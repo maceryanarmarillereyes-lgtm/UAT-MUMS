@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Login | MUMS</title><link rel="stylesheet" href="./css/styles.css?v=p1-516" />
+  <link rel="stylesheet" href="./css/enterprise_ux.css?v=p1-516" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="card pad">
+        <div class="brand brand-login" aria-label="MUMS">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div class="brand-text">
+            <div class="brand-name">MUMS</div>
+            <div class="brand-sub">MUMS User Management System</div>
+          <div class="brand-build">Build ID: <span data-build-label></span></div>
+          </div>
+        </div>
+        <h1 class="h1" style="margin-top:10px">Login</h1>
+        <p class="h2">Login required. Timezone: <b>Asia/Manila</b></p>
+        <!-- Wrap credentials in a form so browsers can correctly detect and autofill password fields. -->
+        <form id="loginForm" autocomplete="on" novalidate>
+          <div class="grid2">
+            <div>
+              <label class="small" for="login">Username or Email</label>
+              <input class="input" id="login" name="username" placeholder="Username or email" autocomplete="username" />
+            </div>
+            <div>
+              <label class="small" for="password">Password</label>
+              <input class="input" id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" />
+            </div>
+          </div>
+
+          <div class="row" style="justify-content:flex-start;align-items:center;margin-top:10px;gap:12px;flex-wrap:wrap">
+            <label class="row small" style="gap:8px;cursor:pointer;user-select:none">
+              <input type="checkbox" id="saveDetails" />
+              <span>Save details</span>
+            </label>
+            <label class="row small" id="savePasswordWrap" style="gap:8px;cursor:pointer;user-select:none;display:none">
+              <input type="checkbox" id="savePassword" />
+              <span>Also save password (not recommended)</span>
+            </label>
+          </div>
+
+          <div class="row" style="justify-content:space-between;margin-top:12px;flex-wrap:wrap">
+            <div class="small">Initial Super User: <b>MUMS / MUMS</b></div>
+            <div class="row" style="gap:8px">
+              <button class="btn" id="resetMeys" type="button">Reset MUMS</button>
+              <button class="btn danger" id="factoryReset" type="button">Factory Reset</button>
+              <button class="btn primary" id="loginBtn" type="submit">Login</button>
+            </div>
+          </div>
+
+          <div id="microsoftLoginSection" style="display:none">
+            <div style="display:flex;align-items:center;gap:10px;margin-top:16px;margin-bottom:12px;">
+              <div style="flex:1;height:1px;background:rgba(255,255,255,0.2);"></div>
+              <div class="small" style="letter-spacing:0.08em;">OR</div>
+              <div style="flex:1;height:1px;background:rgba(255,255,255,0.2);"></div>
+            </div>
+            <button class="btn" id="azureLoginBtn" type="button" style="width:100%;background:#2F2F2F;color:#fff;border-color:#4a4a4a;">🪟 Sign in with Microsoft</button>
+          </div>
+        </form>
+        <div class="err" id="err" style="display:none"></div>
+
+        <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px;gap:10px;flex-wrap:wrap">
+          <div class="small">Users database (for private/incognito browsers):</div>
+          <div class="row" style="gap:8px">
+            <button class="btn" id="exportUsersLogin" type="button">Export</button>
+            <button class="btn" id="importUsersLogin" type="button">Import</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card pad">
+        <h2 style="margin:0 0 10px">Admin Rules</h2>
+        <ul class="small" style="margin:0;line-height:1.6">
+          <li><b>SUPER_ADMIN (MUMS)</b> controls everything and can create Admins/Team Leads.</li>
+          <li><b>Team Leads</b> can manage users and announcements inside their team.</li>
+          <li><b>Schedules</b> show as icons on user tags in Mailbox.</li>
+          <li><b>Announcements</b> appear at the top bar within their date/time window.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load in order (no modules) so it works via file:// in Edge -->
+  <script src="./js/env_runtime.js?v=p1-516"></script>
+  <script src="./js/remote_patch.js?v=p1-516"></script>
+  <script src="./js/config/version.js?v=p1-516"></script>
+  <script src="./js/config.js?v=p1-516"></script>
+  <script src="./js/store.js?v=p1-516"></script>
+  <script src="./js/cloud_auth.js?v=p1-516"></script>
+  <script src="./js/cloud_users.js?v=p1-516"></script>
+  <script src="./js/auth.js?v=p1-516"></script>
+  <script src="./js/ui.js?v=p1-516"></script>
+  <script>
+  // Force native system cursor (no delay)
+  try{ localStorage.setItem("mums_cursor_mode","system"); }catch(e){}
+</script>
+
+  <script>
+    // Surface runtime errors on the login page instead of failing silently
+    window.addEventListener('error', (ev)=>{
+      try{
+        const msg = (ev && ev.message) ? ev.message : 'Unknown error';
+        const where = (ev && ev.filename) ? (ev.filename.split('/').pop()+':'+(ev.lineno||0)) : '';
+        const e = document.getElementById('err');
+        if(e){ e.textContent = 'App error: '+msg+(where?(' ('+where+')'):''); e.style.display='block'; }
+      }catch(_){ }
+    });
+
+    // ── Login Mode: fetch from server and show/hide Microsoft button ──────────
+    (function applyLoginMode(){
+      const section = document.getElementById('microsoftLoginSection');
+      // Optimistic local cache: avoids button flicker on repeat visits
+      try{
+        const cached = localStorage.getItem('mums_login_mode_cache');
+        if(cached){
+          const { mode, ts } = JSON.parse(cached);
+          const age = Date.now() - (ts || 0);
+          if(mode && age < 5 * 60 * 1000){ // 5-minute cache
+            const showMs = (mode === 'microsoft' || mode === 'both');
+            if(section) section.style.display = showMs ? '' : 'none';
+          }
+        }
+      }catch(_){}
+      // Always fetch fresh from server (no auth needed)
+      fetch('/api/settings/login_mode')
+        .then(r => r.json())
+        .then(data => {
+          const mode = (data && data.settings && data.settings.mode) ? data.settings.mode : 'both';
+          try{ localStorage.setItem('mums_login_mode_cache', JSON.stringify({ mode, ts: Date.now() })); }catch(_){}
+          const showMs = (mode === 'microsoft' || mode === 'both');
+          if(section) section.style.display = showMs ? '' : 'none';
+        })
+        .catch(() => {
+          // Network failure: default to showing Microsoft button (safe fallback)
+          if(section) section.style.display = '';
+        });
+    })();
+
+    // Ensure MUMS exists (and repair if old broken localStorage exists)
+    // If Store.ensureSeed fails for any reason, fall back to a minimal MUMS seed
+    // so the system is always recoverable.
+    try{
+      Store.ensureSeed();
+    }catch(e){
+      try{
+        const AuthHash = (window.Auth && Auth.hash) ? Auth.hash('MUMS') : '';
+        const meys = [{
+          id: 'meys-'+Date.now(),
+          username: 'MUMS',
+          email: 'meys@local',
+          name: 'MUMS',
+          role: (window.Config && Config.ROLES && Config.ROLES.SUPER_ADMIN) ? Config.ROLES.SUPER_ADMIN : 'SUPER_ADMIN',
+          teamId: (window.Config && Config.TEAMS && Config.TEAMS[0]) ? Config.TEAMS[0].id : 'morning',
+          schedule: 'mailbox_manager',
+          status: 'active',
+          passwordHash: AuthHash
+        }];
+        localStorage.setItem('ums_users', JSON.stringify(meys));
+        localStorage.setItem('ums_users_backup', JSON.stringify(meys));
+      }catch(_){ }
+    }
+
+    const $ = (id)=>document.getElementById(id);
+    const showErr = (msg)=>{ const e=$("err"); e.textContent=msg; e.style.display="block"; };
+    const hideErr = ()=>{ const e=$("err"); e.style.display="none"; e.textContent=""; };
+
+    function parseAuthErrorFromUrl(){
+      try{
+        const out = { error: '', error_description: '' };
+        const read = (paramSource)=>{
+          if(!paramSource) return;
+          const err = String(paramSource.get('error') || '').trim();
+          const desc = String(paramSource.get('error_description') || paramSource.get('errorDescription') || '').trim();
+          if(err && !out.error) out.error = err;
+          if(desc && !out.error_description) out.error_description = desc;
+        };
+
+        const hashRaw = String(window.location.hash || '').replace(/^#/, '');
+        if(hashRaw) read(new URLSearchParams(hashRaw));
+        read(new URLSearchParams(window.location.search || ''));
+
+        if(!out.error && !out.error_description) return null;
+        if(!out.error_description) out.error_description = out.error || 'Microsoft sign-in failed.';
+        return out;
+      }catch(_){
+        return null;
+      }
+    }
+
+    function consumeAuthErrorFromUrl(){
+      const parsed = parseAuthErrorFromUrl();
+      if(!parsed) return;
+      showErr(parsed.error_description);
+      try{ localStorage.setItem('mums_login_flash', parsed.error_description); }catch(_){ }
+      try{
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }catch(_){ }
+    }
+
+    // One-time flash error (used when a deleted account is forcibly logged out).
+    try{
+      const flash = localStorage.getItem('mums_login_flash');
+      if(flash){
+        localStorage.removeItem('mums_login_flash');
+        showErr(String(flash));
+      }
+    }catch(_){}
+
+    // Show exact OAuth/database-trigger error returned in URL hash/query.
+    consumeAuthErrorFromUrl();
+
+    // Mirror auth state failures on login screen instead of silent loops.
+    try{
+      window.addEventListener('mums:oauth_error', (ev)=>{
+        const msg = String((ev && ev.detail && ev.detail.error_description) || 'Microsoft sign-in failed.');
+        showErr(msg);
+      });
+      window.addEventListener('mums:auth_invalid', (ev)=>{
+        const reason = String((ev && ev.detail && ev.detail.reason) || 'Session invalid');
+        showErr('Authentication error: ' + reason);
+      });
+    }catch(_){ }
+
+    // Save details (username/email, optional password)
+    const SAVE_KEY = 'mums_login_saved_v1';
+    function _getSaved(){
+      try{ return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'); }catch(e){ return {}; }
+    }
+    function _setSaved(obj){
+      try{ localStorage.setItem(SAVE_KEY, JSON.stringify(obj)); }catch(e){}
+    }
+    function _clearSaved(){
+      try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+    }
+    function _syncSaveUi(){
+      const sd = $("saveDetails");
+      const enabled = !!(sd && sd.checked);
+      const wrap = $("savePasswordWrap");
+      if(wrap) wrap.style.display = enabled ? "flex" : "none";
+      if(!enabled && $("savePassword")) $("savePassword").checked = false;
+    }
+    function _restoreSavedDetails(){
+      const saved = _getSaved();
+      if(saved && saved.enabled){
+        if($("saveDetails")) $("saveDetails").checked = true;
+        if(saved.login && $("login")) $("login").value = saved.login;
+        if(saved.savePassword && saved.password && $("password")){
+          if($("savePassword")) $("savePassword").checked = true;
+          $("password").value = saved.password;
+        }
+      }
+      _syncSaveUi();
+    }
+    function _persistSavedDetails(){
+      const sd = $("saveDetails");
+      const enabled = !!(sd && sd.checked);
+      if(!enabled){ _clearSaved(); return; }
+      const loginVal = $("login") ? $("login").value.trim() : '';
+      const sp = $("savePassword");
+      const savePass = !!(sp && sp.checked);
+      const obj = { enabled: true, login: loginVal, savePassword: !!savePass };
+      if(savePass && $("password")) obj.password = $("password").value;
+      _setSaved(obj);
+    }
+
+    async function doLogin(){
+      hideErr();
+      const login = $("login").value.trim();
+      const pass = $("password").value;
+      if(!login || !pass) return showErr("Please enter username/email and password.");
+      const res = await Auth.login(login, pass);
+      if(!res.ok) return showErr(res.message || 'Login failed.');
+      try{ _persistSavedDetails(); }catch(e){}
+      // Use replace() to avoid a slow back navigation and slightly reduce perceived latency.
+      try{
+        if(String(window.location.protocol||'') === 'file:'){
+          window.location.replace("./index.html#dashboard");
+        }else{
+          window.location.replace("./dashboard");
+        }
+      }catch(_){
+        window.location.replace("./index.html#dashboard");
+      }
+    }
+    async function doMicrosoftLogin(){
+      hideErr();
+      try{
+        if(!(window.CloudAuth && CloudAuth.signInWithAzure)){
+          return showErr('Microsoft OAuth is unavailable in this environment.');
+        }
+        let oauthRedirectTo = '';
+        try{
+          oauthRedirectTo = window.location.origin + window.location.pathname;
+        }catch(_){
+          oauthRedirectTo = window.location.origin;
+        }
+        const out = await CloudAuth.signInWithAzure({
+          scopes: 'email',
+          // Always return to login page callback handler so hash tokens/errors
+          // are absorbed before any root/index redirect guard runs.
+          redirectTo: oauthRedirectTo
+        });
+        if(out && out.ok===false){
+          return showErr(out.message || 'Microsoft sign-in failed.');
+        }
+      }catch(e){
+        return showErr((e && e.message) ? e.message : 'Microsoft sign-in failed.');
+      }
+    }
+
+    // Use a form submit handler so password managers/autofill behave properly.
+    // Prevent default navigation to keep the app SPA-style.
+    const loginForm = $("loginForm");
+    if(loginForm){
+      loginForm.addEventListener("submit", (e)=>{
+        try{ e.preventDefault(); }catch(_){ }
+        doLogin();
+      });
+    }
+    const azureLoginBtn = $("azureLoginBtn");
+    if(azureLoginBtn){
+      azureLoginBtn.addEventListener('click', ()=>{ doMicrosoftLogin(); });
+    }
+
+    // Save details UI wiring
+    try{
+      if($("saveDetails")) $("saveDetails").addEventListener('change', _syncSaveUi);
+      if($("savePassword")) $("savePassword").addEventListener('change', _syncSaveUi);
+      _restoreSavedDetails();
+    }catch(e){}
+
+    $("factoryReset").onclick = ()=>{ Store.factoryReset(); alert("Reset complete. Use MUMS / MUMS"); };
+    $("resetMeys").onclick = ()=>{ Store.ensureSeed(); alert("MUMS repaired. Use MUMS / MUMS"); };
+
+    // Incognito/private windows do not share localStorage with normal windows.
+    // This import/export provides an explicit way to sync users.
+    $("exportUsersLogin").onclick = ()=>{
+      try{ UI.downloadJSON("mums_bundle.json", Store.exportBundle()); }catch(e){ showErr("Export failed: "+(e && e.message ? e.message : e)); }
+    };
+    $("importUsersLogin").onclick = async()=>{
+      try{
+        const data = await UI.pickJSON();
+        const res = Store.importBundle(data);
+        alert("Imported: users "+res.users+", announcements "+res.announcements+", release notes "+res.releaseNotes+". You can now log in.");
+      }catch(e){
+        showErr('Import failed: '+(e && e.message ? e.message : e));
+      }
+    };
+
+  </script>
+</body>
+</html>

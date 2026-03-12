@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <base href="/" />
+  <script>
+    // Root access must always load the login page.
+    // Keep the SPA router intact for /dashboard, /members, etc.
+    // This runs before any heavy assets load to avoid UI flashes.
+    (function(){
+      try {
+        const p = String(location.pathname || '/').toLowerCase();
+        if (p === '/' || p === '/login' || p === '/login/' || p === '/index' || p === '/index/') {
+          location.replace('/login.html');
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <title>MUMS | MUMS User Management System</title><link rel="stylesheet" href="/css/styles.css?v=p1-615" />
+  <link rel="stylesheet" href="/css/mailbox.css?v=p1-615" />
+  <link rel="stylesheet" href="/css/enterprise_ux.css?v=p1-615" />
+  <link rel="stylesheet" href="/css/widget_enhancements.css?v=p1-615" />
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="topbrand" aria-label="MUMS">
+        <div class="brand-mark" aria-hidden="true">
+          <button class="btn ghost iconbtn sidebar-toggle-overlay" id="sidebarToggle" type="button" title="Toggle sidebar (click) / Pin rail (double-click)" aria-label="Toggle sidebar">
+            <span class="ico" data-ico="menu" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="brand-text">
+          <div class="brand-name">MUMS</div>
+          <div class="brand-sub">MUMS User Management System</div>
+          <div class="brand-build">Build ID: <span data-build-label></span></div>
+        </div>
+      </div>
+
+      <div class="topbar-center">
+        <div id="reminderFloatHost" class="reminder-float-host" aria-live="polite"></div>
+        <div class="announce-bar" id="announceBar" style="visibility:hidden" title="Click to read full announcement">
+          <div class="announce-left">
+            <div class="announce-avatar" id="announceAvatar" aria-hidden="true"></div>
+            <div class="announce-who" id="announceWho"></div>
+          </div>
+          <div class="announce-body">
+            <div class="announce-title" id="announceTitle">Announcement</div>
+            <div class="announce-msg" id="announceMsg">—</div>
+            <div class="announce-meta small" id="announceMeta" style="opacity:.9">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <div class="top-global-search" role="search">
+          <span class="ico" data-ico="search" aria-hidden="true"></span>
+          <input id="globalSearchInput" type="text" placeholder="Search…" autocomplete="off" aria-label="Global search (Ctrl+K)" />
+          <button class="btn ghost iconbtn" id="globalSearchBtn" type="button" title="Global search (Ctrl+K)" aria-label="Open global search"><span class="ico" data-ico="search" aria-hidden="true"></span></button>
+        </div>
+        <button class="btn ghost iconbtn" id="releaseNotesBtn" type="button" title="Release Notes" aria-label="Release Notes"><span class="ico" data-ico="notes" aria-hidden="true"></span></button>
+        <button class="btn ghost iconbtn" id="dictionaryBtn" type="button" title="MUMS Dictionary" aria-label="MUMS Dictionary"><span class="ico" data-ico="book" aria-hidden="true"></span></button>
+<button class="btn ghost iconbtn" id="settingsBtn" type="button" title="Settings" aria-label="Settings"><span class="ico" data-ico="gear" aria-hidden="true"></span></button>
+        <div id="realtimeSyncStatus" class="sync-status" title="Realtime Sync Status">
+          <span class="dot" aria-hidden="true"></span>
+          <span class="label">Sync:</span>
+          <span class="state">—</span>
+        </div>
+        <button class="btn" id="logoutBtn" type="button">Logout</button>
+      </div>
+    </div>
+
+    <aside class="side card pad">
+      <div class="usercard" id="userCard"></div>
+      <!-- Timezone is shown inside the compact profile card to maximize nav space -->
+      <nav class="nav" id="nav"></nav>
+
+      <div class="side-logs side-logs-minimal" id="sideLogs">
+        <button class="btn ghost side-logs-viewall" id="sideLogsViewAll" type="button">View All Activity</button>
+      </div>
+    </aside>
+
+    <main class="main card pad" id="main"></main>
+
+    <aside class="right card pad" id="rightbar">
+      <div id="right-sidebar-container">
+        <hr style="border: 0; border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 24px 0 16px 0; width: 100%; display: block;" />
+<button id="btn-controller-lab" onclick="window.open('/controller_lab.html', '_blank')" style="width: 100%; padding: 12px 16px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: #ffffff; cursor: pointer; text-align: center; font-weight: 600; font-size: 14px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: all 0.2s ease-in-out; display: flex; align-items: center; justify-content: center; gap: 10px; box-sizing: border-box;" onmouseover="this.style.background='rgba(255, 255, 255, 0.1)'; this.style.borderColor='rgba(255, 255, 255, 0.2)';" onmouseout="this.style.background='rgba(255, 255, 255, 0.05)'; this.style.borderColor='rgba(255, 255, 255, 0.1)';">
+  <i class="fas fa-gamepad" style="font-size: 16px;"></i> Controller Lab
+</button>
+<div style="height: 8px;"></div>
+<button id="btn-support-studio" onclick="window.open('/support_studio.html', '_blank')" style="width: 100%; padding: 12px 16px; background: rgba(0, 115, 234, 0.07); border: 1px solid rgba(0, 115, 234, 0.22); border-radius: 8px; color: #58a6ff; cursor: pointer; text-align: center; font-weight: 600; font-size: 14px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: all 0.2s ease-in-out; display: flex; align-items: center; justify-content: center; gap: 10px; box-sizing: border-box;" onmouseover="this.style.background='rgba(0, 115, 234, 0.14)'; this.style.borderColor='rgba(0, 115, 234, 0.40)'; this.style.color='#79b8ff';" onmouseout="this.style.background='rgba(0, 115, 234, 0.07)'; this.style.borderColor='rgba(0, 115, 234, 0.22)'; this.style.color='#58a6ff';">
+  <i class="fas fa-headset" style="font-size: 16px;"></i> Support Studio
+</button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Online users status bar (above the quick links bar) -->
+  <div class="online-users-bar" id="onlineUsersBar" aria-label="Online users" role="region"></div>
+
+  <!-- Bottom quick links bar (10 customizable circles) -->
+  <div class="quicklinks-bar" id="quickLinksBar" aria-label="Quick links" role="navigation">
+    <!-- World clocks (left side) -->
+    <div class="clocks-wrap" id="worldClocks" aria-label="World clocks"></div>
+    <div class="quicklinks-inner" id="quickLinksInner"></div>
+  </div>
+
+  <div class="modal" id="topAnnModal">
+    <div class="panel">
+      <div class="head">
+        <div>
+          <div class="announce-title" id="annModalTitle">Announcement</div>
+          <div class="small">Full description</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="topAnnModal">✕</button>
+      </div>
+      <div class="body" id="annModalBody" style="white-space:pre-wrap"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="settingsModal">
+    <div class="panel">
+      <div class="head">
+        <div>
+          <div class="announce-title">Settings</div>
+          <div class="small">Manage profile and notification sound.</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="settingsModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="settings-grid">
+          <div class="settings-card">
+            <div class="settings-card-title">Profile</div>
+            <div class="small muted" style="margin-top:6px">Update your photo and display name.</div>
+            <div style="margin-top:10px">
+              <button class="btn primary" id="openProfileBtn" type="button">Open Profile Settings</button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="settings-card-title">Notification Sound</div>
+            <div class="small muted" style="margin-top:6px">Adjust sound type and volume for pop-up notifications.</div>
+            <div style="margin-top:10px">
+              <button class="btn" id="openSoundBtn" type="button">Open Sound Settings</button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="settings-card-title">Theme</div>
+            <div class="small muted" style="margin-top:6px">Choose a professional color theme for MUMS.</div>
+            <div style="margin-top:10px">
+              <button class="btn" id="openThemeBtn" type="button">Open Theme Settings</button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="settings-card-title">Quick Links</div>
+            <div class="small muted" style="margin-top:6px">Set up to 10 favorite links shown on the bottom bar.</div>
+            <div style="margin-top:10px">
+              <button class="btn" id="openLinksBtn" type="button">Manage Quick Links</button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="settings-card-title">Cursor</div>
+            <div class="small muted" style="margin-top:6px">Choose between the custom in-app cursor or your system cursor.</div>
+            <div style="margin-top:10px">
+              <button class="btn" id="openCursorBtn" type="button">Cursor settings</button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="settings-card-title">Sidebar</div>
+            <div class="small muted" style="margin-top:6px">Collapse the menu for compact navigation.</div>
+            <div style="margin-top:10px">
+              <button class="btn" id="openSidebarBtn" type="button">Sidebar settings</button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="settings-card-title">Data tools</div>
+            <div class="small muted" style="margin-top:6px">Export, import, and validate offline local storage.</div>
+            <div style="margin-top:10px">
+              <button class="btn" id="openDataToolsBtn" type="button">Open data tools</button>
+            </div>
+          </div>
+
+          <div class="settings-card" id="timeOverrideCard" style="display:none">
+            <div class="settings-card-title">Mailbox Time Override</div>
+            <div class="small muted" style="margin-top:6px">Super Admin testing tool: override Manila time used in the Mailbox screen.</div>
+            <div style="margin-top:10px">
+              <button class="btn" id="openMailboxTimeBtn" type="button">Configure Mailbox Time</button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="settings-card-title">World Clocks</div>
+	            <div class="small muted" style="margin-top:6px">Configure clocks for regions or fixed GMT offsets (label, style, colors, alarms).</div>
+            <div style="margin-top:10px">
+	              <div class="row" style="gap:8px;flex-wrap:wrap">
+	                <button class="btn" id="openClocksBtn" type="button">Configure Clocks</button>
+	                <button class="btn ghost" id="openGmtOverviewPageBtn" type="button">Open GMT Overview</button>
+	              </div>
+            </div>
+          </div>
+
+          <div class="settings-card" id="systemCheckCard" style="display:none">
+            <div class="settings-card-title">System Check</div>
+            <div class="small muted" style="margin-top:6px">Run diagnostics, tests, and auto-fixes. Available to Super Admin and Super User.</div>
+            <div style="margin-top:10px">
+              <button class="btn" id="openSystemCheckBtn" type="button">Run System Check</button>
+            </div>
+          </div>
+
+          <!-- Login Mode Control — Super Admin only -->
+          <div class="settings-card" id="loginModeCard" style="display:none">
+            <div class="settings-card-title" style="display:flex;align-items:center;gap:8px">
+              <span>🔐</span> Login Mode
+            </div>
+            <div class="small muted" style="margin-top:6px">
+              Control whether users log in with Microsoft or with email &amp; password.
+            </div>
+            <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px" id="loginModeControls">
+              <div class="small" id="loginModeStatus" style="opacity:.7">Loading…</div>
+              <div style="display:flex;flex-direction:column;gap:6px" id="loginModeOptions">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid transparent;transition:background .12s" id="loginModeOpt_both">
+                  <input type="radio" name="loginModeChoice" value="both" style="accent-color:var(--primary)" />
+                  <span>
+                    <span class="small" style="font-weight:700">Both</span>
+                    <span class="small muted" style="display:block;font-size:11px">Show Microsoft button + allow email/password login</span>
+                  </span>
+                </label>
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid transparent;transition:background .12s" id="loginModeOpt_password">
+                  <input type="radio" name="loginModeChoice" value="password" style="accent-color:var(--primary)" />
+                  <span>
+                    <span class="small" style="font-weight:700">Password only</span>
+                    <span class="small muted" style="display:block;font-size:11px">Hide Microsoft button — email/password login only</span>
+                  </span>
+                </label>
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid transparent;transition:background .12s" id="loginModeOpt_microsoft">
+                  <input type="radio" name="loginModeChoice" value="microsoft" style="accent-color:var(--primary)" />
+                  <span>
+                    <span class="small" style="font-weight:700">Microsoft only</span>
+                    <span class="small muted" style="display:block;font-size:11px">Microsoft OAuth only — password form still works for admins</span>
+                  </span>
+                </label>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <button class="btn primary" id="saveLoginModeBtn" type="button" style="min-width:90px">Save</button>
+                <span id="loginModeSaveMsg" class="small" style="opacity:0;transition:opacity .4s"></span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="systemCheckModal">
+    <div class="panel" style="max-width:980px">
+      <div class="head">
+        <div>
+          <div class="announce-title">System Check</div>
+          <div class="small">Diagnostics, smoke tests, and safe auto-fixes for offline storage and configuration.</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="systemCheckModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="syscheck-top">
+          <div class="syscheck-status">
+            <div class="h2" style="margin:0">Status: <span id="syscheckState">Ready</span></div>
+            <div class="small muted" style="margin-top:6px">This runs locally in your browser and does not send data anywhere.</div>
+          </div>
+          <div class="syscheck-actions">
+            <div class="syscheck-timer">
+              <div class="small muted">Estimated time</div>
+              <div class="h2" style="margin:4px 0 0"><span id="syscheckCountdown">—</span>s</div>
+            </div>
+            <button class="btn" id="syscheckRunBtn" type="button">Run</button>
+            <button class="btn ghost" id="syscheckClearResolvedBtn" type="button" title="Remove resolved error logs from Activity Logs">Clear resolved errors</button>
+          </div>
+        </div>
+
+        <div class="syscheck-progress" style="margin-top:12px">
+          <div class="bar"><div class="fill" id="syscheckFill" style="width:0%"></div></div>
+          <div class="small muted" id="syscheckHint" style="margin-top:8px">Press Run to start diagnostics.</div>
+        </div>
+
+        <div class="syscheck-results" style="margin-top:14px">
+          <div class="row" style="justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end">
+            <div>
+              <div class="settings-card-title">Findings</div>
+              <div class="small muted" style="margin-top:6px">Each finding includes impact and recommendations. Severity is Critical or Minor.</div>
+            </div>
+            <div class="row" style="gap:8px;flex-wrap:wrap">
+              <span class="pill" id="syscheckCriticalPill">Critical: 0</span>
+              <span class="pill" id="syscheckMinorPill">Minor: 0</span>
+            </div>
+          </div>
+          <div id="syscheckList" style="margin-top:12px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="modal" id="mailboxTimeModal">
+    <div class="panel" style="max-width:720px">
+      <div class="head">
+        <div>
+          <div class="announce-title">Mailbox Time Override</div>
+          <div class="small">Super Admin testing tool. Overrides Manila time used on the Mailbox screen. Scope can be Super Admin only or Global (affects all users on this device).</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="mailboxTimeModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="small muted" id="mbTimeSys" style="margin-bottom:8px"></div>
+
+        <div class="time-override-preview">
+          <div class="small muted">Effective mailbox time</div>
+          <div class="timer" id="mbTimeClock">--:--:--</div>
+          <div class="small" id="mbTimeClockDate" style="margin-top:2px"></div>
+          <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">
+            <button class="btn" type="button" data-mbshift="-3600000">-1h</button>
+            <button class="btn" type="button" data-mbshift="-900000">-15m</button>
+            <button class="btn" type="button" data-mbshift="900000">+15m</button>
+            <button class="btn" type="button" data-mbshift="3600000">+1h</button>
+            <button class="btn" type="button" id="mbTimeSetNow">Set to system Manila now</button>
+          </div>
+        </div>
+        <div class="grid2">
+          <div>
+            <label class="small">Override date &amp; time (Manila)</label>
+            <input class="input" type="datetime-local" id="mbTimeInput" />
+          </div>
+          <div>
+            <label class="small">Mode</label>
+            <label class="row small" style="gap:10px;align-items:center;margin-top:8px">
+              <input type="checkbox" id="mbTimeFreeze" />
+              <span>Freeze time</span>
+            </label>
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <label class="small">Override scope</label>
+          <select class="input" id="mbTimeScope" style="margin-top:6px">
+            <option value="sa_only">Super Admin only</option>
+            <option value="global">Global (all users)</option>
+          </select>
+          <div class="small muted" style="margin-top:6px">Global scope affects every user session on this device/browser. Use only for controlled testing.</div>
+        </div>
+        <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:12px;align-items:center">
+          <label class="row small" style="gap:10px;align-items:center">
+            <input type="checkbox" id="mbTimeEnabled" />
+            <span>Enable override</span>
+          </label>
+          <div class="small muted" id="mbTimeEffective"></div>
+        </div>
+        <div class="err" id="mbTimeErr"></div>
+        <div class="row" style="justify-content:flex-end;gap:10px;margin-top:14px">
+          <button class="btn" type="button" id="mbTimeReset">Return to normal time</button>
+          <button class="btn primary" type="button" id="mbTimeSave">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="themeModal">
+    <div class="panel" style="max-width:920px">
+      <div class="head">
+        <div>
+          <div class="announce-title">Theme</div>
+          <div class="small">Pick your personal theme. Super Admin sets the org default, and users can still override it here anytime.</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="themeModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="theme-grid" id="themeGrid"></div>
+        <div class="theme-audit" id="themeAudit" style="display:none">
+          <div class="h3" style="margin:0 0 6px">Theme Lab</div>
+          <div class="small muted">Automatic readability checks (contrast + key UI elements). Use this to validate themes like Aurora (Ecommerce Light).</div>
+          <div id="themeAuditInner" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <div class="foot" style="display:flex;justify-content:flex-end;gap:10px">
+        <button class="btn" type="button" data-close="themeModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="linksModal">
+    <div class="panel" style="max-width:980px">
+      <div class="head">
+        <div>
+          <div class="announce-title">Quick Links</div>
+          <div class="small">Configure the 10 circles on the bottom bar. Click a circle to open its link in a new tab.</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="linksModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="links-grid" id="linksGrid"></div>
+        <div class="small muted" style="margin-top:10px">Tip: Use full URLs including https://</div>
+      </div>
+      <div class="foot" style="display:flex;justify-content:flex-end;gap:10px">
+        <button class="btn" type="button" data-close="linksModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  
+    <div class="modal" id="clocksModal">
+    <div class="panel" style="max-width:980px">
+      <div class="head">
+        <div>
+          <div class="announce-title">World Clocks</div>
+          <div class="small">Pin clocks for the bottom bar and review all GMT offsets. Saved per user on this device.</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="clocksModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="clocks-preview">
+          <div class="clocks-preview-head">
+            <div class="small" style="font-weight:900">Preview</div>
+            <div class="small muted">Updates instantly. Drag clocks to reorder (left → right).</div>
+          </div>
+          <div class="clocks-preview-strip" id="clocksPreviewStrip" aria-label="Clocks preview"></div>
+        </div>
+
+        <div class="clocks-grid" id="clocksGrid"></div>
+        <div class="small muted" style="margin-top:10px">Tip: Alarm triggers a beep using your Notification Sound settings.</div>
+      </div>
+      <div class="foot" style="display:flex;justify-content:flex-end;gap:10px">
+        <button class="btn" id="clocksSave" type="button">Save</button>
+        <button class="btn" type="button" data-close="clocksModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+<div class="modal" id="soundSettingsModal">
+    <div class="panel">
+      <div class="head">
+        <div>
+          <div class="announce-title">Notification Sound</div>
+          <div class="small">Adjust beep sound, volume, and type.</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="soundSettingsModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="row" style="justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <label class="small" style="display:flex;gap:10px;align-items:center">
+            <input type="checkbox" id="sndEnabled" />
+            Sound enabled
+          </label>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+            <button class="btn" id="sndTest" type="button">Test sound</button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+          <label class="small">Sound type
+            <select class="input" id="sndType">
+              <option value="beep">Beep</option>
+              <option value="chime">Chime</option>
+              <option value="pop">Pop</option>
+            </select>
+          </label>
+          <label class="small">Volume
+            <input class="input" id="sndVol" type="range" min="0" max="100" value="65" />
+          </label>
+        </div>
+        <div class="small muted" style="margin-top:10px">Tip: If you turn sound Off, notifications still pop out—just silent.</div>
+      </div>
+      <div class="foot" style="display:flex;justify-content:flex-end;gap:10px">
+        <button class="btn" id="sndSave" type="button">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="profileModal">
+    <div class="panel" style="max-width:720px">
+      <div class="head">
+        <div>
+          <div class="announce-title">My Profile</div>
+          <div class="small">Update your photo and profile information (synced to Supabase).</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="profileModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="profile-grid">
+          <div class="profile-photo">
+            <div class="avatar-xl" id="profileAvatar"></div>
+            <label class="btn" style="margin-top:10px;display:inline-block">
+              Upload photo
+              <input id="profilePhotoInput" type="file" accept="image/*" style="display:none" />
+            </label>
+            <button class="btn ghost" id="profileRemovePhoto" type="button" style="margin-top:8px">Remove photo</button>
+            <div class="small muted" style="margin-top:8px">Tip: Use a square photo for best results.</div>
+          </div>
+          <div class="profile-fields">
+            <label class="small">Full Name
+              <input class="input" id="profileName" />
+            </label>
+            <label class="small">Email
+              <input class="input" id="profileEmail" disabled />
+            </label>
+            <label class="small">Role
+              <input class="input" id="profileRole" disabled />
+            </label>
+            <label class="small">Team
+              <input class="input" id="profileTeam" disabled />
+            </label>
+            <label class="small">Profile layout
+              <select class="input" id="profileLayout">
+                <option value="banner">Photo-left Profile (recommended)</option>
+                <option value="card">Classic Card</option>
+                <option value="split">Split header</option>
+                <option value="minimal">Minimal compact</option>
+              </select>
+            </label>
+            <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:14px 0" />
+            <div class="h3" style="margin:0 0 8px">Quickbase Integration</div>
+            <label class="small">Quickbase User Token (Secured)
+              <input class="input" type="password" id="profileQbToken" placeholder="Enter your personal QB Token" />
+            </label>
+            <div class="row" style="justify-content:flex-end;gap:10px;margin-top:10px">
+              <button class="btn" type="button" data-close="profileModal">Cancel</button>
+              <button class="btn primary" id="profileSave" type="button">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="modal" id="cropModal">
+    <div class="panel" style="max-width:560px">
+      <div class="head">
+        <div>
+          <div class="announce-title">Crop Photo</div>
+          <div class="small">Drag to reposition and use the slider to zoom. Square crop is applied.</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="cropModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="cropper-wrap">
+          <canvas id="cropCanvas" width="320" height="320"></canvas>
+        </div>
+        <label class="small" style="margin-top:12px;display:block">Zoom
+          <input class="input" id="cropZoom" type="range" min="1" max="3" value="1" step="0.01" />
+        </label>
+        <div class="small muted" style="margin-top:8px">Tip: For best results, use a clear face photo with good lighting.</div>
+      </div>
+      <div class="foot" style="display:flex;justify-content:flex-end;gap:10px">
+        <button class="btn" type="button" id="cropCancel">Cancel</button>
+        <button class="btn primary" type="button" id="cropSave">Use Photo</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="releaseNotesModal">
+    <div class="panel" style="max-width:980px">
+      <div class="head">
+        <div>
+          <div class="announce-title">Release Notes</div>
+          <div class="small">All updates are appended per build. Older notes are retained.</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="releaseNotesModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="dict-top">
+          <div class="dict-search">
+            <label class="small">Search release notes</label>
+            <input class="input" id="rnSearch" placeholder="Type: aurora, theme, clock, members, settings, bug fix..." />
+          </div>
+          <div class="dict-ask">
+            <label class="small">Filter</label>
+            <select class="input" id="rnFilter">
+              <option value="all">All</option>
+              <option value="feature">Features</option>
+              <option value="fix">Fixes</option>
+              <option value="ui">UI/UX</option>
+              <option value="security">Security</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="small muted" id="rnMeta" style="margin-top:10px">—</div>
+        <div id="rnAdmin" style="display:none">
+          <div class="card pad" style="margin:14px 0">
+            <div class="row" style="justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+              <div>
+                <div class="h3" style="margin:0 0 6px">Release notes management</div>
+                <div class="small muted">Super User/Admin can add, import/export, and delete notes. Notes persist across upgrades and factory reset.</div>
+              </div>
+              <div class="row" style="gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
+                <button class="btn" id="rnExportBtn" type="button" title="Export as JSON">Export</button>
+                <button class="btn danger" id="rnClearBtn" type="button" title="Delete all notes">Delete all</button>
+              </div>
+            </div>
+
+            <div class="h3" style="margin:14px 0 8px">Add a release note</div>
+            <div class="grid2">
+              <label class="small">Build / version
+                <input class="input" id="rnVer" placeholder="e.g. 20260120-aurora-fix16" />
+              </label>
+              <label class="small">Tags (comma-separated)
+                <input class="input" id="rnTags" placeholder="fix, ui, theme" />
+              </label>
+            </div>
+            <label class="small" style="margin-top:10px">Title
+              <input class="input" id="rnTitle" placeholder="Short summary" />
+            </label>
+
+            <div class="rn-editor" style="margin-top:10px">
+              <div class="rn-toolbar" id="rnToolbar" role="toolbar" aria-label="Release note editor toolbar">
+                <button class="btn ghost small" type="button" data-md="# {text}\n" title="Heading">H1</button>
+                <button class="btn ghost small" type="button" data-md="## {text}\n" title="Subheading">H2</button>
+                <button class="btn ghost small" type="button" data-md="**{text}**" title="Bold">Bold</button>
+                <button class="btn ghost small" type="button" data-md="*{text}*" title="Italic">Italic</button>
+                <button class="btn ghost small" type="button" data-md="`{text}`" title="Inline code">Code</button>
+                <button class="btn ghost small" type="button" data-md="- {text}\n" title="Bullet list">• List</button>
+                <button class="btn ghost small" type="button" data-md="1. {text}\n" title="Numbered list">1. List</button>
+                <button class="btn ghost small" type="button" data-md="\n```\n{text}\n```\n" title="Code block">```</button>
+              </div>
+              <div class="rn-editor-grid">
+                <label class="small" style="margin:0">Details (Markdown supported)
+                  <textarea class="input textarea" id="rnBody" rows="7" placeholder="Write details using Markdown.\n\nExample:\n- Fixed Aurora visibility in profile card\n- Rebuilt clock settings UI\n\nTip: Use the toolbar for formatting."></textarea>
+                </label>
+                <div>
+                  <div class="small" style="font-weight:900">Preview</div>
+                  <div class="rn-preview card" id="rnBodyPreview" style="margin-top:8px"></div>
+                </div>
+              </div>
+            </div>
+            <div class="row" style="justify-content:flex-end;gap:10px;margin-top:10px">
+              <button class="btn" id="rnAdd" type="button">Add</button>
+            </div>
+
+            <div class="h3" style="margin:18px 0 8px">Import release notes</div>
+            <div class="small muted">Upload JSON (.json) to merge/replace notes, or upload a text/markdown file to create a single note (first line becomes the title).</div>
+            <div class="row" style="gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:10px">
+              <label class="small" style="flex:1 1 360px">File
+                <input class="input" id="rnImportFile" type="file" accept=".json,.txt,.md" />
+              </label>
+              <label class="small" style="flex:0 0 200px">Mode
+                <select class="input" id="rnImportMode">
+                  <option value="merge">Merge (recommended)</option>
+                  <option value="replace">Replace all</option>
+                </select>
+              </label>
+              <button class="btn" id="rnImportBtn" type="button">Import</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="rnList"></div>
+      </div>
+      <div class="foot" style="display:flex;justify-content:flex-end;gap:10px">
+        <button class="btn" type="button" data-close="releaseNotesModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="dictionaryModal">
+    <div class="panel" style="max-width:980px">
+      <div class="head">
+        <div>
+          <div class="announce-title">MUMS Dictionary</div>
+          <div class="small">In-app guide that stays aligned with your current MUMS build.</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="dictionaryModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="dict-top">
+          <div class="dict-search">
+            <label class="small">Search features / guide</label>
+            <input class="input" id="dictSearch" placeholder="Type: rest day, auto schedule, leaves, send, acknowledgement..." />
+          </div>
+          <div class="dict-ask">
+            <label class="small">Ask a question</label>
+            <div class="row" style="gap:8px;align-items:center">
+              <input class="input" id="dictQuestion" placeholder="Ask anything about MUMS..." />
+              <button class="btn" id="dictAskBtn" type="button">Save</button>
+            </div>
+            <div class="small muted" id="dictAskHint" style="margin-top:6px">Saved questions appear to you as notes (local only).</div>
+          </div>
+        </div>
+
+        <div class="dict-meta" id="dictMeta"></div>
+        <div class="dict-content" id="dictContent"></div>
+      </div>
+      <div class="foot" style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div class="small muted" id="dictFooter">—</div>
+        <button class="btn" type="button" data-close="dictionaryModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/env_runtime.js?v=p1-615"></script>
+  <script src="/js/remote_patch.js?v=p1-615"></script>
+  <script>
+    // Load Supabase UMD as a first-party script when possible.
+    //
+    // Edge InPrivate / Tracking Prevention can block storage access for 3rd-party
+    // CDN scripts. Serving the SDK from our own origin avoids that.
+    (function () {
+      const sources = [
+        // Cloudflare Pages (PROD)
+        '/functions/vendor/supabase.js',
+        // Vercel (UAT)
+        '/api/vendor/supabase.js',
+        // Last-resort fallback
+        'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.0/dist/umd/supabase.min.js'
+      ];
+
+      function loadAt(i) {
+        if (i >= sources.length) {
+          try { console.warn('[MUMS] Supabase SDK failed to load from all sources; app will run in limited mode.'); } catch (_) {}
+          return;
+        }
+        const src = sources[i];
+        const s = document.createElement('script');
+        s.defer = true;
+        s.src = src;
+        s.onload = function () {
+          try { window.__MUMS_SUPABASE_SRC = src; } catch (_) {}
+        };
+        s.onerror = function () { loadAt(i + 1); };
+        document.head.appendChild(s);
+      }
+
+      loadAt(0);
+    })();
+  </script>
+  <!-- Load in order (no modules) so it works via file:// in Edge -->
+  <script src="/js/config/version.js?v=p1-615"></script>
+  <script src="/js/config.js?v=p1-615"></script>
+  <script src="/js/store.js?v=p1-615"></script>
+  <script src="/js/cloud_auth.js?v=p1-615"></script>
+  <script src="/js/cloud_users.js?v=p1-615"></script>
+  <script src="/js/cloud_tasks.js?v=p1-615"></script>
+  <script src="/js/auth.js?v=p1-615"></script>
+  <script src="/js/realtime.js?v=p1-615"></script>
+  <script src="/js/sync_status_ui.js?v=p1-615"></script>
+<script src="/js/ui.js?v=p1-615"></script>
+  <script>try{ window.UI && UI.initAppCursor && UI.initAppCursor(); }catch(e){} </script>
+
+  <!-- Components -->
+  <script src="/js/components/sidebarLogs.js?v=p1-615"></script>
+  <script src="/js/components/statusWidgets.js?v=p1-615"></script>
+  <script src="/js/components/coverageMeter.js?v=p1-615"></script>
+  <script src="/js/components/memberRow.js?v=p1-615"></script>
+  <script src="/js/components/graph_panel.js?v=p1-615"></script>
+  <script src="/js/quickbase_adapter.js?v=p1-615"></script>
+
+  <!-- Pages -->
+  <script src="/js/pages/dashboard.js?v=p1-615"></script>
+  <script src="/js/pages/overall_stats.js?v=p1-615"></script>
+  <script src="/js/pages/members.js?v=p1-615"></script>
+  <script src="/js/pages/master_schedule.js?v=p1-615"></script>
+  <script src="/js/pages/users.js?v=p1-615"></script>
+  <script src="/js/pages/announcements.js?v=p1-615"></script>
+  <script src="/js/pages/mailbox.js?v=p1-615"></script>
+  <script src="/js/pages/logs.js?v=p1-615"></script>
+  <script src="/js/pages/my_reminders.js?v=p1-615"></script>
+  <script src="/js/pages/team_reminders.js?v=p1-615"></script>
+  <script src="/js/pages/team_config.js?v=p1-615"></script>
+  <script src="/js/pages/my_attendance.js?v=p1-615"></script>
+  <script src="/js/pages/my_schedule.js?v=p1-615"></script>
+  <script src="/js/pages/my_case.js?v=p1-615"></script>
+  <script src="/js/pages/my_task.js?v=p1-615"></script>
+  <script src="/js/pages/my_quickbase_tab_manager.js?v=p1-615"></script>
+  <script src="/js/pages/my_quickbase.js?v=p1-615"></script>
+  <script src="/js/pages/commands.js?v=p1-615"></script>
+  <script src="/js/pages/privileges.js?v=p1-615"></script>
+  <script src="/js/pages/gmt_overview.js?v=p1-615"></script>
+
+  <script src="/js/pages/distribution_monitoring.js?v=p1-615"></script>
+  <script src="/js/app.js?v=p1-615"></script>
+  <script src="/js/presence_client.js?v=p1-615"></script>
+  <script>
+    // Boot the app after all scripts load
+    try{
+      if(window.App && typeof App.boot === 'function'){
+        Promise.resolve(App.boot()).catch((e)=>{ try{ console.error(e); }catch(_){} });
+      }
+    }catch(e){ try{ console.error(e); }catch(_){} }
+  </script>
+
+
+
+
+  <!-- Global search -->
+  <div class="modal" id="globalSearchModal" role="dialog" aria-modal="true" aria-labelledby="globalSearchTitle">
+    <div class="panel" style="max-width: 860px">
+      <div class="head">
+        <div>
+          <div class="announce-title" id="globalSearchTitle">Global Search</div>
+          <div class="small">Search across users, reminders, announcements, and cases.</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="globalSearchModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="gsearch" style="margin:0 0 12px">
+          <span class="gsearch-ico">🔎</span>
+          <input id="globalSearchModalInput" type="text" placeholder="Type to search… (Esc to close)" autocomplete="off" />
+        </div>
+        <div id="globalSearchResults" class="gresults" aria-live="polite"></div>
+        <div class="small muted" style="margin-top:10px">Tips: Press <b>Enter</b> to open the top result. Use <b>↑/↓</b> to navigate.</div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Cursor settings -->
+  <div class="modal" id="cursorSettingsModal">
+    <div class="panel">
+      <div class="head">
+        <div>
+          <div class="announce-title">Cursor</div>
+          <div class="small">Choose between the custom in-app cursor or your system cursor.</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="cursorSettingsModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="form-row">
+          <label class="small muted">Cursor mode</label>
+          <select id="cursorModeSelect">
+            <option value="custom">Custom (always visible)</option>
+            <option value="system">System cursor</option>
+          </select>
+        </div>
+        <div class="small muted" style="margin-top:10px">Tip: Custom cursor remains consistent regardless of OS pointer settings.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar settings -->
+  <div class="modal" id="sidebarSettingsModal">
+    <div class="panel">
+      <div class="head">
+        <div>
+          <div class="announce-title">Sidebar</div>
+          <div class="small">Adjust sidebar density and behavior.</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="sidebarSettingsModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="form-row">
+          <label class="small muted">Density</label>
+          <select id="densitySelect">
+            <option value="normal">Normal</option>
+            <option value="compact">Compact</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin-top:10px">
+          <label class="small muted">Default state</label>
+          <select id="sidebarDefaultSelect">
+            <option value="expanded">Expanded</option>
+            <option value="collapsed">Collapsed</option>
+          </select>
+        </div>
+        <label class="gswitch" style="margin-top:12px;display:flex;gap:10px;align-items:center">
+          <input type="checkbox" id="sidebarHoverExpandToggle" />
+          <span>Auto-expand on hover when collapsed</span>
+        </label>
+        <div class="small muted" style="margin-top:10px">You can toggle anytime using the menu button in the top bar. Shortcut: Ctrl+B.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Data & health tools -->
+  <div class="modal" id="dataHealthModal">
+    <div class="panel">
+      <div class="head">
+        <div>
+          <div class="announce-title">Data tools</div>
+          <div class="small">Export, import, and validate offline data stored in this browser.</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="dataHealthModal">✕</button>
+      </div>
+      <div class="body">
+        <div class="settings-grid" style="grid-template-columns:1fr 1fr;gap:12px">
+          <div class="settings-card">
+            <div class="settings-card-title">Storage health</div>
+            <div class="small muted" id="storageHealthSummary" style="margin-top:6px">—</div>
+            <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" id="runHealthCheckBtn" type="button">Run health check</button>
+              <button class="btn" id="exportAllBtn" type="button">Export all</button>
+              <label class="btn" style="cursor:pointer">
+                Import all<input id="importAllInput" type="file" accept="application/json" style="display:none">
+              </label>
+            </div>
+          </div>
+          <div class="settings-card">
+            <div class="settings-card-title">Recovery</div>
+            <div class="small muted" style="margin-top:6px">If data becomes corrupted, you can export it then reset.</div>
+            <div style="margin-top:10px">
+              <button class="btn danger" id="factoryResetBtn2" type="button">Factory reset (local)</button>
+            </div>
+          </div>
+        </div>
+        <div class="small muted" id="healthDetails" style="margin-top:12px;white-space:pre-wrap"></div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,137 @@
+/* @AI_CRITICAL_GUARD: UNTOUCHABLE ZONE. Do not modify existing UI/UX, layouts, or core logic in this file without explicitly asking Thunter BOY for clearance. If changes are required here, STOP and provide a RISK IMPACT REPORT first. */
+// Single-function API router for Vercel Hobby plan.
+//
+// Vercel Hobby limits the number of Serverless Functions. This project previously
+// exceeded that limit by defining each endpoint as a separate /api/*.js file.
+//
+// This handler routes all /api/* traffic (via vercel.json rewrites) to the
+// corresponding implementation under /server/routes.
+
+function sendJson(res, statusCode, body) {
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(body));
+}
+
+function normalizePath(raw) {
+  if (!raw) return '';
+  if (Array.isArray(raw)) raw = raw.join('/');
+  raw = String(raw);
+  raw = raw.replace(/^\/+/, '').replace(/\/+$/, '');
+  return raw;
+}
+
+// Route table (string path => handler)
+const ROUTES = {
+  'env': require('../server/routes/env'),
+  'health': require('../server/routes/health'),
+  'debug/log': require('../server/routes/debug/log'),
+
+  // Vendor bundles served as first-party scripts (avoid 3rd-party storage blocks)
+  'vendor/supabase.js': require('../server/routes/vendor/supabase'),
+
+  // Keep-alive ping for Supabase (prevents project pausing on free plans)
+  'keep_alive': require('../server/routes/keep_alive'),
+  // Back-compat alias if callers hit /api/keep_alive.js
+  'keep_alive.js': require('../server/routes/keep_alive'),
+
+  'mailbox_override/get': require('../server/routes/mailbox_override/get'),
+  'mailbox_override/set': require('../server/routes/mailbox_override/set'),
+
+  'mailbox/assign': require('../server/routes/mailbox/assign'),
+  'mailbox/confirm': require('../server/routes/mailbox/confirm'),
+  'mailbox/case_action': require('../server/routes/mailbox/case_action'),
+
+  'presence/heartbeat': require('../server/routes/presence/heartbeat'),
+  'presence/list': require('../server/routes/presence/list'),
+
+  'sync/pull': require('../server/routes/sync/pull'),
+  'sync/push': require('../server/routes/sync/push'),
+
+  'theme_access/get': require('../server/routes/theme_access/get'),
+  'theme_access/set': require('../server/routes/theme_access/set'),
+  'settings/global_theme': require('../server/routes/settings/global_theme'),
+  'settings/global-theme': require('../server/routes/settings/global_theme'),
+  'settings/login_mode': require('../server/routes/settings/login_mode'),
+
+  'overall_stats': require('../server/routes/overall_stats'),
+
+  'users/create': require('../server/routes/users/create'),
+  'users/ensure_profile': require('../server/routes/users/ensure_profile'),
+  'users/list': require('../server/routes/users/list'),
+  'users/resolve_email': require('../server/routes/users/resolve_email'),
+  'users/me': require('../server/routes/users/me'),
+  'users/update_me': require('../server/routes/users/update_me'),
+  'users/update_user': require('../server/routes/users/update_user'),
+  'users/upload_avatar': require('../server/routes/users/upload_avatar'),
+  'users/remove_avatar': require('../server/routes/users/remove_avatar'),
+  'users/delete': require('../server/routes/users/delete'),
+
+  'member/schedule': require('../server/routes/member_schedule'),
+
+  'tasks/assigned': require('../server/routes/tasks/assigned'),
+  'tasks/distributions': require('../server/routes/tasks/distributions'),
+  'tasks/distribution_items': require('../server/routes/tasks/distribution_items'),
+  'tasks/item_status': require('../server/routes/tasks/item_status'),
+  'tasks/workload_matrix': require('../server/routes/tasks/workload_matrix'),
+  'tasks/members': require('../server/routes/tasks/members'),
+  'tasks/monitoring': require('../server/routes/tasks/monitoring'),
+  'tasks/reassign_pending': require('../server/routes/tasks/reassign_pending'),
+  'tasks/distribution_export': require('../server/routes/tasks/distribution_export'),
+
+  'quickbase/monitoring': require('../server/routes/quickbase/monitoring'),
+  'quickbase_tabs': require('../server/routes/quickbase_tabs'),
+  'quickbase_tabs/upsert': require('../server/routes/quickbase_tabs'),
+};
+
+const DYNAMIC_ROUTES = [
+  {
+    pattern: /^member\/([^/]+)\/schedule$/,
+    handler: ROUTES['member/schedule'],
+    paramMap: (m) => ({ memberId: decodeURIComponent(m[1] || '') })
+  },
+  {
+    pattern: /^quickbase_tabs\/([^/]+)$/,
+    handler: ROUTES['quickbase_tabs'],
+    paramMap: (m) => ({ tab_id: decodeURIComponent(m[1] || '') })
+  }
+];
+
+function resolveRoute(routePath) {
+  const exact = ROUTES[routePath];
+  if (exact) return { handler: exact, params: {} };
+  for (const entry of DYNAMIC_ROUTES) {
+    const hit = routePath.match(entry.pattern);
+    if (!hit) continue;
+    return { handler: entry.handler, params: entry.paramMap(hit) };
+  }
+  return { handler: null, params: {} };
+}
+
+module.exports = async (req, res) => {
+  try {
+    // Prefer rewrite-provided query param `path`.
+    let p = req.query && (req.query.path ?? req.query.p);
+
+    // Fallback: derive path from URL (in case rewrites are not applied in some dev setups).
+    if (!p) {
+      const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+      // /api/<path>
+      const m = url.pathname.match(/^\/api\/(.*)$/);
+      p = m ? m[1] : '';
+    }
+
+    const routePath = normalizePath(p);
+    const resolved = resolveRoute(routePath);
+    const handler = resolved.handler;
+
+    if (!handler) {
+      res.setHeader('Cache-Control', 'no-store');
+      return sendJson(res, 404, { ok: false, error: 'not_found', path: routePath });
+    }
+
+    return await handler(req, res, resolved.params);
+  } catch (err) {
+    return sendJson(res, 500, { ok: false, error: 'router_failed', message: String(err && err.message ? err.message : err) });
+  }
+};

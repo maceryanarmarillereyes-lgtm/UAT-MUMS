@@ -1,0 +1,1098 @@
+/* @AI_CRITICAL_GUARD: UNTOUCHABLE ZONE. Strictly protects Enterprise UI/UX, Realtime Sync Logic, Core State Management, and Database/API Adapters. Do NOT modify existing logic or layout in this file without explicitly asking Thunter BOY for clearance. If overlapping changes are required, STOP and provide a RISK IMPACT REPORT first. */
+/*
+ * MUMS Widget Enhancement Layer — Phase 1-615
+ * ─────────────────────────────────────────────────────────────
+ * Applies the Widget Pack design system on top of the existing
+ * aurora_midnight theme.  All rules are scoped to
+ * body[data-theme="aurora_midnight"] so they NEVER affect other
+ * themes, and NEVER override layout/structural properties.
+ *
+ * Sections:
+ *   1.  Design Tokens (new widget variables)
+ *   2.  Topbar & Brand
+ *   3.  Buttons  (primary / ghost / danger / success / teal / warn)
+ *   4.  Badges & Status Chips
+ *   5.  Sync Status Pill (topbar)
+ *   6.  KPI Cards
+ *   7.  Schedule Task Blocks
+ *   8.  Schedule KPI strip
+ *   9.  Team Schedule Table  (tsg-*)
+ *   10. Toast / UI.toast notifications
+ *   11. Sidebar Nav  (icon badge backgrounds)
+ *   12. Avatar / Profile photo
+ *   13. Online Users Bar
+ *   14. Action Buttons (Members page)
+ *   15. Coverage Meter
+ *   16. Day Tabs
+ *   17. Announce Bar
+ *   18. Dashboard Cards (dashx-*)
+ *   19. Modals (polished glass)
+ *   20. Inputs & Select
+ *   21. Misc polish (scrollbars, HR, selection)
+ */
+
+/* ════════════════════════════════════════════════════════════
+   1. DESIGN TOKENS
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] {
+  /* Widget accent palette */
+  --w-blue:    #4aa3ff;
+  --w-indigo:  #7c6ff7;
+  --w-teal:    #06d6b0;
+  --w-violet:  #a78bfa;
+  --w-warn:    #fbbf24;
+  --w-error:   #f87171;
+  --w-success: #4ade80;
+
+  --w-morning: #06d6b0;
+  --w-mid:     #3b82f6;
+  --w-night:   #a78bfa;
+
+  --w-mailbox: #c4b5fd;
+  --w-call:    #86efac;
+  --w-backoff: #fdba74;
+  --w-lunch:   #94a3b8;
+
+  --w-glow-blue:   rgba(74, 163, 255, .28);
+  --w-glow-indigo: rgba(124,111,247, .32);
+  --w-glow-teal:   rgba(6, 214,176,  .28);
+  --w-glow-violet: rgba(167,139,250, .28);
+  --w-glow-warn:   rgba(251,191, 36, .30);
+  --w-glow-error:  rgba(248,113,113, .30);
+  --w-glow-success:rgba(74, 222,128, .30);
+}
+
+/* ════════════════════════════════════════════════════════════
+   2. TOPBAR & BRAND
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .topbar {
+  background: linear-gradient(90deg, #080b24 0%, #0b0f2e 100%) !important;
+  border: 1px solid rgba(130,148,255,.14) !important;
+  box-shadow: 0 1px 0 rgba(130,148,255,.10), 0 4px 20px rgba(0,0,0,.35) !important;
+}
+
+body[data-theme="aurora_midnight"] .brand-mark {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #06d6b0 100%) !important;
+  box-shadow:
+    0 0 20px rgba(124,111,247,.55),
+    0 0 36px rgba(6,214,176,.18),
+    0 4px 14px rgba(0,0,0,.40),
+    inset 0 0 0 1px rgba(255,255,255,.18) !important;
+  border-radius: 12px !important;
+}
+
+body[data-theme="aurora_midnight"] .brand-name {
+  background: linear-gradient(90deg, #e8eeff, #c4b5fd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none !important;
+  font-weight: 800 !important;
+  letter-spacing: .04em !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   3. BUTTONS
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .btn {
+  font-weight: 700 !important;
+  border-radius: 10px !important;
+  transition: all .16s ease !important;
+  letter-spacing: .01em !important;
+}
+
+/* Primary */
+body[data-theme="aurora_midnight"] .btn.primary {
+  background: linear-gradient(145deg, rgba(124,111,247,.80), rgba(99,84,230,.65)) !important;
+  border-color: rgba(124,111,247,.60) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 18px var(--w-glow-indigo), 0 1px 0 rgba(255,255,255,.10) inset !important;
+}
+body[data-theme="aurora_midnight"] .btn.primary:hover {
+  background: linear-gradient(145deg, rgba(140,128,255,.88), rgba(112,96,245,.75)) !important;
+  box-shadow: 0 6px 24px var(--w-glow-indigo) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Danger */
+body[data-theme="aurora_midnight"] .btn.danger {
+  background: linear-gradient(145deg, rgba(248,113,113,.55), rgba(220,38,38,.42)) !important;
+  border-color: rgba(248,113,113,.55) !important;
+  color: #fecaca !important;
+  box-shadow: 0 4px 16px var(--w-glow-error) !important;
+}
+body[data-theme="aurora_midnight"] .btn.danger:hover {
+  box-shadow: 0 6px 22px rgba(248,113,113,.45) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Success / Unlock */
+body[data-theme="aurora_midnight"] .btn.ok,
+body[data-theme="aurora_midnight"] .btn.success {
+  background: linear-gradient(145deg, rgba(74,222,128,.55), rgba(22,163,74,.42)) !important;
+  border-color: rgba(74,222,128,.55) !important;
+  color: #bbf7d0 !important;
+  box-shadow: 0 4px 16px var(--w-glow-success) !important;
+}
+body[data-theme="aurora_midnight"] .btn.ok:hover,
+body[data-theme="aurora_midnight"] .btn.success:hover {
+  box-shadow: 0 6px 22px rgba(74,222,128,.45) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Warn (Auto Assign, Lock) */
+body[data-theme="aurora_midnight"] .btn.warn {
+  background: linear-gradient(145deg, rgba(251,191,36,.50), rgba(245,158,11,.38)) !important;
+  border-color: rgba(251,191,36,.55) !important;
+  color: #fef3c7 !important;
+  box-shadow: 0 4px 16px var(--w-glow-warn) !important;
+}
+body[data-theme="aurora_midnight"] .btn.warn:hover {
+  box-shadow: 0 6px 22px rgba(251,191,36,.42) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Ghost */
+body[data-theme="aurora_midnight"] .btn.ghost {
+  background: transparent !important;
+  border-color: rgba(130,148,255,.22) !important;
+  color: #bcc8e4 !important;
+  box-shadow: none !important;
+}
+body[data-theme="aurora_midnight"] .btn.ghost:hover {
+  background: rgba(124,111,247,.10) !important;
+  border-color: rgba(124,111,247,.35) !important;
+  color: #d8cfff !important;
+}
+
+/* Active ghost (view toggles: Weekly / Daily / Team) */
+body[data-theme="aurora_midnight"] .btn.ghost.active,
+body[data-theme="aurora_midnight"] .schx-toggle .btn.active {
+  background: rgba(124,111,247,.20) !important;
+  border-color: rgba(124,111,247,.55) !important;
+  color: #c4b5fd !important;
+  box-shadow: 0 0 0 2px rgba(124,111,247,.14) !important;
+}
+
+/* Logout */
+body[data-theme="aurora_midnight"] #logoutBtn {
+  background: rgba(248,113,113,.10) !important;
+  border-color: rgba(248,113,113,.28) !important;
+  color: #fca5a5 !important;
+  font-weight: 700 !important;
+  letter-spacing: .02em !important;
+}
+body[data-theme="aurora_midnight"] #logoutBtn:hover {
+  background: rgba(248,113,113,.20) !important;
+  border-color: rgba(248,113,113,.45) !important;
+  box-shadow: 0 4px 16px rgba(248,113,113,.25) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   4. BADGES & STATUS CHIPS
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .ux-chip {
+  background: rgba(124,111,247,.12) !important;
+  border: 1px solid rgba(124,111,247,.28) !important;
+  color: #c4b5fd !important;
+  border-radius: 999px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: .04em !important;
+  padding: 4px 12px !important;
+}
+body[data-theme="aurora_midnight"] .ux-chip .dot {
+  background: var(--w-success) !important;
+  box-shadow: 0 0 6px rgba(74,222,128,.7) !important;
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50% !important;
+}
+
+/* Role badge enhancements */
+body[data-theme="aurora_midnight"] .badge.ok,
+body[data-theme="aurora_midnight"] .sp-role {
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+  border-radius: 999px !important;
+}
+
+/* Shift badges */
+body[data-theme="aurora_midnight"] .mysx-badge.morning,
+body[data-theme="aurora_midnight"] .badge-morning {
+  background: rgba(6,214,176,.12) !important;
+  border: 1px solid rgba(6,214,176,.35) !important;
+  color: var(--w-teal) !important;
+}
+body[data-theme="aurora_midnight"] .mysx-badge.mid,
+body[data-theme="aurora_midnight"] .badge-mid {
+  background: rgba(59,130,246,.12) !important;
+  border: 1px solid rgba(59,130,246,.35) !important;
+  color: var(--w-mid) !important;
+}
+body[data-theme="aurora_midnight"] .mysx-badge.night,
+body[data-theme="aurora_midnight"] .badge-night {
+  background: rgba(167,139,250,.12) !important;
+  border: 1px solid rgba(167,139,250,.35) !important;
+  color: var(--w-night) !important;
+}
+
+/* Inactive / rest-day badge */
+body[data-theme="aurora_midnight"] .badge.muted {
+  background: rgba(148,163,184,.08) !important;
+  border-color: rgba(148,163,184,.20) !important;
+  color: #94a3b8 !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   5. SYNC STATUS PILL (topbar)
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .sync-status {
+  background: rgba(6,214,176,.10) !important;
+  border: 1px solid rgba(6,214,176,.28) !important;
+  color: #5eead4 !important;
+  border-radius: 999px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 5px 12px !important;
+  letter-spacing: .04em !important;
+}
+body[data-theme="aurora_midnight"] .sync-status .dot {
+  background: var(--w-teal) !important;
+  box-shadow: 0 0 8px rgba(6,214,176,.80) !important;
+  animation: w-pulse-glow 1.8s ease-in-out infinite !important;
+}
+body[data-theme="aurora_midnight"] .sync-status.warn {
+  background: rgba(251,191,36,.10) !important;
+  border-color: rgba(251,191,36,.30) !important;
+  color: #fde68a !important;
+}
+body[data-theme="aurora_midnight"] .sync-status.warn .dot {
+  background: var(--w-warn) !important;
+  box-shadow: 0 0 8px rgba(251,191,36,.70) !important;
+  animation: none !important;
+}
+body[data-theme="aurora_midnight"] .sync-status.error {
+  background: rgba(248,113,113,.10) !important;
+  border-color: rgba(248,113,113,.30) !important;
+  color: #fca5a5 !important;
+}
+body[data-theme="aurora_midnight"] .sync-status.error .dot {
+  background: var(--w-error) !important;
+  box-shadow: 0 0 8px rgba(248,113,113,.70) !important;
+  animation: none !important;
+}
+@keyframes w-pulse-glow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(6,214,176,.7), 0 0 0 0 rgba(6,214,176,.45); }
+  50%       { opacity: .80; box-shadow: 0 0 10px rgba(6,214,176,.5), 0 0 0 5px rgba(6,214,176,.0); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   6. KPI CARDS (schedule page + dashboard)
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .schx-kpi {
+  background: linear-gradient(155deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,.015) 100%) !important;
+  border: 1px solid rgba(130,148,255,.16) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 4px 18px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.04) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+body[data-theme="aurora_midnight"] .schx-kpi::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--w-indigo), var(--w-teal));
+  opacity: .65;
+  pointer-events: none;
+}
+body[data-theme="aurora_midnight"] .schx-kpi .big {
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.01em !important;
+  color: #e8eeff !important;
+}
+body[data-theme="aurora_midnight"] .schx-kpi.countdown .big { color: var(--w-blue) !important; }
+body[data-theme="aurora_midnight"] .schx-kpi.countdown.ok { border-color: rgba(74,222,128,.40) !important; background: linear-gradient(155deg, rgba(74,222,128,.08), rgba(6,214,176,.04)) !important; }
+body[data-theme="aurora_midnight"] .schx-kpi.countdown.ok .big { color: var(--w-success) !important; }
+body[data-theme="aurora_midnight"] .schx-kpi.countdown.ok::before { background: var(--w-success); }
+body[data-theme="aurora_midnight"] .schx-kpi.countdown.focus { border-color: rgba(74,163,255,.40) !important; background: linear-gradient(155deg, rgba(74,163,255,.08), rgba(124,111,247,.04)) !important; }
+body[data-theme="aurora_midnight"] .schx-kpi.countdown.focus .big { color: var(--w-blue) !important; }
+body[data-theme="aurora_midnight"] .schx-kpi.countdown.warn { border-color: rgba(251,191,36,.45) !important; background: linear-gradient(155deg, rgba(251,191,36,.10), rgba(245,158,11,.04)) !important; }
+body[data-theme="aurora_midnight"] .schx-kpi.countdown.warn .big { color: var(--w-warn) !important; }
+
+/* Dashboard dashx-cards */
+body[data-theme="aurora_midnight"] .dashx-card {
+  background: linear-gradient(155deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,.015) 100%) !important;
+  border: 1px solid rgba(130,148,255,.14) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 4px 18px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+body[data-theme="aurora_midnight"] .dashx-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--w-indigo), var(--w-teal));
+  opacity: .60;
+  pointer-events: none;
+}
+body[data-theme="aurora_midnight"] .dashx-card .v {
+  font-size: 24px !important;
+  font-weight: 800 !important;
+  color: var(--w-blue) !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   7. SCHEDULE TASK BLOCKS (My Schedule + Members timeline)
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .schx-block {
+  border-radius: 8px !important;
+  border-width: 1.5px !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,.22) !important;
+  transition: transform .14s ease, box-shadow .14s ease !important;
+}
+body[data-theme="aurora_midnight"] .schx-block:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,.32) !important;
+}
+body[data-theme="aurora_midnight"] .schx-block[data-task-type="mailbox_manager"] {
+  background: linear-gradient(90deg, rgba(196,181,253,.22) 0%, rgba(196,181,253,.10) 100%) !important;
+  border-color: var(--w-mailbox) !important;
+  box-shadow: 0 2px 12px rgba(196,181,253,.15) !important;
+}
+body[data-theme="aurora_midnight"] .schx-block[data-task-type="back_office"] {
+  background: linear-gradient(90deg, rgba(253,186,116,.22) 0%, rgba(253,186,116,.10) 100%) !important;
+  border-color: var(--w-backoff) !important;
+  box-shadow: 0 2px 12px rgba(253,186,116,.15) !important;
+}
+body[data-theme="aurora_midnight"] .schx-block[data-task-type="call_available"],
+body[data-theme="aurora_midnight"] .schx-block[data-task-type="call_onqueue"] {
+  background: linear-gradient(90deg, rgba(134,239,172,.22) 0%, rgba(134,239,172,.10) 100%) !important;
+  border-color: var(--w-call) !important;
+  box-shadow: 0 2px 12px rgba(134,239,172,.15) !important;
+}
+body[data-theme="aurora_midnight"] .schx-block[data-task-type="lunch"] {
+  background: linear-gradient(90deg, rgba(148,163,184,.20) 0%, rgba(148,163,184,.08) 100%) !important;
+  border-color: var(--w-lunch) !important;
+}
+
+/* Left accent bar */
+body[data-theme="aurora_midnight"] .schx-block::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; bottom: 0; width: 3px;
+  border-radius: 2px 0 0 2px;
+  background: currentColor;
+  opacity: .75;
+}
+
+body[data-theme="aurora_midnight"] .schx-block.is-live-current {
+  animation: w-live-pulse 2.5s ease-in-out infinite !important;
+}
+@keyframes w-live-pulse {
+  0%, 100% { box-shadow: 0 2px 10px rgba(0,0,0,.22); }
+  50%       { box-shadow: 0 4px 20px rgba(74,222,128,.25); }
+}
+
+body[data-theme="aurora_midnight"] .schx-block.is-completed {
+  opacity: .5 !important;
+  filter: saturate(.5) !important;
+}
+
+/* Members timeline segs (horizontal blocks) */
+body[data-theme="aurora_midnight"] .seg {
+  border-radius: 5px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.20) !important;
+  transition: filter .12s, transform .12s !important;
+}
+body[data-theme="aurora_midnight"] .seg:hover {
+  filter: brightness(1.12) !important;
+  transform: scaleY(1.06) !important;
+  z-index: 2 !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   8. SCHEDULE KPI STRIP + LEGEND
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .schx-kpis {
+  gap: 10px !important;
+}
+
+body[data-theme="aurora_midnight"] .schx-legend {
+  background: rgba(255,255,255,.025) !important;
+  border: 1px solid rgba(130,148,255,.12) !important;
+  border-radius: 10px !important;
+  padding: 8px 14px !important;
+}
+body[data-theme="aurora_midnight"] .legend-item { color: #bcc8e4 !important; font-size: 11px !important; font-weight: 600 !important; }
+body[data-theme="aurora_midnight"] .legend-dot { width: 8px !important; height: 8px !important; border-radius: 50% !important; }
+
+/* View toggle (Weekly/Daily/Team) */
+body[data-theme="aurora_midnight"] .schx-toggle {
+  background: rgba(255,255,255,.03) !important;
+  border: 1px solid rgba(130,148,255,.14) !important;
+  border-radius: 999px !important;
+  padding: 3px !important;
+  gap: 2px !important;
+}
+body[data-theme="aurora_midnight"] .schx-toggle .btn {
+  border-radius: 999px !important;
+  font-size: 12px !important;
+  padding: 6px 14px !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+}
+
+/* Day tabs (schx-daytab) */
+body[data-theme="aurora_midnight"] .schx-daytab {
+  border-radius: 9px !important;
+  border: 1px solid rgba(130,148,255,.14) !important;
+  background: rgba(255,255,255,.025) !important;
+  color: #8ea4c8 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  transition: all .14s ease !important;
+}
+body[data-theme="aurora_midnight"] .schx-daytab.active {
+  background: rgba(124,111,247,.18) !important;
+  border-color: rgba(124,111,247,.45) !important;
+  color: #c4b5fd !important;
+  box-shadow: 0 0 0 2px rgba(124,111,247,.12) !important;
+}
+body[data-theme="aurora_midnight"] .schx-daytab.is-today {
+  border-color: rgba(6,214,176,.30) !important;
+  color: var(--w-teal) !important;
+}
+body[data-theme="aurora_midnight"] .schx-daytab .dot {
+  background: var(--w-indigo) !important;
+  box-shadow: 0 0 4px rgba(124,111,247,.6) !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   9. TEAM SCHEDULE TABLE  (tsg-*)
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .team-schedule-wrap {
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(130,148,255,.14) !important;
+  box-shadow: 0 6px 24px rgba(0,0,0,.30) !important;
+}
+body[data-theme="aurora_midnight"] .team-schedule-grid {
+  background: rgba(8,9,30,.96) !important;
+}
+body[data-theme="aurora_midnight"] .team-schedule-row {
+  border-bottom: 1px solid rgba(130,148,255,.08) !important;
+  transition: background .12s !important;
+}
+body[data-theme="aurora_midnight"] .team-schedule-row:hover {
+  background: rgba(124,111,247,.04) !important;
+}
+body[data-theme="aurora_midnight"] .team-schedule-header {
+  background: rgba(7,9,28,.95) !important;
+  border-bottom: 1px solid rgba(130,148,255,.14) !important;
+}
+body[data-theme="aurora_midnight"] .tsg-h,
+body[data-theme="aurora_midnight"] .team-schedule-header .tsg-h {
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: .10em !important;
+  text-transform: uppercase !important;
+  color: #6b82a8 !important;
+}
+body[data-theme="aurora_midnight"] .tsg-name {
+  background: rgba(7,9,28,.60) !important;
+  border-right: 1px solid rgba(130,148,255,.10) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #bcc8e4 !important;
+}
+body[data-theme="aurora_midnight"] .tsg-member-name {
+  color: #e8eeff !important;
+  font-weight: 700 !important;
+}
+body[data-theme="aurora_midnight"] .tsg-timeline {
+  background: rgba(4,5,18,.94) !important;
+  border-top: 1px solid rgba(130,148,255,.06) !important;
+}
+body[data-theme="aurora_midnight"] .tsg-hour-grid {
+  background-image: repeating-linear-gradient(
+    to right,
+    rgba(130,148,255,.16) 0,
+    rgba(130,148,255,.16) 1px,
+    transparent 1px,
+    transparent var(--tsg-hour-px, 120px)
+  ) !important;
+}
+/* Task bars in team table */
+body[data-theme="aurora_midnight"] .tsg-block {
+  border-radius: 5px !important;
+  top: 4px !important;
+  bottom: 4px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.22) !important;
+  transition: filter .12s, transform .12s !important;
+}
+body[data-theme="aurora_midnight"] .tsg-block:hover {
+  filter: brightness(1.12) !important;
+  transform: scaleY(1.08) !important;
+  z-index: 2 !important;
+}
+body[data-theme="aurora_midnight"] .tsg-block[data-task-type="mailbox_manager"] {
+  border-color: var(--w-mailbox) !important;
+  background: color-mix(in srgb, var(--w-mailbox) 35%, rgba(255,255,255,.06)) !important;
+}
+body[data-theme="aurora_midnight"] .tsg-block[data-task-type="back_office"] {
+  border-color: var(--w-backoff) !important;
+  background: color-mix(in srgb, var(--w-backoff) 35%, rgba(255,255,255,.06)) !important;
+}
+body[data-theme="aurora_midnight"] .tsg-block[data-task-type="call_available"],
+body[data-theme="aurora_midnight"] .tsg-block[data-task-type="call_onqueue"] {
+  border-color: var(--w-call) !important;
+  background: color-mix(in srgb, var(--w-call) 35%, rgba(255,255,255,.06)) !important;
+}
+body[data-theme="aurora_midnight"] .tsg-block[data-task-type="lunch"] {
+  border-color: var(--w-lunch) !important;
+  background: color-mix(in srgb, var(--w-lunch) 30%, rgba(255,255,255,.06)) !important;
+}
+body[data-theme="aurora_midnight"] .tsg-block-label {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: .02em !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,.40) !important;
+}
+
+/* Rest day / Leave labels in team table */
+body[data-theme="aurora_midnight"] .tsg-rest-day {
+  color: rgba(148,163,184,.65) !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+}
+body[data-theme="aurora_midnight"] .tsg-on-leave {
+  color: rgba(253,186,116,.80) !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+}
+body[data-theme="aurora_midnight"] .team-schedule-row.member-row.is-inactive .tsg-name { opacity: .45 !important; }
+body[data-theme="aurora_midnight"] .team-schedule-row.member-row.is-inactive .tsg-timeline {
+  background: rgba(4,5,18,.70) !important;
+  border-left: 2px dashed rgba(130,148,255,.12) !important;
+}
+
+/* Coverage row */
+body[data-theme="aurora_midnight"] .tsg-coverage {
+  border-top: 1px solid rgba(130,148,255,.12) !important;
+  background: rgba(7,9,28,.80) !important;
+}
+body[data-theme="aurora_midnight"] .tsg-coverage .tsg-name {
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: .06em !important;
+  text-transform: uppercase !important;
+  color: #6b82a8 !important;
+}
+body[data-theme="aurora_midnight"] .tsg-coverage-cell {
+  font-size: 10px !important;
+  color: #6b82a8 !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  padding: 4px 6px !important;
+  border-left: 1px solid rgba(130,148,255,.10) !important;
+}
+body[data-theme="aurora_midnight"] .tsg-coverage-cell strong { color: var(--w-teal) !important; }
+
+/* Now-line */
+body[data-theme="aurora_midnight"] .tsg-nowline {
+  border-left: 2px solid rgba(248,113,113,.80) !important;
+  box-shadow: 0 0 8px rgba(248,113,113,.50) !important;
+}
+body[data-theme="aurora_midnight"] .tsg-nowline span {
+  background: var(--w-error) !important;
+  color: #fff !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  box-shadow: 0 2px 8px rgba(248,113,113,.45) !important;
+}
+
+/* Hour header labels */
+body[data-theme="aurora_midnight"] .tsg-hour-cell {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: #536080 !important;
+}
+
+/* Avatar in team table */
+body[data-theme="aurora_midnight"] .tsg-avatar-fallback {
+  background: linear-gradient(135deg, rgba(124,111,247,.55), rgba(6,214,176,.40)) !important;
+  color: #fff !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   10. TOAST / UI.toast NOTIFICATIONS
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .toast,
+body[data-theme="aurora_midnight"] [class*="toast-"] {
+  border-radius: 12px !important;
+  font-weight: 700 !important;
+  backdrop-filter: blur(16px) !important;
+  box-shadow: 0 8px 28px rgba(0,0,0,.40), 0 0 0 1px rgba(255,255,255,.04) !important;
+}
+/* Generic .toast wrapper if app uses one */
+body[data-theme="aurora_midnight"] .ui-toast {
+  background: linear-gradient(145deg, rgba(13,18,40,.95), rgba(10,14,30,.98)) !important;
+  border: 1px solid rgba(130,148,255,.18) !important;
+  border-radius: 12px !important;
+  color: #e8eeff !important;
+  padding: 12px 16px !important;
+  box-shadow: 0 10px 32px rgba(0,0,0,.42), 0 0 0 1px rgba(255,255,255,.03) !important;
+  backdrop-filter: blur(20px) !important;
+}
+body[data-theme="aurora_midnight"] .ui-toast.ok,
+body[data-theme="aurora_midnight"] .ui-toast.success {
+  border-left: 3px solid var(--w-success) !important;
+  background: linear-gradient(145deg, rgba(74,222,128,.10), rgba(13,18,40,.95)) !important;
+}
+body[data-theme="aurora_midnight"] .ui-toast.warn {
+  border-left: 3px solid var(--w-warn) !important;
+  background: linear-gradient(145deg, rgba(251,191,36,.10), rgba(13,18,40,.95)) !important;
+}
+body[data-theme="aurora_midnight"] .ui-toast.error,
+body[data-theme="aurora_midnight"] .ui-toast.danger {
+  border-left: 3px solid var(--w-error) !important;
+  background: linear-gradient(145deg, rgba(248,113,113,.10), rgba(13,18,40,.95)) !important;
+}
+body[data-theme="aurora_midnight"] .ui-toast.info {
+  border-left: 3px solid var(--w-blue) !important;
+  background: linear-gradient(145deg, rgba(74,163,255,.10), rgba(13,18,40,.95)) !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   11. SIDEBAR NAV — Icon badge polish
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .nav-ico {
+  width: 20px !important;
+  height: 20px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 6px !important;
+  flex-shrink: 0 !important;
+  font-size: 13px !important;
+  transition: all .14s ease !important;
+}
+body[data-theme="aurora_midnight"] .nav a.active .nav-ico,
+body[data-theme="aurora_midnight"] .nav .nav-item.active .nav-ico {
+  background: rgba(124,111,247,.18) !important;
+  box-shadow: 0 0 10px rgba(124,111,247,.25) !important;
+}
+
+/* Active nav indicator — glowing left bar */
+body[data-theme="aurora_midnight"] .nav a.active,
+body[data-theme="aurora_midnight"] .nav .nav-item.active {
+  position: relative !important;
+}
+body[data-theme="aurora_midnight"] .nav a.active::before,
+body[data-theme="aurora_midnight"] .nav .nav-item.active::before {
+  background: linear-gradient(180deg, var(--w-indigo), var(--w-teal)) !important;
+  box-shadow: 0 0 12px rgba(124,111,247,.75), 0 0 20px rgba(6,214,176,.25) !important;
+  width: 3px !important;
+}
+
+/* Nav group labels */
+body[data-theme="aurora_midnight"] .nav-section-label,
+body[data-theme="aurora_midnight"] .nav-label {
+  font-size: 9.5px !important;
+  letter-spacing: .14em !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   12. AVATAR / PROFILE PHOTO
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .sp-photo-sm,
+body[data-theme="aurora_midnight"] .sp-photo {
+  border-radius: 12px !important;
+  border: 1.5px solid rgba(124,111,247,.35) !important;
+  background: linear-gradient(135deg, rgba(124,111,247,.18), rgba(6,214,176,.12)) !important;
+  box-shadow: 0 0 14px rgba(124,111,247,.18) !important;
+}
+body[data-theme="aurora_midnight"] .sp-photo-sm .initials,
+body[data-theme="aurora_midnight"] .sp-photo .initials {
+  font-weight: 800 !important;
+  color: #e8eeff !important;
+  text-shadow: 0 1px 4px rgba(0,0,0,.40) !important;
+}
+body[data-theme="aurora_midnight"] .sp-presence-dot.is-active {
+  background: var(--w-success) !important;
+  box-shadow: 0 0 0 2px var(--bg-deep, #07091a), 0 0 8px rgba(74,222,128,.70) !important;
+  animation: w-pulse-glow 2s ease-in-out infinite !important;
+}
+
+/* Member avatar in members page */
+body[data-theme="aurora_midnight"] .ms-avatar {
+  border-radius: 12px !important;
+  border: 1.5px solid rgba(124,111,247,.30) !important;
+  background: linear-gradient(135deg, rgba(124,111,247,.22), rgba(6,214,176,.15)) !important;
+  font-weight: 800 !important;
+  box-shadow: 0 0 12px rgba(124,111,247,.15) !important;
+}
+
+/* Online pills in bottom bar */
+body[data-theme="aurora_midnight"] .online-pill {
+  border: 1.5px solid rgba(74,222,128,.60) !important;
+  background: rgba(255,255,255,.05) !important;
+  box-shadow: 0 0 0 1px rgba(74,222,128,.12) !important;
+  transition: all .14s !important;
+}
+body[data-theme="aurora_midnight"] .online-pill:hover {
+  border-color: rgba(74,222,128,.90) !important;
+  box-shadow: 0 0 10px rgba(74,222,128,.35) !important;
+}
+body[data-theme="aurora_midnight"] .online-pill.is-red {
+  border-color: rgba(248,113,113,.70) !important;
+  box-shadow: 0 0 0 1px rgba(248,113,113,.12) !important;
+}
+body[data-theme="aurora_midnight"] .online-pill.is-red:hover {
+  box-shadow: 0 0 10px rgba(248,113,113,.35) !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   13. ONLINE USERS BAR (bottom bar)
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .online-users-bar {
+  background: linear-gradient(
+    180deg,
+    rgba(7,9,26,0) 0%,
+    rgba(7,9,26,.85) 45%,
+    rgba(5,7,20,.97) 100%) !important;
+  border-top: 1px solid rgba(130,148,255,.12) !important;
+  backdrop-filter: blur(16px) !important;
+}
+body[data-theme="aurora_midnight"] .onlinebar-sec {
+  background: rgba(255,255,255,.03) !important;
+  border: 1px solid rgba(130,148,255,.12) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,.20) !important;
+}
+body[data-theme="aurora_midnight"] .onlinebar-title {
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+  color: #536080 !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   14. ACTION BUTTONS (Members toolbar: Paint, Delete, etc.)
+   ════════════════════════════════════════════════════════════ */
+/* Paint button */
+body[data-theme="aurora_midnight"] #paintBtn,
+body[data-theme="aurora_midnight"] .btn[data-act="paint"],
+body[data-theme="aurora_midnight"] .paint-btn {
+  background: linear-gradient(145deg, rgba(74,163,255,.45), rgba(74,163,255,.22)) !important;
+  border-color: rgba(74,163,255,.55) !important;
+  color: #bae6fd !important;
+  box-shadow: 0 3px 12px rgba(74,163,255,.20) !important;
+}
+
+/* Auto Assign */
+body[data-theme="aurora_midnight"] .auto-assign-btn,
+body[data-theme="aurora_midnight"] [data-act="auto-assign"] {
+  background: linear-gradient(145deg, rgba(251,191,36,.48), rgba(245,158,11,.30)) !important;
+  border-color: rgba(251,191,36,.55) !important;
+  color: #fef3c7 !important;
+  box-shadow: 0 3px 12px rgba(251,191,36,.22) !important;
+  font-weight: 700 !important;
+}
+
+/* Delete / Clear */
+body[data-theme="aurora_midnight"] .btn[data-act="delete-sel"],
+body[data-theme="aurora_midnight"] .btn[data-act="clear-all"] {
+  background: linear-gradient(145deg, rgba(248,113,113,.40), rgba(220,38,38,.28)) !important;
+  border-color: rgba(248,113,113,.50) !important;
+  color: #fecaca !important;
+}
+
+/* Coverage meter cells */
+body[data-theme="aurora_midnight"] .cov-cell-m { color: var(--w-teal) !important; font-weight: 800 !important; }
+body[data-theme="aurora_midnight"] .cov-cell-c { color: var(--w-blue) !important; font-weight: 800 !important; }
+
+/* ════════════════════════════════════════════════════════════
+   15. COVERAGE METER (Members page top bar)
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .coverage-meter,
+body[data-theme="aurora_midnight"] .cov-wrap {
+  background: rgba(7,9,28,.90) !important;
+  border: 1px solid rgba(130,148,255,.12) !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+body[data-theme="aurora_midnight"] .hour-cell,
+body[data-theme="aurora_midnight"] .cov-hour {
+  border-left: 1px solid rgba(130,148,255,.12) !important;
+  background: rgba(7,9,28,.80) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   16. DAY TABS (Members page)
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .daytab {
+  border-radius: 8px 8px 0 0 !important;
+  border: 1px solid rgba(130,148,255,.14) !important;
+  border-bottom: none !important;
+  background: rgba(255,255,255,.025) !important;
+  color: #6b82a8 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  transition: all .14s ease !important;
+  letter-spacing: .02em !important;
+  cursor: pointer !important;
+}
+body[data-theme="aurora_midnight"] .daytab.is-on,
+body[data-theme="aurora_midnight"] .daytab.active {
+  background: rgba(124,111,247,.18) !important;
+  border-color: rgba(124,111,247,.45) !important;
+  color: #c4b5fd !important;
+  box-shadow: 0 -2px 10px rgba(124,111,247,.15) !important;
+}
+body[data-theme="aurora_midnight"] .daytab:hover:not(.is-on) {
+  background: rgba(255,255,255,.05) !important;
+  color: #bcc8e4 !important;
+}
+body[data-theme="aurora_midnight"] .tab-dot {
+  background: var(--w-indigo) !important;
+  box-shadow: 0 0 4px rgba(124,111,247,.6) !important;
+}
+body[data-theme="aurora_midnight"] .tab-lock { filter: drop-shadow(0 0 3px rgba(251,191,36,.5)) !important; }
+
+/* ════════════════════════════════════════════════════════════
+   17. ANNOUNCE BAR
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .announce-bar {
+  background: rgba(255,255,255,.025) !important;
+  border: 1px solid rgba(130,148,255,.12) !important;
+  border-left: 3px solid var(--w-warn) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,.20) !important;
+}
+body[data-theme="aurora_midnight"] .announce-bar:hover {
+  background: rgba(255,255,255,.04) !important;
+  border-color: rgba(130,148,255,.20) !important;
+  border-left-color: var(--w-warn) !important;
+  box-shadow: 0 4px 18px rgba(0,0,0,.28) !important;
+}
+body[data-theme="aurora_midnight"] .announce-title { color: #f0f4ff !important; font-weight: 800 !important; }
+body[data-theme="aurora_midnight"] .announce-msg   { color: #bcc8e4 !important; }
+
+/* ════════════════════════════════════════════════════════════
+   18. DASHBOARD DASHX CARDS
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .dashx-cards {
+  gap: 12px !important;
+}
+body[data-theme="aurora_midnight"] .dashx-card .k {
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: .10em !important;
+  text-transform: uppercase !important;
+  color: #6b82a8 !important;
+}
+body[data-theme="aurora_midnight"] .dashx-title {
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.01em !important;
+  color: #f0f4ff !important;
+}
+body[data-theme="aurora_midnight"] .dashx-sub { color: #8ea4c8 !important; }
+
+/* Right panel (Cases / Reminders / Deadlines) */
+body[data-theme="aurora_midnight"] .schx-right-panel,
+body[data-theme="aurora_midnight"] .right-panel-kpis {
+  background: rgba(7,9,28,.90) !important;
+  border: 1px solid rgba(130,148,255,.12) !important;
+  border-radius: 12px !important;
+}
+
+/* Controller Lab button */
+body[data-theme="aurora_midnight"] .controller-lab-btn,
+body[data-theme="aurora_midnight"] [data-page="controller_lab"],
+body[data-theme="aurora_midnight"] a[href*="controller"] .nav-item {
+  background: linear-gradient(135deg, rgba(167,139,250,.14), rgba(74,163,255,.10)) !important;
+  border: 1px solid rgba(167,139,250,.30) !important;
+  color: var(--w-violet) !important;
+  font-weight: 700 !important;
+  transition: all .18s !important;
+}
+body[data-theme="aurora_midnight"] .controller-lab-btn:hover {
+  background: linear-gradient(135deg, rgba(167,139,250,.24), rgba(74,163,255,.18)) !important;
+  box-shadow: 0 0 20px rgba(167,139,250,.20) !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   19. MODALS — Polished glass
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] .modal {
+  background: rgba(0,0,0,.75) !important;
+  backdrop-filter: blur(16px) !important;
+}
+body[data-theme="aurora_midnight"] .modal .panel {
+  background: linear-gradient(145deg, #0a0d24, #0c1030) !important;
+  border: 1px solid rgba(130,148,255,.18) !important;
+  border-radius: 18px !important;
+  box-shadow:
+    0 40px 90px rgba(0,0,0,.70),
+    0 0 0 1px rgba(255,255,255,.03),
+    inset 0 1px 0 rgba(255,255,255,.06) !important;
+}
+body[data-theme="aurora_midnight"] .modal .panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(124,111,247,.5), rgba(6,214,176,.4), transparent);
+  border-radius: 18px 18px 0 0;
+}
+body[data-theme="aurora_midnight"] .modal .head {
+  border-bottom: 1px solid rgba(130,148,255,.12) !important;
+  background: rgba(255,255,255,.015) !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   20. INPUTS & SELECT
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="aurora_midnight"] input,
+body[data-theme="aurora_midnight"] select,
+body[data-theme="aurora_midnight"] textarea,
+body[data-theme="aurora_midnight"] .input,
+body[data-theme="aurora_midnight"] .select,
+body[data-theme="aurora_midnight"] .textarea {
+  background: rgba(255,255,255,.04) !important;
+  border: 1px solid rgba(130,148,255,.16) !important;
+  color: #e8eeff !important;
+  border-radius: 9px !important;
+  transition: border-color .14s, box-shadow .14s !important;
+}
+body[data-theme="aurora_midnight"] input:focus,
+body[data-theme="aurora_midnight"] select:focus,
+body[data-theme="aurora_midnight"] textarea:focus,
+body[data-theme="aurora_midnight"] .input:focus {
+  border-color: rgba(124,111,247,.55) !important;
+  box-shadow: 0 0 0 3px rgba(124,111,247,.14) !important;
+  background: rgba(255,255,255,.06) !important;
+}
+body[data-theme="aurora_midnight"] input::placeholder,
+body[data-theme="aurora_midnight"] textarea::placeholder { color: #6b82a8 !important; }
+
+/* Search bar */
+body[data-theme="aurora_midnight"] .top-global-search {
+  background: rgba(255,255,255,.04) !important;
+  border: 1px solid rgba(130,148,255,.14) !important;
+  border-radius: 10px !important;
+  transition: all .14s !important;
+}
+body[data-theme="aurora_midnight"] .top-global-search:focus-within {
+  border-color: rgba(124,111,247,.45) !important;
+  box-shadow: 0 0 0 3px rgba(124,111,247,.12) !important;
+  background: rgba(255,255,255,.055) !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   21. MISC POLISH
+   ════════════════════════════════════════════════════════════ */
+/* HR / separators */
+body[data-theme="aurora_midnight"] hr {
+  border: none !important;
+  border-top: 1px solid rgba(130,148,255,.12) !important;
+  margin: 14px 0 !important;
+}
+
+/* Selection highlight */
+body[data-theme="aurora_midnight"] ::selection {
+  background: rgba(124,111,247,.28) !important;
+  color: #f0f4ff !important;
+}
+
+/* Scrollbars — thin, indigo-tinted */
+body[data-theme="aurora_midnight"] ::-webkit-scrollbar { width: 5px; height: 5px; }
+body[data-theme="aurora_midnight"] ::-webkit-scrollbar-track { background: rgba(255,255,255,.02); }
+body[data-theme="aurora_midnight"] ::-webkit-scrollbar-thumb {
+  background: rgba(124,111,247,.22);
+  border-radius: 999px;
+}
+body[data-theme="aurora_midnight"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(124,111,247,.42);
+}
+
+/* Cards — unified glass */
+body[data-theme="aurora_midnight"] .card {
+  background: linear-gradient(155deg, rgba(255,255,255,.04) 0%, rgba(255,255,255,.015) 100%) !important;
+  border: 1px solid rgba(130,148,255,.14) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.04) !important;
+}
+
+/* Focus ring */
+body[data-theme="aurora_midnight"] button:focus-visible,
+body[data-theme="aurora_midnight"] a:focus-visible,
+body[data-theme="aurora_midnight"] input:focus-visible {
+  outline: 2px solid rgba(124,111,247,.65) !important;
+  outline-offset: 2px !important;
+}
+
+/* Quicklinks dock circles */
+body[data-theme="aurora_midnight"] .qcircle {
+  background: rgba(124,111,247,.10) !important;
+  border: 1px solid rgba(124,111,247,.22) !important;
+  box-shadow: 0 0 12px rgba(124,111,247,.08) !important;
+  transition: all .16s ease !important;
+}
+body[data-theme="aurora_midnight"] .qcircle:hover {
+  background: rgba(124,111,247,.22) !important;
+  border-color: rgba(124,111,247,.42) !important;
+  box-shadow: 0 0 20px rgba(124,111,247,.30) !important;
+  transform: translateY(-2px) !important;
+}
+body[data-theme="aurora_midnight"] .qcircle .qtxt {
+  color: #e8eeff !important;
+  font-weight: 700 !important;
+}
+body[data-theme="aurora_midnight"] .qlabel {
+  color: #8ea4c8 !important;
+  font-size: 9.5px !important;
+}
+
+/* Ruler ticks */
+body[data-theme="aurora_midnight"] .schx-tick-label {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 10px !important;
+  color: #536080 !important;
+  font-weight: 600 !important;
+}
+
+/* Lock banner (Members) */
+body[data-theme="aurora_midnight"] .week-lock-banner,
+body[data-theme="aurora_midnight"] .lock-notice {
+  background: linear-gradient(90deg, rgba(251,191,36,.12), rgba(245,158,11,.06)) !important;
+  border: 1px solid rgba(251,191,36,.35) !important;
+  border-radius: 10px !important;
+  color: #fde68a !important;
+  font-weight: 700 !important;
+}
+
+/* Audit trail */
+body[data-theme="aurora_midnight"] .mysx-audit-row {
+  border: 1px solid rgba(130,148,255,.10) !important;
+  border-radius: 8px !important;
+  background: rgba(255,255,255,.02) !important;
+  transition: background .12s !important;
+}
+body[data-theme="aurora_midnight"] .mysx-audit-row:hover { background: rgba(124,111,247,.05) !important; }

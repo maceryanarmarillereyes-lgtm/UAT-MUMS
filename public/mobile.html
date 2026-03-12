@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#03071E">
+<title>MUMS Mobile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/mobile_apex.css">
+</head>
+<body>
+
+<!-- ══ LOADING OVERLAY ══════════════════════════════════════════════════ -->
+<div id="mum-loading" class="mum-loading-overlay">
+  <div class="mum-loading-ring"></div>
+  <div class="mum-loading-text">MUMS</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     PHONE VIEW
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="mum-phone-view">
+  <div class="mum-gold-line"></div>
+
+  <!-- ── LOGIN ──────────────────────────────────────────────────────── -->
+  <div class="mum-screen active" id="ms-login">
+    <div class="mum-login-bg">
+      <div class="mum-apex-logo-wrap">
+        <div class="mum-apex-diamond"><span class="mum-apex-logo-letter">M</span></div>
+        <div class="mum-apex-title">MUMS</div>
+        <div class="mum-apex-sub">User Management System</div>
+      </div>
+      <div class="mum-form">
+        <div>
+          <label class="mum-label">Username or Email</label>
+          <input class="mum-input" id="mum-login-user" type="text" placeholder="Enter credentials" autocomplete="username">
+        </div>
+        <div>
+          <label class="mum-label">Password</label>
+          <input class="mum-input" id="mum-login-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <div class="mum-form-row">
+          <label class="mum-check-label">
+            <div class="mum-check-box" id="mum-save-chk">✓</div>
+            Save details
+          </label>
+          <span class="mum-forgot">Forgot?</span>
+        </div>
+        <div class="mum-error" id="mum-login-err"></div>
+        <button class="mum-btn-primary" id="mum-login-btn">Sign In</button>
+        <div class="mum-divider">or continue with</div>
+        <button class="mum-btn-secondary" id="mum-azure-btn">🪟 Microsoft Azure AD</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DASHBOARD ──────────────────────────────────────────────────── -->
+  <div class="mum-screen" id="ms-dash">
+    <div class="mum-topbar">
+      <div class="mum-brand">MUMS<span>Enterprise Platform</span></div>
+      <div class="mum-sync" id="mum-sync-badge"><div class="mum-sync-dot"></div><span id="mum-sync-txt">Connected</span></div>
+      <div class="mum-action" id="mum-notif-btn">🔔<div class="mum-notif-pip" id="mum-notif-pip" style="display:none"></div></div>
+      <div class="mum-action" id="mum-menu-btn">☰</div>
+    </div>
+    <div class="mum-page-body" id="mum-dash-body">
+      <!-- hero strip -->
+      <div class="mum-hero-strip">
+        <div class="mum-user-row">
+          <div class="mum-avatar" id="mum-dash-avatar">SM</div>
+          <div style="flex:1">
+            <div class="mum-user-name" id="mum-dash-name">—</div>
+            <div class="mum-user-role" id="mum-dash-role">—</div>
+          </div>
+          <div class="mum-online-tag"><div class="mum-sync-dot"></div>Online</div>
+        </div>
+        <div class="mum-kpi-row">
+          <div class="mum-kpi gold"><div class="mum-kpi-val" id="mum-kpi-cases">—</div><div class="mum-kpi-label">Cases</div></div>
+          <div class="mum-kpi amber"><div class="mum-kpi-val" id="mum-kpi-reminders">—</div><div class="mum-kpi-label">Reminders</div></div>
+          <div class="mum-kpi red"><div class="mum-kpi-val" id="mum-kpi-deadlines">—</div><div class="mum-kpi-label">Deadlines</div></div>
+        </div>
+      </div>
+      <!-- status ticker -->
+      <div class="mum-ticker" id="mum-ticker">
+        <div class="mum-tick"><div class="mum-tick-label">Open</div><div class="mum-tick-val" id="t-open">—</div><div class="mum-tick-delta mum-up">↑ —</div></div>
+        <div class="mum-tick"><div class="mum-tick-label">Investigating</div><div class="mum-tick-val" id="t-inv">—</div><div class="mum-tick-delta mum-up">↑ —</div></div>
+        <div class="mum-tick"><div class="mum-tick-label">Waiting</div><div class="mum-tick-val" id="t-wait">—</div><div class="mum-tick-delta mum-dn">↓ —</div></div>
+        <div class="mum-tick"><div class="mum-tick-label">Resolved</div><div class="mum-tick-val" id="t-res">—</div><div class="mum-tick-delta mum-up">↑ —</div></div>
+        <div class="mum-tick"><div class="mum-tick-label">Overdue</div><div class="mum-tick-val" id="t-ov" style="color:var(--red)">—</div><div class="mum-tick-delta mum-dn" style="color:var(--red)">!</div></div>
+      </div>
+      <!-- announcement -->
+      <div style="padding:12px 18px 4px">
+        <div class="mum-announce" id="mum-announce">
+          <div class="mum-ann-ico">📢</div>
+          <div style="flex:1;overflow:hidden">
+            <div class="mum-ann-tag">Announcement</div>
+            <div class="mum-ann-msg" id="mum-ann-msg">No active announcements</div>
+          </div>
+          <span style="color:var(--silver3);font-size:18px">›</span>
+        </div>
+      </div>
+      <!-- module cards -->
+      <div class="mum-section">
+        <div class="mum-sh"><div class="mum-sh-title">Modules</div></div>
+        <div class="mum-cards">
+          <div class="mum-card" id="mum-goto-qb">
+            <div class="mum-card-ico" style="background:rgba(201,168,76,.10);border:1px solid rgba(201,168,76,.20)">🗄️</div>
+            <div class="mum-card-info"><div class="mum-card-title">My Quickbase</div><div class="mum-card-sub">Live record monitor</div></div>
+            <div class="mum-card-end"><div class="mum-card-count" id="mum-qb-count">—</div><div class="mum-card-note">records</div></div>
+          </div>
+          <div class="mum-card" id="mum-goto-recs">
+            <div class="mum-card-ico" style="background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.20)">📋</div>
+            <div class="mum-card-info"><div class="mum-card-title">My Records</div><div class="mum-card-sub">Attendance, Schedule, Cases</div></div>
+            <div class="mum-card-end"><div class="mum-card-count" style="color:var(--blue)">4</div><div class="mum-card-note">modules</div></div>
+          </div>
+          <div class="mum-card">
+            <div class="mum-card-ico" style="background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.20)">⏰</div>
+            <div class="mum-card-info"><div class="mum-card-title">Reminders</div><div class="mum-card-sub">Personal alerts</div></div>
+            <div class="mum-card-end"><div class="mum-card-count" style="color:var(--amber)" id="mum-rem-count">—</div><div class="mum-card-note">pending</div></div>
+          </div>
+          <div class="mum-card">
+            <div class="mum-card-ico" style="background:rgba(16,185,129,.10);border:1px solid rgba(16,185,129,.20)">🚨</div>
+            <div class="mum-card-info"><div class="mum-card-title">Team Reminders</div><div class="mum-card-sub">Team-wide alerts</div></div>
+            <div class="mum-card-end"><div class="mum-card-count" style="color:var(--green)" id="mum-trem-count">—</div><div class="mum-card-note">active</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <nav class="mum-bottom-nav">
+      <div class="mum-nav-item active" data-goto="ms-dash"><div class="mum-nav-ico">⌂</div>Home</div>
+      <div class="mum-nav-item" data-goto="ms-qb"><div class="mum-nav-ico">🗄</div>QB</div>
+      <div class="mum-nav-item" data-goto="ms-recs"><div class="mum-nav-ico">📋</div>Records</div>
+      <div class="mum-nav-item" id="mum-nav-alerts"><div class="mum-nav-ico">🔔</div>Alerts</div>
+      <div class="mum-nav-item" id="mum-nav-more"><div class="mum-nav-ico">⋯</div>More</div>
+    </nav>
+  </div>
+
+  <!-- ── QUICKBASE ──────────────────────────────────────────────────── -->
+  <div class="mum-screen" id="ms-qb">
+    <div class="mum-qb-wrap">
+      <div class="mum-topbar">
+        <div class="mum-action" data-goto="ms-dash" style="font-size:22px;font-weight:300">‹</div>
+        <div class="mum-brand">Quickbase<span>Live record monitor</span></div>
+        <div class="mum-sync" id="mum-qb-sync"><div class="mum-sync-dot"></div>Live</div>
+      </div>
+      <div class="mum-qb-body">
+        <div class="mum-tab-row" id="mum-tab-row">
+          <!-- populated by JS -->
+        </div>
+        <div class="mum-qb-toolbar">
+          <div class="mum-search-wrap"><span class="mum-search-ico">🔍</span><input class="mum-search" id="mum-qb-search" placeholder="Search records..."></div>
+          <div class="mum-qb-btn" id="mum-qb-csv">⬇ CSV</div>
+          <div class="mum-qb-btn" id="mum-qb-reload">↻</div>
+          <div class="mum-qb-btn gold" id="mum-qb-settings">⚙</div>
+        </div>
+        <div class="mum-qb-meta">
+          <div class="mum-live-badge"><div class="mum-live-dot"></div>LIVE</div>
+          <span id="mum-qb-count-meta" style="font-size:11px;color:var(--silver3);margin-left:4px">Loading…</span>
+        </div>
+        <div class="mum-qb-records" id="mum-qb-records">
+          <div style="padding:32px 14px;text-align:center;color:var(--silver3);font-size:12px">Loading records…</div>
+        </div>
+      </div>
+      <nav class="mum-bottom-nav">
+        <div class="mum-nav-item" data-goto="ms-dash"><div class="mum-nav-ico">⌂</div>Home</div>
+        <div class="mum-nav-item active" data-goto="ms-qb"><div class="mum-nav-ico">🗄</div>QB</div>
+        <div class="mum-nav-item" data-goto="ms-recs"><div class="mum-nav-ico">📋</div>Records</div>
+        <div class="mum-nav-item" id="mum-nav-alerts-qb"><div class="mum-nav-ico">🔔</div>Alerts</div>
+        <div class="mum-nav-item" id="mum-nav-more-qb"><div class="mum-nav-ico">⋯</div>More</div>
+      </nav>
+    </div>
+  </div>
+
+  <!-- ── MY RECORDS ────────────────────────────────────────────────── -->
+  <div class="mum-screen" id="ms-recs">
+    <div class="mum-topbar">
+      <div class="mum-action" data-goto="ms-dash" style="font-size:22px;font-weight:300">‹</div>
+      <div class="mum-brand">My Records<span>Personal dashboard</span></div>
+    </div>
+    <div class="mum-page-body">
+      <div class="mum-records-grid">
+        <!-- Attendance — wide -->
+        <div class="mum-rec-tile wide" style="--clr:var(--gold)">
+          <div class="mum-rec-tile-row">
+            <div style="font-size:24px">📝</div>
+            <div><div class="mum-rec-title">My Attendance</div><div class="mum-rec-sub">Daily time tracking</div></div>
+            <div class="mum-rec-num" id="mum-att-count" style="margin:0;margin-left:auto">—</div>
+          </div>
+        </div>
+        <!-- Schedule -->
+        <div class="mum-rec-tile" style="--clr:var(--blue)">
+          <div class="mum-rec-ico">📅</div>
+          <div class="mum-rec-title">My Schedule</div>
+          <div class="mum-rec-sub">Shift management</div>
+          <div class="mum-rec-num" style="color:var(--blue)">—</div>
+        </div>
+        <!-- My Case -->
+        <div class="mum-rec-tile" style="--clr:var(--amber)">
+          <div class="mum-rec-ico">📨</div>
+          <div class="mum-rec-title">My Case</div>
+          <div class="mum-rec-sub">Open tickets</div>
+          <div class="mum-rec-num" style="color:var(--amber)" id="mum-case-count">—</div>
+        </div>
+        <!-- My Task -->
+        <div class="mum-rec-tile" style="--clr:var(--green)">
+          <div class="mum-rec-ico">✅</div>
+          <div class="mum-rec-title">My Task</div>
+          <div class="mum-rec-sub">Active tasks</div>
+          <div class="mum-rec-num" style="color:var(--green)" id="mum-task-count">—</div>
+        </div>
+        <!-- Reminders -->
+        <div class="mum-rec-tile" style="--clr:#A78BFA">
+          <div class="mum-rec-ico">⏰</div>
+          <div class="mum-rec-title">Reminders</div>
+          <div class="mum-rec-sub">Set alerts</div>
+          <div class="mum-rec-num" style="color:#A78BFA" id="mum-myrem-count">—</div>
+        </div>
+      </div>
+      <!-- Today's shift -->
+      <div style="padding:0 16px 100px">
+        <div class="mum-sh" style="margin-bottom:12px"><div class="mum-sh-title">Today's Shift</div></div>
+        <div class="mum-shift-card" id="mum-shift-card">
+          <div class="mum-shift-row">
+            <div class="mum-shift-bar" style="background:var(--navy4)"></div>
+            <div><div class="mum-shift-name">Loading…</div><div class="mum-shift-time"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <nav class="mum-bottom-nav">
+      <div class="mum-nav-item" data-goto="ms-dash"><div class="mum-nav-ico">⌂</div>Home</div>
+      <div class="mum-nav-item" data-goto="ms-qb"><div class="mum-nav-ico">🗄</div>QB</div>
+      <div class="mum-nav-item active" data-goto="ms-recs"><div class="mum-nav-ico">📋</div>Records</div>
+      <div class="mum-nav-item" id="mum-nav-alerts-recs"><div class="mum-nav-ico">🔔</div>Alerts</div>
+      <div class="mum-nav-item" id="mum-nav-more-recs"><div class="mum-nav-ico">⋯</div>More</div>
+    </nav>
+  </div>
+
+  <!-- ── NOTIFICATIONS SHEET ────────────────────────────────────────── -->
+  <div class="mum-notif-sheet" id="mum-notif-sheet">
+    <div class="mum-sheet-handle"></div>
+    <div class="mum-sheet-head">
+      <h3>Notifications</h3>
+      <span class="mum-sheet-close" id="mum-notif-close">Close</span>
+    </div>
+    <div class="mum-sheet-list" id="mum-notif-list">
+      <!-- populated by JS -->
+    </div>
+  </div>
+
+  <!-- ── NAVIGATION DRAWER ─────────────────────────────────────────── -->
+  <div class="mum-drawer" id="mum-drawer">
+    <div class="mum-drawer-bg" id="mum-drawer-bg"></div>
+    <div class="mum-drawer-panel">
+      <div class="mum-dh">
+        <div class="mum-dlogo">MUMS</div>
+        <div class="mum-dsub" id="mum-build-label">Enterprise Platform</div>
+      </div>
+      <div class="mum-duser">
+        <div class="mum-davi" id="mum-drawer-avi">S</div>
+        <div><div class="mum-dname" id="mum-drawer-name">—</div><div class="mum-drole" id="mum-drawer-role">—</div></div>
+      </div>
+      <div class="mum-dnav">
+        <div class="mum-dsect">Management</div>
+        <div class="mum-ditem" data-nav="team_task_settings"><span class="mum-dico">🛠️</span>Team Task Settings</div>
+        <div class="mum-ditem" data-nav="command_center"><span class="mum-dico">🛰️</span>Command Center</div>
+        <div class="mum-dsect">Administration</div>
+        <div class="mum-ditem" data-nav="members"><span class="mum-dico">👥</span>Members</div>
+        <div class="mum-ditem" data-nav="privileges"><span class="mum-dico">🔐</span>Privileges</div>
+        <div class="mum-ditem" data-nav="overall_stats"><span class="mum-dico">📊</span>Overall Stats</div>
+        <div class="mum-dsect">My Records</div>
+        <div class="mum-ditem" data-nav="my_attendance"><span class="mum-dico">📝</span>My Attendance</div>
+        <div class="mum-ditem" data-nav="my_schedule"><span class="mum-dico">📅</span>My Schedule</div>
+        <div class="mum-ditem" data-nav="my_case"><span class="mum-dico">📨</span>My Case</div>
+        <div class="mum-ditem" data-nav="my_task"><span class="mum-dico">✅</span>My Task</div>
+        <div class="mum-ditem active" data-nav="my_quickbase" id="mum-drawer-qb"><span class="mum-dico">🗄️</span>My Quickbase</div>
+        <div class="mum-dsect">Notifications</div>
+        <div class="mum-ditem" data-nav="my_reminders"><span class="mum-dico">⏰</span>My Reminders</div>
+        <div class="mum-ditem" data-nav="team_reminders"><span class="mum-dico">🚨</span>Team Reminders</div>
+      </div>
+      <div class="mum-dfoot">
+        <div class="mum-dlg" id="mum-signout-btn">Sign Out</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /#mum-phone-view -->
+
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     TABLET VIEW  (768px+)
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="mum-tablet-view">
+  <div class="mum-gold-line" style="position:absolute"></div>
+  <div class="mum-t-wrap" id="mum-t-wrap" style="display:none">
+
+    <!-- Sidebar -->
+    <div class="mum-t-sidebar">
+      <div class="mum-t-sb-head">
+        <div class="mum-t-logo">MUMS</div>
+        <div class="mum-t-sub">Enterprise Platform</div>
+      </div>
+      <div class="mum-t-user">
+        <div class="mum-t-avi" id="mum-t-avi">S</div>
+        <div>
+          <div class="mum-t-un" id="mum-t-name">—</div>
+          <div class="mum-t-ur" id="mum-t-role">—</div>
+        </div>
+      </div>
+      <div class="mum-t-nav">
+        <div class="mum-t-nsect">Management</div>
+        <div class="mum-t-nitem"><span class="mum-t-nico">🛠️</span>Team Task Settings</div>
+        <div class="mum-t-nitem"><span class="mum-t-nico">🛰️</span>Command Center</div>
+        <div class="mum-t-nsect">Administration</div>
+        <div class="mum-t-nitem"><span class="mum-t-nico">👥</span>Members</div>
+        <div class="mum-t-nitem"><span class="mum-t-nico">📊</span>Overall Stats</div>
+        <div class="mum-t-nsect">My Records</div>
+        <div class="mum-t-nitem"><span class="mum-t-nico">📝</span>Attendance</div>
+        <div class="mum-t-nitem"><span class="mum-t-nico">📅</span>Schedule</div>
+        <div class="mum-t-nitem"><span class="mum-t-nico">📨</span>My Case</div>
+        <div class="mum-t-nitem active" id="mum-t-qb-nav"><span class="mum-t-nico">🗄️</span>My Quickbase</div>
+        <div class="mum-t-nsect">Notifications</div>
+        <div class="mum-t-nitem"><span class="mum-t-nico">⏰</span>Reminders</div>
+        <div class="mum-t-nitem"><span class="mum-t-nico">🚨</span>Team Reminders</div>
+      </div>
+      <div class="mum-t-sb-foot">
+        <div class="mum-dlg" id="mum-t-signout" style="font-size:11px;padding:10px">Sign Out</div>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="mum-t-main">
+      <div class="mum-t-topbar">
+        <div class="mum-t-search-wrap">
+          <span class="mum-t-search-ico">🔍</span>
+          <input class="mum-t-search" placeholder="Search MUMS…">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-left:8px">
+          <div class="mum-sync" style="font-size:10px;padding:5px 9px" id="mum-t-sync"><div class="mum-sync-dot"></div><span id="mum-t-sync-txt">Connected</span></div>
+          <div class="mum-action" style="width:32px;height:32px;font-size:13px" id="mum-t-notif">🔔<div class="mum-notif-pip" id="mum-t-pip" style="display:none"></div></div>
+          <div class="mum-action" style="width:32px;height:32px;font-size:13px">⚙</div>
+        </div>
+      </div>
+      <!-- page header -->
+      <div class="mum-t-ph">
+        <div>
+          <div class="mum-t-ptitle">My Quickbase</div>
+          <div class="mum-t-psub">Active tab instance dashboard</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <div class="mum-t-pbtn ghost" id="mum-t-csv">⬇ Export CSV</div>
+          <div class="mum-t-pbtn ghost" id="mum-t-reload">↻ Reload</div>
+          <div class="mum-t-pbtn" id="mum-t-settings">⚙ Settings</div>
+        </div>
+      </div>
+      <!-- tabs + records -->
+      <div class="mum-t-content" id="mum-t-content">
+        <div class="mum-tab-row" id="mum-t-tab-row" style="padding:0 14px"></div>
+        <div class="mum-qb-meta" style="padding:8px 14px">
+          <div class="mum-live-badge"><div class="mum-live-dot"></div>LIVE</div>
+          <span id="mum-t-count-meta" style="font-size:11px;color:var(--silver3);margin-left:4px">Loading…</span>
+        </div>
+        <div id="mum-t-records" style="padding:0 14px 16px">
+          <div style="padding:32px 0;text-align:center;color:var(--silver3);font-size:12px">Loading records…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="mum-t-right">
+      <div class="mum-t-rh"><div class="mum-t-rt">Cases</div></div>
+      <div class="mum-t-rv">
+        <div class="mum-t-rvl">Active Cases</div>
+        <div class="mum-t-rvn" id="mum-t-cases">—</div>
+        <div class="mum-t-rvs" id="mum-t-cases-sub">—</div>
+      </div>
+      <div class="mum-t-rh"><div class="mum-t-rt">Reminders</div></div>
+      <div class="mum-t-rv">
+        <div class="mum-t-rvl">Due Soon</div>
+        <div class="mum-t-rvn" style="color:var(--amber)" id="mum-t-rems">—</div>
+        <div class="mum-t-rvs" id="mum-t-rems-sub">—</div>
+      </div>
+      <div class="mum-t-rh"><div class="mum-t-rt">Deadlines</div></div>
+      <div class="mum-t-rv">
+        <div class="mum-t-rvl">Critical</div>
+        <div class="mum-t-rvn" style="color:var(--red)" id="mum-t-dead">—</div>
+        <div class="mum-t-rvs">Action required</div>
+      </div>
+      <div class="mum-t-rh"><div class="mum-t-rt">World Clocks</div></div>
+      <div class="mum-clk-row"><span class="mum-clk-c">Manila</span><span class="mum-clk-t" id="mum-clk-manila">—</span></div>
+      <div class="mum-clk-row"><span class="mum-clk-c">UTC</span><span class="mum-clk-t" id="mum-clk-utc">—</span></div>
+      <div class="mum-clk-row"><span class="mum-clk-c">New York</span><span class="mum-clk-t" id="mum-clk-ny">—</span></div>
+      <div class="mum-t-rh"><div class="mum-t-rt">Developer</div></div>
+      <div class="mum-t-rv" style="display:flex;align-items:center;gap:8px">
+        <div class="mum-t-avi" id="mum-t-dev-avi">S</div>
+        <span style="font-size:12px;color:var(--silver2)" id="mum-t-dev-name">—</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Tablet login overlay -->
+  <div id="mum-t-login" style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 100%,rgba(201,168,76,.15) 0%,transparent 60%),radial-gradient(ellipse at 100% 0%,rgba(59,130,246,.15) 0%,transparent 50%),var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:36px 28px">
+    <div class="mum-apex-logo-wrap" style="margin-bottom:36px">
+      <div class="mum-apex-diamond"><span class="mum-apex-logo-letter">M</span></div>
+      <div class="mum-apex-title">MUMS</div>
+      <div class="mum-apex-sub">User Management System</div>
+    </div>
+    <div class="mum-form" style="width:100%;max-width:380px">
+      <div>
+        <label class="mum-label">Username or Email</label>
+        <input class="mum-input" id="mum-t-login-user" type="text" placeholder="Enter credentials" autocomplete="username">
+      </div>
+      <div>
+        <label class="mum-label">Password</label>
+        <input class="mum-input" id="mum-t-login-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <div class="mum-error" id="mum-t-login-err"></div>
+      <button class="mum-btn-primary" id="mum-t-login-btn">Sign In</button>
+      <div class="mum-divider">or continue with</div>
+      <button class="mum-btn-secondary" id="mum-t-azure-btn">🪟 Microsoft Azure AD</button>
+    </div>
+  </div>
+
+</div><!-- /#mum-tablet-view -->
+
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     SCRIPTS — load same stack as index.html
+══════════════════════════════════════════════════════════════════════════ -->
+<script src="/js/env_runtime.js"></script>
+<script>
+(function(){
+  const sources = [
+    '/functions/vendor/supabase.js',
+    '/api/vendor/supabase.js',
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.0/dist/umd/supabase.min.js'
+  ];
+  function loadAt(i){
+    if(i>=sources.length) return;
+    const s=document.createElement('script');
+    s.src=sources[i];
+    s.onerror=function(){ loadAt(i+1); };
+    document.head.appendChild(s);
+  }
+  loadAt(0);
+})();
+</script>
+<script src="/js/config/version.js"></script>
+<script src="/js/config.js"></script>
+<script src="/js/store.js"></script>
+<script src="/js/cloud_auth.js"></script>
+<script src="/js/cloud_users.js"></script>
+<script src="/js/cloud_tasks.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/realtime.js"></script>
+<script src="/js/ui.js"></script>
+<script src="/js/quickbase_adapter.js"></script>
+
+<!-- ══ MOBILE APP LOGIC ══════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+
+/* ─── Helpers ──────────────────────────────────────────────────────────── */
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function initials(name){
+  return String(name||'').trim().split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase() || '?';
+}
+function el(id){ return document.getElementById(id); }
+function setText(id,v){ const e=el(id); if(e) e.textContent=v; }
+function fmt2(n){ return String(Math.floor(n)||0).padStart(2,'0'); }
+
+/* ─── Screen routing (phone) ───────────────────────────────────────────── */
+function showScreen(id){
+  document.querySelectorAll('#mum-phone-view .mum-screen').forEach(s=>s.classList.remove('active'));
+  const target = el(id);
+  if(target) target.classList.add('active');
+}
+
+/* Bind all [data-goto] */
+document.addEventListener('click', function(e){
+  const btn = e.target.closest('[data-goto]');
+  if(btn){ showScreen(btn.dataset.goto); }
+});
+
+/* ─── Drawer ───────────────────────────────────────────────────────────── */
+function openDrawer(){ el('mum-drawer').classList.add('open'); }
+function closeDrawer(){ el('mum-drawer').classList.remove('open'); }
+
+el('mum-menu-btn').addEventListener('click', openDrawer);
+el('mum-drawer-bg').addEventListener('click', closeDrawer);
+el('mum-signout-btn').addEventListener('click', function(){ closeDrawer(); doSignOut(); });
+if(el('mum-nav-more'))   el('mum-nav-more').addEventListener('click', openDrawer);
+if(el('mum-nav-more-qb'))  el('mum-nav-more-qb').addEventListener('click', openDrawer);
+if(el('mum-nav-more-recs')) el('mum-nav-more-recs').addEventListener('click', openDrawer);
+
+/* drawer QB nav */
+el('mum-drawer-qb').addEventListener('click', function(){ closeDrawer(); showScreen('ms-qb'); loadQBData(); });
+
+/* ─── Notifications sheet ──────────────────────────────────────────────── */
+function openNotif(){ el('mum-notif-sheet').classList.add('open'); renderNotifications(); }
+function closeNotif(){ el('mum-notif-sheet').classList.remove('open'); }
+
+el('mum-notif-btn').addEventListener('click', openNotif);
+el('mum-notif-close').addEventListener('click', closeNotif);
+if(el('mum-nav-alerts'))    el('mum-nav-alerts').addEventListener('click', openNotif);
+if(el('mum-nav-alerts-qb')) el('mum-nav-alerts-qb').addEventListener('click', openNotif);
+if(el('mum-nav-alerts-recs')) el('mum-nav-alerts-recs').addEventListener('click', openNotif);
+
+/* QB quick-access */
+el('mum-goto-qb').addEventListener('click', function(){ showScreen('ms-qb'); loadQBData(); });
+el('mum-goto-recs').addEventListener('click', function(){ showScreen('ms-recs'); });
+
+/* Tablet sign-out */
+if(el('mum-t-signout')) el('mum-t-signout').addEventListener('click', doSignOut);
+
+/* ─── World Clocks ─────────────────────────────────────────────────────── */
+function updateClocks(){
+  var fmt=function(tz){
+    try{
+      return new Date().toLocaleTimeString('en-US',{timeZone:tz,hour:'2-digit',minute:'2-digit',hour12:false});
+    }catch(_){ return '--:--'; }
+  };
+  setText('mum-clk-manila', fmt('Asia/Manila'));
+  setText('mum-clk-utc',    fmt('UTC'));
+  setText('mum-clk-ny',     fmt('America/New_York'));
+}
+updateClocks();
+setInterval(updateClocks, 1000);
+
+/* ─── Sync status listener ─────────────────────────────────────────────── */
+window.addEventListener('mums:syncstatus', function(e){
+  try{
+    var d = (e&&e.detail) ? e.detail : {};
+    var mode = String(d.mode||'offline');
+    var label = mode==='realtime' ? 'Connected' : mode==='polling' ? 'Polling' : mode==='connecting' ? 'Connecting' : 'Offline';
+    var isOk = (mode==='realtime'||mode==='polling');
+    /* phone */
+    var sb = el('mum-sync-badge'); var st = el('mum-sync-txt');
+    if(st) st.textContent = label;
+    if(sb){ sb.style.background = isOk ? 'var(--green-dim)' : 'rgba(255,59,78,.10)'; sb.style.borderColor = isOk ? 'rgba(16,185,129,.20)' : 'rgba(255,59,78,.20)'; sb.style.color = isOk ? 'var(--green)' : 'var(--red)'; }
+    /* tablet */
+    var ts = el('mum-t-sync-txt'); if(ts) ts.textContent = label;
+  }catch(_){}
+});
+
+/* ─── LOGIN ────────────────────────────────────────────────────────────── */
+async function doLogin(user, pass, errEl, btnEl){
+  if(!user||!pass){ if(errEl){ errEl.textContent='Please enter username and password.'; errEl.classList.add('show'); } return; }
+  if(errEl) errEl.classList.remove('show');
+  if(btnEl){ btnEl.classList.add('mum-loading-btn'); btnEl.textContent='Signing in…'; }
+  try{
+    var result = await CloudAuth.login(user, pass);
+    if(!result.ok){
+      if(errEl){ errEl.textContent = result.message || 'Login failed. Please try again.'; errEl.classList.add('show'); }
+      if(btnEl){ btnEl.classList.remove('mum-loading-btn'); btnEl.textContent='Sign In'; }
+      return;
+    }
+    /* write session then hydrate */
+    if(window.CloudAuth && CloudAuth.writeSession) try{ CloudAuth.writeSession(result.session); }catch(_){}
+    await bootAfterLogin();
+  }catch(err){
+    if(errEl){ errEl.textContent = String((err&&err.message)||'Login failed.'); errEl.classList.add('show'); }
+    if(btnEl){ btnEl.classList.remove('mum-loading-btn'); btnEl.textContent='Sign In'; }
+  }
+}
+
+el('mum-login-btn').addEventListener('click', function(){
+  doLogin(el('mum-login-user').value.trim(), el('mum-login-pass').value, el('mum-login-err'), this);
+});
+el('mum-login-pass').addEventListener('keydown', function(e){ if(e.key==='Enter') el('mum-login-btn').click(); });
+el('mum-login-user').addEventListener('keydown', function(e){ if(e.key==='Enter') el('mum-login-pass').focus(); });
+
+/* Tablet login */
+if(el('mum-t-login-btn')){
+  el('mum-t-login-btn').addEventListener('click', function(){
+    doLogin(el('mum-t-login-user').value.trim(), el('mum-t-login-pass').value, el('mum-t-login-err'), this);
+  });
+  el('mum-t-login-pass').addEventListener('keydown', function(e){ if(e.key==='Enter') el('mum-t-login-btn').click(); });
+}
+
+/* Azure AD */
+async function doAzureLogin(){
+  if(!window.CloudAuth || !CloudAuth.signInWithAzure){ alert('Azure AD not configured.'); return; }
+  try{ await CloudAuth.signInWithAzure({ redirectTo: window.location.href }); }catch(e){ alert(String((e&&e.message)||'Azure login failed.')); }
+}
+el('mum-azure-btn').addEventListener('click', doAzureLogin);
+if(el('mum-t-azure-btn')) el('mum-t-azure-btn').addEventListener('click', doAzureLogin);
+
+/* ─── SIGN OUT ─────────────────────────────────────────────────────────── */
+async function doSignOut(){
+  try{ window.CloudAuth && CloudAuth.signOut && (await CloudAuth.signOut()); }catch(_){}
+  try{ window.Store && Store.setSession && Store.setSession(null); }catch(_){}
+  /* reset UI */
+  el('mum-login-user').value=''; el('mum-login-pass').value='';
+  showScreen('ms-login');
+  showTabletLogin();
+}
+
+/* ─── BUILD LABEL ──────────────────────────────────────────────────────── */
+function applyBuildLabel(){
+  try{
+    var label = window.MUMS_VERSION ? window.MUMS_VERSION.buildLabel : 'MUMS Phase 1';
+    setText('mum-build-label', 'Enterprise Platform · ' + label);
+  }catch(_){}
+}
+
+/* ─── BOOT AFTER LOGIN ─────────────────────────────────────────────────── */
+async function bootAfterLogin(){
+  el('mum-loading').style.display='flex';
+  try{
+    var user = await Auth.requireUser({ redirect: false, maxMs: 6000 });
+    if(!user){
+      el('mum-loading').style.display='none';
+      return;
+    }
+    applyBuildLabel();
+    renderUser(user);
+    renderDashboardData(user);
+    showAppUI();
+    el('mum-loading').style.display='none';
+    /* kick realtime */
+    try{ window.Realtime && Realtime.init && Realtime.init(); }catch(_){}
+    /* initial QB load */
+    loadQBData();
+    /* listen for store updates */
+    window.addEventListener('mums:store', function(){ renderDashboardData(user); });
+  }catch(err){
+    el('mum-loading').style.display='none';
+    console.error('[Mobile] boot error', err);
+  }
+}
+
+/* ─── RENDER USER ──────────────────────────────────────────────────────── */
+function renderUser(user){
+  var name  = String(user.name||user.username||'User');
+  var role  = String(user.role||'Member').replace(/_/g,' ');
+  var ini   = initials(name);
+
+  /* phone */
+  setText('mum-dash-avatar', ini);
+  setText('mum-dash-name', name);
+  setText('mum-dash-role', role.toUpperCase() + ' · ' + (user.teamId||'Developer'));
+  setText('mum-drawer-avi', ini.charAt(0));
+  setText('mum-drawer-name', name);
+  setText('mum-drawer-role', role);
+
+  /* tablet */
+  setText('mum-t-avi', ini.charAt(0));
+  setText('mum-t-name', name);
+  setText('mum-t-role', role.toUpperCase());
+  setText('mum-t-dev-avi', ini.charAt(0));
+  setText('mum-t-dev-name', name);
+}
+
+/* ─── RENDER DASHBOARD DATA ────────────────────────────────────────────── */
+function renderDashboardData(user){
+  if(!user) return;
+  try{
+    var uid = user.id || user.user_id;
+    var tid = user.teamId || '';
+
+    /* Cases */
+    var cases = (window.Store && Store.getCases) ? Store.getCases() : [];
+    var myCases = cases.filter(function(c){ return c && String(c.userId||c.user_id||'')===String(uid); });
+    var caseCount = cases.length;
+    setText('mum-kpi-cases', caseCount);
+    setText('mum-qb-count', caseCount);
+    setText('mum-case-count', myCases.length);
+    setText('mum-t-cases', caseCount);
+    setText('mum-t-cases-sub', '↑ from yesterday');
+
+    /* Reminders */
+    var myRems = (window.Store && Store.getMyReminders) ? Store.getMyReminders(uid) : [];
+    var nowMs = Date.now();
+    var dueRems = myRems.filter(function(r){ return r && r.alarmAt && r.alarmAt <= nowMs + 86400000 && !r.closedAt; });
+    setText('mum-kpi-reminders', dueRems.length);
+    setText('mum-rem-count', myRems.length);
+    setText('mum-myrem-count', myRems.length);
+    setText('mum-t-rems', dueRems.length);
+    var overdueRems = myRems.filter(function(r){ return r && r.alarmAt && r.alarmAt < nowMs && !r.closedAt; });
+    setText('mum-t-rems-sub', overdueRems.length + ' overdue');
+
+    /* Team reminders */
+    var tRems = (window.Store && Store.getTeamReminders) ? Store.getTeamReminders(tid) : [];
+    setText('mum-trem-count', tRems.length);
+
+    /* Deadlines (overdue cases) */
+    var overdueCount = myCases.filter(function(c){ return c && !c.resolved && !c.closed; }).length;
+    setText('mum-kpi-deadlines', Math.min(overdueCount, 99));
+    setText('mum-t-dead', Math.min(overdueCount, 99));
+
+    /* Attendance count */
+    var att = (window.Store && Store.getAttendanceForUser) ? Store.getAttendanceForUser(uid) : (window.Store && Store.getAttendance ? Store.getAttendance().filter(function(a){ return a && a.userId===uid; }) : []);
+    setText('mum-att-count', att.length);
+
+    /* Ticker — status breakdown from cases */
+    var statusMap = {};
+    cases.forEach(function(c){ if(c && c.status){ var s=String(c.status); statusMap[s]=(statusMap[s]||0)+1; } });
+    var openCount = 0, invCount = 0, waitCount = 0, resCount = 0;
+    Object.keys(statusMap).forEach(function(s){
+      var sl = s.toLowerCase();
+      if(sl.includes('resolv')||sl.includes('closed')) resCount+=statusMap[s];
+      else if(sl.includes('wait')) waitCount+=statusMap[s];
+      else if(sl.includes('invest')||sl.includes('initial')||sl.includes('triag')) invCount+=statusMap[s];
+      else openCount+=statusMap[s];
+    });
+    setText('t-open', openCount||caseCount);
+    setText('t-inv', invCount);
+    setText('t-wait', waitCount);
+    setText('t-res', resCount);
+    setText('t-ov', overdueRems.length);
+
+    /* Announcement */
+    renderAnnouncement();
+
+    /* Today's shift */
+    renderShift(user);
+
+    /* Notifications pip */
+    var hasPip = (dueRems.length > 0 || overdueRems.length > 0);
+    var pip = el('mum-notif-pip'); if(pip) pip.style.display = hasPip ? 'block' : 'none';
+    var tpip = el('mum-t-pip');   if(tpip) tpip.style.display = hasPip ? 'block' : 'none';
+  }catch(e){ console.error('[Mobile] renderDashboard', e); }
+}
+
+/* ─── ANNOUNCEMENT ─────────────────────────────────────────────────────── */
+function renderAnnouncement(){
+  try{
+    var active = (window.UI && UI.activeAnnouncements) ? UI.activeAnnouncements() : [];
+    var msgEl = el('mum-ann-msg');
+    if(!msgEl) return;
+    if(!active.length){ msgEl.textContent = 'No active announcements'; return; }
+    var a = active[0];
+    msgEl.textContent = String(a.short||a.title||'Announcement');
+  }catch(_){}
+}
+
+/* ─── SHIFT ────────────────────────────────────────────────────────────── */
+function renderShift(user){
+  try{
+    var card = el('mum-shift-card');
+    if(!card) return;
+    var teams = (window.Config && Config.TEAMS) ? Config.TEAMS : [];
+    var devTeam = (window.Config && Config.DEV_TEAM) ? Config.DEV_TEAM : { label:'Developer Access', teamStart:'00:00', teamEnd:'23:59' };
+    var uid = user.teamId;
+    var active = uid ? teams.find(function(t){ return t.id===uid; }) : devTeam;
+    if(!active) active = devTeam;
+
+    var html = teams.map(function(t){
+      var isActive = (t.id === uid);
+      var bar = isActive ? 'var(--gold)' : 'var(--navy4)';
+      var nameStyle = isActive ? 'font-size:13px;font-weight:600;color:var(--text)' : 'font-size:13px;color:var(--silver2)';
+      var badge = isActive ? '<div class="mum-chip res" style="margin-left:auto">Active</div>' : '<span style="margin-left:auto;font-size:10px;color:var(--silver3)">Upcoming</span>';
+      return '<div class="mum-shift-row"><div class="mum-shift-bar" style="background:'+bar+'"></div><div><div style="'+nameStyle+'">'+esc(t.label)+'</div><div style="font-size:11px;color:var(--silver3)">'+esc(t.teamStart)+' — '+esc(t.teamEnd)+' PHT</div></div>'+badge+'</div>';
+    }).join('');
+
+    if(!teams.length){
+      html = '<div class="mum-shift-row"><div class="mum-shift-bar" style="background:var(--gold)"></div><div><div style="font-size:13px;font-weight:600;color:var(--text)">'+esc(devTeam.label)+'</div><div style="font-size:11px;color:var(--silver3)">'+esc(devTeam.teamStart)+' — '+esc(devTeam.teamEnd)+'</div></div></div>';
+    }
+    card.innerHTML = html;
+  }catch(_){}
+}
+
+/* ─── NOTIFICATIONS ────────────────────────────────────────────────────── */
+function renderNotifications(){
+  var list = el('mum-notif-list');
+  if(!list) return;
+  try{
+    var user = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
+    if(!user){ list.innerHTML='<div style="padding:24px;text-align:center;color:var(--silver3);font-size:12px">Not signed in</div>'; return; }
+    var uid = user.id||user.user_id;
+    var nowMs = Date.now();
+    var myRems = (window.Store && Store.getMyReminders) ? Store.getMyReminders(uid) : [];
+    var due = myRems.filter(function(r){ return r && !r.closedAt && r.alarmAt && r.alarmAt <= nowMs + 3600000*24; })
+                    .sort(function(a,b){ return (a.alarmAt||0)-(b.alarmAt||0); })
+                    .slice(0,6);
+    var anns = (window.UI && UI.activeAnnouncements) ? UI.activeAnnouncements() : [];
+
+    var items = [];
+    anns.slice(0,2).forEach(function(a){
+      items.push({ ico:'📢', title: String(a.title||'Announcement'), body: String(a.short||''), time: a.startAt ? relTime(a.startAt) : '', unread: true });
+    });
+    due.forEach(function(r){
+      var overdue = r.alarmAt < nowMs;
+      items.push({ ico: overdue?'⚠️':'⏰', title: overdue ? 'Overdue reminder' : 'Reminder due', body: String(r.short||r.details||''), time: r.alarmAt ? relTime(r.alarmAt) : '', unread: overdue });
+    });
+    if(!items.length){
+      list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--silver3);font-size:12px">No notifications</div>';
+      return;
+    }
+    list.innerHTML = items.map(function(it){
+      return '<div class="mum-notif-item"><div class="mum-notif-ico">'+it.ico+'</div><div style="flex:1"><div class="mum-notif-title">'+esc(it.title)+'</div><div class="mum-notif-body">'+esc(it.body)+'</div><div class="mum-notif-time">'+esc(it.time)+'</div></div>'+(it.unread?'<div class="mum-unread-pip"></div>':'')+'</div>';
+    }).join('');
+  }catch(e){
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--red);font-size:12px">Error loading notifications</div>';
+  }
+}
+function relTime(ms){
+  var diff = Date.now()-ms; var abs=Math.abs(diff);
+  if(abs<60000)  return (diff<0?'in ':'') + Math.round(abs/1000) + 's ago';
+  if(abs<3600000) return (diff<0?'in ':'') + Math.round(abs/60000) + 'm ago';
+  if(abs<86400000) return (diff<0?'in ':'') + Math.round(abs/3600000) + 'h ago';
+  return Math.round(abs/86400000) + 'd ago';
+}
+
+/* ─── QUICKBASE ────────────────────────────────────────────────────────── */
+var _qbState = {
+  rows: [],
+  tabs: [],
+  activeTabIdx: 0,
+  loading: false
+};
+
+async function loadQBData(){
+  if(_qbState.loading) return;
+  _qbState.loading = true;
+  renderQBLoading();
+  try{
+    /* build tabs from store profile */
+    var user = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
+    if(!user) throw new Error('Not authenticated');
+    var uid = user.id||user.user_id;
+
+    /* get QB settings from profile */
+    var profile = (window.Store && Store.getProfile) ? Store.getProfile(uid) : null;
+    var qbSettings = {};
+    if(profile){
+      var raw = profile.quickbase_settings || profile.quickbase_config;
+      if(raw){ try{ qbSettings = (typeof raw==='string') ? JSON.parse(raw) : raw; }catch(_){} }
+    }
+
+    /* if no QB settings at all, show "not configured" */
+    if(!qbSettings.qid && !qbSettings.qb_qid){
+      renderQBNoConfig();
+      _qbState.loading=false;
+      return;
+    }
+
+    /* fetch data */
+    var result = await QuickbaseAdapter.fetchMonitoringData({
+      qid:     qbSettings.qid || qbSettings.qb_qid || '',
+      tableId: qbSettings.tableId || qbSettings.qb_table_id || '',
+      realm:   qbSettings.realm || qbSettings.qb_realm || ''
+    });
+    var rows = (result && Array.isArray(result.rows)) ? result.rows : [];
+    _qbState.rows = rows;
+
+    /* figure out tab names from QB tab manager localStorage */
+    var tabs = [];
+    try{
+      var tabKey = 'mums_quickbase_tabs_' + String(uid).replace(/[^a-z0-9_]/gi,'_');
+      var raw2 = localStorage.getItem(tabKey);
+      var parsed = raw2 ? JSON.parse(raw2) : null;
+      if(parsed && Array.isArray(parsed)){
+        tabs = parsed.map(function(t){ return String(t.tab_name||t.tabName||'Tab'); });
+      }
+    }catch(_){}
+    if(!tabs.length) tabs = ['MAIN 3','CUSTOM SCREEN TRIAGE 4'];
+    _qbState.tabs = tabs;
+    _qbState.activeTabIdx = 0;
+
+    renderQBTabs();
+    renderQBRows(rows);
+    var countMeta = rows.length + ' records loaded';
+    setText('mum-qb-count-meta', countMeta);
+    setText('mum-t-count-meta', countMeta);
+    setText('mum-qb-count', rows.length);
+    setText('mum-kpi-cases', rows.length);
+    setText('mum-t-cases', rows.length);
+  }catch(err){
+    renderQBError(err);
+  }
+  _qbState.loading=false;
+}
+
+function renderQBLoading(){
+  var r=el('mum-qb-records'); var tr=el('mum-t-records');
+  if(r) r.innerHTML='<div style="padding:32px 14px;text-align:center;color:var(--silver3);font-size:12px">Loading records…</div>';
+  if(tr) tr.innerHTML='<div style="padding:32px 0;text-align:center;color:var(--silver3);font-size:12px">Loading records…</div>';
+  setText('mum-qb-count-meta','Loading…'); setText('mum-t-count-meta','Loading…');
+}
+function renderQBNoConfig(){
+  var r=el('mum-qb-records'); var tr=el('mum-t-records');
+  var msg='<div style="padding:40px 14px;text-align:center"><div style="font-size:24px;margin-bottom:12px">⚙️</div><div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px">Quickbase not configured</div><div style="font-size:12px;color:var(--silver3)">Set your QID, Table ID, and Realm in Settings</div></div>';
+  if(r) r.innerHTML=msg; if(tr) tr.innerHTML=msg;
+  setText('mum-qb-count-meta','Not configured'); setText('mum-t-count-meta','Not configured');
+}
+function renderQBError(err){
+  var msg = String((err&&err.message)||'Failed to load records');
+  var html='<div style="padding:40px 14px;text-align:center"><div style="font-size:24px;margin-bottom:12px">⚠️</div><div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:6px">Load Error</div><div style="font-size:12px;color:var(--silver3)">'+esc(msg)+'</div></div>';
+  var r=el('mum-qb-records'); var tr=el('mum-t-records');
+  if(r) r.innerHTML=html; if(tr) tr.innerHTML=html;
+  setText('mum-qb-count-meta','Error'); setText('mum-t-count-meta','Error');
+}
+
+function renderQBTabs(){
+  /* phone */
+  var phoneRow = el('mum-tab-row');
+  /* tablet */
+  var tabRow = el('mum-t-tab-row');
+  var tabsHtml = _qbState.tabs.map(function(t,i){
+    return '<div class="mum-tab'+(i===_qbState.activeTabIdx?' active':'')+'" data-tabidx="'+i+'">'+esc(t)+'</div>';
+  }).join('')+'<div class="mum-tab">+ Add</div>';
+  if(phoneRow) phoneRow.innerHTML = tabsHtml;
+  if(tabRow)   tabRow.innerHTML   = tabsHtml;
+  /* bind tab clicks */
+  document.querySelectorAll('[data-tabidx]').forEach(function(t){
+    t.addEventListener('click', function(){
+      _qbState.activeTabIdx = parseInt(this.dataset.tabidx)||0;
+      renderQBTabs();
+      renderQBRows(_qbState.rows);
+    });
+  });
+}
+
+function chipClass(status){
+  var s = String(status||'').toLowerCase();
+  if(s.includes('resolv')||s.includes('closed')||s.includes('c–')) return 'res';
+  if(s.includes('wait')) return 'wait';
+  return 'inv';
+}
+
+function renderQBRows(rows){
+  /* phone */
+  var r = el('mum-qb-records');
+  /* tablet */
+  var tr = el('mum-t-records');
+  if(!rows||!rows.length){
+    var empty='<div style="padding:32px 14px;text-align:center;color:var(--silver3);font-size:12px">No records found</div>';
+    if(r) r.innerHTML=empty; if(tr) tr.innerHTML=empty; return;
+  }
+  var phoneHtml = rows.slice(0,30).map(function(row){
+    var id     = row['3']||row.recordId||row['Record ID#']||row.id||'—';
+    var desc   = row['6']||row['7']||row['Title']||row['Subject']||row['Description']||row['Name']||'—';
+    var status = row['10']||row['Status']||row.status||'';
+    var user2   = row['8']||row['Assignee']||row['Assigned To']||row.assignee||'';
+    var age    = row['11']||row['Age']||row['Days Open']||row.age||'';
+    var cls    = chipClass(status);
+    return '<div class="mum-record-card"><div class="mum-record-head"><span class="mum-record-id">'+esc(id)+'</span><span class="mum-chip '+cls+'">'+esc(status||'Unknown')+'</span></div><div class="mum-record-desc">'+esc(desc)+'</div><div class="mum-record-foot"><span class="mum-record-meta">👤 '+esc(user2)+'</span>'+(age?'<span class="mum-record-meta">🕐 '+esc(age)+'</span>':'')+'</div></div>';
+  }).join('');
+  if(r) r.innerHTML = phoneHtml;
+
+  /* tablet (compact row layout) */
+  var tabHtml = rows.slice(0,20).map(function(row){
+    var id     = row['3']||row.recordId||row['Record ID#']||row.id||'—';
+    var desc   = row['6']||row['7']||row['Title']||row['Subject']||row['Description']||row['Name']||'—';
+    var status = row['10']||row['Status']||row.status||'';
+    var user3   = row['8']||row['Assignee']||row['Assigned To']||row.assignee||'';
+    var age    = row['11']||row['Age']||row['Days Open']||row.age||'';
+    var cls    = chipClass(status);
+    return '<div class="mum-t-record"><span class="mum-record-id" style="min-width:64px">'+esc(id)+'</span><span class="mum-record-meta" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 10px;font-size:12px;color:var(--silver)">'+esc(desc)+'</span><span class="mum-chip '+cls+'">'+esc(status||'Unknown')+'</span><span class="mum-record-meta" style="padding-left:8px">'+esc(user3)+(age?' · '+esc(age):'')+'</span></div>';
+  }).join('');
+  if(tr) tr.innerHTML = tabHtml;
+}
+
+/* QB toolbar buttons */
+el('mum-qb-reload').addEventListener('click', function(){ loadQBData(); });
+el('mum-qb-csv').addEventListener('click', function(){
+  try{
+    if(!_qbState.rows.length){ alert('No records to export.'); return; }
+    var keys = Object.keys(_qbState.rows[0]||{});
+    var csv  = [keys.join(',')].concat(_qbState.rows.map(function(r){ return keys.map(function(k){ return '"'+(String(r[k]||'').replace(/"/g,'""'))+'"'; }).join(','); })).join('\n');
+    var blob = new Blob([csv],{type:'text/csv'});
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a'); a.href=url; a.download='quickbase_export.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }catch(e){ console.error(e); }
+});
+el('mum-qb-search').addEventListener('input', function(){
+  var q = this.value.toLowerCase();
+  if(!q){ renderQBRows(_qbState.rows); return; }
+  var filtered = _qbState.rows.filter(function(row){
+    return Object.values(row).some(function(v){ return String(v||'').toLowerCase().includes(q); });
+  });
+  renderQBRows(filtered);
+});
+
+/* tablet reload */
+if(el('mum-t-reload')) el('mum-t-reload').addEventListener('click', function(){ loadQBData(); });
+if(el('mum-t-csv')) el('mum-t-csv').addEventListener('click', function(){ el('mum-qb-csv').click(); });
+
+/* ─── SHOW APP UI (post-login) ─────────────────────────────────────────── */
+function showAppUI(){
+  var isTablet = window.matchMedia && window.matchMedia('(min-width: 768px)').matches;
+  el('mum-loading').style.display='none';
+  if(isTablet){
+    el('mum-t-login').style.display='none';
+    var tw=el('mum-t-wrap'); if(tw) tw.style.display='flex';
+  } else {
+    showScreen('ms-dash');
+  }
+}
+
+/* ─── SHOW TABLET LOGIN ───────────────────────────────────────────────── */
+function showTabletLogin(){
+  var tl=el('mum-t-login'); if(tl) tl.style.display='flex';
+  var tw=el('mum-t-wrap'); if(tw) tw.style.display='none';
+}
+
+/* ─── DESKTOP REDIRECT ─────────────────────────────────────────────────── */
+function checkDesktopRedirect(){
+  var w = window.innerWidth || document.documentElement.clientWidth;
+  if(w >= 1100){
+    window.location.replace('/index.html');
+  }
+}
+checkDesktopRedirect();
+window.addEventListener('resize', function(){
+  if((window.innerWidth||0)>=1100) window.location.replace('/index.html');
+});
+
+/* ─── AUTO-LOGIN (session restore) ─────────────────────────────────────── */
+async function tryAutoLogin(){
+  el('mum-loading').style.display='flex';
+  try{
+    var user = await Auth.requireUser({ redirect: false, maxMs: 5000 });
+    if(user){
+      applyBuildLabel();
+      renderUser(user);
+      renderDashboardData(user);
+      showAppUI();
+      el('mum-loading').style.display='none';
+      try{ window.Realtime && Realtime.init && Realtime.init(); }catch(_){}
+      loadQBData();
+      window.addEventListener('mums:store', function(){ renderDashboardData(user); });
+    } else {
+      el('mum-loading').style.display='none';
+      /* check OAuth callback */
+      try{ window.CloudAuth && CloudAuth.handleOAuthCallback && (await CloudAuth.handleOAuthCallback()); }catch(_){}
+    }
+  }catch(e){
+    el('mum-loading').style.display='none';
+    console.error('[Mobile] auto-login failed', e);
+  }
+}
+
+/* ─── INIT ─────────────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', function(){
+  /* Check for desktop immediately */
+  checkDesktopRedirect();
+  /* Set initial tablet state */
+  var isTablet = window.matchMedia && window.matchMedia('(min-width: 768px)').matches;
+  if(isTablet){
+    showTabletLogin();
+  }
+  /* Try to restore session */
+  tryAutoLogin();
+});
+
+})();
+</script>
+</body>
+</html>

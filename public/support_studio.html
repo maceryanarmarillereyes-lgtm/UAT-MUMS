@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MUMS Support Studio — Enterprise Support Console</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/enterprise_ux.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* ─────────────────────────────────────────────────────────────────
+       MUMS SUPPORT STUDIO — Base Styles
+       Mirrors controller_lab.html architecture exactly.
+    ───────────────────────────────────────────────────────────────── */
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ss-bg:        #010409;
+      --ss-surface:   #0d1117;
+      --ss-surface2:  #161b22;
+      --ss-surface3:  #1c2128;
+      --ss-border:    rgba(255,255,255,.10);
+      --ss-border2:   rgba(255,255,255,.05);
+      --ss-text:      #c9d1d9;
+      --ss-muted:     #8b949e;
+      --ss-accent:    #58a6ff;
+      --ss-accent2:   #0073ea;
+      --ss-green:     #3fb950;
+      --ss-purple:    #a25ddc;
+      --ss-danger:    #f85149;
+      --ss-warn:      #d29922;
+      --ss-radius:    8px;
+      --ss-font:      'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif;
+      --ss-mono:      'JetBrains Mono', 'Courier New', monospace;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--ss-bg);
+      color: var(--ss-text);
+      font-family: var(--ss-font);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .ss-shell {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── SCROLLBAR ────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.22); }
+
+    /* ─────────────────────────────────────────────────────────────────
+       HEADER
+    ───────────────────────────────────────────────────────────────── */
+    .ss-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      height: 50px;
+      min-height: 50px;
+      background: var(--ss-surface);
+      border-bottom: 1px solid var(--ss-border);
+      z-index: 100;
+      flex-shrink: 0;
+      gap: 16px;
+    }
+
+    .ss-header-left {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      min-width: 0;
+    }
+
+    .ss-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .ss-brand-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #0073ea 0%, #a25ddc 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(0,115,234,.4);
+      flex-shrink: 0;
+    }
+
+    .ss-brand-text {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .ss-brand-name {
+      font-size: 14px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: .01em;
+      line-height: 1;
+    }
+
+    .ss-brand-sub {
+      font-size: 9px;
+      font-weight: 600;
+      color: var(--ss-muted);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      line-height: 1;
+    }
+
+    /* Tab group */
+    .ss-tabs {
+      display: flex;
+      gap: 4px;
+    }
+
+    .ss-tab {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--ss-muted);
+      padding: 6px 13px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      font-family: var(--ss-font);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all .18s;
+      white-space: nowrap;
+    }
+
+    .ss-tab:hover {
+      color: var(--ss-text);
+      background: rgba(255,255,255,.05);
+    }
+
+    .ss-tab.active {
+      background: rgba(88,166,255,.10);
+      color: var(--ss-accent);
+      border-color: rgba(88,166,255,.35);
+    }
+
+    /* Header right controls */
+    .ss-header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .ss-search-wrap {
+      display: flex;
+      align-items: center;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 6px;
+      overflow: hidden;
+      transition: border-color .18s;
+    }
+
+    .ss-search-wrap:focus-within {
+      border-color: rgba(88,166,255,.45);
+      box-shadow: 0 0 0 3px rgba(88,166,255,.12);
+    }
+
+    .ss-search-input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--ss-text);
+      font-family: var(--ss-font);
+      font-size: 12px;
+      padding: 7px 12px;
+      width: 200px;
+    }
+
+    .ss-search-input::placeholder { color: rgba(255,255,255,.22); }
+
+    .ss-search-btn {
+      background: rgba(255,255,255,.04);
+      border: none;
+      border-left: 1px solid rgba(255,255,255,.08);
+      color: var(--ss-muted);
+      padding: 7px 11px;
+      cursor: pointer;
+      transition: background .18s, color .18s;
+      font-size: 11px;
+    }
+
+    .ss-search-btn:hover { background: rgba(255,255,255,.10); color: var(--ss-text); }
+
+    .ss-btn-primary {
+      background: linear-gradient(135deg, #0073ea, #0060c2);
+      border: 1px solid rgba(0,115,234,.5);
+      color: #fff;
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 12px;
+      font-family: var(--ss-font);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 2px 10px rgba(0,115,234,.3);
+      transition: all .18s;
+    }
+
+    .ss-btn-primary:hover {
+      background: linear-gradient(135deg, #0284c7, #0073ea);
+      box-shadow: 0 4px 16px rgba(0,115,234,.4);
+      transform: translateY(-1px);
+    }
+
+    /* ─────────────────────────────────────────────────────────────────
+       3-PANE BODY
+    ───────────────────────────────────────────────────────────────── */
+    .ss-body {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* ─────────────────────────────────────────────────────────────────
+       SIDEBARS
+    ───────────────────────────────────────────────────────────────── */
+    .ss-sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: var(--ss-surface);
+      border-right: 1px solid var(--ss-border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+      flex-shrink: 0;
+    }
+
+    .ss-sidebar.right {
+      border-right: none;
+      border-left: 1px solid var(--ss-border);
+      width: 300px;
+      min-width: 300px;
+    }
+
+    .ss-panel {
+      padding: 16px 14px;
+      border-bottom: 1px solid var(--ss-border2);
+    }
+
+    .ss-panel.grow { flex: 1; }
+
+    .ss-panel-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      color: var(--ss-muted);
+      font-weight: 700;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ss-panel-title i { font-size: 9px; opacity: .85; }
+
+    /* Toolbar buttons */
+    .ss-tool-btn {
+      width: 100%;
+      padding: 9px 12px;
+      margin-bottom: 6px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 6px;
+      color: var(--ss-text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 12px;
+      font-family: var(--ss-font);
+      font-weight: 500;
+      transition: all .18s;
+      text-align: left;
+    }
+
+    .ss-tool-btn:hover {
+      background: rgba(255,255,255,.08);
+      border-color: rgba(255,255,255,.14);
+      color: #fff;
+    }
+
+    .ss-tool-btn:disabled {
+      opacity: .35;
+      cursor: not-allowed;
+    }
+
+    .ss-tool-btn i {
+      width: 16px;
+      text-align: center;
+      flex-shrink: 0;
+      color: var(--ss-muted);
+      font-size: 12px;
+    }
+
+    .ss-tool-btn:hover i { color: var(--ss-accent); }
+
+    .ss-tool-btn .badge-soon {
+      margin-left: auto;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: rgba(255,255,255,.06);
+      color: var(--ss-muted);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+
+    /* form control */
+    .ss-input {
+      width: 100%;
+      padding: 7px 10px;
+      background: var(--ss-bg);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 5px;
+      color: var(--ss-text);
+      font-size: 12px;
+      font-family: var(--ss-font);
+      outline: none;
+      transition: border-color .18s, box-shadow .18s;
+    }
+
+    .ss-input:focus {
+      border-color: rgba(88,166,255,.45);
+      box-shadow: 0 0 0 3px rgba(88,166,255,.12);
+    }
+
+    .ss-input::placeholder { color: rgba(255,255,255,.22); }
+
+    .ss-input-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .ss-input-row .ss-input { flex: 1; }
+
+    .ss-icon-btn {
+      padding: 7px 10px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 5px;
+      color: var(--ss-muted);
+      cursor: pointer;
+      font-size: 11px;
+      transition: all .18s;
+      flex-shrink: 0;
+    }
+
+    .ss-icon-btn:hover { background: rgba(255,255,255,.12); color: #fff; }
+
+    /* session list empty */
+    .ss-empty-note {
+      font-size: 11px;
+      color: rgba(255,255,255,.18);
+      text-align: center;
+      padding: 22px 10px;
+      line-height: 1.7;
+    }
+
+    .ss-empty-note i {
+      display: block;
+      font-size: 22px;
+      margin-bottom: 8px;
+      opacity: .22;
+    }
+
+    /* ─────────────────────────────────────────────────────────────────
+       CENTER CANVAS
+    ───────────────────────────────────────────────────────────────── */
+    .ss-canvas {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #000;
+      position: relative;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .ss-canvas-toolbar {
+      padding: 8px 16px;
+      background: var(--ss-surface2);
+      border-bottom: 1px solid var(--ss-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+      gap: 12px;
+    }
+
+    .ss-canvas-toolbar-left { display: flex; gap: 8px; align-items: center; }
+
+    .ss-mode-btn {
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.10);
+      color: var(--ss-text);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--ss-font);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all .18s;
+    }
+
+    .ss-mode-btn:hover { background: rgba(255,255,255,.10); }
+
+    .ss-mode-badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      background: rgba(139,148,158,.10);
+      color: var(--ss-muted);
+      border: 1px solid rgba(139,148,158,.25);
+    }
+
+    .ss-canvas-path {
+      font-size: 11px;
+      color: var(--ss-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Canvas empty state */
+    .ss-canvas-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      position: relative;
+      background:
+        radial-gradient(ellipse 55% 35% at 50% 50%, rgba(0,115,234,.035) 0%, transparent 70%),
+        repeating-linear-gradient(
+          0deg,
+          transparent, transparent 39px,
+          rgba(255,255,255,.022) 39px, rgba(255,255,255,.022) 40px
+        ),
+        repeating-linear-gradient(
+          90deg,
+          transparent, transparent 39px,
+          rgba(255,255,255,.022) 39px, rgba(255,255,255,.022) 40px
+        );
+    }
+
+    .ss-empty-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      background: rgba(0,115,234,.07);
+      border: 1px dashed rgba(88,166,255,.28);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      color: rgba(88,166,255,.38);
+      position: relative;
+    }
+
+    .ss-empty-icon::after {
+      content: '';
+      position: absolute;
+      inset: -12px;
+      border-radius: 24px;
+      border: 1px dashed rgba(88,166,255,.10);
+    }
+
+    .ss-empty-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: rgba(255,255,255,.22);
+      text-align: center;
+      letter-spacing: .01em;
+    }
+
+    .ss-empty-sub {
+      font-size: 11px;
+      color: rgba(255,255,255,.12);
+      text-align: center;
+      margin-top: 4px;
+      line-height: 1.6;
+    }
+
+    /* ── Tab content panels (hidden initially) ── */
+    .ss-tab-content { display: none; }
+    .ss-tab-content.active { display: flex; flex: 1; min-height: 0; }
+
+    /* ─────────────────────────────────────────────────────────────────
+       RIGHT SIDEBAR — Inspector
+    ───────────────────────────────────────────────────────────────── */
+    .ss-inspector-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      text-align: center;
+      gap: 12px;
+      color: var(--ss-muted);
+    }
+
+    .ss-inspector-empty i {
+      font-size: 36px;
+      opacity: .18;
+    }
+
+    .ss-inspector-empty p {
+      font-size: 11px;
+      opacity: .38;
+      line-height: 1.6;
+    }
+
+    /* skeleton fields */
+    .ss-field-group { margin-bottom: 14px; }
+
+    .ss-field-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--ss-muted);
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    .ss-field-skel {
+      height: 30px;
+      border-radius: 5px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.06);
+    }
+
+    .ss-field-skel.tall { height: 56px; }
+
+    .ss-btn-row { display: flex; gap: 6px; margin-top: 8px; }
+
+    .ss-action-btn {
+      flex: 1;
+      padding: 8px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 5px;
+      color: var(--ss-muted);
+      font-size: 11px;
+      font-family: var(--ss-font);
+      font-weight: 600;
+      cursor: not-allowed;
+      opacity: .5;
+      text-align: center;
+    }
+
+    /* ─────────────────────────────────────────────────────────────────
+       STATUS BAR (bottom)
+    ───────────────────────────────────────────────────────────────── */
+    .ss-statusbar {
+      height: 26px;
+      min-height: 26px;
+      background: var(--ss-surface3);
+      border-top: 1px solid var(--ss-border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    .ss-status-chip {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--ss-muted);
+      letter-spacing: .02em;
+    }
+
+    .ss-status-chip .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--ss-muted);
+    }
+
+    .ss-status-chip.ok .dot { background: var(--ss-green); box-shadow: 0 0 0 2px rgba(63,185,80,.2); }
+    .ss-status-chip.ok { color: var(--ss-green); }
+
+    .ss-statusbar-right {
+      margin-left: auto;
+      font-size: 10px;
+      color: rgba(255,255,255,.2);
+      font-family: var(--ss-mono);
+    }
+
+    /* ─────────────────────────────────────────────────────────────────
+       DIVIDER
+    ───────────────────────────────────────────────────────────────── */
+    .ss-divider {
+      border: none;
+      border-top: 1px solid var(--ss-border2);
+      margin: 12px 0;
+    }
+
+    /* Coming Soon watermark on canvas */
+    .ss-coming-soon {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.08);
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    /* MUMS theme overrides for light theme */
+    body[data-theme="mums_light"] .ss-header,
+    body[data-theme="mums_light"] .ss-sidebar,
+    body[data-theme="mums_light"] .ss-sidebar.right,
+    body[data-theme="mums_light"] .ss-canvas-toolbar,
+    body[data-theme="mums_light"] .ss-statusbar {
+      background: #0d1117 !important;
+      border-color: rgba(255,255,255,.10) !important;
+      color: #c9d1d9 !important;
+    }
+
+    body[data-theme="mums_light"] .ss-shell,
+    body[data-theme="mums_light"] body {
+      background: #010409 !important;
+      color: #c9d1d9 !important;
+    }
+
+  </style>
+</head>
+<body>
+
+<div class="ss-shell">
+
+  <!-- ══════════════════════════════════════════════════
+       HEADER
+  ══════════════════════════════════════════════════════ -->
+  <header class="ss-header">
+    <div class="ss-header-left">
+
+      <!-- Brand -->
+      <div class="ss-brand">
+        <div class="ss-brand-icon"><i class="fas fa-headset"></i></div>
+        <div class="ss-brand-text">
+          <div class="ss-brand-name">MUMS Support Studio</div>
+          <div class="ss-brand-sub">Enterprise Support Console</div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <nav class="ss-tabs" id="ss-tabs">
+        <button class="ss-tab active" data-tab="tickets">
+          <i class="fas fa-ticket-alt"></i> Tickets
+        </button>
+        <button class="ss-tab" data-tab="history">
+          <i class="fas fa-history"></i> History
+        </button>
+        <button class="ss-tab" data-tab="config">
+          <i class="fas fa-cog"></i> Config
+        </button>
+      </nav>
+
+    </div>
+
+    <!-- Right controls -->
+    <div class="ss-header-right">
+      <div class="ss-search-wrap">
+        <input class="ss-search-input" id="ss-search" type="text" placeholder="Search cases, users, tickets…" autocomplete="off">
+        <button class="ss-search-btn" onclick="document.getElementById('ss-search').focus()">
+          <i class="fas fa-search"></i>
+        </button>
+      </div>
+      <button class="ss-btn-primary" id="ss-connect-btn" disabled title="Coming soon">
+        <i class="fas fa-satellite-dish"></i> Connect to Case
+      </button>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════════
+       TAB: TICKETS (default active)
+  ══════════════════════════════════════════════════════ -->
+  <div class="ss-tab-content active" id="tab-tickets">
+    <div class="ss-body">
+
+      <!-- LEFT SIDEBAR -->
+      <aside class="ss-sidebar">
+        <div class="ss-panel">
+          <div class="ss-panel-title"><i class="fas fa-folder-open"></i> Session Manager</div>
+          <div class="ss-input-row">
+            <input class="ss-input" type="text" placeholder="Session name…" id="ss-session-name">
+            <button class="ss-icon-btn" title="Save session (coming soon)" disabled><i class="fas fa-save"></i></button>
+          </div>
+          <div class="ss-empty-note">
+            <i class="fas fa-folder-plus"></i>
+            No active sessions.<br>Create one to begin.
+          </div>
+        </div>
+
+        <div class="ss-panel grow">
+          <div class="ss-panel-title"><i class="fas fa-tools"></i> Support Tools</div>
+
+          <button class="ss-tool-btn" disabled>
+            <i class="fas fa-user-check"></i> User Lookup
+            <span class="badge-soon">Soon</span>
+          </button>
+          <button class="ss-tool-btn" disabled>
+            <i class="fas fa-file-alt"></i> Case Report
+            <span class="badge-soon">Soon</span>
+          </button>
+          <button class="ss-tool-btn" disabled>
+            <i class="fas fa-exchange-alt"></i> Case Reassign
+            <span class="badge-soon">Soon</span>
+          </button>
+          <button class="ss-tool-btn" disabled>
+            <i class="fas fa-bell"></i> Send Reminder
+            <span class="badge-soon">Soon</span>
+          </button>
+          <button class="ss-tool-btn" disabled>
+            <i class="fas fa-chart-line"></i> Performance Snapshot
+            <span class="badge-soon">Soon</span>
+          </button>
+          <button class="ss-tool-btn" disabled>
+            <i class="fas fa-download"></i> Export Logs
+            <span class="badge-soon">Soon</span>
+          </button>
+
+          <hr class="ss-divider">
+
+          <button class="ss-tool-btn" disabled>
+            <i class="fas fa-bug"></i> Diagnostics
+            <span class="badge-soon">Soon</span>
+          </button>
+          <button class="ss-tool-btn" disabled>
+            <i class="fas fa-shield-alt"></i> Audit Trail
+            <span class="badge-soon">Soon</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- CENTER CANVAS -->
+      <main class="ss-canvas">
+        <div class="ss-canvas-toolbar">
+          <div class="ss-canvas-toolbar-left">
+            <button class="ss-mode-btn" id="ss-mode-btn">
+              <i class="fas fa-mouse-pointer"></i> Enable Support Mode
+            </button>
+            <span class="ss-mode-badge" id="ss-mode-badge"><i class="fas fa-circle" style="font-size:7px; margin-right:4px;"></i> Standby</span>
+          </div>
+          <div class="ss-canvas-path">
+            <i class="fas fa-desktop"></i> Workspace: /support_studio.html
+          </div>
+        </div>
+
+        <!-- Empty canvas body -->
+        <div class="ss-canvas-body" id="ss-canvas-body">
+          <div class="ss-empty-icon"><i class="fas fa-headset"></i></div>
+          <div>
+            <div class="ss-empty-title">MUMS Support Studio</div>
+            <div class="ss-empty-sub">
+              Select a session or create a new support ticket to begin.<br>
+              Tools and workspace will appear here.
+            </div>
+          </div>
+          <div class="ss-coming-soon">MUMS Support Studio &nbsp;·&nbsp; Enterprise Support Console &nbsp;·&nbsp; Coming Soon</div>
+        </div>
+      </main>
+
+      <!-- RIGHT SIDEBAR -->
+      <aside class="ss-sidebar right">
+        <div class="ss-panel">
+          <div class="ss-panel-title"><i class="fas fa-info-circle"></i> Case Inspector</div>
+          <div class="ss-inspector-empty">
+            <i class="fas fa-search-plus"></i>
+            <p>Select a support ticket or case to inspect full details here.</p>
+          </div>
+        </div>
+
+        <div class="ss-panel">
+          <div class="ss-panel-title"><i class="fas fa-user-shield"></i> Agent Panel</div>
+
+          <div class="ss-field-group">
+            <div class="ss-field-label">Assigned Agent</div>
+            <div class="ss-field-skel"></div>
+          </div>
+          <div class="ss-field-group">
+            <div class="ss-field-label">Case Priority</div>
+            <div class="ss-field-skel"></div>
+          </div>
+          <div class="ss-field-group">
+            <div class="ss-field-label">Notes</div>
+            <div class="ss-field-skel tall"></div>
+          </div>
+
+          <div class="ss-btn-row">
+            <button class="ss-action-btn">Escalate</button>
+            <button class="ss-action-btn">Resolve</button>
+          </div>
+        </div>
+
+        <div class="ss-panel">
+          <div class="ss-panel-title"><i class="fas fa-sliders-h"></i> Element Inspector</div>
+          <div class="ss-inspector-empty" style="padding: 20px 10px;">
+            <i class="fas fa-mouse-pointer" style="font-size: 24px;"></i>
+            <p>Enable Support Mode and click any element to inspect.</p>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════
+       TAB: HISTORY
+  ══════════════════════════════════════════════════════ -->
+  <div class="ss-tab-content" id="tab-history">
+    <div class="ss-body">
+      <aside class="ss-sidebar">
+        <div class="ss-panel grow">
+          <div class="ss-panel-title"><i class="fas fa-filter"></i> Filters</div>
+          <div class="ss-empty-note">
+            <i class="fas fa-sliders-h"></i>
+            Filter options coming soon.
+          </div>
+        </div>
+      </aside>
+      <main class="ss-canvas">
+        <div class="ss-canvas-toolbar">
+          <div class="ss-canvas-toolbar-left">
+            <span class="ss-mode-badge">History View</span>
+          </div>
+          <div class="ss-canvas-path"><i class="fas fa-history"></i> Support History Log</div>
+        </div>
+        <div class="ss-canvas-body">
+          <div class="ss-empty-icon"><i class="fas fa-history"></i></div>
+          <div>
+            <div class="ss-empty-title">History</div>
+            <div class="ss-empty-sub">Support history log will appear here.</div>
+          </div>
+          <div class="ss-coming-soon">MUMS Support Studio &nbsp;·&nbsp; History Module &nbsp;·&nbsp; Coming Soon</div>
+        </div>
+      </main>
+      <aside class="ss-sidebar right">
+        <div class="ss-panel grow">
+          <div class="ss-panel-title"><i class="fas fa-info-circle"></i> Details</div>
+          <div class="ss-inspector-empty">
+            <i class="fas fa-file-alt"></i>
+            <p>Select a history entry to view full details.</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════
+       TAB: CONFIG
+  ══════════════════════════════════════════════════════ -->
+  <div class="ss-tab-content" id="tab-config">
+    <div class="ss-body">
+      <aside class="ss-sidebar">
+        <div class="ss-panel grow">
+          <div class="ss-panel-title"><i class="fas fa-cog"></i> Config Sections</div>
+          <div class="ss-empty-note">
+            <i class="fas fa-cog fa-spin"></i>
+            Configuration options coming soon.
+          </div>
+        </div>
+      </aside>
+      <main class="ss-canvas">
+        <div class="ss-canvas-toolbar">
+          <div class="ss-canvas-toolbar-left">
+            <span class="ss-mode-badge">Config View</span>
+          </div>
+          <div class="ss-canvas-path"><i class="fas fa-cog"></i> Studio Configuration</div>
+        </div>
+        <div class="ss-canvas-body">
+          <div class="ss-empty-icon"><i class="fas fa-cog"></i></div>
+          <div>
+            <div class="ss-empty-title">Configuration</div>
+            <div class="ss-empty-sub">Studio configuration settings will appear here.</div>
+          </div>
+          <div class="ss-coming-soon">MUMS Support Studio &nbsp;·&nbsp; Config Module &nbsp;·&nbsp; Coming Soon</div>
+        </div>
+      </main>
+      <aside class="ss-sidebar right">
+        <div class="ss-panel grow">
+          <div class="ss-panel-title"><i class="fas fa-info-circle"></i> Info</div>
+          <div class="ss-inspector-empty">
+            <i class="fas fa-info-circle"></i>
+            <p>Select a config section to view details.</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════
+       STATUS BAR (bottom)
+  ══════════════════════════════════════════════════════ -->
+  <div class="ss-statusbar">
+    <div class="ss-status-chip ok">
+      <div class="dot"></div>
+      Studio Ready
+    </div>
+    <div class="ss-status-chip">
+      <div class="dot"></div>
+      No Active Session
+    </div>
+    <div class="ss-status-chip">
+      <i class="fas fa-server" style="font-size:9px; margin-right:2px;"></i>
+      MUMS Support Studio v1.0
+    </div>
+    <div class="ss-statusbar-right" id="ss-clock">--:--:--</div>
+  </div>
+
+</div><!-- end ss-shell -->
+
+<script>
+/* ─────────────────────────────────────────────────────────────────
+   MUMS Support Studio — Core JS
+   Lightweight tab switching, clock, mode toggle.
+───────────────────────────────────────────────────────────────── */
+
+(function() {
+  'use strict';
+
+  // ── Tab switching ──────────────────────────────────────
+  const tabs    = document.querySelectorAll('.ss-tab');
+  const panels  = document.querySelectorAll('.ss-tab-content');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.tab;
+
+      tabs.forEach(t => t.classList.remove('active'));
+      panels.forEach(p => p.classList.remove('active'));
+
+      tab.classList.add('active');
+      const panel = document.getElementById('tab-' + target);
+      if (panel) panel.classList.add('active');
+    });
+  });
+
+  // ── Live clock ─────────────────────────────────────────
+  const clockEl = document.getElementById('ss-clock');
+  function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    if (clockEl) clockEl.textContent = h + ':' + m + ':' + s;
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // ── Mode toggle (stub) ─────────────────────────────────
+  const modeBtn   = document.getElementById('ss-mode-btn');
+  const modeBadge = document.getElementById('ss-mode-badge');
+  let modeActive  = false;
+
+  if (modeBtn) {
+    modeBtn.addEventListener('click', () => {
+      modeActive = !modeActive;
+      if (modeActive) {
+        modeBtn.innerHTML = '<i class="fas fa-times-circle"></i> Disable Support Mode';
+        modeBtn.style.background = 'rgba(88,166,255,.10)';
+        modeBtn.style.borderColor = 'rgba(88,166,255,.35)';
+        modeBtn.style.color = '#58a6ff';
+        modeBadge.innerHTML = '<i class="fas fa-circle" style="font-size:7px; margin-right:4px; color:#3fb950;"></i> Active';
+        modeBadge.style.background = 'rgba(63,185,80,.10)';
+        modeBadge.style.color = '#3fb950';
+        modeBadge.style.borderColor = 'rgba(63,185,80,.30)';
+      } else {
+        modeBtn.innerHTML = '<i class="fas fa-mouse-pointer"></i> Enable Support Mode';
+        modeBtn.style.background = '';
+        modeBtn.style.borderColor = '';
+        modeBtn.style.color = '';
+        modeBadge.innerHTML = '<i class="fas fa-circle" style="font-size:7px; margin-right:4px;"></i> Standby';
+        modeBadge.style.background = '';
+        modeBadge.style.color = '';
+        modeBadge.style.borderColor = '';
+      }
+    });
+  }
+
+  // ── Search (stub — future: filter canvas content) ─────
+  const searchInput = document.getElementById('ss-search');
+  if (searchInput) {
+    searchInput.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { searchInput.value = ''; searchInput.blur(); }
+    });
+  }
+
+  // ── Page title ──────────────────────────────────────────
+  document.title = 'MUMS Support Studio';
+
+})();
+</script>
+
+</body>
+</html>
