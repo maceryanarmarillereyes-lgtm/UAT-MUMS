@@ -41,8 +41,9 @@ function canCreateRole(actor, targetRole) {
   const tRole = (targetRole || '').toUpperCase();
 
   if (aRole === 'SUPER_ADMIN') {
-    // Super admin can create any role except SUPER_ADMIN (reserved).
-    return tRole !== 'SUPER_ADMIN';
+    // SUPER_ADMIN can assign any role (including SUPER_ADMIN for display in edit mode).
+    // Creation of new SUPER_ADMIN accounts is blocked at the save step, not here.
+    return true;
   }
   if (aRole === 'TEAM_LEAD') {
     // Team lead can only create MEMBER accounts.
@@ -497,15 +498,28 @@ if (!createAllowed) {
 function applyDevOptionForRole(role){
   const isSuper = String(role || '').toUpperCase() === String(Config.ROLES.SUPER_ADMIN);
   const sel = UI.el('#u_team');
-  const devOpt = sel ? sel.querySelector('option[value=""]') : null;
-  // FIX: SUPER_ADMIN -> Developer Access enabled + visible; non-SUPER_ADMIN -> hidden
-  if (devOpt) {
+  if (!sel) return;
+
+  // FIX: style.display on <option> is ignored by Chrome on Windows.
+  // Correct approach: physically remove or re-insert the Developer Access option.
+  let devOpt = sel.querySelector('option[value=""]');
+
+  if (isSuper) {
+    // Ensure Developer Access option exists at the top
+    if (!devOpt) {
+      devOpt = document.createElement('option');
+      devOpt.value = '';
+      devOpt.textContent = 'Developer Access';
+      sel.insertBefore(devOpt, sel.firstChild);
+    }
     devOpt.disabled = false;
-    devOpt.style.display = isSuper ? '' : 'none';
-  }
-  // If non-SUPER_ADMIN somehow has Developer Access selected, force to first shift
-  if (!isSuper && sel && sel.value === '') {
-    sel.value = (Config.TEAMS[0] && Config.TEAMS[0].id) || 'morning';
+  } else {
+    // Remove Developer Access option entirely for non-SUPER_ADMIN
+    if (devOpt) devOpt.remove();
+    // If value is empty (Developer Access), force to first shift
+    if (sel.value === '') {
+      sel.value = (Config.TEAMS[0] && Config.TEAMS[0].id) || 'morning';
+    }
   }
 }
 
@@ -651,6 +665,10 @@ function openUserModal(actor, user){
 
       // Role restrictions
       if(!canCreateRole(actor, role) && (user?.role!==role)) return err('You do not have permission to set that role.');
+      // Block creating NEW SUPER_ADMIN accounts (editing existing one is fine)
+      if(!isEdit && String(role||'').toUpperCase() === String(Config.ROLES.SUPER_ADMIN)){
+        return err('Cannot create new Super Admin accounts. Contact system administrator.');
+      }
       if(actor.role===Config.ROLES.TEAM_LEAD && teamId!==actor.teamId) return err('Team Lead can only manage users in their team.');
 
       // Developer Access restriction
