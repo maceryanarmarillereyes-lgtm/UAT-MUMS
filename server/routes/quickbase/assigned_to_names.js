@@ -37,9 +37,10 @@ module.exports = async (req, res) => {
     const profile = await getProfileForUserId(user.id);
     if (!isSuperAdmin(profile)) return sendJson(res, 403, { ok: false, error: 'forbidden', message: 'Super Admin only.' });
 
-    // Return memory cache if fresh
+    // Return memory cache if fresh (with sanitization guard)
     if (_memCache && (Date.now() - _memCacheAt) < CACHE_TTL_MS) {
-      return sendJson(res, 200, { ok: true, names: _memCache, cached: true });
+      const sanitizedCache = _memCache.filter(n => typeof n === 'string' && n.trim() && n !== '[object Object]');
+      return sendJson(res, 200, { ok: true, names: sanitizedCache, cached: true });
     }
 
     // Load persisted names from mums_documents (always returned even if QB fetch fails)
@@ -47,7 +48,10 @@ module.exports = async (req, res) => {
     try {
       const dbOut = await serviceSelect('mums_documents', `select=value&key=eq.${encodeURIComponent(NAMES_CACHE_KEY)}&limit=1`);
       if (dbOut.ok && Array.isArray(dbOut.json) && dbOut.json[0] && Array.isArray(dbOut.json[0].value)) {
-        persistedNames = dbOut.json[0].value;
+        // Sanitize: only keep plain non-empty strings (guards against old [object Object] cache entries)
+        persistedNames = dbOut.json[0].value
+          .filter(n => typeof n === 'string' && n.trim() && n !== '[object Object]')
+          .map(n => n.trim());
       }
     } catch (_) {}
 
@@ -95,12 +99,16 @@ module.exports = async (req, res) => {
     }
 
     // Extract unique names
+    // FIX: Use mappedRecords (not raw records). QB "Assigned To" is a User-type field
+    // that returns nested objects: { value: { id, name, email } }.
+    // queryQuickbaseRecords().mappedRecords already runs normalizeQuickbaseCellValue()
+    // on every cell, resolving nested User objects to plain strings.
+    // Using raw out.records + String(cell.value) produced "[object Object]" in the dropdown.
     const namesSet = new Set(persistedNames); // always keep persisted names
-    (Array.isArray(out.records) ? out.records : []).forEach(row => {
-      const cell = row && (row[String(assignedToFid)] || row[assignedToFid]);
-      let val = '';
-      if (cell && typeof cell === 'object' && cell.value !== undefined) val = String(cell.value || '').trim();
-      else if (typeof cell === 'string') val = cell.trim();
+    const sourceRecords = Array.isArray(out.mappedRecords) ? out.mappedRecords : [];
+    sourceRecords.forEach(row => {
+      if (!row) return;
+      const val = String(row[String(assignedToFid)] || row[assignedToFid] || '').trim();
       if (val) namesSet.add(val);
     });
 
