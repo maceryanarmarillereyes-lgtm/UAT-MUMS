@@ -1580,7 +1580,7 @@
             <div class="qb-table-meta">
               <span id="qbDataMeta" class="qb-meta-text">Loading…</span>
               <span id="qbFreshBadge" class="qb-fresh-badge" style="display:none;">● Live</span>
-              <span id="qbCacheBadge" class="qb-cache-badge" style="display:none;">◎ Cached</span>
+              <span id="qbCacheBadge" class="qb-cache-badge" style="display:none;cursor:pointer;" title="Showing cached data — click to refresh live">◎ Cached — click to refresh</span>
             </div>
           </div>
           <div id="qbDataBody" class="qb-data-body"></div>
@@ -3056,9 +3056,28 @@
       if (fromCache) {
         freshBadge.style.display = 'none';
         cacheBadge.style.display = '';
+        // ── CLICK TO REFRESH: when showing cached data, badge is clickable ──
+        // Clicking it clears the cache for this tab and triggers a live reload.
+        cacheBadge.onclick = () => {
+          const activeTabId = getActiveTabId();
+          // Invalidate in-memory QB cache for this tab so next load hits QB live
+          if (state.qbCache && activeTabId) {
+            Object.keys(state.qbCache).forEach(k => {
+              if (k.startsWith(activeTabId + '|') || k === activeTabId) {
+                delete state.qbCache[k];
+              }
+            });
+          }
+          // Also clear _tabDataCache for this tab so cache-hit path is skipped
+          if (state._tabDataCache && activeTabId) {
+            delete state._tabDataCache[activeTabId];
+          }
+          loadQuickbaseData({ forceRefresh: true, silent: false });
+        };
       } else {
         freshBadge.style.display = '';
         cacheBadge.style.display = 'none';
+        cacheBadge.onclick = null;
       }
     }
   };

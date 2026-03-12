@@ -1852,9 +1852,13 @@ function updateClocksPreviewTimes(){
     const team = Config.teamById(user.teamId);
     const prof = Store.getProfile(user.id) || {};
     const initials = UI.initials(user.name||user.username);
-    const avatarHtml = prof.photoDataUrl
-      ? `<img src="${prof.photoDataUrl}" alt="User photo" />`
-      : `<div class="initials">${UI.esc(initials)}</div>`;
+    const _avatarSrc = prof.photoDataUrl && !prof.photoDataUrl.startsWith('data:')
+      ? (prof.photoDataUrl + (prof.photoDataUrl.includes('?') ? `&_cb=${Date.now()}` : `?_cb=${Date.now()}`))
+      : (prof.photoDataUrl || '');
+    const _avatarFallback = `<div class="initials">${UI.esc(initials)}</div>`;
+    const avatarHtml = _avatarSrc
+      ? `<img src="${_avatarSrc}" alt="User photo" onerror="this.parentElement.innerHTML=${JSON.stringify(_avatarFallback)}" />`
+      : _avatarFallback;
 
     let shiftLabel = (team && team.label) ? String(team.label) : '';
     try{
@@ -2072,14 +2076,8 @@ function updateClocksPreviewTimes(){
     const emailEl = UI.el('#profileEmail');
     const roleEl = UI.el('#profileRole');
     const teamEl = UI.el('#profileTeam');
-    // Show QB Integration section only for SUPER_ADMIN
-    const qbIntegSection = document.getElementById('qbIntegrationSection');
-    if (qbIntegSection) {
-      const currentUser = Auth && typeof Auth.getUser === 'function' ? Auth.getUser() : null;
-      const currentRole = String((currentUser && currentUser.role) || '').trim().toUpperCase().replace(/\s+/g, '_');
-      qbIntegSection.style.display = (currentRole === 'SUPER_ADMIN') ? '' : 'none';
-    }
-    const qbTokenEl = UI.el('#profileQbToken');
+    // QB Integration section removed — token is managed globally by SUPER_ADMIN in Global QB Settings
+    const qbTokenEl = null; // field removed from UI
 
     let teamSel = UI.el('#profileTeamSelect');
     if(isSuperAdmin0){
@@ -2135,7 +2133,7 @@ function updateClocksPreviewTimes(){
     }
     if(roleEl) roleEl.value = user.role||'';
     if(teamEl) teamEl.value = (teamForLabel && teamForLabel.label) ? teamForLabel.label : '';
-    if(qbTokenEl) qbTokenEl.value = String(prof.qb_token || '');
+    // qbTokenEl removed
 
     try{
       if(isSuperAdmin0 && teamSel){
@@ -2175,10 +2173,7 @@ function updateClocksPreviewTimes(){
             }
 
             if(emailEl && p.email) emailEl.value = p.email;
-            if(qbTokenEl && p.qb_token !== undefined && p.qb_token !== null){
-              qbTokenEl.value = String(p.qb_token || '');
-              try{ Store.setProfile(user.id, { qb_token: String(p.qb_token || ''), updatedAt: Date.now() }); }catch(_){ }
-            }
+            // qbTokenEl removed — QB token is now global-only
             if(isSuperAdmin0 && teamSel){
               const roleUp = String(p.role || user.role || '').toUpperCase();
               const isSuperRole = (roleUp === 'SUPER_ADMIN' || roleUp === 'SUPER_USER');
@@ -2251,7 +2246,7 @@ function updateClocksPreviewTimes(){
 
     UI.el('#profileSave').onclick = async ()=>{
       const name = String((nameEl && nameEl.value) || '').trim();
-      const qbToken = String((qbTokenEl && qbTokenEl.value) || '').trim();
+      const qbToken = ''; // QB token field removed from profile UI
 
       let teamIdSel = '';
       let teamOverrideSel = false;
@@ -2302,9 +2297,20 @@ function updateClocksPreviewTimes(){
     const box = UI.el('#profileAvatar');
     if(!box) return;
     if(photoDataUrl){
-      box.innerHTML = `<img src="${photoDataUrl}" alt="User photo" />`;
+      // Add cache-bust param to force browser re-fetch after upload
+      // (Supabase CDN may serve stale or missing response without it)
+      const bust = photoDataUrl.includes('?') ? `&_cb=${Date.now()}` : `?_cb=${Date.now()}`;
+      const srcWithBust = photoDataUrl.startsWith('data:') ? photoDataUrl : (photoDataUrl + bust);
+      const fallbackHtml = `<div class="initials" style="font-size:28px">${UI.esc(UI.initials((user&&(user.name||user.username))||''))}</div>`;
+      const img = document.createElement('img');
+      img.alt = 'User photo';
+      img.onerror = () => { box.innerHTML = fallbackHtml; };
+      img.onload = () => { box.innerHTML = ''; box.appendChild(img); };
+      img.src = srcWithBust;
+      // Show a placeholder while loading so there's no flash of broken img
+      box.innerHTML = fallbackHtml;
     } else {
-      box.innerHTML = `<div class="initials" style="font-size:28px">${UI.esc(UI.initials(user.name||user.username))}</div>`;
+      box.innerHTML = `<div class="initials" style="font-size:28px">${UI.esc(UI.initials((user&&(user.name||user.username))||''))}</div>`;
     }
   }
 

@@ -5417,6 +5417,13 @@ body.members-fullscreen-active .tooltip{
   border-radius: 999px;
   background: rgba(170,188,220,0.07);
   border: 1px solid rgba(170,188,220,0.18);
+  transition: color .15s, background .15s, border-color .15s;
+}
+.qb-cache-badge[style*="cursor:pointer"]:hover,
+.qb-cache-badge[style*="cursor: pointer"]:hover {
+  color: #4ade80;
+  background: rgba(74,222,128,0.10);
+  border-color: rgba(74,222,128,0.28);
 }
 .qb-data-body {
   flex: 1;

@@ -117,14 +117,14 @@ function canCreateRole(actor, targetRole) {
       <tbody data-users-tbody></tbody>
     </table>
 
-    <div class="modal" id="profileModal" aria-hidden="true">
+    <div class="modal" id="userProfileModal" aria-hidden="true">
       <div class="panel">
         <div class="head">
           <div>
             <div class="announce-title" id="p_title">User Profile</div>
             <div class="small" id="p_sub">Manage account and scheduling.</div>
           </div>
-          <button class="btn ghost" data-close="profileModal">✕</button>
+          <button class="btn ghost" data-close="userProfileModal">✕</button>
         </div>
         <div class="body">
           <div class="tabs">
@@ -573,7 +573,7 @@ if (!createAllowed) {
   };
 // modal close
   root.querySelectorAll('[data-close="userModal"]').forEach(b=>b.onclick=()=>UI.closeModal('userModal'));
-  root.querySelectorAll('[data-close="profileModal"]').forEach(b=>b.onclick=()=>UI.closeModal('profileModal'));
+  root.querySelectorAll('[data-close="userProfileModal"]').forEach(b=>b.onclick=()=>UI.closeModal('profileModal'));
 
 
 function applyDevOptionForRole(role){
