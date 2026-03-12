@@ -71,13 +71,41 @@ module.exports = async (req, res) => {
     if (req.method !== 'POST') return sendJson(res, 405, { ok: false, error: 'method_not_allowed' });
 
     const auth = String(req.headers.authorization || '');
-    const jwt = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : '';
+    let jwt = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : '';
+
+    // sendBeacon (used for offline marker on beforeunload) cannot set
+    // Authorization headers. As a fallback, the watchdog embeds the JWT
+    // in the request body as _jwt. Validate it only from body if header is absent.
+    if (!jwt) {
+      let bodyPreview = {};
+      try {
+        if (req.body && typeof req.body === 'object') bodyPreview = req.body;
+        else {
+          // Peek at body to extract _jwt without consuming the stream for main readBody() below
+          const rawPeek = await new Promise((resolve) => {
+            let d = '';
+            req.on('data', c => { d += c; });
+            req.on('end', () => resolve(d));
+          });
+          req.__cachedBody = rawPeek; // cache so readBody() below doesn't re-read
+          try { bodyPreview = rawPeek ? JSON.parse(rawPeek) : {}; } catch (_) {}
+        }
+      } catch (_) {}
+      const bodyJwt = String(bodyPreview._jwt || '').trim();
+      if (bodyJwt) jwt = bodyJwt;
+    }
+
     const authed = await getUserFromJwt(jwt);
     if (!authed) return sendJson(res, 401, { ok: false, error: 'unauthorized' });
 
     let body;
     try {
-      body = await readBody(req);
+      // If we already read the body for JWT extraction, use cached version
+      if (req.__cachedBody !== undefined) {
+        try { body = req.__cachedBody ? JSON.parse(req.__cachedBody) : {}; } catch (_) { body = {}; }
+      } else {
+        body = await readBody(req);
+      }
     } catch (e) {
       return sendJson(res, 400, { ok: false, error: 'invalid_json' });
     }

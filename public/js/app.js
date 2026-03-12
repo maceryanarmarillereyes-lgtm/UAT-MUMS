@@ -1279,6 +1279,12 @@ function renderWorldClocksBar(){
       (buckets[b]||buckets.mid).push(u);
     });
 
+    // Active threshold: heartbeat received within last 45s → full green
+    // Idle threshold:   heartbeat within last 8hr → grayed out (session alive, just backgrounded)
+    // Beyond 8hr: removed from roster entirely by server TTL
+    const ACTIVE_THRESHOLD_MS = 45 * 1000;
+    const _nowTs = Date.now();
+
     function pills(arr){
       return (arr||[]).slice(0, 18).map(u=>{
         const uid = String(u.userId || u.id || '').trim();
@@ -1286,8 +1292,14 @@ function renderWorldClocksBar(){
         const red = mode === 'WFH';
         const photo = u.photo ? String(u.photo) : '';
         const nm = String(u.name||u.username||'User');
+        // Determine if user is active or idle based on last heartbeat time
+        const lastSeen = Number(u.lastSeen || u.last_seen || 0);
+        const isIdle = lastSeen > 0 && (_nowTs - lastSeen) > ACTIVE_THRESHOLD_MS;
+        const idleLabel = isIdle ? ' · Away' : '';
+        const pillClass = isIdle ? 'is-idle' : (red ? 'is-red' : '');
+        const titleLabel = UI.esc(nm + idleLabel);
         return `
-          <div class="online-pill ${red?'is-red':''}" title="${UI.esc(nm)}">
+          <div class="online-pill ${pillClass}" title="${titleLabel}">
             ${photo ? `<img src="${UI.esc(photo)}" alt="${UI.esc(nm)}" />` : `<span class="ini">${UI.esc(_initials(nm))}</span>`}
           </div>
         `;
@@ -1296,12 +1308,23 @@ function renderWorldClocksBar(){
 
     function sec(title, arr){
       const items = pills(arr);
+      // Active count (green) vs total (includes idle/grayed)
+      const activeCount = arr.filter(u => {
+        const lastSeen = Number(u.lastSeen || u.last_seen || 0);
+        return lastSeen <= 0 || (_nowTs - lastSeen) <= ACTIVE_THRESHOLD_MS;
+      }).length;
+      const totalCount = arr.length;
+      // Show "2 / 3" when there are idle users, "2" when all active
+      const countDisplay = (totalCount > activeCount && totalCount > 0)
+        ? `${activeCount}<span style="opacity:.45;font-weight:500">/${totalCount}</span>`
+        : String(totalCount);
+
       if(isMobile){
         return `
           <details class="onlinebar-acc" ${arr.length ? 'open' : ''}>
             <summary>
               <span class="onlinebar-title">${UI.esc(title)}</span>
-              <span class="onlinebar-count">${arr.length}</span>
+              <span class="onlinebar-count">${countDisplay}</span>
             </summary>
             <div class="onlinebar-badges">
               <div class="onlinebar-list">${items || '<span class="small" style="opacity:.7">—</span>'}</div>
@@ -1314,7 +1337,7 @@ function renderWorldClocksBar(){
         <div class="onlinebar-sec">
           <div class="onlinebar-head">
             <div class="onlinebar-title">${UI.esc(title)}</div>
-            <div class="onlinebar-count">${arr.length}</div>
+            <div class="onlinebar-count">${countDisplay}</div>
           </div>
           <div class="onlinebar-list">${items || '<span class="small" style="opacity:.7">—</span>'}</div>
         </div>
@@ -3989,6 +4012,9 @@ async function boot(){
     }catch(e){ console.error(e); }
 
     UI.el('#logoutBtn').onclick = ()=>{
+      // Send explicit offline marker so user disappears from roster immediately
+      // instead of waiting for TTL expiry on the 8-hour window
+      try{ if(typeof window.__mumsPresenceOffline === 'function') window.__mumsPresenceOffline(); }catch(_){ }
       try{ const u = Auth.getUser && Auth.getUser(); if(u && Store && Store.setOffline) Store.setOffline(u.id); }catch(_){ }
       Auth.logout();
       window.location.href='/login';

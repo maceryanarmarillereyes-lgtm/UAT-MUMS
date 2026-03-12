@@ -67,7 +67,9 @@ try {
       return sendJson(res, 500, { ok: false, error: 'supabase_select_failede_list_failed', status: out.status, details: out.json || out.text });
     }
 
-    const rowsRaw = Array.isArray(out.json) ? out.json : [];
+    const rowsRaw = (Array.isArray(out.json) ? out.json : [])
+      // Filter out explicit offline markers (sent by watchdog on browser close / logout)
+      .filter(r => String(r && r.route || '') !== '__offline__');
 
 // De-duplicate by user_id (or client_id fallback), selecting the newest by last_seen.
 // This prevents flicker when the same user has multiple tabs/devices.

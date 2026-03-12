@@ -2955,12 +2955,31 @@ body.attendance-locked #app{
   display:inline-grid;
   place-items:center;
   overflow:hidden;
-  border: 2px solid rgba(34,197,94,.75); /* green by default */
+  border: 2px solid rgba(34,197,94,.75); /* green = active */
   background: rgba(255,255,255,.06);
   box-shadow: 0 6px 14px rgba(0,0,0,.22);
   flex: 0 0 22px;
+  transition: border-color .3s, opacity .3s, filter .3s;
+  position: relative;
 }
+/* WFH / manual red flag */
 .online-pill.is-red{ border-color: rgba(255,91,110,.82); }
+/* Idle: browser open but heartbeat missed — grayed with reduced opacity */
+.online-pill.is-idle{
+  border-color: rgba(148,163,184,.35);
+  opacity: .52;
+  filter: grayscale(.75);
+}
+/* Idle tooltip indicator */
+.online-pill.is-idle::after{
+  content: '';
+  position: absolute;
+  bottom: -1px; right: -1px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(148,163,184,.9);
+  border: 1px solid rgba(15,23,42,.7);
+}
 .online-pill img{width:100%;height:100%;object-fit:cover;display:block}
 .online-pill .ini{font-size:10px;font-weight:950;color:var(--text);opacity:.95}
 
