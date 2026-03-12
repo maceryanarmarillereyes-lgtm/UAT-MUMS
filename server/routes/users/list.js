@@ -58,7 +58,7 @@ module.exports = async (req, res) => {
       filter = `&user_id=eq.${encodeURIComponent(user.id)}`;
     }
 
-    let select = 'user_id,username,name,email,role,team_id,team_override,duty,avatar_url,created_at,updated_at';
+    let select = 'user_id,username,name,email,role,team_id,team_override,duty,avatar_url,qb_name,created_at,updated_at';
     let out = await serviceSelect('mums_profiles', `select=${select}${filter}&order=name.asc`);
     // Back-compat: if mums_profiles.email doesn't exist yet, retry without it.
     if (!out.ok && isMissingColumn(out, 'email')) {

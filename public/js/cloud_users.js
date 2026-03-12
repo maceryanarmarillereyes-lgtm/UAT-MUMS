@@ -126,6 +126,7 @@ const CloudUsers = (() => {
         teamOverride,
         duty: p.duty || '—',
         photoDataUrl: p.avatar_url || '',
+        qb_name: p.qb_name || '',
         // Passwords are never stored client-side when using cloud auth.
         password: null,
         _cloud: true

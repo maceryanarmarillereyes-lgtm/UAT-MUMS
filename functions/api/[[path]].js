@@ -95,6 +95,7 @@ async function getRoutes(env) {
     'tasks/reassign_pending': unwrapCjs(await import('../../server/routes/tasks/reassign_pending.js')),
 
     'quickbase/monitoring': unwrapCjs(await import('../../server/routes/quickbase/monitoring.js')),
+    'quickbase/assigned_to_names': unwrapCjs(await import('../../server/routes/quickbase/assigned_to_names.js')),
     'quickbase_tabs': unwrapCjs(await import('../../server/routes/quickbase_tabs.js')),
     'quickbase_tabs/upsert': unwrapCjs(await import('../../server/routes/quickbase_tabs.js'))
   };

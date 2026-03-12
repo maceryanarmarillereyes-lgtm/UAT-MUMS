@@ -180,10 +180,17 @@ function canCreateRole(actor, targetRole) {
               <select class="select" id="u_team"></select>
             </div>
             <div id="u_qb_name_wrap">
-              <label class="small">Quickbase Name <span class="muted" style="font-size:11px">(Assigned To column — auto-filters QB data)</span></label>
-              <select class="select" id="u_qb_name">
+              <label class="small" style="display:flex;justify-content:space-between;align-items:center">
+                <span>Quickbase Name <span class="muted" style="font-size:11px">(Assigned To — auto-filters QB data)</span></span>
+                <button type="button" id="u_qb_name_toggle" class="btn ghost" style="font-size:11px;padding:2px 8px;margin-left:8px">✏️ Enter manually</button>
+              </label>
+              <select class="select" id="u_qb_name" style="margin-top:4px">
                 <option value="">— Not Assigned —</option>
               </select>
+              <div id="u_qb_name_manual_wrap" style="display:none;margin-top:4px">
+                <input class="input" id="u_qb_name_manual" type="text" placeholder="Type exact name as it appears in Quickbase" />
+                <div class="small muted" style="margin-top:3px">Must match exactly the name in the "Assigned To" column</div>
+              </div>
             </div>
             <!-- Schedule and Status removed from creation (managed in Profile > Scheduling) -->
           </div>
@@ -361,38 +368,64 @@ if (!createAllowed) {
   // Only SUPER_ADMIN can set QB names
   if (qbNameWrap) qbNameWrap.style.display = (actor && actor.role === Config.ROLES.SUPER_ADMIN) ? '' : 'none';
 
+  // ── QB Name: manual input toggle ─────────────────────────────────────────
+  const qbNameManualWrap = document.getElementById('u_qb_name_manual_wrap');
+  const qbNameManualInput = document.getElementById('u_qb_name_manual');
+  const qbNameToggleBtn = document.getElementById('u_qb_name_toggle');
+
+  if (qbNameToggleBtn) {
+    qbNameToggleBtn.onclick = () => {
+      const isManual = qbNameManualWrap && qbNameManualWrap.style.display !== 'none';
+      if (qbNameManualWrap) qbNameManualWrap.style.display = isManual ? 'none' : '';
+      if (qbNameSel) qbNameSel.style.display = isManual ? '' : 'none';
+      qbNameToggleBtn.textContent = isManual ? '✏️ Enter manually' : '↩ Pick from list';
+    };
+  }
+
   async function loadQbNameOptions(currentQbName) {
     if (!qbNameSel) return;
+
+    // Always show current name immediately — don't wait for network
+    if (currentQbName) {
+      qbNameSel.innerHTML = `<option value="">— Not Assigned —</option><option value="${currentQbName.replace(/"/g,'&quot;')}" selected>${currentQbName.replace(/</g,'&lt;')}</option>`;
+      if (qbNameManualInput) qbNameManualInput.value = currentQbName;
+    } else {
+      qbNameSel.innerHTML = '<option value="">— Not Assigned —</option><option value="" disabled>Loading names…</option>';
+    }
+
     try {
       const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
-      // Fetch global QB settings to get realm/tableId/qid
-      const settingsRes = await fetch('/api/settings/global_quickbase', { headers: { Authorization: 'Bearer ' + tok } });
-      const settingsData = await settingsRes.json();
-      if (!settingsData.ok || !settingsData.settings || !settingsData.settings.realm) {
-        qbNameSel.innerHTML = '<option value="">— Global QB not configured —</option>';
-        return;
-      }
-      const { realm, tableId, qid } = settingsData.settings;
-      if (!realm || !tableId || !qid) { qbNameSel.innerHTML = '<option value="">— Global QB not configured —</option>'; return; }
-      // Fetch QB data to get the list of Assigned To names (field #13)
-      const params = new URLSearchParams({ realm, tableId, qid, limit: 500 });
-      const dataRes = await fetch('/api/quickbase/monitoring?' + params.toString(), { headers: { Authorization: 'Bearer ' + tok } });
-      const data = await dataRes.json();
-      // Extract unique values from Assigned To column (label contains "Assigned to" or field id 13)
-      const assignedField = (data.allAvailableFields || []).find(f =>
-        String(f.label || '').toLowerCase().includes('assigned to') || Number(f.id) === 13
-      );
-      const assignedFid = assignedField ? String(assignedField.id) : '13';
-      const names = new Set();
-      (data.records || []).forEach(row => {
-        const val = row[assignedFid];
-        if (val && typeof val === 'object' && val.value) names.add(String(val.value).trim());
-        else if (val && typeof val === 'string') names.add(val.trim());
+      const res = await fetch('/api/quickbase/assigned_to_names', {
+        headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }
       });
-      const sorted = Array.from(names).filter(Boolean).sort((a, b) => a.localeCompare(b));
-      qbNameSel.innerHTML = '<option value="">— Not Assigned —</option>' + sorted.map(n => `<option value="${n.replace(/"/g,'&quot;')}" ${n === currentQbName ? 'selected' : ''}>${n.replace(/</g,'&lt;')}</option>`).join('');
+      const data = await res.json();
+
+      const names = Array.isArray(data.names) ? data.names : [];
+
+      // Always include the currently assigned name even if not in live list
+      const allNames = new Set(names);
+      if (currentQbName) allNames.add(currentQbName);
+      const sorted = Array.from(allNames).filter(Boolean).sort((a, b) => a.localeCompare(b));
+
+      if (data.ok && sorted.length) {
+        qbNameSel.innerHTML = '<option value="">— Not Assigned —</option>' +
+          sorted.map(n =>
+            `<option value="${n.replace(/"/g,'&quot;')}" ${n === currentQbName ? 'selected' : ''}>${n.replace(/</g,'&lt;')}</option>`
+          ).join('');
+      } else if (currentQbName) {
+        // Keep showing current name at minimum
+        qbNameSel.innerHTML = `<option value="">— Not Assigned —</option><option value="${currentQbName.replace(/"/g,'&quot;')}" selected>${currentQbName.replace(/</g,'&lt;')}</option>`;
+      } else {
+        const msg = data.warning === 'global_qb_not_configured' ? '— Global QB not configured —' : '— No names found —';
+        qbNameSel.innerHTML = `<option value="">${msg}</option>`;
+      }
     } catch (e) {
-      qbNameSel.innerHTML = '<option value="">— Error loading names —</option>';
+      // Keep showing current name on network error
+      if (currentQbName) {
+        qbNameSel.innerHTML = `<option value="">— Not Assigned —</option><option value="${currentQbName.replace(/"/g,'&quot;')}" selected>${currentQbName.replace(/</g,'&lt;')}</option>`;
+      } else {
+        qbNameSel.innerHTML = '<option value="">— Network error —</option>';
+      }
     }
   }
 
@@ -706,9 +739,17 @@ function openUserModal(actor, user){
       const email = UI.el('#u_email').value.trim().toLowerCase();
       const role = UI.el('#u_role').value;
       const teamId = UI.el('#u_team').value;
-      const qbName = (actor && actor.role === Config.ROLES.SUPER_ADMIN && UI.el('#u_qb_name'))
-        ? String(UI.el('#u_qb_name').value || '').trim()
-        : undefined;
+      // QB Name: read from manual input if visible, otherwise from dropdown
+      let qbName = undefined;
+      if (actor && actor.role === Config.ROLES.SUPER_ADMIN) {
+        const manualWrap = document.getElementById('u_qb_name_manual_wrap');
+        const isManual = manualWrap && manualWrap.style.display !== 'none';
+        if (isManual) {
+          qbName = String((UI.el('#u_qb_name_manual') && UI.el('#u_qb_name_manual').value) || '').trim();
+        } else {
+          qbName = String((UI.el('#u_qb_name') && UI.el('#u_qb_name').value) || '').trim();
+        }
+      }
 
       const password = isEdit ? '' : (UI.el('#u_password') ? UI.el('#u_password').value.trim() : '');
 
