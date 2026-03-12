@@ -853,6 +853,33 @@
     await refreshProfileFromCloud();
     profile = (me && window.Store && Store.getProfile) ? (Store.getProfile(me.id) || {}) : {};
 
+    // ── QB NAME GUARD — blocks ALL data loading when no qb_name is assigned ──
+    // Privacy rule: a user MUST have a Quickbase Name assigned before they can
+    // see ANY records. This applies to every role including SUPER_ADMIN.
+    // Without this guard the monitoring API returns all records for SUPER_ADMIN
+    // (data leak). The correct fix is on the frontend: block the call entirely.
+    const _userQbName = String(profile.qb_name || '').trim();
+    if (!_userQbName) {
+      root.classList.add('page-qb');
+      root.style.padding  = '0';
+      root.style.overflow = 'clip';
+      root.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:320px;gap:16px;padding:40px;text-align:center;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <div style="font-size:17px;font-weight:700;color:rgba(255,255,255,0.85);">Quickbase Name Not Assigned</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.45);max-width:380px;line-height:1.6;">
+            Your Quickbase Name has not been configured yet.<br>
+            Contact your <strong style="color:rgba(255,255,255,0.7);">Super Admin</strong> to assign your name in User Management → Edit User → Quickbase Name.
+          </div>
+        </div>`;
+      root._cleanup = function() {
+        try { root.style.padding = ''; } catch(_) {}
+        try { root.style.overflow = ''; } catch(_) {}
+        try { root.classList.remove('page-qb'); } catch(_) {}
+      };
+      return;
+    }
+
     const cloudMe = window.me && typeof window.me === 'object' ? window.me : {};
     const profileWithCloudFallback = Object.assign({}, cloudMe, profile);
     if (
@@ -1580,7 +1607,7 @@
             <div class="qb-table-meta">
               <span id="qbDataMeta" class="qb-meta-text">Loading…</span>
               <span id="qbFreshBadge" class="qb-fresh-badge" style="display:none;">● Live</span>
-              <span id="qbCacheBadge" class="qb-cache-badge" style="display:none;cursor:pointer;" title="Showing cached data — click to refresh live">◎ Cached — click to refresh</span>
+              <button id="qbCacheBadge" type="button" class="qb-cache-badge" style="display:none;cursor:pointer;background:none;border:none;padding:2px 8px;font:inherit;" title="Click to refresh live data">◎ Cached — click to refresh</button>
             </div>
           </div>
           <div id="qbDataBody" class="qb-data-body"></div>
@@ -2614,6 +2641,27 @@
       if (event.target && event.target.id === 'qbSettingsModal') cleanupModalBindings();
     });
     root.querySelector('#qbReloadBtn').onclick = () => loadQuickbaseData({ applyFilters: true });
+
+    // ── CACHE BADGE CLICK — wired once, permanent. ─────────────────────────
+    // Cannot use onclick set inside updateDataFreshnessBadge because the
+    // quickbaseLoadInFlight guard silently blocks re-entry. Fix: kill the
+    // inflight reference first, then call forceRefresh.
+    const _cacheBadgeBtn = root.querySelector('#qbCacheBadge');
+    if (_cacheBadgeBtn) {
+      _cacheBadgeBtn.addEventListener('click', () => {
+        // Kill any in-flight promise so the guard doesn't block us
+        quickbaseLoadInFlight = null;
+        // Clear all QB cache entries for the active tab
+        const _tabId = getActiveTabId();
+        if (state.qbCache) {
+          Object.keys(state.qbCache).forEach(k => { delete state.qbCache[k]; });
+        }
+        if (state._tabDataCache && _tabId) {
+          delete state._tabDataCache[_tabId];
+        }
+        loadQuickbaseData({ forceRefresh: true, silent: false });
+      });
+    }
     root.querySelector('#qbSettingsModal').addEventListener('click', (event) => {
       const target = event.target;
       if (!target || !(target instanceof HTMLElement)) return;
@@ -3056,28 +3104,11 @@
       if (fromCache) {
         freshBadge.style.display = 'none';
         cacheBadge.style.display = '';
-        // ── CLICK TO REFRESH: when showing cached data, badge is clickable ──
-        // Clicking it clears the cache for this tab and triggers a live reload.
-        cacheBadge.onclick = () => {
-          const activeTabId = getActiveTabId();
-          // Invalidate in-memory QB cache for this tab so next load hits QB live
-          if (state.qbCache && activeTabId) {
-            Object.keys(state.qbCache).forEach(k => {
-              if (k.startsWith(activeTabId + '|') || k === activeTabId) {
-                delete state.qbCache[k];
-              }
-            });
-          }
-          // Also clear _tabDataCache for this tab so cache-hit path is skipped
-          if (state._tabDataCache && activeTabId) {
-            delete state._tabDataCache[activeTabId];
-          }
-          loadQuickbaseData({ forceRefresh: true, silent: false });
-        };
+        // Click handler is wired ONCE at init time (after root.innerHTML).
+        // No onclick re-assignment here — avoids the quickbaseLoadInFlight block.
       } else {
         freshBadge.style.display = '';
         cacheBadge.style.display = 'none';
-        cacheBadge.onclick = null;
       }
     }
   };
