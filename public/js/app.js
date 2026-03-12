@@ -2072,6 +2072,13 @@ function updateClocksPreviewTimes(){
     const emailEl = UI.el('#profileEmail');
     const roleEl = UI.el('#profileRole');
     const teamEl = UI.el('#profileTeam');
+    // Show QB Integration section only for SUPER_ADMIN
+    const qbIntegSection = document.getElementById('qbIntegrationSection');
+    if (qbIntegSection) {
+      const currentUser = Auth && typeof Auth.getUser === 'function' ? Auth.getUser() : null;
+      const currentRole = String((currentUser && currentUser.role) || '').trim().toUpperCase().replace(/\s+/g, '_');
+      qbIntegSection.style.display = (currentRole === 'SUPER_ADMIN') ? '' : 'none';
+    }
     const qbTokenEl = UI.el('#profileQbToken');
 
     let teamSel = UI.el('#profileTeamSelect');
@@ -4390,7 +4397,186 @@ async function boot(){
       }
     }catch(_){ }
 
-    // ── Login Mode Control (Super Admin only) ─────────────────────────────────
+    // ── Global Quickbase Settings (Super Admin only) ──────────────────────────
+    try {
+      if (isSA) {
+        const gqbCard = document.getElementById('globalQbSettingsCard');
+        const openGqbBtn = document.getElementById('openGlobalQbSettingsBtn');
+        if (gqbCard) gqbCard.style.display = '';
+
+        function parseQbLink(url) {
+          const out = { realm: '', tableId: '', qid: '' };
+          try {
+            const u = new URL(url);
+            const host = u.hostname;
+            const m = host.match(/^([a-z0-9-]+)\.quickbase\.com$/i);
+            if (m) out.realm = m[1] + '.quickbase.com';
+            const dbm = u.pathname.match(/\/db\/([a-zA-Z0-9]+)/);
+            if (dbm) out.tableId = dbm[1];
+            out.qid = u.searchParams.get('qid') || u.searchParams.get('QID') || '';
+          } catch (_) {}
+          return out;
+        }
+
+        let gqbState = { reportLink:'', realm:'', tableId:'', qid:'', qbToken:'', customColumns:[], filterConfig:[], filterMatch:'ALL' };
+        let gqbAvailableFields = [];
+        let gqbActiveTab = 'report-config';
+
+        function gqbShowTab(tab) {
+          gqbActiveTab = tab;
+          ['report-config','custom-columns','filter-config'].forEach(t => {
+            const sec = document.getElementById('gqbSection-' + t);
+            if (sec) sec.style.display = (t === tab) ? '' : 'none';
+            const btn = document.querySelector('[data-gqb-tab="' + t + '"]');
+            if (btn) { btn.style.borderBottom = (t === tab) ? '2px solid var(--primary)' : '2px solid transparent'; btn.classList.toggle('active', t === tab); }
+          });
+          if (tab === 'custom-columns' && gqbAvailableFields.length) renderGqbColumns();
+          if (tab === 'filter-config') renderGqbFilters();
+        }
+
+        function renderGqbColumns() {
+          const list = document.getElementById('gqbColumnsList');
+          const msg = document.getElementById('gqbColumnsMsg');
+          if (!list) return;
+          if (!gqbAvailableFields.length) {
+            if (msg) msg.style.display = '';
+            list.innerHTML = '';
+            return;
+          }
+          if (msg) msg.style.display = 'none';
+          list.innerHTML = gqbAvailableFields.map(f => {
+            const checked = gqbState.customColumns.includes(Number(f.id));
+            return `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;border:1px solid ${checked?'rgba(99,179,237,.5)':'rgba(255,255,255,.08)'}">
+              <input type="checkbox" data-fid="${f.id}" ${checked?'checked':''} style="accent-color:var(--primary)" />
+              <span class="small">${String(f.label||'').replace(/</g,'&lt;')}</span>
+            </label>`;
+          }).join('');
+          list.querySelectorAll('input[data-fid]').forEach(cb => {
+            cb.onchange = () => {
+              const fid = Number(cb.dataset.fid);
+              if (cb.checked) { if (!gqbState.customColumns.includes(fid)) gqbState.customColumns.push(fid); }
+              else { gqbState.customColumns = gqbState.customColumns.filter(id => id !== fid); }
+            };
+          });
+        }
+
+        function renderGqbFilters() {
+          const container = document.getElementById('gqbFilterRows');
+          if (!container) return;
+          const filters = Array.isArray(gqbState.filterConfig) ? gqbState.filterConfig : [];
+          if (!filters.length) { container.innerHTML = '<div class="small muted" style="padding:8px">No global filters. Click + Add Filter.</div>'; return; }
+          container.innerHTML = filters.map((f, i) => `
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+              <input class="input" style="flex:0.5" type="number" placeholder="Field ID" value="${f.fieldId||''}" data-fi="${i}" data-key="fieldId" />
+              <select class="input" style="flex:0.4" data-fi="${i}" data-key="operator">
+                ${['EX','XEX','CT','XCT'].map(op=>`<option value="${op}" ${f.operator===op?'selected':''}>${op}</option>`).join('')}
+              </select>
+              <input class="input" style="flex:1" type="text" placeholder="Value" value="${String(f.value||'').replace(/"/g,'&quot;')}" data-fi="${i}" data-key="value" />
+              <button class="btn ghost" style="padding:4px 8px" data-gqb-del-filter="${i}" type="button">✕</button>
+            </div>`).join('');
+          container.querySelectorAll('[data-fi]').forEach(el => {
+            el.oninput = el.onchange = () => {
+              const i = Number(el.dataset.fi); const key = el.dataset.key;
+              if (!gqbState.filterConfig[i]) return;
+              gqbState.filterConfig[i][key] = key === 'fieldId' ? Number(el.value) : el.value;
+            };
+          });
+          container.querySelectorAll('[data-gqb-del-filter]').forEach(btn => {
+            btn.onclick = () => { gqbState.filterConfig.splice(Number(btn.dataset.gqbDelFilter), 1); renderGqbFilters(); };
+          });
+        }
+
+        async function loadGqbSettings() {
+          try {
+            const tok = CloudAuth && typeof CloudAuth.getToken === 'function' ? await CloudAuth.getToken() : '';
+            const r = await fetch('/api/settings/global_quickbase', { headers: { 'Authorization': 'Bearer ' + tok } });
+            const d = await r.json();
+            if (d.ok && d.settings) {
+              gqbState = { ...gqbState, ...d.settings, customColumns: Array.isArray(d.settings.customColumns) ? d.settings.customColumns : [], filterConfig: Array.isArray(d.settings.filterConfig) ? d.settings.filterConfig : [] };
+              const rl = document.getElementById('gqbReportLink'); if (rl) rl.value = gqbState.reportLink;
+              const rv = document.getElementById('gqbRealm'); if (rv) rv.value = gqbState.realm;
+              const tv = document.getElementById('gqbTableId'); if (tv) tv.value = gqbState.tableId;
+              const qv = document.getElementById('gqbQid'); if (qv) qv.value = gqbState.qid;
+              const tok2 = document.getElementById('gqbToken'); if (tok2) tok2.value = gqbState.qbToken || '';
+              const fm = document.getElementById('gqbFilterMatch'); if (fm) fm.value = gqbState.filterMatch || 'ALL';
+            }
+          } catch (_) {}
+        }
+
+        async function fetchGqbFields() {
+          if (!gqbState.realm || !gqbState.tableId || !gqbState.qbToken) return;
+          try {
+            const tok = CloudAuth && typeof CloudAuth.getToken === 'function' ? await CloudAuth.getToken() : '';
+            const params = new URLSearchParams({ realm: gqbState.realm, tableId: gqbState.tableId, qid: gqbState.qid || '1' });
+            const r = await fetch('/api/quickbase/monitoring?' + params.toString(), { headers: { 'Authorization': 'Bearer ' + tok } });
+            const d = await r.json();
+            if (d.allAvailableFields && Array.isArray(d.allAvailableFields)) {
+              gqbAvailableFields = d.allAvailableFields;
+              if (gqbActiveTab === 'custom-columns') renderGqbColumns();
+            }
+          } catch (_) {}
+        }
+
+        const rlInput = document.getElementById('gqbReportLink');
+        if (rlInput) {
+          rlInput.oninput = () => {
+            const parsed = parseQbLink(rlInput.value.trim());
+            gqbState.reportLink = rlInput.value.trim();
+            gqbState.realm = parsed.realm; gqbState.tableId = parsed.tableId; gqbState.qid = parsed.qid;
+            const rv = document.getElementById('gqbRealm'); if (rv) rv.value = parsed.realm;
+            const tv = document.getElementById('gqbTableId'); if (tv) tv.value = parsed.tableId;
+            const qv = document.getElementById('gqbQid'); if (qv) qv.value = parsed.qid;
+          };
+        }
+        const tokInput = document.getElementById('gqbToken');
+        if (tokInput) tokInput.oninput = () => { gqbState.qbToken = tokInput.value.trim(); };
+
+        document.querySelectorAll('[data-gqb-tab]').forEach(btn => {
+          btn.onclick = () => {
+            if (gqbActiveTab === 'report-config' && btn.dataset.gqbTab === 'custom-columns') fetchGqbFields();
+            gqbShowTab(btn.dataset.gqbTab);
+          };
+        });
+
+        const addFilterBtn = document.getElementById('gqbAddFilterBtn');
+        if (addFilterBtn) addFilterBtn.onclick = () => {
+          if (!Array.isArray(gqbState.filterConfig)) gqbState.filterConfig = [];
+          gqbState.filterConfig.push({ fieldId: '', operator: 'EX', value: '' });
+          renderGqbFilters();
+        };
+
+        const gqbFmSel = document.getElementById('gqbFilterMatch');
+        if (gqbFmSel) gqbFmSel.onchange = () => { gqbState.filterMatch = gqbFmSel.value; };
+
+        const saveBtn = document.getElementById('gqbSaveBtn');
+        if (saveBtn) saveBtn.onclick = async () => {
+          const msg = document.getElementById('gqbSaveMsg');
+          try {
+            const tok = CloudAuth && typeof CloudAuth.getToken === 'function' ? await CloudAuth.getToken() : '';
+            const r = await fetch('/api/settings/global_quickbase', {
+              method: 'POST',
+              headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
+              body: JSON.stringify(gqbState)
+            });
+            const d = await r.json();
+            if (msg) { msg.textContent = d.ok ? '✅ Saved!' : '❌ ' + (d.message || 'Error'); msg.style.opacity = '1'; setTimeout(()=>{ msg.style.opacity='0'; }, 3000); }
+          } catch (e) {
+            if (msg) { msg.textContent = '❌ Network error'; msg.style.opacity = '1'; setTimeout(()=>{ msg.style.opacity='0'; }, 3000); }
+          }
+        };
+
+        document.querySelectorAll('[data-close="globalQbModal"]').forEach(b => b.onclick = () => { UI.closeModal('globalQbModal'); });
+
+        if (openGqbBtn) openGqbBtn.onclick = () => {
+          loadGqbSettings();
+          gqbShowTab('report-config');
+          UI.closeModal('settingsModal');
+          UI.openModal('globalQbModal');
+        };
+      }
+    } catch (_) {}
+
+        // ── Login Mode Control (Super Admin only) ─────────────────────────────────
     try{
       if(isSA){
         const lmCard    = document.getElementById('loginModeCard');

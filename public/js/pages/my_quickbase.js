@@ -823,6 +823,20 @@
       : null;
     let profile = (me && window.Store && Store.getProfile) ? (Store.getProfile(me.id) || {}) : {};
 
+    // ── GLOBAL QB SETTINGS — fetched once on page load ─────────────────────
+    // Report Config (realm/tableId/qid/token) now comes from Global QB Settings.
+    // Per-tab settings only customize columns + filters.
+    let globalQbSettings = { reportLink: '', realm: '', tableId: '', qid: '', customColumns: [], filterConfig: [], filterMatch: 'ALL' };
+    async function fetchGlobalQbSettings() {
+      try {
+        const tok = window.CloudAuth && typeof CloudAuth.getToken === 'function' ? await CloudAuth.getToken() : '';
+        const r = await fetch('/api/settings/global_quickbase', { headers: { Authorization: 'Bearer ' + tok } });
+        const d = await r.json();
+        if (d.ok && d.settings) globalQbSettings = Object.assign(globalQbSettings, d.settings);
+      } catch (_) {}
+    }
+    await fetchGlobalQbSettings();
+
     async function refreshProfileFromCloud() {
       if (!me || !window.CloudUsers || typeof window.CloudUsers.me !== 'function') return;
       try {
@@ -894,7 +908,7 @@
       pageSize: 100,
       qbCache: {},
       _tabDataCache: {},
-      settingsModalView: 'report-config',
+      settingsModalView: 'custom-columns',  // report-config moved to Global QB Settings
       settingsEditingTabId: ''
     };
 
@@ -1324,8 +1338,8 @@
     }
 
     function setSettingsModalView(viewKey) {
-      const allowedViews = new Set(['report-config', 'custom-columns', 'filter-config', 'dashboard-counters']);
-      const nextView = allowedViews.has(String(viewKey || '').trim()) ? String(viewKey).trim() : 'report-config';
+      const allowedViews = new Set(['custom-columns', 'filter-config', 'dashboard-counters']);
+      const nextView = allowedViews.has(String(viewKey || '').trim()) ? String(viewKey).trim() : 'custom-columns';
       state.settingsModalView = nextView;
 
       root.querySelectorAll('[data-qb-settings-view]').forEach((section) => {
@@ -1595,45 +1609,19 @@
           </div>
 
           <div class="qb-modal-tabs">
-            <button type="button" class="qb-modal-tab active" data-qb-settings-tab="report-config">Report Config</button>
-            <button type="button" class="qb-modal-tab" data-qb-settings-tab="custom-columns">Custom Columns</button>
+            <button type="button" class="qb-modal-tab active" data-qb-settings-tab="custom-columns">Custom Columns</button>
             <button type="button" class="qb-modal-tab" data-qb-settings-tab="filter-config">Filter Config</button>
             <button type="button" class="qb-modal-tab" data-qb-settings-tab="dashboard-counters">Dashboard Counters</button>
           </div>
 
           <div class="qb-modal-body">
 
-            <section class="qb-modal-section" data-qb-settings-view="report-config">
-              <div class="qb-section-title"><span class="qb-section-num">1</span>Report Config</div>
-              <div class="qb-field-stack">
-                <div class="qb-field">
-                  <label class="qb-field-label">Tab Name</label>
-                  <input class="qb-field-input" id="qbTabName" value="${esc(state.tabName)}" placeholder="e.g. Daily Distribution" />
-                </div>
-                <div class="qb-field">
-                  <label class="qb-field-label">Report Link</label>
-                  <input class="qb-field-input" id="qbReportLink" value="${esc(state.reportLink)}" placeholder="https://<realm>.quickbase.com/db/<tableid>?a=q&qid=…" />
-                  <div class="qb-field-hint">⚡ QID, Table ID and field dropdowns auto-fill from this URL</div>
-                </div>
-                <div class="qb-field">
-                  <label class="qb-field-label">Base Report QID</label>
-                  <input class="qb-field-input qb-field-readonly" id="qbTabBaseQid" value="${esc(state.qid)}" placeholder="e.g. 1000288" readonly />
-                </div>
-                <div class="qb-field-row">
-                  <div class="qb-field">
-                    <label class="qb-field-label">QID</label>
-                    <input class="qb-field-input qb-field-readonly" id="qbQid" value="${esc(state.qid)}" placeholder="e.g. 1000288" readonly />
-                  </div>
-                  <div class="qb-field">
-                    <label class="qb-field-label">Table ID</label>
-                    <input class="qb-field-input qb-field-readonly" id="qbTableId" value="${esc(state.tableId)}" placeholder="e.g. bpvmztzr5" readonly />
-                  </div>
-                </div>
+            <section class="qb-modal-section" data-qb-settings-view="custom-columns">
+              <div class="qb-section-title"><span class="qb-section-num">1</span>Custom Columns</div>
+              <div class="qb-field" style="margin-bottom:14px;">
+                <label class="qb-field-label">Tab Name</label>
+                <input class="qb-field-input" id="qbTabName" value="${esc(state.tabName)}" placeholder="e.g. My Cases" />
               </div>
-            </section>
-
-            <section class="qb-modal-section" data-qb-settings-view="custom-columns" style="display:none;">
-              <div class="qb-section-title"><span class="qb-section-num">2</span>Custom Columns</div>
               <div class="qb-field" style="margin-bottom:12px;">
                 <label class="qb-field-label">Search Columns</label>
                 <input type="text" id="qbColumnSearch" placeholder="Filter available fields…" class="qb-field-input" />
@@ -1651,7 +1639,7 @@
 
             <section class="qb-modal-section" data-qb-settings-view="filter-config" style="display:none;">
               <div class="qb-section-header">
-                <div class="qb-section-title" style="margin-bottom:0;"><span class="qb-section-num">3</span>Filter Config</div>
+                <div class="qb-section-title" style="margin-bottom:0;"><span class="qb-section-num">2</span>Filter Config</div>
                 <button class="qb-btn qb-btn-ghost qb-btn-sm" id="qbAddFilterBtn" type="button">+ Add Filter</button>
               </div>
               <div class="qb-filter-match-row">
@@ -1666,7 +1654,7 @@
 
             <section class="qb-modal-section" data-qb-settings-view="dashboard-counters" style="display:none;">
               <div class="qb-section-header">
-                <div class="qb-section-title" style="margin-bottom:0;"><span class="qb-section-num">4</span>Dashboard Counter Filters</div>
+                <div class="qb-section-title" style="margin-bottom:0;"><span class="qb-section-num">3</span>Dashboard Counter Filters</div>
                 <button class="qb-btn qb-btn-primary qb-btn-sm" id="qbAddCounterBtn" type="button">+ Add Counter</button>
               </div>
               <div id="qbCounterRows" class="qb-counter-rows"></div>
@@ -2140,7 +2128,12 @@
             ? createDefaultSettings(state.quickbaseSettings.settingsByTabId[thisLoadTabId], {})
             : createDefaultSettings({}, {});
 
-          const reportLink = String(freshTabSettings.reportLink || '').trim();
+          // Report Config comes from Global QB Settings — override tab-level reportLink
+          // Tab settings only carry customColumns + customFilters + filterMatch
+          const globalReportLink = String(globalQbSettings.reportLink || '').trim();
+          const effectiveReportLink = globalReportLink || String(freshTabSettings.reportLink || '').trim();
+
+          const reportLink = effectiveReportLink;
           if (!reportLink) {
             state.allAvailableFields = [];
             state.baseRecords = [];
@@ -2158,10 +2151,10 @@
           const tabFilterMatch = normalizeFilterMatch(freshTabSettings.filterMatch);
           const mergedFilters = shouldApplyFilters ? tabCustomFilters : [];
           // Derive qid/tableId/realm from reportLink if not explicitly set on the tab
-          const _tabParsed = parseQuickbaseLink(String(freshTabSettings.reportLink || ''));
-          const activeQid = String(freshTabSettings.qid || _tabParsed.qid || '').trim();
-          const activeTableId = String(freshTabSettings.tableId || _tabParsed.tableId || '').trim();
-          const activeRealm = String(freshTabSettings.realm || _tabParsed.realm || '').trim();
+          const _tabParsed = parseQuickbaseLink(effectiveReportLink);
+          const activeQid = String(globalQbSettings.qid || freshTabSettings.qid || _tabParsed.qid || '').trim();
+          const activeTableId = String(globalQbSettings.tableId || freshTabSettings.tableId || _tabParsed.tableId || '').trim();
+          const activeRealm = String(globalQbSettings.realm || freshTabSettings.realm || _tabParsed.realm || '').trim();
           const hasExplicitLoadMore = Number(opts.offset || 0) >= 100;
           const hasActiveSearch = !!String(getActiveSearchTerm() || '').trim();
           const requestLimit = 100;

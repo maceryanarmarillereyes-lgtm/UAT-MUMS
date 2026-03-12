@@ -2,6 +2,7 @@
 const { sendJson, requireAuthedUser } = require('../tasks/_common');
 const { queryQuickbaseRecords, listQuickbaseFields, normalizeQuickbaseCellValue } = require('../../lib/quickbase');
 const { normalizeSettings } = require('../../lib/normalize_settings');
+const { readGlobalQuickbaseSettings } = require('../../lib/global_quickbase');
 
 const FIELDS_CACHE_TTL_MS = 60 * 1000;
 const REPORT_META_CACHE_TTL_MS = 30 * 1000;
@@ -185,37 +186,64 @@ module.exports = async (req, res) => {
     if (!auth) return sendJson(res, 401, { ok: false, error: 'unauthorized' });
 
     const profile = auth?.profile || {};
+    const actorRole = String(profile.role || 'MEMBER').toUpperCase().replace(/\s+/g, '_');
+    const isSuperAdmin = actorRole === 'SUPER_ADMIN';
+
+    // ── GLOBAL QB SETTINGS (single source of truth for report config + token) ──
+    const globalQbOut = await readGlobalQuickbaseSettings();
+    const globalQb = (globalQbOut.ok && globalQbOut.settings) ? globalQbOut.settings : {};
+    const globalToken = String(globalQb.qbToken || '').trim();
+    const globalRealm = String(globalQb.realm || '').trim();
+    const globalTableId = String(globalQb.tableId || '').trim();
+    const globalQid = String(globalQb.qid || '').trim();
+    const globalReportLink = String(globalQb.reportLink || '').trim();
+
+    // Per-user QB name — used for privacy filtering (Assigned To field = this name)
+    const userQbName = String(profile.qb_name || '').trim();
+
+    // For non-SUPER_ADMIN: if no qb_name set, return empty (no data leaks)
+    if (!isSuperAdmin && !userQbName) {
+      return sendJson(res, 200, {
+        ok: true, columns: [], records: [], allAvailableFields: [],
+        settings: { dynamicFilters: ['Assigned to', 'Case Status', 'Type'], sortBy: ['End User ASC', 'Type ASC'] },
+        warning: 'qb_name_not_assigned',
+        message: 'Your Quickbase name has not been assigned. Contact your administrator.'
+      });
+    }
+
+    // Per-tab settings (for custom columns / filters) — report config comes from global
     const profileQuickbaseSettings = parseQuickbaseSettings(profile.quickbase_settings, auth.id);
     const profileQuickbaseConfigRaw = parseQuickbaseSettings(profile.quickbase_config, auth.id);
     const profileQuickbaseConfig = Object.keys(profileQuickbaseSettings).length
       ? profileQuickbaseSettings
       : profileQuickbaseConfigRaw;
-    const profileToken = String(profile.qb_token || profile.quickbase_token || profile.quickbase_user_token || '').trim();
-    const profileLink = String(profileQuickbaseConfig.reportLink || profileQuickbaseConfig.qb_report_link || profile.qb_report_link || profile.quickbase_url || profile.quickbase_report_link || '').trim();
-    const profileRealm = String(profileQuickbaseConfig.realm || profileQuickbaseConfig.qb_realm || profile.qb_realm || profile.quickbase_realm || '').trim();
-    const profileQid = String(profileQuickbaseConfig.qid || profileQuickbaseConfig.qb_qid || profile.qb_qid || profile.quickbase_qid || '').trim();
-    const profileTableId = String(profileQuickbaseConfig.tableId || profileQuickbaseConfig.qb_table_id || profile.qb_table_id || profile.quickbase_table_id || '').trim();
 
+    // Token: always from global QB settings (users no longer have their own tokens)
+    // Fallback to profile token for SUPER_ADMIN backward compat during transition
+    const profileToken = String(profile.qb_token || profile.quickbase_token || profile.quickbase_user_token || '').trim();
+    const activeToken = globalToken || (isSuperAdmin ? profileToken : '');
+
+    // Realm/tableId/qid: from request params first, then global settings, then profile (legacy fallback)
     let qid = String(req?.query?.qid || req?.query?.qId || '').trim();
     let tableId = String(req?.query?.tableId || req?.query?.table_id || '').trim();
     let realm = String(req?.query?.realm || '').trim();
 
-    if (!qid || !tableId || !realm) {
-      qid = qid || profileQid;
-      tableId = tableId || profileTableId;
-      realm = realm || profileRealm;
-    }
+    // Fall back to global settings
+    qid = qid || globalQid || String(profileQuickbaseConfig.qid || profileQuickbaseConfig.qb_qid || profile.qb_qid || '').trim();
+    tableId = tableId || globalTableId || String(profileQuickbaseConfig.tableId || profileQuickbaseConfig.qb_table_id || profile.qb_table_id || '').trim();
+    realm = realm || globalRealm || String(profileQuickbaseConfig.realm || profileQuickbaseConfig.qb_realm || profile.qb_realm || '').trim();
+    const profileLink = globalReportLink || String(profileQuickbaseConfig.reportLink || profileQuickbaseConfig.qb_report_link || profile.qb_report_link || '').trim();
 
     if (!qid || !tableId || !realm) {
       return sendJson(res, 400, {
         ok: false,
         warning: 'quickbase_credentials_missing',
-        message: 'Missing Quickbase configuration. Please configure your QID in My Quickbase Settings.'
+        message: 'Missing Quickbase configuration. Please configure Global QB Settings in the admin panel.'
       });
     }
 
     const userQuickbaseConfig = {
-      qb_token: profileToken,
+      qb_token: activeToken,
       qb_realm: realm,
       qb_table_id: tableId,
       qb_qid: qid,
@@ -370,6 +398,14 @@ module.exports = async (req, res) => {
     const searchClause = buildSearchClause(search, searchableFieldIds);
 
     const conditions = [];
+
+    // 0. PRIVACY FILTER — mandatory, always injected first, cannot be bypassed
+    //    Filters to ONLY records where "Assigned to" (#13) matches the user's QB name.
+    //    SUPER_ADMIN sees all records (no restriction). For all others this is non-removable.
+    if (!isSuperAdmin && userQbName && Number.isFinite(assignedToFieldId)) {
+      conditions.push(`{${assignedToFieldId}.EX.'${encodeQuickbaseLiteral(userQbName)}'}`);
+    }
+
     // 1. Report Filters
     if (hasPersonalQuickbaseQuery && reportMetadata?.filter) {
       conditions.push(String(reportMetadata.filter).trim());

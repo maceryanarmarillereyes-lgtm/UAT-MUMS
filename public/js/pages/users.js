@@ -179,6 +179,12 @@ function canCreateRole(actor, targetRole) {
               <label class="small">Team</label>
               <select class="select" id="u_team"></select>
             </div>
+            <div id="u_qb_name_wrap">
+              <label class="small">Quickbase Name <span class="muted" style="font-size:11px">(Assigned To column — auto-filters QB data)</span></label>
+              <select class="select" id="u_qb_name">
+                <option value="">— Not Assigned —</option>
+              </select>
+            </div>
             <!-- Schedule and Status removed from creation (managed in Profile > Scheduling) -->
           </div>
           <div class="err" id="u_err"></div>
@@ -348,6 +354,48 @@ if (!createAllowed) {
     .map(r=>`<option value="${r}">${r}</option>`).join('');
 
   teamSel.innerHTML = `<option value="">Developer Access</option>` + Config.TEAMS.map(t=>`<option value="${t.id}">${t.label}</option>`).join('');
+
+  // ── QB Name dropdown: load Assigned To names from Global QB Settings report ──
+  const qbNameSel = UI.el('#u_qb_name');
+  const qbNameWrap = document.getElementById('u_qb_name_wrap');
+  // Only SUPER_ADMIN can set QB names
+  if (qbNameWrap) qbNameWrap.style.display = (actor && actor.role === Config.ROLES.SUPER_ADMIN) ? '' : 'none';
+
+  async function loadQbNameOptions(currentQbName) {
+    if (!qbNameSel) return;
+    try {
+      const tok = window.CloudAuth && typeof CloudAuth.getToken === 'function' ? await CloudAuth.getToken() : '';
+      // Fetch global QB settings to get realm/tableId/qid
+      const settingsRes = await fetch('/api/settings/global_quickbase', { headers: { Authorization: 'Bearer ' + tok } });
+      const settingsData = await settingsRes.json();
+      if (!settingsData.ok || !settingsData.settings || !settingsData.settings.realm) {
+        qbNameSel.innerHTML = '<option value="">— Global QB not configured —</option>';
+        return;
+      }
+      const { realm, tableId, qid } = settingsData.settings;
+      if (!realm || !tableId || !qid) { qbNameSel.innerHTML = '<option value="">— Global QB not configured —</option>'; return; }
+      // Fetch QB data to get the list of Assigned To names (field #13)
+      const params = new URLSearchParams({ realm, tableId, qid, limit: 500 });
+      const dataRes = await fetch('/api/quickbase/monitoring?' + params.toString(), { headers: { Authorization: 'Bearer ' + tok } });
+      const data = await dataRes.json();
+      // Extract unique values from Assigned To column (label contains "Assigned to" or field id 13)
+      const assignedField = (data.allAvailableFields || []).find(f =>
+        String(f.label || '').toLowerCase().includes('assigned to') || Number(f.id) === 13
+      );
+      const assignedFid = assignedField ? String(assignedField.id) : '13';
+      const names = new Set();
+      (data.records || []).forEach(row => {
+        const val = row[assignedFid];
+        if (val && typeof val === 'object' && val.value) names.add(String(val.value).trim());
+        else if (val && typeof val === 'string') names.add(val.trim());
+      });
+      const sorted = Array.from(names).filter(Boolean).sort((a, b) => a.localeCompare(b));
+      qbNameSel.innerHTML = '<option value="">— Not Assigned —</option>' + sorted.map(n => `<option value="${n.replace(/"/g,'&quot;')}" ${n === currentQbName ? 'selected' : ''}>${n.replace(/</g,'&lt;')}</option>`).join('');
+    } catch (e) {
+      qbNameSel.innerHTML = '<option value="">— Error loading names —</option>';
+    }
+  }
+
   // (no schedule select in Add User)
 
   // events
@@ -560,6 +608,12 @@ function openUserModal(actor, user){
   UI.el('#u_email').value = (user && user.email) ? String(user.email).trim() : '';
   UI.el('#u_email').readOnly = false;
 
+  // QB Name — load options and pre-select current value
+  if (actor && actor.role === Config.ROLES.SUPER_ADMIN) {
+    const currentQbName = (user && user.qb_name) ? String(user.qb_name) : '';
+    loadQbNameOptions(currentQbName);
+  }
+
   // Cloud mode: prevent editing username/email for existing users to avoid breaking auth mapping.
   UI.el('#u_username').readOnly = (isCloud && isEdit);
 
@@ -652,6 +706,9 @@ function openUserModal(actor, user){
       const email = UI.el('#u_email').value.trim().toLowerCase();
       const role = UI.el('#u_role').value;
       const teamId = UI.el('#u_team').value;
+      const qbName = (actor && actor.role === Config.ROLES.SUPER_ADMIN && UI.el('#u_qb_name'))
+        ? String(UI.el('#u_qb_name').value || '').trim()
+        : undefined;
 
       const password = isEdit ? '' : (UI.el('#u_password') ? UI.el('#u_password').value.trim() : '');
 
@@ -700,6 +757,9 @@ function openUserModal(actor, user){
             if(!out.ok) return err(out.message || 'Update failed.');
           } else if(window.CloudUsers && typeof CloudUsers.updateUser === 'function'){
             const payload = { user_id: user.id, name };
+            if(actor && actor.role===Config.ROLES.SUPER_ADMIN && qbName !== undefined){
+              payload.qb_name = qbName;
+            }
             if(actor && actor.role===Config.ROLES.SUPER_ADMIN){
               payload.role = role;
               if(String(user.role||'').toUpperCase()===String(Config.ROLES.SUPER_ADMIN)){
@@ -718,7 +778,9 @@ function openUserModal(actor, user){
             if(!out.ok) return err(out.message || 'Update failed.');
           }
         } else {
-          const out = await CloudUsers.create({ email, username, full_name: name, name, role, team_id: teamId, team: teamId, password });
+          const createPayload = { email, username, full_name: name, name, role, team_id: teamId, team: teamId, password };
+        if (qbName !== undefined) createPayload.qb_name = qbName;
+        const out = await CloudUsers.create(createPayload);
           if(!out.ok) {
             let msg = out.message || 'Create failed.';
 

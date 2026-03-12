@@ -168,6 +168,14 @@ module.exports = async (req, res) => {
       }
     }
 
+    // QB Name (SUPER_ADMIN only — this is the Quickbase "Assigned To" display name for privacy filtering)
+    if (Object.prototype.hasOwnProperty.call(body, 'qb_name') || Object.prototype.hasOwnProperty.call(body, 'qbName')) {
+      if (actorRole !== 'SUPER_ADMIN') return sendJson(res, 403, { ok: false, error: 'forbidden', message: 'Only Super Admin can set QB Name.' });
+      const qbName = String(body.qb_name !== undefined ? body.qb_name : (body.qbName || '')).trim();
+      if (qbName.length > 120) return sendJson(res, 400, { ok: false, error: 'invalid_qb_name' });
+      patch.qb_name = qbName;
+    }
+
     if (!Object.keys(patch).length) return sendJson(res, 200, { ok: true, updated: false, profile: null });
 
     const out = await serviceUpdate('mums_profiles', patch, { user_id: `eq.${encodeURIComponent(targetId)}` });

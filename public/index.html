@@ -221,6 +221,19 @@
             </div>
           </div>
 
+          <!-- Global Quickbase Settings — Super Admin only -->
+          <div class="settings-card" id="globalQbSettingsCard" style="display:none">
+            <div class="settings-card-title" style="display:flex;align-items:center;gap:8px">
+              <span>📊</span> Global Quickbase Settings
+            </div>
+            <div class="small muted" style="margin-top:6px">
+              Configure the shared Quickbase report for all users. Changes apply globally.
+            </div>
+            <div style="margin-top:12px">
+              <button class="btn" id="openGlobalQbSettingsBtn" type="button">Configure Global QB</button>
+            </div>
+          </div>
+
           <!-- Login Mode Control — Super Admin only -->
           <div class="settings-card" id="loginModeCard" style="display:none">
             <div class="settings-card-title" style="display:flex;align-items:center;gap:8px">
@@ -261,6 +274,79 @@
             </div>
           </div>
 
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Quickbase Settings Modal -->
+  <div class="modal" id="globalQbModal" style="display:none">
+    <div class="panel" style="max-width:660px">
+      <div class="head">
+        <div>
+          <div class="h2">Global Quickbase Settings</div>
+          <div class="small muted">Shared QB report config distributed to all users</div>
+        </div>
+        <button class="btn ghost" type="button" data-close="globalQbModal">✕</button>
+      </div>
+      <div style="padding:0 20px 20px">
+        <!-- Tabs -->
+        <div style="display:flex;gap:4px;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:20px;padding-top:12px" id="globalQbTabs">
+          <button class="btn ghost globalQbTab active" data-gqb-tab="report-config" type="button" style="border-radius:8px 8px 0 0;padding:8px 16px;border-bottom:2px solid var(--primary)">Report Config</button>
+          <button class="btn ghost globalQbTab" data-gqb-tab="custom-columns" type="button" style="border-radius:8px 8px 0 0;padding:8px 16px">Custom Columns</button>
+          <button class="btn ghost globalQbTab" data-gqb-tab="filter-config" type="button" style="border-radius:8px 8px 0 0;padding:8px 16px">Filter Config</button>
+        </div>
+
+        <!-- Report Config Tab -->
+        <div id="gqbSection-report-config">
+          <div class="small muted" style="margin-bottom:12px">Set the Quickbase report used by all users. All users share this configuration.</div>
+          <label class="small" style="display:block;margin-bottom:10px">Report Link (URL)
+            <input class="input" id="gqbReportLink" type="text" placeholder="https://realm.quickbase.com/db/tableId?a=q&qid=..." style="margin-top:4px" />
+          </label>
+          <div style="display:flex;gap:10px;margin-bottom:10px">
+            <label class="small" style="flex:1">Realm (auto-filled)
+              <input class="input qb-field-readonly" id="gqbRealm" type="text" placeholder="realm.quickbase.com" readonly style="margin-top:4px" />
+            </label>
+            <label class="small" style="flex:1">Table ID (auto-filled)
+              <input class="input qb-field-readonly" id="gqbTableId" type="text" placeholder="bpvmztzr5" readonly style="margin-top:4px" />
+            </label>
+            <label class="small" style="flex:1">QID (auto-filled)
+              <input class="input qb-field-readonly" id="gqbQid" type="text" placeholder="1000288" readonly style="margin-top:4px" />
+            </label>
+          </div>
+          <label class="small" style="display:block;margin-bottom:10px">QB Token (Secured — server-side only)
+            <input class="input" id="gqbToken" type="password" placeholder="Enter QB User Token" style="margin-top:4px" />
+          </label>
+          <div class="small muted" style="margin-top:6px">⚡ Realm, Table ID and QID auto-fill from the Report Link URL</div>
+        </div>
+
+        <!-- Custom Columns Tab -->
+        <div id="gqbSection-custom-columns" style="display:none">
+          <div class="small muted" style="margin-bottom:12px">Select the default columns visible to all users. Individual users can override this per tab.</div>
+          <div id="gqbColumnsMsg" class="small muted" style="padding:16px;text-align:center">Load Report Config first to populate available columns.</div>
+          <div id="gqbColumnsList" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:340px;overflow:auto"></div>
+        </div>
+
+        <!-- Filter Config Tab -->
+        <div id="gqbSection-filter-config" style="display:none">
+          <div class="small muted" style="margin-bottom:12px">Global base filters applied to all users. The "Assigned To" privacy filter is always auto-injected separately.</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <span class="small">Match</span>
+            <select class="input" id="gqbFilterMatch" style="width:auto">
+              <option value="ALL">ALL of the following</option>
+              <option value="ANY">ANY of the following</option>
+            </select>
+            <button class="btn" id="gqbAddFilterBtn" type="button" style="margin-left:auto">+ Add Filter</button>
+          </div>
+          <div id="gqbFilterRows"></div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1)">
+          <span id="gqbSaveMsg" class="small muted" style="opacity:0;transition:opacity .4s"></span>
+          <div style="display:flex;gap:8px">
+            <button class="btn" type="button" data-close="globalQbModal">Cancel</button>
+            <button class="btn primary" id="gqbSaveBtn" type="button">Save Global Settings</button>
+          </div>
         </div>
       </div>
     </div>
@@ -526,11 +612,13 @@
                 <option value="minimal">Minimal compact</option>
               </select>
             </label>
+            <div id="qbIntegrationSection" style="display:none">
             <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin:14px 0" />
             <div class="h3" style="margin:0 0 8px">Quickbase Integration</div>
             <label class="small">Quickbase User Token (Secured)
               <input class="input" type="password" id="profileQbToken" placeholder="Enter your personal QB Token" />
             </label>
+            </div>
             <div class="row" style="justify-content:flex-end;gap:10px;margin-top:10px">
               <button class="btn" type="button" data-close="profileModal">Cancel</button>
               <button class="btn primary" id="profileSave" type="button">Save Changes</button>

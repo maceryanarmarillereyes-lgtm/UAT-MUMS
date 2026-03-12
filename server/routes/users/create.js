@@ -212,6 +212,7 @@ module.exports = async (req, res) => {
     const role = String(body.role || '').trim().toUpperCase();
     const duty = String(body.duty || '').trim();
     const finalTeamId = pickTeamId(body);
+    const qbName = String(body.qb_name || body.qbName || '').trim();
     // Password is required for email+password login. If omitted, falls back to
     // whitelist-only (Microsoft OAuth). We enforce it when provided.
     const password = String(body.password || '').trim();
@@ -293,7 +294,8 @@ module.exports = async (req, res) => {
         name: fullName,
         role,
         team_id: finalTeamId,
-        duty: duty || ''
+        duty: duty || '',
+        qb_name: qbName || ''
       };
       if (supportsEmailColumn) profileRow.email = email;
 
