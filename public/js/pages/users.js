@@ -498,7 +498,12 @@ function applyDevOptionForRole(role){
   const isSuper = String(role || '').toUpperCase() === String(Config.ROLES.SUPER_ADMIN);
   const sel = UI.el('#u_team');
   const devOpt = sel ? sel.querySelector('option[value=""]') : null;
-  if (devOpt) devOpt.disabled = !isSuper;
+  // FIX: SUPER_ADMIN -> Developer Access enabled + visible; non-SUPER_ADMIN -> hidden
+  if (devOpt) {
+    devOpt.disabled = false;
+    devOpt.style.display = isSuper ? '' : 'none';
+  }
+  // If non-SUPER_ADMIN somehow has Developer Access selected, force to first shift
   if (!isSuper && sel && sel.value === '') {
     sel.value = (Config.TEAMS[0] && Config.TEAMS[0].id) || 'morning';
   }
@@ -531,7 +536,11 @@ function openUserModal(actor, user){
   }
 
   // Team: SUPER_ADMIN may be Developer Access (empty string); others must be shift team.
-  UI.el('#u_team').value = (user && (user.teamId !== undefined && user.teamId !== null)) ? user.teamId : ((Config.TEAMS[0] && Config.TEAMS[0].id) || 'morning');
+  // FIX: explicitly check for empty string '' (Developer Access) — falsy check was treating it as no team.
+  const resolvedTeam = (user && user.teamId !== undefined && user.teamId !== null)
+    ? user.teamId
+    : ((Config.TEAMS[0] && Config.TEAMS[0].id) || 'morning');
+  UI.el('#u_team').value = resolvedTeam;
 
   // Email is required and explicitly managed as the Microsoft identity.
   UI.el('#u_email').value = (user && user.email) ? String(user.email).trim() : '';
@@ -645,7 +654,10 @@ function openUserModal(actor, user){
       if(actor.role===Config.ROLES.TEAM_LEAD && teamId!==actor.teamId) return err('Team Lead can only manage users in their team.');
 
       // Developer Access restriction
-      if(String(role||'').toUpperCase() !== String(Config.ROLES.SUPER_ADMIN) && String(teamId||'')===''){
+      // FIX: SUPER_ADMIN role CAN have Developer Access (empty teamId). Only block for non-SUPER_ADMIN roles.
+      const isSuperAdminRole = String(role||'').toUpperCase() === String(Config.ROLES.SUPER_ADMIN);
+      const isEditingExistingSuperAdmin = isEdit && user && String(user.role||'').toUpperCase() === String(Config.ROLES.SUPER_ADMIN);
+      if(!isSuperAdminRole && !isEditingExistingSuperAdmin && String(teamId||'')===''){
         return err('Developer Access is reserved for Super Admin. Choose Morning/Mid/Night shift.');
       }
 
