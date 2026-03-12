@@ -364,7 +364,7 @@ if (!createAllowed) {
   async function loadQbNameOptions(currentQbName) {
     if (!qbNameSel) return;
     try {
-      const tok = window.CloudAuth && typeof CloudAuth.getToken === 'function' ? await CloudAuth.getToken() : '';
+      const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
       // Fetch global QB settings to get realm/tableId/qid
       const settingsRes = await fetch('/api/settings/global_quickbase', { headers: { Authorization: 'Bearer ' + tok } });
       const settingsData = await settingsRes.json();

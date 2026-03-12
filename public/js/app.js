@@ -4411,8 +4411,14 @@ async function boot(){
             const host = u.hostname;
             const m = host.match(/^([a-z0-9-]+)\.quickbase\.com$/i);
             if (m) out.realm = m[1] + '.quickbase.com';
+            // Handle /db/<tableId> format
             const dbm = u.pathname.match(/\/db\/([a-zA-Z0-9]+)/);
             if (dbm) out.tableId = dbm[1];
+            // Handle /nav/app/<appId>/table/<tableId>/... format
+            const navM = u.pathname.match(/\/table\/([a-zA-Z0-9]+)/);
+            if (!out.tableId && navM) out.tableId = navM[1];
+            else if (navM) out.tableId = navM[1]; // /table/ is more specific
+            // QID from ?qid= or ?a=q&qid= params
             out.qid = u.searchParams.get('qid') || u.searchParams.get('QID') || '';
           } catch (_) {}
           return out;
@@ -4488,8 +4494,8 @@ async function boot(){
 
         async function loadGqbSettings() {
           try {
-            const tok = CloudAuth && typeof CloudAuth.getToken === 'function' ? await CloudAuth.getToken() : '';
-            const r = await fetch('/api/settings/global_quickbase', { headers: { 'Authorization': 'Bearer ' + tok } });
+            const tok = getBearerToken();
+            const r = await fetch('/api/settings/global_quickbase', { headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' } });
             const d = await r.json();
             if (d.ok && d.settings) {
               gqbState = { ...gqbState, ...d.settings, customColumns: Array.isArray(d.settings.customColumns) ? d.settings.customColumns : [], filterConfig: Array.isArray(d.settings.filterConfig) ? d.settings.filterConfig : [] };
@@ -4506,7 +4512,7 @@ async function boot(){
         async function fetchGqbFields() {
           if (!gqbState.realm || !gqbState.tableId || !gqbState.qbToken) return;
           try {
-            const tok = CloudAuth && typeof CloudAuth.getToken === 'function' ? await CloudAuth.getToken() : '';
+            const tok = getBearerToken();
             const params = new URLSearchParams({ realm: gqbState.realm, tableId: gqbState.tableId, qid: gqbState.qid || '1' });
             const r = await fetch('/api/quickbase/monitoring?' + params.toString(), { headers: { 'Authorization': 'Bearer ' + tok } });
             const d = await r.json();
@@ -4552,7 +4558,7 @@ async function boot(){
         if (saveBtn) saveBtn.onclick = async () => {
           const msg = document.getElementById('gqbSaveMsg');
           try {
-            const tok = CloudAuth && typeof CloudAuth.getToken === 'function' ? await CloudAuth.getToken() : '';
+            const tok = getBearerToken();
             const r = await fetch('/api/settings/global_quickbase', {
               method: 'POST',
               headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },

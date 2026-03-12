@@ -829,8 +829,8 @@
     let globalQbSettings = { reportLink: '', realm: '', tableId: '', qid: '', customColumns: [], filterConfig: [], filterMatch: 'ALL' };
     async function fetchGlobalQbSettings() {
       try {
-        const tok = window.CloudAuth && typeof CloudAuth.getToken === 'function' ? await CloudAuth.getToken() : '';
-        const r = await fetch('/api/settings/global_quickbase', { headers: { Authorization: 'Bearer ' + tok } });
+        const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
+        const r = await fetch('/api/settings/global_quickbase', { headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' } });
         const d = await r.json();
         if (d.ok && d.settings) globalQbSettings = Object.assign(globalQbSettings, d.settings);
       } catch (_) {}
