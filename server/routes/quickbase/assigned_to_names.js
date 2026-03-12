@@ -83,6 +83,71 @@ module.exports = async (req, res) => {
       if (f) assignedToFid = Number(f.id);
     }
 
+    // ── Build WHERE clause from global filterConfig ──────────────────────────
+    // The global QB settings include filters like "Case Status Is Not C - Resolved".
+    // These MUST be applied when fetching names so we only see ACTIVE-case assignees.
+    // We mirror the buildProfileFilterClauses logic from monitoring.js (UNTOUCHABLE)
+    // locally here — do NOT touch the untouchable file.
+    const { filterConfig: globalFilters, filterMatch } = globalOut.settings;
+
+    function encodeQbLiteral(s) {
+      return String(s || '').replace(/'/g, "\'");
+    }
+
+    function buildGlobalWhereClause(filters, match) {
+      if (!Array.isArray(filters) || !filters.length) return '';
+      const VALID_OPS = ['EX','XEX','CT','XCT','SW','XSW','BF','AF','IR','XIR','TV','XTV','LT','LTE','GT','GTE','XNE'];
+      const INCLUSION_OPS = new Set(['EX','CT','SW','BF','AF','LT','LTE','GT','GTE','IR','TV']);
+      // Map human-readable operator aliases to QB codes (mirrors OPERATOR_ALIASES in quickbase-utils.js)
+      const OP_ALIAS = {
+        'Is Not': 'XEX', 'Not Equal To': 'XEX',
+        'Is Equal To': 'EX', 'Is': 'EX', 'Is (Exact)': 'EX',
+        'Contains': 'CT', 'Does Not Contain': 'XCT',
+        'Is Not Empty': 'XNE', 'Starts With': 'SW',
+        'Does Not Start With': 'XSW'
+      };
+
+      const inclusionByField = new Map();
+      const exclusionClauses = [];
+
+      filters.forEach(f => {
+        if (!f || typeof f !== 'object') return;
+        const fieldId = Number(f.fieldId ?? f.field_id ?? f.fid ?? f.id);
+        if (!Number.isFinite(fieldId) || fieldId <= 0) return;
+        const value = String(f.value ?? '').trim();
+        if (!value) return;
+        const opRaw = String(f.operator ?? 'EX').trim();
+        // Resolve alias first, then uppercase and validate
+        const opResolved = OP_ALIAS[opRaw] || opRaw.toUpperCase();
+        const operator = VALID_OPS.includes(opResolved) ? opResolved : 'EX';
+        const clause = `{${fieldId}.${operator}.'${encodeQbLiteral(value)}'}`;
+        if (INCLUSION_OPS.has(operator)) {
+          if (!inclusionByField.has(fieldId)) inclusionByField.set(fieldId, []);
+          inclusionByField.get(fieldId).push(clause);
+        } else {
+          exclusionClauses.push(clause);
+        }
+      });
+
+      const parts = [];
+      inclusionByField.forEach(clauses => {
+        if (!clauses.length) return;
+        parts.push(clauses.length === 1 ? clauses[0] : `(${clauses.join(' OR ')})`);
+      });
+      exclusionClauses.forEach(c => parts.push(c));
+
+      if (!parts.length) return '';
+      const joiner = String(match || 'ALL').toUpperCase() === 'ANY' ? ' OR ' : ' AND ';
+      return parts.length === 1 ? parts[0] : `(${parts.join(joiner)})`;
+    }
+
+    const globalWhereClause = buildGlobalWhereClause(globalFilters, filterMatch);
+    if (globalWhereClause) {
+      console.log('[assigned_to_names] Applying global filter WHERE:', globalWhereClause);
+    } else {
+      console.log('[assigned_to_names] No global filters configured — fetching all records');
+    }
+
     // ── Paginated fetch: pull ALL records from QB regardless of total count ──
     // QB API hard-caps at 1000 per request. We loop with increasing skip until
     // a page returns fewer than PAGE_SIZE records (last page / exhausted).
@@ -113,6 +178,8 @@ module.exports = async (req, res) => {
       const skip = page * PAGE_SIZE;
       const reqBody = { from: tableId, select: [assignedToFid], options: { top: PAGE_SIZE, skip } };
       if (qid) reqBody.queryId = String(qid);
+      // Apply global filter WHERE clause so only active-case assignees are returned
+      if (globalWhereClause) reqBody.where = globalWhereClause;
 
       let pageJson = {};
       try {
