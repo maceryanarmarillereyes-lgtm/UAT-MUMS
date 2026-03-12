@@ -2040,10 +2040,13 @@
         ? state.quickbaseSettings.settingsByTabId[safeTabId]
         : {};
       const tabSettings = createDefaultSettings(Object.assign({}, fallbackSettings, managerSettings), {});
-      const parsed = parseQuickbaseLink(String(tabSettings.reportLink || ''));
-      const qid = String(tabSettings.qid || parsed.qid || '').trim();
-      const tableId = String(tabSettings.tableId || parsed.tableId || '').trim();
-      const realm = String(tabSettings.realm || parsed.realm || '').trim();
+      // FIX[QB-NameFilter]: Fall back to globalQbSettings for qid/tableId/realm.
+      // New users / new tabs have empty tab-level settings — without this fallback
+      // the field list stays empty and the Settings modal shows "Load data first".
+      const parsed = parseQuickbaseLink(String(globalQbSettings.reportLink || tabSettings.reportLink || ''));
+      const qid = String(globalQbSettings.qid || tabSettings.qid || parsed.qid || '').trim();
+      const tableId = String(globalQbSettings.tableId || tabSettings.tableId || parsed.tableId || '').trim();
+      const realm = String(globalQbSettings.realm || tabSettings.realm || parsed.realm || '').trim();
 
       if (!qid || !tableId || !realm) {
         state.allAvailableFields = [];
@@ -2085,7 +2088,11 @@
       const stateTabSettingsForGuard = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[activeTabId]
         ? createDefaultSettings(state.quickbaseSettings.settingsByTabId[activeTabId], {})
         : createDefaultSettings({}, {});
-      const activeReportLink = String(stateTabSettingsForGuard.reportLink || '').trim();
+      // FIX[QB-NameFilter]: Use globalQbSettings.reportLink as primary source.
+      // The outer guard was only checking the tab-level reportLink and returning
+      // early before the inner logic could apply the global report link.
+      // Members with a qb_name set should auto-load using the global report config.
+      const activeReportLink = String(globalQbSettings.reportLink || stateTabSettingsForGuard.reportLink || '').trim();
       if (!activeReportLink) {
         const recordsContainer = document.querySelector('[data-qb-records-container]')
           || document.querySelector('.qb-records-body')
@@ -2527,7 +2534,9 @@
       // FIX[Bug2]: If reportLink is already configured, prefetch fields in realtime so
       // Custom Columns, Filter Config, and Dashboard Counter dropdowns populate immediately
       // without requiring the user to re-type or re-paste the link.
-      const existingReportLink = String(state.reportLink || '').trim();
+      // FIX[QB-NameFilter]: Also check globalQbSettings.reportLink — members with a
+      // qb_name set never have a tab-level reportLink but global settings does.
+      const existingReportLink = String(globalQbSettings.reportLink || state.reportLink || '').trim();
       if (existingReportLink && state.allAvailableFields.length === 0) {
         refreshAvailableFieldsForActiveTab(state.settingsEditingTabId || getActiveTabId()).catch(() => {});
       }
