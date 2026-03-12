@@ -4434,62 +4434,129 @@ async function boot(){
             const sec = document.getElementById('gqbSection-' + t);
             if (sec) sec.style.display = (t === tab) ? '' : 'none';
             const btn = document.querySelector('[data-gqb-tab="' + t + '"]');
-            if (btn) { btn.style.borderBottom = (t === tab) ? '2px solid var(--primary)' : '2px solid transparent'; btn.classList.toggle('active', t === tab); }
+            if (btn) {
+              btn.style.borderBottom = (t === tab) ? '2px solid var(--primary)' : '2px solid transparent';
+              btn.style.color = (t === tab) ? 'var(--primary)' : '';
+              btn.classList.toggle('active', t === tab);
+            }
           });
-          if (tab === 'custom-columns' && gqbAvailableFields.length) renderGqbColumns();
+          if (tab === 'custom-columns') renderGqbColumns();
           if (tab === 'filter-config') renderGqbFilters();
         }
 
-        function renderGqbColumns() {
-          const list = document.getElementById('gqbColumnsList');
-          const msg = document.getElementById('gqbColumnsMsg');
-          if (!list) return;
-          if (!gqbAvailableFields.length) {
-            if (msg) msg.style.display = '';
-            list.innerHTML = '';
-            return;
-          }
-          if (msg) msg.style.display = 'none';
-          list.innerHTML = gqbAvailableFields.map(f => {
-            const checked = gqbState.customColumns.includes(Number(f.id));
-            return `<label style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;cursor:pointer;border:1px solid ${checked?'rgba(99,179,237,.5)':'rgba(255,255,255,.08)'}">
-              <input type="checkbox" data-fid="${f.id}" ${checked?'checked':''} style="accent-color:var(--primary)" />
-              <span class="small">${String(f.label||'').replace(/</g,'&lt;')}</span>
-            </label>`;
-          }).join('');
-          list.querySelectorAll('input[data-fid]').forEach(cb => {
-            cb.onchange = () => {
-              const fid = Number(cb.dataset.fid);
-              if (cb.checked) { if (!gqbState.customColumns.includes(fid)) gqbState.customColumns.push(fid); }
-              else { gqbState.customColumns = gqbState.customColumns.filter(id => id !== fid); }
-            };
+        // ── Column Grid (matches existing QB settings style) ──────────────────
+        function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+        function renderGqbSelectedPanel() {
+          const panel = document.getElementById('gqbSelectedFloatingPanel');
+          const list = document.getElementById('gqbSelectedFloatingList');
+          if (!panel || !list) return;
+          if (!gqbState.customColumns.length) { panel.style.display = 'none'; list.innerHTML = ''; return; }
+          const byId = new Map(gqbAvailableFields.map(f => [String(f.id), String(f.label || 'Field #' + f.id)]));
+          list.innerHTML = gqbState.customColumns.map((id, idx) =>
+            `<div style="display:flex;gap:8px;align-items:flex-start;"><span style="min-width:18px;color:#38bdf8;font-weight:700;">${idx+1}.</span><span>${esc(byId.get(String(id)) || 'Field #'+id)}</span></div>`
+          ).join('');
+          panel.style.display = 'block';
+        }
+
+        function applyGqbColumnSearch() {
+          const input = document.getElementById('gqbColumnSearch');
+          const query = String(input && input.value || '').trim().toLowerCase();
+          document.querySelectorAll('#gqbColumnGrid .qb-col-card').forEach(card => {
+            const hay = String(card.getAttribute('data-col-label') || '').toLowerCase();
+            card.style.display = !query || hay.includes(query) ? 'flex' : 'none';
           });
+        }
+
+        function renderGqbColumns() {
+          const grid = document.getElementById('gqbColumnGrid');
+          if (!grid) return;
+          if (!gqbAvailableFields.length) {
+            grid.innerHTML = '<div class="small muted" style="padding:16px;text-align:center">Load Report Config first to populate columns.</div>';
+            renderGqbSelectedPanel(); return;
+          }
+          const selectedById = new Map();
+          gqbState.customColumns.forEach((id, idx) => selectedById.set(String(id), idx + 1));
+          grid.innerHTML = gqbAvailableFields.map(f => {
+            const id = String(f.id); const order = selectedById.get(id);
+            const label = String(f.label || 'Field #' + id);
+            return `<button type="button" data-col-id="${esc(id)}" data-col-label="${esc(label+' #'+id)}" class="qb-col-card" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid ${order?'rgba(56,189,248,.72)':'rgba(148,163,184,.25)'};background:${order?'rgba(14,116,144,.45)':'rgba(15,23,42,.45)'};color:inherit;cursor:pointer;text-align:left;min-height:40px;">
+              <span class="small" style="font-weight:${order?'700':'500'};">${esc(label)} <span class="muted">(#${esc(id)})</span></span>
+              ${order ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 7px;border-radius:999px;background:rgba(14,165,233,.22);border:1px solid rgba(56,189,248,.55);font-size:12px;font-weight:700;">${order}</span>` : ''}
+            </button>`;
+          }).join('');
+          applyGqbColumnSearch();
+          renderGqbSelectedPanel();
+          grid.querySelectorAll('.qb-col-card').forEach(el => {
+            el.addEventListener('click', () => {
+              const id = String(el.getAttribute('data-col-id') || '').trim();
+              if (!id) return;
+              const numId = Number(id);
+              const idx = gqbState.customColumns.indexOf(numId);
+              if (idx === -1) gqbState.customColumns.push(numId);
+              else gqbState.customColumns.splice(idx, 1);
+              renderGqbColumns();
+            });
+          });
+        }
+
+        const gqbColSearch = document.getElementById('gqbColumnSearch');
+        if (gqbColSearch) gqbColSearch.oninput = applyGqbColumnSearch;
+
+        // ── Filter Rows (matches existing QB settings style) ───────────────────
+        function gqbFilterRowTemplate(f, idx) {
+          const knownFields = gqbAvailableFields.slice();
+          const selFid = String(f.fieldId || '').trim();
+          if (selFid && !knownFields.some(x => String(x.id) === selFid)) {
+            knownFields.unshift({ id: selFid, label: 'Field #' + selFid });
+          }
+          const fieldOpts = knownFields.map(x =>
+            `<option value="${esc(String(x.id))}" ${String(f.fieldId) === String(x.id) ? 'selected' : ''}>${esc(x.label)} (#${esc(String(x.id))})</option>`
+          ).join('');
+          const v = String(f.value || '').trim();
+          return `<div class="row" data-gqb-filter-idx="${idx}" style="gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+            <select class="input" data-gf="fieldId" style="max-width:300px;"><option value="">Select field</option>${fieldOpts}</select>
+            <select class="input" data-gf="operator" style="max-width:140px;">
+              <option value="EX"  ${f.operator==='EX'  ?'selected':''}>Is (Exact)</option>
+              <option value="XEX" ${f.operator==='XEX' ?'selected':''}>Is Not</option>
+              <option value="CT"  ${f.operator==='CT'  ?'selected':''}>Contains</option>
+              <option value="XCT" ${f.operator==='XCT' ?'selected':''}>Does Not Contain</option>
+              <option value="SW"  ${f.operator==='SW'  ?'selected':''}>Starts With</option>
+              <option value="XSW" ${f.operator==='XSW' ?'selected':''}>Does Not Start With</option>
+              <option value="BF"  ${f.operator==='BF'  ?'selected':''}>Before</option>
+              <option value="AF"  ${f.operator==='AF'  ?'selected':''}>After</option>
+            </select>
+            <input type="text" class="input" data-gf="value" value="${esc(v)}" placeholder="Filter value" style="min-width:200px;" />
+            <button class="btn" data-gqb-remove-filter="${idx}" type="button">Remove</button>
+          </div>`;
         }
 
         function renderGqbFilters() {
           const container = document.getElementById('gqbFilterRows');
           if (!container) return;
           const filters = Array.isArray(gqbState.filterConfig) ? gqbState.filterConfig : [];
-          if (!filters.length) { container.innerHTML = '<div class="small muted" style="padding:8px">No global filters. Click + Add Filter.</div>'; return; }
-          container.innerHTML = filters.map((f, i) => `
-            <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
-              <input class="input" style="flex:0.5" type="number" placeholder="Field ID" value="${f.fieldId||''}" data-fi="${i}" data-key="fieldId" />
-              <select class="input" style="flex:0.4" data-fi="${i}" data-key="operator">
-                ${['EX','XEX','CT','XCT'].map(op=>`<option value="${op}" ${f.operator===op?'selected':''}>${op}</option>`).join('')}
-              </select>
-              <input class="input" style="flex:1" type="text" placeholder="Value" value="${String(f.value||'').replace(/"/g,'&quot;')}" data-fi="${i}" data-key="value" />
-              <button class="btn ghost" style="padding:4px 8px" data-gqb-del-filter="${i}" type="button">✕</button>
-            </div>`).join('');
-          container.querySelectorAll('[data-fi]').forEach(el => {
-            el.oninput = el.onchange = () => {
-              const i = Number(el.dataset.fi); const key = el.dataset.key;
-              if (!gqbState.filterConfig[i]) return;
-              gqbState.filterConfig[i][key] = key === 'fieldId' ? Number(el.value) : el.value;
+          container.innerHTML = filters.length
+            ? filters.map((f, i) => gqbFilterRowTemplate(f, i)).join('')
+            : '<div class="small muted">No global filters configured. Click + Add Filter.</div>';
+
+          container.querySelectorAll('[data-gqb-filter-idx]').forEach(row => {
+            const idx = Number(row.getAttribute('data-gqb-filter-idx'));
+            row.querySelectorAll('[data-gf]').forEach(input => {
+              const key = input.getAttribute('data-gf');
+              input.addEventListener(input.tagName === 'SELECT' ? 'change' : 'input', () => {
+                if (!gqbState.filterConfig[idx]) return;
+                gqbState.filterConfig[idx][key] = String(input.value || '').trim();
+              });
+            });
+          });
+          container.querySelectorAll('[data-gqb-remove-filter]').forEach(btn => {
+            btn.onclick = () => {
+              gqbState.filterConfig.splice(Number(btn.getAttribute('data-gqb-remove-filter')), 1);
+              renderGqbFilters();
             };
           });
-          container.querySelectorAll('[data-gqb-del-filter]').forEach(btn => {
-            btn.onclick = () => { gqbState.filterConfig.splice(Number(btn.dataset.gqbDelFilter), 1); renderGqbFilters(); };
-          });
+          const fm = document.getElementById('gqbFilterMatch');
+          if (fm) fm.value = gqbState.filterMatch || 'ALL';
         }
 
         async function loadGqbSettings() {
@@ -4518,7 +4585,7 @@ async function boot(){
             const d = await r.json();
             if (d.allAvailableFields && Array.isArray(d.allAvailableFields)) {
               gqbAvailableFields = d.allAvailableFields;
-              if (gqbActiveTab === 'custom-columns') renderGqbColumns();
+              renderGqbColumns(); // always update since fields just loaded
             }
           } catch (_) {}
         }
@@ -4539,8 +4606,12 @@ async function boot(){
 
         document.querySelectorAll('[data-gqb-tab]').forEach(btn => {
           btn.onclick = () => {
-            if (gqbActiveTab === 'report-config' && btn.dataset.gqbTab === 'custom-columns') fetchGqbFields();
-            gqbShowTab(btn.dataset.gqbTab);
+            const targetTab = btn.dataset.gqbTab;
+            // Auto-fetch fields when switching to Custom Columns or Filter Config
+            if (targetTab === 'custom-columns' || targetTab === 'filter-config') {
+              if (!gqbAvailableFields.length) fetchGqbFields();
+            }
+            gqbShowTab(targetTab);
           };
         });
 
@@ -4549,10 +4620,13 @@ async function boot(){
           if (!Array.isArray(gqbState.filterConfig)) gqbState.filterConfig = [];
           gqbState.filterConfig.push({ fieldId: '', operator: 'EX', value: '' });
           renderGqbFilters();
+          // Scroll to bottom of filter rows
+          const fr = document.getElementById('gqbFilterRows');
+          if (fr) fr.scrollTop = fr.scrollHeight;
         };
 
         const gqbFmSel = document.getElementById('gqbFilterMatch');
-        if (gqbFmSel) gqbFmSel.onchange = () => { gqbState.filterMatch = gqbFmSel.value; };
+        if (gqbFmSel) gqbFmSel.onchange = () => { gqbState.filterMatch = gqbFmSel.value || 'ALL'; };
 
         const saveBtn = document.getElementById('gqbSaveBtn');
         if (saveBtn) saveBtn.onclick = async () => {
@@ -4573,11 +4647,13 @@ async function boot(){
 
         document.querySelectorAll('[data-close="globalQbModal"]').forEach(b => b.onclick = () => { UI.closeModal('globalQbModal'); });
 
-        if (openGqbBtn) openGqbBtn.onclick = () => {
-          loadGqbSettings();
+        if (openGqbBtn) openGqbBtn.onclick = async () => {
+          await loadGqbSettings();
           gqbShowTab('report-config');
           UI.closeModal('settingsModal');
           UI.openModal('globalQbModal');
+          // Auto-fetch fields in background so columns are ready when user switches tab
+          if (gqbState.realm && gqbState.tableId) setTimeout(() => fetchGqbFields(), 300);
         };
       }
     } catch (_) {}
