@@ -83,34 +83,79 @@ module.exports = async (req, res) => {
       if (f) assignedToFid = Number(f.id);
     }
 
-    // Query QB — select only the Assigned To field, high limit
-    const out = await queryQuickbaseRecords({
-      config,
-      where: null, // No filter — get ALL names
-      select: [assignedToFid],
-      limit: 1000,
-      allowEmptySelect: false,
-      enableQueryIdFallback: !!qid
-    });
+    // ── Paginated fetch: pull ALL records from QB regardless of total count ──
+    // QB API hard-caps at 1000 per request. We loop with increasing skip until
+    // a page returns fewer than PAGE_SIZE records (last page / exhausted).
+    // Safety ceiling: MAX_PAGES × PAGE_SIZE = 50,000 records max.
+    const PAGE_SIZE = 1000;
+    const MAX_PAGES = 50;
+    const namesSet = new Set(persistedNames);
+    let fetchError = null;
 
-    if (!out.ok) {
-      // Return persisted names on error
-      return sendJson(res, 200, { ok: true, names: persistedNames, warning: 'qb_fetch_failed', message: out.message });
+    // Resolve a QB User-type cell to a plain string.
+    // Mirrors normalizeQuickbaseCellValue from quickbase.js — kept local so
+    // we do NOT need to touch the UNTOUCHABLE lib.
+    function resolveQbCell(raw) {
+      if (raw == null) return '';
+      if (typeof raw !== 'object') return String(raw).trim();
+      for (const key of ['displayValue', 'display', 'text', 'name', 'fullName', 'label', 'email', 'value']) {
+        if (!Object.prototype.hasOwnProperty.call(raw, key)) continue;
+        const inner = raw[key];
+        if (inner == null) continue;
+        if (typeof inner === 'object') { const n = resolveQbCell(inner); if (n) return n; continue; }
+        const s = String(inner).trim();
+        if (s) return s;
+      }
+      return '';
     }
 
-    // Extract unique names
-    // FIX: Use mappedRecords (not raw records). QB "Assigned To" is a User-type field
-    // that returns nested objects: { value: { id, name, email } }.
-    // queryQuickbaseRecords().mappedRecords already runs normalizeQuickbaseCellValue()
-    // on every cell, resolving nested User objects to plain strings.
-    // Using raw out.records + String(cell.value) produced "[object Object]" in the dropdown.
-    const namesSet = new Set(persistedNames); // always keep persisted names
-    const sourceRecords = Array.isArray(out.mappedRecords) ? out.mappedRecords : [];
-    sourceRecords.forEach(row => {
-      if (!row) return;
-      const val = String(row[String(assignedToFid)] || row[assignedToFid] || '').trim();
-      if (val) namesSet.add(val);
-    });
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const skip = page * PAGE_SIZE;
+      const reqBody = { from: tableId, select: [assignedToFid], options: { top: PAGE_SIZE, skip } };
+      if (qid) reqBody.queryId = String(qid);
+
+      let pageJson = {};
+      try {
+        const pageRes = await fetch('https://api.quickbase.com/v1/records/query', {
+          method: 'POST',
+          headers: {
+            'QB-Realm-Hostname': realm,
+            Authorization: `QB-USER-TOKEN ${qbToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(reqBody)
+        });
+        const rawText = await pageRes.text();
+        try { pageJson = rawText ? JSON.parse(rawText) : {}; } catch (_) { pageJson = {}; }
+        if (!pageRes.ok) {
+          console.error('[assigned_to_names] QB page failed — page:', page, 'status:', pageRes.status, pageJson.message || '');
+          fetchError = { status: pageRes.status, message: pageJson.message || `QB query failed (${pageRes.status})` };
+          break;
+        }
+      } catch (fetchErr) {
+        console.error('[assigned_to_names] Network error on page:', page, fetchErr.message);
+        fetchError = { message: fetchErr.message };
+        break;
+      }
+
+      const pageRecords = Array.isArray(pageJson.data) ? pageJson.data : [];
+      console.log(`[assigned_to_names] Page ${page + 1} — skip:${skip} — records:${pageRecords.length}`);
+
+      pageRecords.forEach(row => {
+        if (!row) return;
+        const cell = row[String(assignedToFid)] || row[assignedToFid];
+        const val = resolveQbCell(cell);
+        if (val) namesSet.add(val);
+      });
+
+      // Last page reached when fewer records returned than requested
+      if (pageRecords.length < PAGE_SIZE) break;
+    }
+
+    // If fetch errored before retrieving any new names, fall back to persisted
+    if (fetchError && namesSet.size === persistedNames.length) {
+      return sendJson(res, 200, { ok: true, names: persistedNames, warning: 'qb_fetch_failed', message: fetchError.message });
+    }
 
     const sorted = Array.from(namesSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
 
