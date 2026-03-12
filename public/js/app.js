@@ -1852,12 +1852,17 @@ function updateClocksPreviewTimes(){
     const team = Config.teamById(user.teamId);
     const prof = Store.getProfile(user.id) || {};
     const initials = UI.initials(user.name||user.username);
-    const _avatarSrc = prof.photoDataUrl && !prof.photoDataUrl.startsWith('data:')
-      ? (prof.photoDataUrl + (prof.photoDataUrl.includes('?') ? `&_cb=${Date.now()}` : `?_cb=${Date.now()}`))
-      : (prof.photoDataUrl || '');
+    const _rawSrc = prof.photoDataUrl || '';
     const _avatarFallback = `<div class="initials">${UI.esc(initials)}</div>`;
+    // Cache-bust Supabase URLs (not data: URLs) to avoid stale 404 after upload
+    const _avatarSrc = (_rawSrc && !_rawSrc.startsWith('data:'))
+      ? (_rawSrc + (_rawSrc.includes('?') ? '&_cb=' + Date.now() : '?_cb=' + Date.now()))
+      : _rawSrc;
+    // Use a data-attribute for the fallback to avoid quote-escaping issues
+    // inside an inline onerror handler — the previous JSON.stringify approach
+    // injected unescaped double quotes that caused SyntaxError: Unexpected end of input
     const avatarHtml = _avatarSrc
-      ? `<img src="${_avatarSrc}" alt="User photo" onerror="this.parentElement.innerHTML=${JSON.stringify(_avatarFallback)}" />`
+      ? `<img src="${_avatarSrc}" alt="User photo" data-initials="${UI.esc(initials)}" onerror="this.outerHTML='<div class=\\'initials\\'>' + (this.dataset.initials||'') + '</div>'" />`
       : _avatarFallback;
 
     let shiftLabel = (team && team.label) ? String(team.label) : '';
