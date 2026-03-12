@@ -4,6 +4,12 @@
 const { getUserFromJwt, getProfileForUserId } = require('../../lib/supabase');
 const { readGlobalQuickbaseSettings, writeGlobalQuickbaseSettings } = require('../../lib/global_quickbase');
 
+// In-memory GET cache: avoids repeated DB reads on every page load.
+// Invalidated immediately on any POST/PATCH write.
+let _settingsCache = null;
+let _settingsCacheAt = 0;
+const SETTINGS_CACHE_TTL_MS = 30 * 1000; // 30 seconds
+
 function sendJson(res, statusCode, body) {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
@@ -26,17 +32,29 @@ module.exports = async (req, res) => {
     const method = String(req.method || 'GET').toUpperCase();
 
     if (method === 'GET') {
-      const out = await readGlobalQuickbaseSettings();
-      if (!out.ok) return sendJson(res, out.status || 500, { ok: false, error: 'db_error' });
-      // Strip qbToken from GET response for non-admins (token is server-only)
+      // Serve from in-memory cache when fresh (avoids Supabase roundtrip on every page load)
       const profile = await getProfileForUserId(user.id);
       const isAdmin = isSuperAdmin(profile);
+      if (_settingsCache && (Date.now() - _settingsCacheAt) < SETTINGS_CACHE_TTL_MS) {
+        const settings = { ..._settingsCache };
+        if (!isAdmin) delete settings.qbToken;
+        return sendJson(res, 200, { ok: true, settings, cached: true });
+      }
+      const out = await readGlobalQuickbaseSettings();
+      if (!out.ok) return sendJson(res, out.status || 500, { ok: false, error: 'db_error' });
+      // Cache the full settings (including token) server-side only
+      _settingsCache = { ...out.settings };
+      _settingsCacheAt = Date.now();
+      // Strip qbToken from GET response for non-admins (token is server-only)
       const settings = { ...out.settings };
       if (!isAdmin) delete settings.qbToken;
       return sendJson(res, 200, { ok: true, settings, updatedAt: out.row && out.row.updated_at || null, updatedByName: out.row && out.row.updated_by_name || null });
     }
 
     if (method === 'POST' || method === 'PATCH') {
+      // Invalidate cache on write so next GET reflects new settings immediately
+      _settingsCache = null;
+      _settingsCacheAt = 0;
       const profile = await getProfileForUserId(user.id);
       if (!isSuperAdmin(profile)) return sendJson(res, 403, { ok: false, error: 'forbidden', message: 'Super Admin only.' });
 

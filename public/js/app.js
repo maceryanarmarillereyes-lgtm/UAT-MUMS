@@ -1846,6 +1846,16 @@ function updateClocksPreviewTimes(){
     }
   }
 
+  // Global avatar onerror handler — safe to call from inline HTML attributes.
+  function mumsAvatarFallback(img) {
+    try {
+      const alt = String(img && img.alt || '');
+      const parent = img && img.parentElement;
+      if (parent) parent.innerHTML = '<div class="initials">' + alt + '</div>';
+    } catch(_) {}
+  }
+  window.mumsAvatarFallback = mumsAvatarFallback;
+
   function renderUserCard(user){
     const el = UI.el('#userCard');
     if(!el) return;
@@ -1853,16 +1863,13 @@ function updateClocksPreviewTimes(){
     const prof = Store.getProfile(user.id) || {};
     const initials = UI.initials(user.name||user.username);
     const _rawSrc = prof.photoDataUrl || '';
-    const _avatarFallback = `<div class="initials">${UI.esc(initials)}</div>`;
-    // Cache-bust Supabase URLs (not data: URLs) to avoid stale 404 after upload
-    const _avatarSrc = (_rawSrc && !_rawSrc.startsWith('data:'))
-      ? (_rawSrc + (_rawSrc.includes('?') ? '&_cb=' + Date.now() : '?_cb=' + Date.now()))
+    // Cache-bust Supabase storage URLs to prevent stale CDN responses after upload
+    const _bustedSrc = (_rawSrc && !_rawSrc.startsWith('data:'))
+      ? _rawSrc + (_rawSrc.includes('?') ? '&_v=' : '?_v=') + (prof.updatedAt || Date.now())
       : _rawSrc;
-    // Use a data-attribute for the fallback to avoid quote-escaping issues
-    // inside an inline onerror handler — the previous JSON.stringify approach
-    // injected unescaped double quotes that caused SyntaxError: Unexpected end of input
-    const avatarHtml = _avatarSrc
-      ? `<img src="${_avatarSrc}" alt="User photo" data-initials="${UI.esc(initials)}" onerror="this.outerHTML='<div class=\\'initials\\'>' + (this.dataset.initials||'') + '</div>'" />`
+    const _avatarFallback = `<div class="initials">${UI.esc(initials)}</div>`;
+    const avatarHtml = _bustedSrc
+      ? `<img src="${UI.esc(_bustedSrc)}" alt="${UI.esc(initials)}" class="mums-avatar-img" onerror="mumsAvatarFallback(this)" />`
       : _avatarFallback;
 
     let shiftLabel = (team && team.label) ? String(team.label) : '';
@@ -2301,21 +2308,19 @@ function updateClocksPreviewTimes(){
   function renderProfileAvatar(photoDataUrl, user){
     const box = UI.el('#profileAvatar');
     if(!box) return;
+    const initStr = UI.esc(UI.initials((user&&(user.name||user.username))||''));
+    const fallbackHtml = `<div class="initials" style="font-size:28px">${initStr}</div>`;
     if(photoDataUrl){
-      // Add cache-bust param to force browser re-fetch after upload
-      // (Supabase CDN may serve stale or missing response without it)
-      const bust = photoDataUrl.includes('?') ? `&_cb=${Date.now()}` : `?_cb=${Date.now()}`;
-      const srcWithBust = photoDataUrl.startsWith('data:') ? photoDataUrl : (photoDataUrl + bust);
-      const fallbackHtml = `<div class="initials" style="font-size:28px">${UI.esc(UI.initials((user&&(user.name||user.username))||''))}</div>`;
       const img = document.createElement('img');
       img.alt = 'User photo';
+      img.className = 'mums-avatar-img';
       img.onerror = () => { box.innerHTML = fallbackHtml; };
       img.onload = () => { box.innerHTML = ''; box.appendChild(img); };
-      img.src = srcWithBust;
-      // Show a placeholder while loading so there's no flash of broken img
+      // Show initials immediately while image loads (no broken-img flash)
       box.innerHTML = fallbackHtml;
+      img.src = photoDataUrl; // set AFTER event handlers are bound
     } else {
-      box.innerHTML = `<div class="initials" style="font-size:28px">${UI.esc(UI.initials((user&&(user.name||user.username))||''))}</div>`;
+      box.innerHTML = fallbackHtml;
     }
   }
 

@@ -816,7 +816,7 @@
       _qbLayoutGuardObs.observe(root, { childList: true });
     } catch (_) {}
 
-    const AUTO_REFRESH_MS = 10000; // 10-second realtime auto-refresh
+    const AUTO_REFRESH_MS = 60000; // 60-second auto-refresh (was 10s — reduced to cut QB API load by 6x)
     const me = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
     const tabManager = (window.TabManager && typeof window.TabManager.init === 'function')
       ? window.TabManager.init({ userId: me && me.id, apiBaseUrl: '/api' })
@@ -933,7 +933,7 @@
     // first await) so that the preliminary root._cleanup and MutationObserver
     // can reference them.  Do NOT re-declare them here.
 
-    const QUICKBASE_CACHE_TTL_MS = 9 * 1000; // 9s — slightly under 10s refresh tick so auto-refresh always fetches live
+    const QUICKBASE_CACHE_TTL_MS = 55 * 1000; // 55s — slightly under 60s refresh interval
     const QUICKBASE_BACKGROUND_LIMIT = 500;
 
     function getQuickbaseCacheKey({ tabId, tableId, qid, filters, filterMatch }) {
