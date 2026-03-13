@@ -280,6 +280,16 @@ module.exports = async (req, res) => {
       patch.duty = duty;
     }
 
+    // QB Name — SUPER_ADMIN only. Sets the "Assigned To" filter name for My Quickbase page.
+    if (Object.prototype.hasOwnProperty.call(body, 'qb_name') || Object.prototype.hasOwnProperty.call(body, 'qbName')) {
+      const profCheck = await getProfileForUserId(authed.id);
+      const roleCheck = String((profCheck && profCheck.role) || '').trim().toUpperCase();
+      if (roleCheck !== 'SUPER_ADMIN') return sendJson(res, 403, { ok: false, error: 'forbidden', message: 'Only Super Admin can set QB Name.' });
+      const qbNameVal = String(body.qb_name !== undefined ? body.qb_name : (body.qbName || '')).trim();
+      if (qbNameVal.length > 120) return sendJson(res, 400, { ok: false, error: 'invalid_qb_name' });
+      patch.qb_name = qbNameVal;
+    }
+
     // Personal Quickbase config updates (save via server/service-role to avoid client RLS failures).
     if (Object.prototype.hasOwnProperty.call(body, 'qb_token')) {
       const qbToken = String(body.qb_token || '').trim();

@@ -785,6 +785,12 @@ function openUserModal(actor, user){
           // Self edits use update_me (supports SUPER_ADMIN team override)
           if(actor && user && actor.id===user.id && window.CloudUsers && typeof CloudUsers.updateMe === 'function'){
             const patch = { name };
+            // FIX: Include qb_name in self-edit patch for SUPER_ADMIN.
+            // Previously qb_name was excluded from updateMe — SA editing own
+            // account never saved the QB Name. update_me route now accepts qb_name.
+            if(actor.role === Config.ROLES.SUPER_ADMIN && qbName !== undefined){
+              patch.qb_name = qbName;
+            }
             if(String(user.role||'').toUpperCase()===String(Config.ROLES.SUPER_ADMIN)){
               if(String(teamId)===''){
                 patch.team_override = false;
