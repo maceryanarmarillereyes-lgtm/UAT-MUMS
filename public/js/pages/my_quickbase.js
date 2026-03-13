@@ -853,6 +853,26 @@
     await refreshProfileFromCloud();
     profile = (me && window.Store && Store.getProfile) ? (Store.getProfile(me.id) || {}) : {};
 
+    // FIX: If Store has no qb_name yet, try fetching directly from /api/users/list
+    // This handles the case where the SA just saved a qb_name and the user navigates
+    // to My Quickbase before the Store has been refreshed by the realtime sync.
+    if (me && !String(profile.qb_name || '').trim()) {
+      try {
+        const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
+        const r = await fetch('/api/users/list', { headers: { Authorization: 'Bearer ' + tok } });
+        const d = await r.json().catch(() => ({}));
+        if (d.ok && Array.isArray(d.rows)) {
+          const myRow = d.rows.find(row => row && String(row.user_id || '') === String(me.id || ''));
+          if (myRow && String(myRow.qb_name || '').trim()) {
+            profile = Object.assign({}, profile, { qb_name: myRow.qb_name });
+            if (window.Store && typeof Store.setProfile === 'function') {
+              Store.setProfile(me.id, Object.assign({}, profile, { updatedAt: Date.now() }));
+            }
+          }
+        }
+      } catch(_) {}
+    }
+
     // ── QB NAME GUARD — blocks ALL data loading when no qb_name is assigned ──
     // Privacy rule: a user MUST have a Quickbase Name assigned before they can
     // see ANY records. This applies to every role including SUPER_ADMIN.
