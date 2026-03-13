@@ -25,10 +25,10 @@
       } catch (_) {}
     })();
   </script>
-  <title>MUMS | MUMS User Management System</title><link rel="stylesheet" href="/css/styles.css?v=p1-651" />
-  <link rel="stylesheet" href="/css/mailbox.css?v=p1-651" />
-  <link rel="stylesheet" href="/css/enterprise_ux.css?v=p1-651" />
-  <link rel="stylesheet" href="/css/widget_enhancements.css?v=p1-651" />
+  <title>MUMS | MUMS User Management System</title><link rel="stylesheet" href="/css/styles.css?v=p1-654" />
+  <link rel="stylesheet" href="/css/mailbox.css?v=p1-654" />
+  <link rel="stylesheet" href="/css/enterprise_ux.css?v=p1-654" />
+  <link rel="stylesheet" href="/css/widget_enhancements.css?v=p1-654" />
 </head>
 <body>
   <div class="app">
@@ -128,155 +128,223 @@
   </div>
 
   <div class="modal" id="settingsModal">
-    <div class="panel">
-      <div class="head">
-        <div>
-          <div class="announce-title">Settings</div>
-          <div class="small">Manage profile and notification sound.</div>
+    <div class="panel stngs-panel">
+
+      <!-- ── HEADER ──────────────────────────────────────────────────── -->
+      <div class="stngs-header">
+        <div class="stngs-header-left">
+          <div class="stngs-header-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </div>
+          <div>
+            <div class="stngs-title">Settings</div>
+            <div class="stngs-subtitle">Customize your MUMS experience</div>
+          </div>
         </div>
-        <button class="btn ghost" type="button" data-close="settingsModal">✕</button>
+        <button class="stngs-close-btn" type="button" data-close="settingsModal" aria-label="Close settings">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
-      <div class="body">
-        <div class="settings-grid">
-          <div class="settings-card">
-            <div class="settings-card-title">Profile</div>
-            <div class="small muted" style="margin-top:6px">Update your photo and display name.</div>
-            <div style="margin-top:10px">
-              <button class="btn primary" id="openProfileBtn" type="button">Open Profile Settings</button>
+
+      <!-- ── BODY ───────────────────────────────────────────────────── -->
+      <div class="stngs-body">
+
+        <!-- ── SECTION: PERSONAL ──────────────────────────────────── -->
+        <div class="stngs-section-label">Personal</div>
+        <div class="stngs-row">
+
+          <button class="stngs-tile stngs-tile-featured" id="openProfileBtn" type="button">
+            <div class="stngs-tile-icon stngs-icon-profile">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
             </div>
+            <div class="stngs-tile-content">
+              <div class="stngs-tile-name">Profile</div>
+              <div class="stngs-tile-desc">Photo, display name &amp; account info</div>
+            </div>
+            <div class="stngs-tile-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </button>
+
+          <button class="stngs-tile" id="openSoundBtn" type="button">
+            <div class="stngs-tile-icon stngs-icon-sound">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            </div>
+            <div class="stngs-tile-content">
+              <div class="stngs-tile-name">Notifications</div>
+              <div class="stngs-tile-desc">Sound type &amp; volume</div>
+            </div>
+            <div class="stngs-tile-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </button>
+
+          <button class="stngs-tile" id="openThemeBtn" type="button">
+            <div class="stngs-tile-icon stngs-icon-theme">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/><circle cx="12" cy="12" r="4"/></svg>
+            </div>
+            <div class="stngs-tile-content">
+              <div class="stngs-tile-name">Theme</div>
+              <div class="stngs-tile-desc">Color theme &amp; appearance</div>
+            </div>
+            <div class="stngs-tile-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </button>
+
+          <button class="stngs-tile" id="openCursorBtn" type="button">
+            <div class="stngs-tile-icon stngs-icon-cursor">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l7.5 18 3-7 7-3z"/></svg>
+            </div>
+            <div class="stngs-tile-content">
+              <div class="stngs-tile-name">Cursor</div>
+              <div class="stngs-tile-desc">Custom or system cursor</div>
+            </div>
+            <div class="stngs-tile-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </button>
+
+        </div>
+
+        <!-- ── SECTION: WORKSPACE ─────────────────────────────────── -->
+        <div class="stngs-section-label">Workspace</div>
+        <div class="stngs-row">
+
+          <button class="stngs-tile" id="openSidebarBtn" type="button">
+            <div class="stngs-tile-icon stngs-icon-sidebar">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+            </div>
+            <div class="stngs-tile-content">
+              <div class="stngs-tile-name">Sidebar</div>
+              <div class="stngs-tile-desc">Compact navigation mode</div>
+            </div>
+            <div class="stngs-tile-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </button>
+
+          <button class="stngs-tile" id="openLinksBtn" type="button">
+            <div class="stngs-tile-icon stngs-icon-links">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            </div>
+            <div class="stngs-tile-content">
+              <div class="stngs-tile-name">Quick Links</div>
+              <div class="stngs-tile-desc">Up to 10 bottom bar shortcuts</div>
+            </div>
+            <div class="stngs-tile-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </button>
+
+          <button class="stngs-tile stngs-tile-dual" id="openClocksBtn" type="button">
+            <div class="stngs-tile-icon stngs-icon-clocks">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="stngs-tile-content">
+              <div class="stngs-tile-name">World Clocks</div>
+              <div class="stngs-tile-desc">GMT offsets &amp; region clocks</div>
+            </div>
+            <div class="stngs-tile-extra-action">
+              <button class="stngs-tile-chip" id="openGmtOverviewPageBtn" type="button" onclick="event.stopPropagation()">GMT Overview</button>
+            </div>
+          </button>
+
+          <button class="stngs-tile" id="openDataToolsBtn" type="button">
+            <div class="stngs-tile-icon stngs-icon-data">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+            </div>
+            <div class="stngs-tile-content">
+              <div class="stngs-tile-name">Data Tools</div>
+              <div class="stngs-tile-desc">Export, import &amp; validate storage</div>
+            </div>
+            <div class="stngs-tile-arrow">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </button>
+
+        </div>
+
+        <!-- ── SECTION: ADMIN (conditionally visible) ─────────────── -->
+        <div class="stngs-section-label stngs-admin-section" id="stngsAdminLabel" style="display:none">Admin Controls</div>
+        <div class="stngs-row stngs-admin-section" id="stngsAdminRow" style="display:none">
+
+          <div class="stngs-tile" id="timeOverrideCard" style="display:none" role="group">
+            <div class="stngs-tile-icon stngs-icon-time">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 8 14"/></svg>
+            </div>
+            <div class="stngs-tile-content">
+              <div class="stngs-tile-name">Mailbox Time</div>
+              <div class="stngs-tile-desc">Override Manila time for testing</div>
+            </div>
+            <button class="stngs-tile-arrow stngs-tile-inner-btn" id="openMailboxTimeBtn" type="button" aria-label="Configure Mailbox Time">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
           </div>
 
-          <div class="settings-card">
-            <div class="settings-card-title">Notification Sound</div>
-            <div class="small muted" style="margin-top:6px">Adjust sound type and volume for pop-up notifications.</div>
-            <div style="margin-top:10px">
-              <button class="btn" id="openSoundBtn" type="button">Open Sound Settings</button>
+          <div class="stngs-tile" id="systemCheckCard" style="display:none" role="group">
+            <div class="stngs-tile-icon stngs-icon-system">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H5m4 0h10m0-11v11m0 0h4M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 1 2-2v-5"/></svg>
             </div>
-          </div>
-
-          <div class="settings-card">
-            <div class="settings-card-title">Theme</div>
-            <div class="small muted" style="margin-top:6px">Choose a professional color theme for MUMS.</div>
-            <div style="margin-top:10px">
-              <button class="btn" id="openThemeBtn" type="button">Open Theme Settings</button>
+            <div class="stngs-tile-content">
+              <div class="stngs-tile-name">System Check</div>
+              <div class="stngs-tile-desc">Diagnostics &amp; auto-fixes</div>
             </div>
-          </div>
-
-          <div class="settings-card">
-            <div class="settings-card-title">Quick Links</div>
-            <div class="small muted" style="margin-top:6px">Set up to 10 favorite links shown on the bottom bar.</div>
-            <div style="margin-top:10px">
-              <button class="btn" id="openLinksBtn" type="button">Manage Quick Links</button>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <div class="settings-card-title">Cursor</div>
-            <div class="small muted" style="margin-top:6px">Choose between the custom in-app cursor or your system cursor.</div>
-            <div style="margin-top:10px">
-              <button class="btn" id="openCursorBtn" type="button">Cursor settings</button>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <div class="settings-card-title">Sidebar</div>
-            <div class="small muted" style="margin-top:6px">Collapse the menu for compact navigation.</div>
-            <div style="margin-top:10px">
-              <button class="btn" id="openSidebarBtn" type="button">Sidebar settings</button>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <div class="settings-card-title">Data tools</div>
-            <div class="small muted" style="margin-top:6px">Export, import, and validate offline local storage.</div>
-            <div style="margin-top:10px">
-              <button class="btn" id="openDataToolsBtn" type="button">Open data tools</button>
-            </div>
-          </div>
-
-          <div class="settings-card" id="timeOverrideCard" style="display:none">
-            <div class="settings-card-title">Mailbox Time Override</div>
-            <div class="small muted" style="margin-top:6px">Super Admin testing tool: override Manila time used in the Mailbox screen.</div>
-            <div style="margin-top:10px">
-              <button class="btn" id="openMailboxTimeBtn" type="button">Configure Mailbox Time</button>
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <div class="settings-card-title">World Clocks</div>
-	            <div class="small muted" style="margin-top:6px">Configure clocks for regions or fixed GMT offsets (label, style, colors, alarms).</div>
-            <div style="margin-top:10px">
-	              <div class="row" style="gap:8px;flex-wrap:wrap">
-	                <button class="btn" id="openClocksBtn" type="button">Configure Clocks</button>
-	                <button class="btn ghost" id="openGmtOverviewPageBtn" type="button">Open GMT Overview</button>
-	              </div>
-            </div>
-          </div>
-
-          <div class="settings-card" id="systemCheckCard" style="display:none">
-            <div class="settings-card-title">System Check</div>
-            <div class="small muted" style="margin-top:6px">Run diagnostics, tests, and auto-fixes. Available to Super Admin and Super User.</div>
-            <div style="margin-top:10px">
-              <button class="btn" id="openSystemCheckBtn" type="button">Run System Check</button>
-            </div>
+            <button class="stngs-tile-arrow stngs-tile-inner-btn" id="openSystemCheckBtn" type="button" aria-label="Run System Check">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
           </div>
 
           <!-- Global Quickbase Settings — Super Admin only -->
-          <div class="settings-card" id="globalQbSettingsCard" style="display:none">
-            <div class="settings-card-title" style="display:flex;align-items:center;gap:8px">
-              <span>📊</span> Global Quickbase Settings
+          <div class="stngs-tile" id="globalQbSettingsCard" style="display:none" role="group">
+            <div class="stngs-tile-icon stngs-icon-qb">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
             </div>
-            <div class="small muted" style="margin-top:6px">
-              Configure the shared Quickbase report for all users. Changes apply globally.
+            <div class="stngs-tile-content">
+              <div class="stngs-tile-name">Global Quickbase</div>
+              <div class="stngs-tile-desc">Shared report config for all users</div>
             </div>
-            <div style="margin-top:12px">
-              <button class="btn" id="openGlobalQbSettingsBtn" type="button">Configure Global QB</button>
-            </div>
+            <button class="stngs-tile-arrow stngs-tile-inner-btn" id="openGlobalQbSettingsBtn" type="button" aria-label="Configure Global QB">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
           </div>
 
           <!-- Login Mode Control — Super Admin only -->
-          <div class="settings-card" id="loginModeCard" style="display:none">
-            <div class="settings-card-title" style="display:flex;align-items:center;gap:8px">
-              <span>🔐</span> Login Mode
+          <div class="stngs-tile stngs-tile-login-mode" id="loginModeCard" style="display:none" role="group">
+            <div class="stngs-tile-icon stngs-icon-login">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             </div>
-            <div class="small muted" style="margin-top:6px">
-              Control whether users log in with Microsoft or with email &amp; password.
-            </div>
-            <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px" id="loginModeControls">
-              <div class="small" id="loginModeStatus" style="opacity:.7">Loading…</div>
-              <div style="display:flex;flex-direction:column;gap:6px" id="loginModeOptions">
-                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid transparent;transition:background .12s" id="loginModeOpt_both">
-                  <input type="radio" name="loginModeChoice" value="both" style="accent-color:var(--primary)" />
-                  <span>
-                    <span class="small" style="font-weight:700">Both</span>
-                    <span class="small muted" style="display:block;font-size:11px">Show Microsoft button + allow email/password login</span>
-                  </span>
+            <div class="stngs-tile-content stngs-login-mode-content">
+              <div class="stngs-tile-name">Login Mode</div>
+              <div class="stngs-tile-desc" id="loginModeStatus">Loading…</div>
+              <div class="stngs-login-opts" id="loginModeOptions">
+                <label class="stngs-radio" id="loginModeOpt_both">
+                  <input type="radio" name="loginModeChoice" value="both" />
+                  <span class="stngs-radio-dot"></span>
+                  <span class="stngs-radio-label">Both <span class="stngs-radio-sub">Microsoft + Password</span></span>
                 </label>
-                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid transparent;transition:background .12s" id="loginModeOpt_password">
-                  <input type="radio" name="loginModeChoice" value="password" style="accent-color:var(--primary)" />
-                  <span>
-                    <span class="small" style="font-weight:700">Password only</span>
-                    <span class="small muted" style="display:block;font-size:11px">Hide Microsoft button — email/password login only</span>
-                  </span>
+                <label class="stngs-radio" id="loginModeOpt_password">
+                  <input type="radio" name="loginModeChoice" value="password" />
+                  <span class="stngs-radio-dot"></span>
+                  <span class="stngs-radio-label">Password only <span class="stngs-radio-sub">No Microsoft button</span></span>
                 </label>
-                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 10px;border-radius:10px;border:1px solid transparent;transition:background .12s" id="loginModeOpt_microsoft">
-                  <input type="radio" name="loginModeChoice" value="microsoft" style="accent-color:var(--primary)" />
-                  <span>
-                    <span class="small" style="font-weight:700">Microsoft only</span>
-                    <span class="small muted" style="display:block;font-size:11px">Microsoft OAuth only — password form still works for admins</span>
-                  </span>
+                <label class="stngs-radio" id="loginModeOpt_microsoft">
+                  <input type="radio" name="loginModeChoice" value="microsoft" />
+                  <span class="stngs-radio-dot"></span>
+                  <span class="stngs-radio-label">Microsoft only <span class="stngs-radio-sub">OAuth, admins can still use password</span></span>
                 </label>
               </div>
-              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                <button class="btn primary" id="saveLoginModeBtn" type="button" style="min-width:90px">Save</button>
+              <div class="stngs-login-save-row">
+                <button class="btn primary" id="saveLoginModeBtn" type="button">Save</button>
                 <span id="loginModeSaveMsg" class="small" style="opacity:0;transition:opacity .4s"></span>
               </div>
             </div>
           </div>
 
         </div>
-      </div>
-    </div>
+
+      </div><!-- /stngs-body -->
+    </div><!-- /stngs-panel -->
   </div>
 
   <!-- Global Quickbase Settings Modal -->
@@ -802,8 +870,8 @@
     </div>
   </div>
 
-  <script src="/js/env_runtime.js?v=p1-651"></script>
-  <script src="/js/remote_patch.js?v=p1-651"></script>
+  <script src="/js/env_runtime.js?v=p1-654"></script>
+  <script src="/js/remote_patch.js?v=p1-654"></script>
   <script>
     // Load Supabase UMD as a first-party script when possible.
     //
@@ -839,52 +907,52 @@
     })();
   </script>
   <!-- Load in order (no modules) so it works via file:// in Edge -->
-  <script src="/js/config/version.js?v=p1-651"></script>
-  <script src="/js/config.js?v=p1-651"></script>
-  <script src="/js/store.js?v=p1-651"></script>
-  <script src="/js/cloud_auth.js?v=p1-651"></script>
-  <script src="/js/cloud_users.js?v=p1-651"></script>
-  <script src="/js/cloud_tasks.js?v=p1-651"></script>
-  <script src="/js/auth.js?v=p1-651"></script>
-  <script src="/js/realtime.js?v=p1-651"></script>
-  <script src="/js/sync_status_ui.js?v=p1-651"></script>
-<script src="/js/ui.js?v=p1-651"></script>
+  <script src="/js/config/version.js?v=p1-654"></script>
+  <script src="/js/config.js?v=p1-654"></script>
+  <script src="/js/store.js?v=p1-654"></script>
+  <script src="/js/cloud_auth.js?v=p1-654"></script>
+  <script src="/js/cloud_users.js?v=p1-654"></script>
+  <script src="/js/cloud_tasks.js?v=p1-654"></script>
+  <script src="/js/auth.js?v=p1-654"></script>
+  <script src="/js/realtime.js?v=p1-654"></script>
+  <script src="/js/sync_status_ui.js?v=p1-654"></script>
+<script src="/js/ui.js?v=p1-654"></script>
   <script>try{ window.UI && UI.initAppCursor && UI.initAppCursor(); }catch(e){} </script>
 
   <!-- Components -->
-  <script src="/js/components/sidebarLogs.js?v=p1-651"></script>
-  <script src="/js/components/statusWidgets.js?v=p1-651"></script>
-  <script src="/js/components/coverageMeter.js?v=p1-651"></script>
-  <script src="/js/components/memberRow.js?v=p1-651"></script>
-  <script src="/js/components/graph_panel.js?v=p1-651"></script>
-  <script src="/js/quickbase_adapter.js?v=p1-651"></script>
+  <script src="/js/components/sidebarLogs.js?v=p1-654"></script>
+  <script src="/js/components/statusWidgets.js?v=p1-654"></script>
+  <script src="/js/components/coverageMeter.js?v=p1-654"></script>
+  <script src="/js/components/memberRow.js?v=p1-654"></script>
+  <script src="/js/components/graph_panel.js?v=p1-654"></script>
+  <script src="/js/quickbase_adapter.js?v=p1-654"></script>
 
   <!-- Pages -->
-  <script src="/js/pages/dashboard.js?v=p1-651"></script>
-  <script src="/js/pages/overall_stats.js?v=p1-651"></script>
-  <script src="/js/pages/members.js?v=p1-651"></script>
-  <script src="/js/pages/master_schedule.js?v=p1-651"></script>
-  <script src="/js/pages/users.js?v=p1-651"></script>
-  <script src="/js/pages/announcements.js?v=p1-651"></script>
-  <script src="/js/pages/mailbox.js?v=p1-651"></script>
-  <script src="/js/pages/logs.js?v=p1-651"></script>
-  <script src="/js/pages/my_reminders.js?v=p1-651"></script>
-  <script src="/js/pages/team_reminders.js?v=p1-651"></script>
-  <script src="/js/pages/team_config.js?v=p1-651"></script>
-  <script src="/js/pages/my_attendance.js?v=p1-651"></script>
-  <script src="/js/pages/my_schedule.js?v=p1-651"></script>
-  <script src="/js/pages/my_case.js?v=p1-651"></script>
-  <script src="/js/pages/my_task.js?v=p1-651"></script>
-  <script src="/js/pages/my_quickbase_tab_manager.js?v=p1-651"></script>
-  <script src="/js/pages/my_quickbase.js?v=p1-651"></script>
-  <script src="/js/pages/commands.js?v=p1-651"></script>
-  <script src="/js/pages/privileges.js?v=p1-651"></script>
-  <script src="/js/pages/gmt_overview.js?v=p1-651"></script>
+  <script src="/js/pages/dashboard.js?v=p1-654"></script>
+  <script src="/js/pages/overall_stats.js?v=p1-654"></script>
+  <script src="/js/pages/members.js?v=p1-654"></script>
+  <script src="/js/pages/master_schedule.js?v=p1-654"></script>
+  <script src="/js/pages/users.js?v=p1-654"></script>
+  <script src="/js/pages/announcements.js?v=p1-654"></script>
+  <script src="/js/pages/mailbox.js?v=p1-654"></script>
+  <script src="/js/pages/logs.js?v=p1-654"></script>
+  <script src="/js/pages/my_reminders.js?v=p1-654"></script>
+  <script src="/js/pages/team_reminders.js?v=p1-654"></script>
+  <script src="/js/pages/team_config.js?v=p1-654"></script>
+  <script src="/js/pages/my_attendance.js?v=p1-654"></script>
+  <script src="/js/pages/my_schedule.js?v=p1-654"></script>
+  <script src="/js/pages/my_case.js?v=p1-654"></script>
+  <script src="/js/pages/my_task.js?v=p1-654"></script>
+  <script src="/js/pages/my_quickbase_tab_manager.js?v=p1-654"></script>
+  <script src="/js/pages/my_quickbase.js?v=p1-654"></script>
+  <script src="/js/pages/commands.js?v=p1-654"></script>
+  <script src="/js/pages/privileges.js?v=p1-654"></script>
+  <script src="/js/pages/gmt_overview.js?v=p1-654"></script>
 
-  <script src="/js/pages/distribution_monitoring.js?v=p1-651"></script>
-  <script src="/js/app.js?v=p1-651"></script>
-  <script src="/js/presence_client.js?v=p1-651"></script>
-  <script src="/js/presence_watchdog.js?v=p1-651"></script>
+  <script src="/js/pages/distribution_monitoring.js?v=p1-654"></script>
+  <script src="/js/app.js?v=p1-654"></script>
+  <script src="/js/presence_client.js?v=p1-654"></script>
+  <script src="/js/presence_watchdog.js?v=p1-654"></script>
   <script>
     // Boot the app after all scripts load
     try{

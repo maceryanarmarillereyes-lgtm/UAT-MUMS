@@ -62,10 +62,13 @@
     USERNAME_EMAIL_DOMAIN: 'mums.local',
     REALTIME_RELAY_URL: '',
     REMOTE_PATCH_URL: '',
-    MAILBOX_OVERRIDE_POLL_MS: 2000,
-    PRESENCE_TTL_SECONDS: 25,
-    PRESENCE_POLL_MS: 3000,
-    SYNC_POLL_MS: 2000,
+    // ── CALIBRATED: 30 users × 8hr × 30 days — target ≤3.5 GB/month ──
+    MAILBOX_OVERRIDE_POLL_MS: 10000,   // 10s FIXED — lightweight Store check only
+    PRESENCE_TTL_SECONDS: 360,         // 6min TTL — user stays in roster through 3 missed HBs
+    PRESENCE_POLL_MS: 45000,           // 45s HB — was 3s (67× reduction)
+    PRESENCE_LIST_POLL_MS: 90000,      // 90s roster list — biggest egress saver
+    SYNC_POLL_MS: 90000,               // 90s offline fallback sync
+    SYNC_RECONCILE_MS: 90000,          // 90s reconcile (realtime WebSocket is primary)
     SYNC_ENABLE_SUPABASE_REALTIME: true
   };
 

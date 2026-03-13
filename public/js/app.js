@@ -1279,10 +1279,10 @@ function renderWorldClocksBar(){
       (buckets[b]||buckets.mid).push(u);
     });
 
-    // Active threshold: heartbeat received within last 45s → full green
-    // Idle threshold:   heartbeat within last 8hr → grayed out (session alive, just backgrounded)
-    // Beyond 8hr: removed from roster entirely by server TTL
-    const ACTIVE_THRESHOLD_MS = 45 * 1000;
+    // Active threshold: heartbeat within last 90s → full green
+    // (Allows one missed 60s beat before turning gray — prevents flicker on slow networks)
+    // Idle threshold: beyond 90s but still in roster (TTL=300s) → grayed out
+    const ACTIVE_THRESHOLD_MS = 90 * 1000; // 90s = 2× 45s HB interval — green if beat within 90s
     const _nowTs = Date.now();
 
     function pills(arr){
@@ -4124,7 +4124,7 @@ async function boot(){
         try{
           const active = isGlobalOverrideActive();
           const canView = isSA || active;
-          if(card) card.style.display = canView ? '' : 'none';
+          if(card) { card.style.display = canView ? '' : 'none'; if(canView) _revealAdminSection(); }
           if(openMailboxTimeBtn) openMailboxTimeBtn.disabled = (!isSA && !active);
         }catch(_){ }
       };
@@ -4425,10 +4425,20 @@ async function boot(){
       };
     }
 
+    // Helper: show admin section header + row when any admin card is visible
+    function _revealAdminSection(){
+      try{
+        const lbl = document.getElementById('stngsAdminLabel');
+        const row = document.getElementById('stngsAdminRow');
+        if(lbl) lbl.style.display = '';
+        if(row) row.style.display = '';
+      }catch(_){}
+    }
+
     try{
       const sysCard = document.getElementById('systemCheckCard');
       const openSysBtn = document.getElementById('openSystemCheckBtn');
-      if(sysCard && (isSA || isSU)) sysCard.style.display = '';
+      if(sysCard && (isSA || isSU)){ sysCard.style.display = ''; _revealAdminSection(); }
       if(openSysBtn && (isSA || isSU)){
         bindSystemCheckModal(user);
         openSysBtn.onclick = ()=>{
@@ -4444,7 +4454,7 @@ async function boot(){
       if (isSA) {
         const gqbCard = document.getElementById('globalQbSettingsCard');
         const openGqbBtn = document.getElementById('openGlobalQbSettingsBtn');
-        if (gqbCard) gqbCard.style.display = '';
+        if (gqbCard) { gqbCard.style.display = ''; _revealAdminSection(); }
 
         function parseQbLink(url) {
           const out = { realm: '', tableId: '', qid: '' };
@@ -4710,7 +4720,7 @@ async function boot(){
         const lmRadios  = ()=> document.querySelectorAll('input[name="loginModeChoice"]');
         const lmOptLabels = { both: document.getElementById('loginModeOpt_both'), password: document.getElementById('loginModeOpt_password'), microsoft: document.getElementById('loginModeOpt_microsoft') };
 
-        if(lmCard) lmCard.style.display = '';
+        if(lmCard){ lmCard.style.display = ''; _revealAdminSection(); }
 
         // Highlight active option label
         const highlightSelected = (mode) => {
@@ -4889,7 +4899,7 @@ async function boot(){
 
     try{
       if(!window.__mumsOnlineBarTimer){
-        window.__mumsOnlineBarTimer = setInterval(()=>{ try{ renderOnlineUsersBar(); }catch(_){ } }, 10000);
+        window.__mumsOnlineBarTimer = setInterval(()=>{ try{ renderOnlineUsersBar(); }catch(_){ } }, 60000); // local render, no DB — 60s
       }
     }catch(_){ }
 
@@ -4993,7 +5003,7 @@ async function boot(){
 
     UI.els('[data-close="topAnnModal"]').forEach(b=>b.onclick=()=>UI.closeModal('topAnnModal'));
 
-    setInterval(()=>{ try{ renderSideLogs(Auth.getUser()||user); }catch(e){} }, 5000);
+    setInterval(()=>{ try{ renderSideLogs(Auth.getUser()||user); }catch(e){} }, 300000); // local render, no DB — 5min
     setInterval(()=>{ try{ renderUserCard(Auth.getUser()||user); }catch(e){} }, 60000);
 
     window.addEventListener('mums:store', ()=>{

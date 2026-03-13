@@ -6407,3 +6407,354 @@ body[data-theme="ivory_executive"] .page-btn.active { background: #1e40af !impor
 body[data-theme="ivory_executive"] .locked-below { color: rgba(26,26,46,.6) !important; }
 body[data-theme="ivory_executive"] .locked-overlay { background: rgba(245,245,242,.8) !important; border: 1px dashed #d4d4ce !important; color: #8a8a9a !important; border-radius: 8px !important; }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SETTINGS MODAL — Premium Redesign
+   Uses CSS variables only — adapts to ALL themes automatically
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Panel shell ─────────────────────────────────────────────────────────── */
+.stngs-panel {
+  width: min(680px, 100%);
+  max-height: min(88vh, 860px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: 22px;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.stngs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.stngs-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.stngs-header-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(var(--primary-rgb, 37,99,235), 0.12);
+  color: var(--primary);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.stngs-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.2;
+}
+.stngs-subtitle {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 1px;
+  font-weight: 500;
+}
+.stngs-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background .13s, color .13s, border-color .13s;
+  flex-shrink: 0;
+}
+.stngs-close-btn:hover {
+  background: rgba(255,255,255,.08);
+  color: var(--text);
+  border-color: rgba(255,255,255,.18);
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+.stngs-body {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 18px 20px 22px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.12) transparent;
+}
+.stngs-body::-webkit-scrollbar { width: 4px; }
+.stngs-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 99px; }
+
+/* ── Section labels ──────────────────────────────────────────────────────── */
+.stngs-section-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted2, var(--muted));
+  padding: 14px 2px 8px;
+}
+.stngs-section-label:first-child { padding-top: 2px; }
+
+/* ── Row grid ────────────────────────────────────────────────────────────── */
+.stngs-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+/* ── Tile base ───────────────────────────────────────────────────────────── */
+.stngs-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,.03);
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  font: inherit;
+  transition: background .14s, border-color .14s, transform .08s;
+  position: relative;
+  min-width: 0;
+}
+.stngs-tile:hover {
+  background: rgba(255,255,255,.07);
+  border-color: rgba(255,255,255,.18);
+  transform: translateY(-1px);
+}
+.stngs-tile:active { transform: translateY(0); }
+
+/* Featured tile (Profile) — subtle accent border */
+.stngs-tile-featured {
+  border-color: rgba(var(--primary-rgb, 37,99,235), 0.35);
+  background: rgba(var(--primary-rgb, 37,99,235), 0.05);
+}
+.stngs-tile-featured:hover {
+  border-color: rgba(var(--primary-rgb, 37,99,235), 0.55);
+  background: rgba(var(--primary-rgb, 37,99,235), 0.09);
+}
+
+/* ── Tile icon ───────────────────────────────────────────────────────────── */
+.stngs-tile-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: transform .14s;
+}
+.stngs-tile:hover .stngs-tile-icon { transform: scale(1.06); }
+
+/* Icon color variants — each picks a subtle tint from the palette */
+.stngs-icon-profile  { background: rgba(99,102,241,.15); color: #818cf8; }
+.stngs-icon-sound    { background: rgba(16,185,129,.13); color: #34d399; }
+.stngs-icon-theme    { background: rgba(245,158,11,.13); color: #fbbf24; }
+.stngs-icon-cursor   { background: rgba(236,72,153,.13); color: #f472b6; }
+.stngs-icon-sidebar  { background: rgba(59,130,246,.13); color: #60a5fa; }
+.stngs-icon-links    { background: rgba(14,165,233,.13);  color: #38bdf8; }
+.stngs-icon-clocks   { background: rgba(168,85,247,.13); color: #c084fc; }
+.stngs-icon-data     { background: rgba(245,158,11,.13); color: #fbbf24; }
+.stngs-icon-time     { background: rgba(249,115,22,.13); color: #fb923c; }
+.stngs-icon-system   { background: rgba(239,68,68,.13);  color: #f87171; }
+.stngs-icon-qb       { background: rgba(16,185,129,.13); color: #34d399; }
+.stngs-icon-login    { background: rgba(99,102,241,.15); color: #818cf8; }
+
+/* ── Tile text ───────────────────────────────────────────────────────────── */
+.stngs-tile-content {
+  flex: 1;
+  min-width: 0;
+}
+.stngs-tile-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stngs-tile-desc {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Arrow ───────────────────────────────────────────────────────────────── */
+.stngs-tile-arrow {
+  color: var(--muted2, var(--muted));
+  flex-shrink: 0;
+  opacity: .5;
+  transition: opacity .14s, transform .14s;
+}
+.stngs-tile:hover .stngs-tile-arrow {
+  opacity: .85;
+  transform: translateX(2px);
+}
+/* Arrow used as inner button (for card-style tiles that aren't full buttons) */
+.stngs-tile-inner-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background .13s, color .13s;
+}
+.stngs-tile:hover .stngs-tile-inner-btn { background: rgba(255,255,255,.07); color: var(--text); }
+
+/* ── World Clocks dual-action tile ──────────────────────────────────────── */
+.stngs-tile-extra-action { flex-shrink: 0; }
+.stngs-tile-chip {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,.06);
+  color: var(--muted);
+  cursor: pointer;
+  letter-spacing: .01em;
+  transition: background .12s, color .12s, border-color .12s;
+  white-space: nowrap;
+}
+.stngs-tile-chip:hover {
+  background: rgba(255,255,255,.12);
+  color: var(--text);
+  border-color: rgba(255,255,255,.22);
+}
+
+/* ── Login mode expanded tile ────────────────────────────────────────────── */
+.stngs-tile-login-mode {
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  cursor: default;
+}
+.stngs-tile-login-mode:hover { transform: none; }
+.stngs-login-mode-content { flex: 1; min-width: 0; }
+.stngs-login-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+}
+.stngs-radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background .11s, border-color .11s;
+}
+.stngs-radio:hover { background: rgba(255,255,255,.05); border-color: var(--border); }
+.stngs-radio input[type=radio] {
+  accent-color: var(--primary);
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.stngs-radio-dot { display: none; }
+.stngs-radio-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+.stngs-radio-sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.stngs-login-save-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* ── Card-style non-button tiles (admin) ─────────────────────────────────── */
+div.stngs-tile { cursor: default; }
+div.stngs-tile:hover { transform: none; }
+
+/* ── Mobile ──────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .stngs-row { grid-template-columns: 1fr; }
+  .stngs-panel { border-radius: 16px; }
+  .stngs-tile-login-mode { grid-column: auto; }
+}
+
+/* ── FORCE REFRESH "ACTIVE" BUTTON ──────────────────────────────────────── */
+.qb-btn-force-refresh {
+  background: rgba(16,185,129,0.10);
+  color: #34d399;
+  border: 1px solid rgba(16,185,129,0.28);
+  font-weight: 700;
+  letter-spacing: .02em;
+  transition: background .14s, border-color .14s, color .14s, transform .08s;
+  position: relative;
+  overflow: hidden;
+}
+.qb-btn-force-refresh::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at center, rgba(16,185,129,.18) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity .2s;
+  pointer-events: none;
+}
+.qb-btn-force-refresh:hover {
+  background: rgba(16,185,129,0.18);
+  border-color: rgba(16,185,129,0.5);
+  color: #6ee7b7;
+  transform: translateY(-1px);
+}
+.qb-btn-force-refresh:hover::before { opacity: 1; }
+.qb-btn-force-refresh:active { transform: translateY(0) scale(0.97); }
+.qb-btn-force-refresh:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+/* Fetching state — amber pulsing */
+.qb-btn-force-refresh.qb-force-fetching {
+  background: rgba(245,158,11,0.12);
+  border-color: rgba(245,158,11,0.35);
+  color: #fbbf24;
+}
+/* Success pulse — brief green flash */
+.qb-btn-force-refresh.qb-force-success {
+  background: rgba(16,185,129,0.22);
+  border-color: rgba(16,185,129,0.6);
+  color: #6ee7b7;
+  animation: qb-force-pulse 0.4s ease-out;
+}
+@keyframes qb-force-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
+  70%  { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+  100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+}

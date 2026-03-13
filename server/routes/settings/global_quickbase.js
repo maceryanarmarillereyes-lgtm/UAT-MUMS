@@ -8,7 +8,7 @@ const { readGlobalQuickbaseSettings, writeGlobalQuickbaseSettings } = require('.
 // Invalidated immediately on any POST/PATCH write.
 let _settingsCache = null;
 let _settingsCacheAt = 0;
-const SETTINGS_CACHE_TTL_MS = 30 * 1000; // 30 seconds
+const SETTINGS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes — reduced DB reads for 30+ users
 
 function sendJson(res, statusCode, body) {
   res.statusCode = statusCode;

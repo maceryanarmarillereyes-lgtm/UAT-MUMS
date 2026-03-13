@@ -32,7 +32,9 @@ function envFromProcess() {
 // Returns online roster for authenticated users.
 module.exports = async (req, res) => {
   try {
-    res.setHeader('Cache-Control', 'no-store');
+    // 30s cache — presence data is polled every 60s anyway.
+    // Allows browser to deduplicate rapid calls (e.g. tab switch + poll coincidence).
+    res.setHeader('Cache-Control', 'private, max-age=30');
     if (req.method !== 'GET') return sendJson(res, 405, { ok: false, error: 'method_not_allowed' });
 
     const auth = String(req.headers.authorization || '');
@@ -59,7 +61,9 @@ try {
     const ttl = Number.isFinite(env.PRESENCE_TTL_SECONDS) ? env.PRESENCE_TTL_SECONDS : 25;
     const cutoff = new Date(Date.now() - ttl * 1000).toISOString();
 
-    const select = 'client_id,user_id,name,role,team_id,route,last_seen';
+    // Lean payload — omit 'route' field (not used by online bar renderer)
+    // saves ~15-20 bytes per row × 30 users × thousands of fetches/month
+    const select = 'client_id,user_id,name,role,team_id,last_seen';
     const q = `select=${select}&last_seen=gte.${encodeURIComponent(cutoff)}&order=last_seen.desc&limit=300`;
 
     const out = await serviceSelect('mums_presence', q);
@@ -145,7 +149,8 @@ const rows = Array.from(bestByKey.values()).sort((a, b) => toMs(b.last_seen || b
       }
     } catch (_) {}
 
-    return sendJson(res, 200, { ok: true, ttlSeconds: ttl, rows });
+    // Compact response — strip ttlSeconds (client doesn't use it at runtime)
+    return sendJson(res, 200, { ok: true, rows });
   } catch (err) {
     return sendJson(res, 500, { ok: false, error: 'list_failed', message: String(err && err.message ? err.message : err) });
   }

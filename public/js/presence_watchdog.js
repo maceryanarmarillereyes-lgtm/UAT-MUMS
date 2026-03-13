@@ -29,9 +29,17 @@
   'use strict';
 
   // ── CONFIG ──────────────────────────────────────────────────────────────────
-  var WATCHDOG_POLL_MS     = 8000;   // Secondary poll interval (ms) — backs up main client
-  var WATCHDOG_GAP_MS      = 12000;  // If last beat > this ago, fire immediately on wakeup
-  var ACTIVITY_DEBOUNCE_MS = 20000;  // Min gap between activity-triggered beats
+  // ── EGRESS-OPTIMIZED INTERVALS ─────────────────────────────────────────────
+  // Watchdog only fires HB (heartbeat) — roster fetches delegated to presence_client.js
+  // at 60s to avoid double-counting bandwidth.
+  // Watchdog HB at 30s = 2× per minute per user = ~0.06 GB/month for 30 users.
+  // ── CALIBRATED for 45s HB interval + 360s TTL ──────────────────────────
+  // Watchdog fires HB only — roster fetch stays with presence_client (90s)
+  // Gap threshold = 1.5× main HB interval: fires immediately if 67s+ since last beat
+  // This ensures user never misses more than 1 HB before watchdog recovers it
+  var WATCHDOG_POLL_MS     = 45000;  // 45s — matches main HB interval (backup only)
+  var WATCHDOG_GAP_MS      = 67000;  // Fire if >67s since last beat (1.5× 45s interval)
+  var ACTIVITY_DEBOUNCE_MS = 90000;  // Activity-triggered HB max 1 per 90s
   var STORAGE_KEY          = 'mums_watchdog_last_hb';
   var CLIENT_ID_KEY        = 'mums_client_id';
 
@@ -112,8 +120,10 @@
 
       if (res.ok) {
         writeLastBeat(now());
-        // Also immediately refresh the roster so the bar updates right away
-        triggerRosterRefresh();
+        // NOTE: We intentionally do NOT call triggerRosterRefresh() here.
+        // presence_client.js already polls the roster every 60s.
+        // Calling it here too would double the egress. The bar will update
+        // within 60s naturally, or instantly on visibility restore.
       }
     } catch (_) {
       // Silent — best-effort
@@ -190,11 +200,11 @@
 
   function onBecomeVisible() {
     var hidden = now() - hiddenAt;
-    // If hidden for more than WATCHDOG_GAP_MS, our previous heartbeats may have
-    // been skipped by the browser timer throttle → fire immediately
     var stale = (now() - (readLastBeat() || lastBeatAt)) > WATCHDOG_GAP_MS;
     if (stale || hidden > WATCHDOG_GAP_MS) {
       fireHeartbeat('visibility-restore');
+      // One-shot roster refresh on wakeup is acceptable (user needs to see current state)
+      triggerRosterRefresh();
     }
   }
 

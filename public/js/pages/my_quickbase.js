@@ -816,7 +816,7 @@
       _qbLayoutGuardObs.observe(root, { childList: true });
     } catch (_) {}
 
-    const AUTO_REFRESH_MS = 60000; // 60-second auto-refresh (was 10s — reduced to cut QB API load by 6x)
+    const AUTO_REFRESH_MS = 300000; // 5-min auto-refresh — was 60s (5× reduction). Egress optimization for Free Plan.
     const me = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
     const tabManager = (window.TabManager && typeof window.TabManager.init === 'function')
       ? window.TabManager.init({ userId: me && me.id, apiBaseUrl: '/api' })
@@ -1586,6 +1586,10 @@
             <button class="qb-btn qb-btn-ghost" id="qbReloadBtn" type="button">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
               Reload
+            </button>
+            <button class="qb-btn qb-btn-force-refresh" id="qbForceRefreshBtn" type="button" title="Force live fetch from Quickbase — bypasses 5-min auto-refresh">
+              <svg id="qbForceRefreshIcon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+              <span id="qbForceRefreshLabel">Active</span>
             </button>
             <button class="qb-btn qb-btn-primary" id="qbOpenSettingsBtn" type="button">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -2641,6 +2645,57 @@
       if (event.target && event.target.id === 'qbSettingsModal') cleanupModalBindings();
     });
     root.querySelector('#qbReloadBtn').onclick = () => loadQuickbaseData({ applyFilters: true });
+
+    // ── FORCE REFRESH "ACTIVE" BUTTON — wired once ──────────────────────────
+    // Manual force-fetch from Quickbase. Bypasses the 300s auto-refresh.
+    // Use case: user needs latest data immediately without waiting for next cycle.
+    // Behavior:
+    //   1. Kills any in-flight request (same as cache badge)
+    //   2. Clears ALL tab caches (not just active tab)
+    //   3. Triggers live fetch: forceRefresh:true + applyFilters:true
+    //   4. Button shows spinning animation + "Fetching…" label while loading
+    //   5. Reverts to "Active" with pulse animation on success
+    const _forceRefreshBtn = root.querySelector('#qbForceRefreshBtn');
+    const _forceRefreshIcon = root.querySelector('#qbForceRefreshIcon');
+    const _forceRefreshLabel = root.querySelector('#qbForceRefreshLabel');
+    let _forceRefreshCooldown = false;
+
+    if (_forceRefreshBtn) {
+      _forceRefreshBtn.addEventListener('click', async () => {
+        if (_forceRefreshCooldown) return;
+        _forceRefreshCooldown = true;
+
+        // Visual: spinning state
+        _forceRefreshBtn.classList.add('qb-force-fetching');
+        if (_forceRefreshIcon) _forceRefreshIcon.classList.add('qb-spin');
+        if (_forceRefreshLabel) _forceRefreshLabel.textContent = 'Fetching…';
+        _forceRefreshBtn.disabled = true;
+
+        try {
+          // Kill inflight + clear ALL caches across all tabs
+          quickbaseLoadInFlight = null;
+          if (state.qbCache) { Object.keys(state.qbCache).forEach(k => { delete state.qbCache[k]; }); }
+          if (state._tabDataCache) { Object.keys(state._tabDataCache).forEach(k => { delete state._tabDataCache[k]; }); }
+
+          await loadQuickbaseData({ forceRefresh: true, applyFilters: true, silent: false });
+
+          // Visual: success pulse
+          _forceRefreshBtn.classList.remove('qb-force-fetching');
+          _forceRefreshBtn.classList.add('qb-force-success');
+          if (_forceRefreshIcon) _forceRefreshIcon.classList.remove('qb-spin');
+          if (_forceRefreshLabel) _forceRefreshLabel.textContent = 'Active';
+          setTimeout(() => { _forceRefreshBtn.classList.remove('qb-force-success'); }, 1500);
+        } catch (_) {
+          _forceRefreshBtn.classList.remove('qb-force-fetching');
+          if (_forceRefreshIcon) _forceRefreshIcon.classList.remove('qb-spin');
+          if (_forceRefreshLabel) _forceRefreshLabel.textContent = 'Active';
+        } finally {
+          _forceRefreshBtn.disabled = false;
+          // 10s cooldown — prevent spam clicking
+          setTimeout(() => { _forceRefreshCooldown = false; }, 10000);
+        }
+      });
+    }
 
     // ── CACHE BADGE CLICK — wired once, permanent. ─────────────────────────
     // Cannot use onclick set inside updateDataFreshnessBadge because the

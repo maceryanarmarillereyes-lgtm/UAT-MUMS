@@ -9,6 +9,26 @@ function sendJson(res, statusCode, body) {
   res.end(JSON.stringify(body));
 }
 
+// ── HB DEDUP CACHE ────────────────────────────────────────────────────────
+// Prevents multiple tabs / watchdog + presence_client from writing duplicate
+// rows to mums_presence within a short window. Skips the DB upsert and
+// returns 200 early — saves ~50% of heartbeat DB writes.
+const _hbCache = new Map();
+const HB_DEDUP_MS = 20000; // 20s — skip DB write if same client HB'd recently
+
+function _hbDedup(clientId) {
+  const now = Date.now();
+  const last = _hbCache.get(clientId) || 0;
+  if ((now - last) < HB_DEDUP_MS) return true; // duplicate, skip
+  _hbCache.set(clientId, now);
+  // Cleanup old entries every 500 calls to prevent unbounded growth
+  if (_hbCache.size > 500) {
+    const cutoff = now - HB_DEDUP_MS * 3;
+    for (const [k, v] of _hbCache) { if (v < cutoff) _hbCache.delete(k); }
+  }
+  return false;
+}
+
 
 function normalizeTeamId(v) {
   const s = String(v == null ? '' : v).trim();
@@ -185,6 +205,11 @@ module.exports = async (req, res) => {
       last_seen: new Date().toISOString()
     };
 
+
+    // Skip DB write if this client heartbeated within the last 20s (dedup window)
+    if (_hbDedup(clientId)) {
+      return sendJson(res, 200, { ok: true, deduped: true });
+    }
 
     let up = await serviceUpsert('mums_presence', [record], 'client_id');
     if (!up.ok) {
