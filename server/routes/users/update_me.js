@@ -540,6 +540,7 @@ module.exports = async (req, res) => {
     const allowedFields = [
       'name',
       'duty',
+      'qb_name',      // SUPER_ADMIN: Quickbase "Assigned To" display name
       'qb_token',
       'qb_report_link',
       'qb_qid',
