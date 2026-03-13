@@ -853,21 +853,31 @@
     await refreshProfileFromCloud();
     profile = (me && window.Store && Store.getProfile) ? (Store.getProfile(me.id) || {}) : {};
 
-    // FIX: If Store has no qb_name yet, try fetching directly from /api/users/list
-    // This handles the case where the SA just saved a qb_name and the user navigates
-    // to My Quickbase before the Store has been refreshed by the realtime sync.
+    // FIX: If Store has no qb_name, check Store.getUsers() first (populated by
+    // refreshIntoLocalStore which maps qb_name into the users array).
+    // Then fallback to a direct /api/users/me fetch.
+    // This handles: SA sets qb_name → realtime sync arrives → user opens My QB.
     if (me && !String(profile.qb_name || '').trim()) {
       try {
+        // 1. Check Store.getUsers() — refreshIntoLocalStore maps qb_name here
+        const storeUser = window.Store && Store.getUsers
+          ? (Store.getUsers() || []).find(u => u && String(u.id || '') === String(me.id || ''))
+          : null;
+        if (storeUser && String(storeUser.qb_name || '').trim()) {
+          profile = Object.assign({}, profile, { qb_name: storeUser.qb_name });
+        }
+      } catch(_) {}
+    }
+    if (me && !String(profile.qb_name || '').trim()) {
+      try {
+        // 2. Final fallback: direct API call — catches cold-start / stale Store
         const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
-        const r = await fetch('/api/users/list', { headers: { Authorization: 'Bearer ' + tok } });
+        const r = await fetch('/api/users/me', { headers: { Authorization: 'Bearer ' + tok } });
         const d = await r.json().catch(() => ({}));
-        if (d.ok && Array.isArray(d.rows)) {
-          const myRow = d.rows.find(row => row && String(row.user_id || '') === String(me.id || ''));
-          if (myRow && String(myRow.qb_name || '').trim()) {
-            profile = Object.assign({}, profile, { qb_name: myRow.qb_name });
-            if (window.Store && typeof Store.setProfile === 'function') {
-              Store.setProfile(me.id, Object.assign({}, profile, { updatedAt: Date.now() }));
-            }
+        if (d.ok && d.profile && String(d.profile.qb_name || '').trim()) {
+          profile = Object.assign({}, profile, { qb_name: d.profile.qb_name });
+          if (window.Store && typeof Store.setProfile === 'function') {
+            Store.setProfile(me.id, Object.assign({}, profile, { updatedAt: Date.now() }));
           }
         }
       } catch(_) {}

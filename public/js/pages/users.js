@@ -850,31 +850,12 @@ function openUserModal(actor, user){
           }catch(_){ createdEvent = { type:'user_created', ts: Date.now(), userId:'', teamId: String(teamId||'') }; }
         }
 
+        // ── REFRESH STORE after save ─────────────────────────────────────────
+        // refreshIntoLocalStore() fetches /api/users/list and maps qb_name into
+        // the Store.getUsers() array. This MUST be awaited BEFORE renderRows() and
+        // BEFORE Edit modal re-opens, otherwise Store still has the stale user object
+        // (without qb_name) and the QB Name dropdown shows "— Not Assigned —".
         try { await CloudUsers.refreshIntoLocalStore(); } catch(_) {}
-
-        // FIX: After saving qb_name, the target user's profile must be refreshed
-        // in the local Store. refreshIntoLocalStore() re-fetches the users list but
-        // does NOT refresh individual profile objects used by Edit User + My Quickbase.
-        // Without this, qb_name appears blank when reopening Edit User.
-        try {
-          if (isEdit && user && user.id && window.Store && typeof Store.setProfile === 'function') {
-            const listOut = await fetch('/api/users/list', {
-              headers: {
-                'Authorization': window.CloudAuth && typeof CloudAuth.accessToken === 'function'
-                  ? 'Bearer ' + CloudAuth.accessToken() : ''
-              }
-            });
-            if (listOut.ok) {
-              const listData = await listOut.json().catch(() => ({}));
-              if (listData.ok && Array.isArray(listData.rows)) {
-                listData.rows.forEach(row => {
-                  if (!row || !row.user_id) return;
-                  Store.setProfile(row.user_id, Object.assign({}, row, { updatedAt: Date.now() }));
-                });
-              }
-            }
-          }
-        } catch(_) {}
 
         // Broadcast to other devices via realtime/sync queue.
         try{
