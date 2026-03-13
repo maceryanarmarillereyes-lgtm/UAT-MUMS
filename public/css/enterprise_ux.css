@@ -6758,3 +6758,110 @@ div.stngs-tile:hover { transform: none; }
   70%  { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
   100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   QB SETTINGS — BYPASS GLOBAL TOGGLE + PERSONAL REPORT CONFIG
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Bypass row: toggle strip at top of modal */
+.qb-bypass-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  background: rgba(99,102,241,.07);
+  border-bottom: 1px solid rgba(99,102,241,.2);
+  border-top: 1px solid rgba(99,102,241,.12);
+}
+.qb-bypass-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: rgba(165,168,255,.9);
+  flex: 1;
+  min-width: 0;
+}
+.qb-bypass-info svg { flex-shrink: 0; margin-top: 2px; }
+.qb-bypass-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: rgba(200,202,255,.95);
+  line-height: 1.2;
+}
+.qb-bypass-desc {
+  font-size: 11px;
+  color: rgba(148,163,184,.75);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+/* Toggle switch */
+.qb-toggle {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.qb-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.qb-toggle-track {
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.15);
+  transition: background .2s, border-color .2s;
+  position: relative;
+}
+.qb-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.55);
+  transition: transform .2s, background .2s;
+}
+.qb-toggle input:checked ~ .qb-toggle-track {
+  background: rgba(99,102,241,.75);
+  border-color: rgba(99,102,241,.6);
+}
+.qb-toggle input:checked ~ .qb-toggle-track .qb-toggle-thumb {
+  transform: translateX(18px);
+  background: #fff;
+}
+
+/* Report Config tab accent */
+.qb-modal-tab[data-qb-settings-tab="report-config"] {
+  color: rgba(165,168,255,.85);
+  border-color: rgba(99,102,241,.35) !important;
+}
+.qb-modal-tab[data-qb-settings-tab="report-config"].active {
+  color: #a5a8ff;
+  background: rgba(99,102,241,.15);
+  border-color: rgba(99,102,241,.5) !important;
+}
+
+/* Bypass section num badge */
+.qb-bypass-num {
+  background: rgba(99,102,241,.25) !important;
+  color: #a5a8ff !important;
+  border-color: rgba(99,102,241,.35) !important;
+}
+
+/* Bypass notice banner inside report config section */
+.qb-bypass-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(99,102,241,.08);
+  border: 1px solid rgba(99,102,241,.2);
+  border-radius: 10px;
+  font-size: 12px;
+  color: rgba(165,168,255,.85);
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+.qb-bypass-notice svg { flex-shrink: 0; margin-top: 1px; color: rgba(165,168,255,.7); }

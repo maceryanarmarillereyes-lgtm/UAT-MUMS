@@ -243,6 +243,9 @@
       qid: hasReportLink ? String(src.qid || src.qb_qid || parsed.qid || base.qid || '').trim() : '',
       tableId: hasReportLink ? String(src.tableId || src.qb_table_id || parsed.tableId || base.tableId || '').trim() : '',
       realm: hasReportLink ? String(src.realm || src.qb_realm || parsed.realm || base.realm || '').trim() : '',
+      // bypassGlobal: when true, this tab uses its own reportLink + profile.qb_token
+      // instead of the Global QB Settings. Each tab is independent.
+      bypassGlobal: !!(src.bypassGlobal || base.bypassGlobal || false),
       dashboard_counters: deepClone(normalizeDashboardCounters(src.dashboard_counters || src.dashboardCounters || base.dashboard_counters || [])),
       customColumns: deepClone(Array.isArray(src.customColumns || src.qb_custom_columns || base.customColumns)
         ? (src.customColumns || src.qb_custom_columns || base.customColumns).map((v) => String(v))
@@ -1395,7 +1398,7 @@
     }
 
     function setSettingsModalView(viewKey) {
-      const allowedViews = new Set(['custom-columns', 'filter-config', 'dashboard-counters']);
+      const allowedViews = new Set(['report-config', 'custom-columns', 'filter-config', 'dashboard-counters']);
       const nextView = allowedViews.has(String(viewKey || '').trim()) ? String(viewKey).trim() : 'custom-columns';
       state.settingsModalView = nextView;
 
@@ -1669,13 +1672,69 @@
             </button>
           </div>
 
+          <!-- BYPASS GLOBAL TOGGLE -->
+          <div id="qbBypassRow" class="qb-bypass-row">
+            <div class="qb-bypass-info">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <div>
+                <div class="qb-bypass-label">Use Personal QB Config for this tab</div>
+                <div class="qb-bypass-desc">Bypass Global QB Settings — use your own Report URL &amp; QB Token for this tab only</div>
+              </div>
+            </div>
+            <label class="qb-toggle" title="Toggle personal QB config for this tab">
+              <input type="checkbox" id="qbBypassToggle" />
+              <span class="qb-toggle-track"><span class="qb-toggle-thumb"></span></span>
+            </label>
+          </div>
+
           <div class="qb-modal-tabs">
+            <button type="button" class="qb-modal-tab qb-bypass-only" id="qbTabReportConfig" data-qb-settings-tab="report-config" style="display:none">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:4px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Report Config
+            </button>
             <button type="button" class="qb-modal-tab active" data-qb-settings-tab="custom-columns">Custom Columns</button>
             <button type="button" class="qb-modal-tab" data-qb-settings-tab="filter-config">Filter Config</button>
             <button type="button" class="qb-modal-tab" data-qb-settings-tab="dashboard-counters">Dashboard Counters</button>
           </div>
 
           <div class="qb-modal-body">
+
+            <!-- REPORT CONFIG (only visible when bypassGlobal=true) -->
+            <section class="qb-modal-section qb-bypass-only" data-qb-settings-view="report-config" style="display:none;">
+              <div class="qb-section-title"><span class="qb-section-num qb-bypass-num">★</span>Personal Report Config</div>
+              <div class="qb-bypass-notice">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                This tab uses your personal QB config. Other tabs still use Global QB Settings.
+              </div>
+              <div class="qb-field" style="margin-bottom:14px;">
+                <label class="qb-field-label">Report Link (URL)</label>
+                <input class="qb-field-input" id="qbBypassReportLink" type="text" placeholder="https://yourcompany.quickbase.com/nav/app/..." autocomplete="off" />
+                <div style="margin-top:6px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                  <div>
+                    <div class="qb-field-label" style="font-size:10px;margin-bottom:3px;">Realm (auto-filled)</div>
+                    <input class="qb-field-input" id="qbBypassRealm" type="text" placeholder="Auto" readonly style="font-size:11px;opacity:.7;"/>
+                  </div>
+                  <div>
+                    <div class="qb-field-label" style="font-size:10px;margin-bottom:3px;">Table ID (auto-filled)</div>
+                    <input class="qb-field-input" id="qbBypassTableId" type="text" placeholder="Auto" readonly style="font-size:11px;opacity:.7;"/>
+                  </div>
+                  <div>
+                    <div class="qb-field-label" style="font-size:10px;margin-bottom:3px;">QID (auto-filled)</div>
+                    <input class="qb-field-input" id="qbBypassQid" type="text" placeholder="Auto" readonly style="font-size:11px;opacity:.7;"/>
+                  </div>
+                </div>
+              </div>
+              <div class="qb-field">
+                <label class="qb-field-label">
+                  Personal QB Token
+                  <span style="font-size:10px;opacity:.6;margin-left:6px;">(Secured — stored in your profile)</span>
+                </label>
+                <input class="qb-field-input" id="qbBypassToken" type="password" placeholder="Enter your personal QB User Token" autocomplete="new-password" />
+                <div style="margin-top:5px;font-size:11px;opacity:.55;">
+                  ⚡ Realm, Table ID and QID auto-fill from the Report Link URL
+                </div>
+              </div>
+            </section>
 
             <section class="qb-modal-section" data-qb-settings-view="custom-columns">
               <div class="qb-section-title"><span class="qb-section-num">1</span>Custom Columns</div>
@@ -2104,10 +2163,19 @@
       // FIX[QB-NameFilter]: Fall back to globalQbSettings for qid/tableId/realm.
       // New users / new tabs have empty tab-level settings — without this fallback
       // the field list stays empty and the Settings modal shows "Load data first".
-      const parsed = parseQuickbaseLink(String(globalQbSettings.reportLink || tabSettings.reportLink || ''));
-      const qid = String(globalQbSettings.qid || tabSettings.qid || parsed.qid || '').trim();
-      const tableId = String(globalQbSettings.tableId || tabSettings.tableId || parsed.tableId || '').trim();
-      const realm = String(globalQbSettings.realm || tabSettings.realm || parsed.realm || '').trim();
+      const _isBypassTab = !!(tabSettings.bypassGlobal);
+      const parsed = parseQuickbaseLink(String(
+        _isBypassTab ? (tabSettings.reportLink || '') : (globalQbSettings.reportLink || tabSettings.reportLink || '')
+      ));
+      const qid = _isBypassTab
+        ? String(tabSettings.qid || parsed.qid || '').trim()
+        : String(globalQbSettings.qid || tabSettings.qid || parsed.qid || '').trim();
+      const tableId = _isBypassTab
+        ? String(tabSettings.tableId || parsed.tableId || '').trim()
+        : String(globalQbSettings.tableId || tabSettings.tableId || parsed.tableId || '').trim();
+      const realm = _isBypassTab
+        ? String(tabSettings.realm || parsed.realm || '').trim()
+        : String(globalQbSettings.realm || tabSettings.realm || parsed.realm || '').trim();
 
       if (!qid || !tableId || !realm) {
         state.allAvailableFields = [];
@@ -2153,7 +2221,10 @@
       // The outer guard was only checking the tab-level reportLink and returning
       // early before the inner logic could apply the global report link.
       // Members with a qb_name set should auto-load using the global report config.
-      const activeReportLink = String(globalQbSettings.reportLink || stateTabSettingsForGuard.reportLink || '').trim();
+      const _guardBypassed = !!(stateTabSettingsForGuard.bypassGlobal);
+      const activeReportLink = _guardBypassed
+        ? String(stateTabSettingsForGuard.reportLink || '').trim()
+        : String(globalQbSettings.reportLink || stateTabSettingsForGuard.reportLink || '').trim();
       if (!activeReportLink) {
         const recordsContainer = document.querySelector('[data-qb-records-container]')
           || document.querySelector('.qb-records-body')
@@ -2196,10 +2267,15 @@
             ? createDefaultSettings(state.quickbaseSettings.settingsByTabId[thisLoadTabId], {})
             : createDefaultSettings({}, {});
 
-          // Report Config comes from Global QB Settings — override tab-level reportLink
-          // Tab settings only carry customColumns + customFilters + filterMatch
+          // ── BYPASS or GLOBAL report config resolution ────────────────────
+          // Per-tab isolation: each tab independently decides if it bypasses global.
+          // bypassGlobal=true → use tab's own reportLink + profile.qb_token (via server)
+          // bypassGlobal=false → use Global QB Settings as usual
+          const isTabBypassed = !!(freshTabSettings.bypassGlobal);
           const globalReportLink = String(globalQbSettings.reportLink || '').trim();
-          const effectiveReportLink = globalReportLink || String(freshTabSettings.reportLink || '').trim();
+          const effectiveReportLink = isTabBypassed
+            ? String(freshTabSettings.reportLink || '').trim()
+            : (globalReportLink || String(freshTabSettings.reportLink || '').trim());
 
           const reportLink = effectiveReportLink;
           if (!reportLink) {
@@ -2210,7 +2286,10 @@
             renderColumnGrid();
             renderFilters();
             applySearchAndRender();
-            renderEmptyState(root, 'No records Loaded — Please configure a Report Link in Settings.');
+            const emptyMsg = isTabBypassed
+              ? 'No records — configure your personal Report Link in Settings → Report Config tab.'
+              : 'No records Loaded — Please configure a Report Link in Settings.';
+            renderEmptyState(root, emptyMsg);
             return;
           }
           const shouldApplyFilters = shouldApplyServerFilters(opts);
@@ -2218,11 +2297,17 @@
 
           const tabFilterMatch = normalizeFilterMatch(freshTabSettings.filterMatch);
           const mergedFilters = shouldApplyFilters ? tabCustomFilters : [];
-          // Derive qid/tableId/realm from reportLink if not explicitly set on the tab
+          // Derive qid/tableId/realm — bypass tab uses its own, non-bypass uses global first
           const _tabParsed = parseQuickbaseLink(effectiveReportLink);
-          const activeQid = String(globalQbSettings.qid || freshTabSettings.qid || _tabParsed.qid || '').trim();
-          const activeTableId = String(globalQbSettings.tableId || freshTabSettings.tableId || _tabParsed.tableId || '').trim();
-          const activeRealm = String(globalQbSettings.realm || freshTabSettings.realm || _tabParsed.realm || '').trim();
+          const activeQid = isTabBypassed
+            ? String(freshTabSettings.qid || _tabParsed.qid || '').trim()
+            : String(globalQbSettings.qid || freshTabSettings.qid || _tabParsed.qid || '').trim();
+          const activeTableId = isTabBypassed
+            ? String(freshTabSettings.tableId || _tabParsed.tableId || '').trim()
+            : String(globalQbSettings.tableId || freshTabSettings.tableId || _tabParsed.tableId || '').trim();
+          const activeRealm = isTabBypassed
+            ? String(freshTabSettings.realm || _tabParsed.realm || '').trim()
+            : String(globalQbSettings.realm || freshTabSettings.realm || _tabParsed.realm || '').trim();
           const hasExplicitLoadMore = Number(opts.offset || 0) >= 100;
           const hasActiveSearch = !!String(getActiveSearchTerm() || '').trim();
           const requestLimit = 100;
@@ -2290,6 +2375,7 @@
             ...requestPayload,
             tab_id: activeTabId,
             reportLink,
+            bypassGlobal: isTabBypassed,
             customColumns: Array.isArray(freshTabSettings.customColumns) ? freshTabSettings.customColumns : [],
             customFilters: mergedFilters,
             filterMatch: tabFilterMatch,
@@ -2592,12 +2678,21 @@
       bindFloatingDrag();
       bindReportLinkAutoExtract();
       modalBindingsActive = true;
+      // Sync bypass UI state when opening settings modal
+      const _openTabId = state.settingsEditingTabId || getActiveTabId();
+      const _openTabSettings = createDefaultSettings((state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[_openTabId]) || {}, {});
+      const _isBypassed = !!_openTabSettings.bypassGlobal;
+      applyBypassUIState(_isBypassed);
+      syncBypassInputsFromState();
+
       // FIX[Bug2]: If reportLink is already configured, prefetch fields in realtime so
       // Custom Columns, Filter Config, and Dashboard Counter dropdowns populate immediately
       // without requiring the user to re-type or re-paste the link.
       // FIX[QB-NameFilter]: Also check globalQbSettings.reportLink — members with a
       // qb_name set never have a tab-level reportLink but global settings does.
-      const existingReportLink = String(globalQbSettings.reportLink || state.reportLink || '').trim();
+      const existingReportLink = String(
+        _isBypassed ? (_openTabSettings.reportLink || '') : (globalQbSettings.reportLink || state.reportLink || '')
+      ).trim();
       if (existingReportLink && state.allAvailableFields.length === 0) {
         refreshAvailableFieldsForActiveTab(state.settingsEditingTabId || getActiveTabId()).catch(() => {});
       }
@@ -2675,6 +2770,94 @@
       if (event.target && event.target.id === 'qbSettingsModal') cleanupModalBindings();
     });
     root.querySelector('#qbReloadBtn').onclick = () => loadQuickbaseData({ applyFilters: true });
+
+    // ── BYPASS TOGGLE LOGIC ───────────────────────────────────────────────────
+    // Controls per-tab bypass of Global QB Settings.
+    // When ON: shows Report Config tab, allows personal reportLink + qb_token.
+    // Isolation: each tab stores its own bypassGlobal flag independently.
+
+    function getActiveTabBypassState() {
+      const tabId = getActiveTabId();
+      const s = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId];
+      return !!(s && s.bypassGlobal);
+    }
+
+    function applyBypassUIState(isBypassed) {
+      const toggle = root.querySelector('#qbBypassToggle');
+      const reportConfigTab = root.querySelector('#qbTabReportConfig');
+      const bypassOnlyEls = root.querySelectorAll('.qb-bypass-only');
+      if (toggle) toggle.checked = !!isBypassed;
+      bypassOnlyEls.forEach(el => { el.style.display = isBypassed ? '' : 'none'; });
+      if (reportConfigTab) {
+        reportConfigTab.style.display = isBypassed ? '' : 'none';
+      }
+      // If bypass just turned on, auto-switch to Report Config tab
+      if (isBypassed) {
+        const currentView = state.settingsModalView;
+        if (currentView !== 'report-config') setSettingsModalView('report-config');
+      } else {
+        // If bypass turned off while on report-config, switch to custom-columns
+        if (state.settingsModalView === 'report-config') setSettingsModalView('custom-columns');
+      }
+    }
+
+    function syncBypassInputsFromState() {
+      const tabId = getActiveTabId();
+      const s = createDefaultSettings((state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]) || {}, {});
+      const rlEl = root.querySelector('#qbBypassReportLink');
+      const realmEl = root.querySelector('#qbBypassRealm');
+      const tableEl = root.querySelector('#qbBypassTableId');
+      const qidEl = root.querySelector('#qbBypassQid');
+      if (rlEl) rlEl.value = s.reportLink || '';
+      if (realmEl) realmEl.value = s.realm || '';
+      if (tableEl) tableEl.value = s.tableId || '';
+      if (qidEl) qidEl.value = s.qid || '';
+      // Token: show placeholder only — never expose actual token in UI
+      const tokEl = root.querySelector('#qbBypassToken');
+      if (tokEl) tokEl.placeholder = s.reportLink ? '(token saved — enter new to change)' : 'Enter your personal QB User Token';
+    }
+
+    // Wire bypass toggle
+    const bypassToggle = root.querySelector('#qbBypassToggle');
+    if (bypassToggle) {
+      bypassToggle.addEventListener('change', () => {
+        const tabId = getActiveTabId();
+        const isBypassed = bypassToggle.checked;
+        // Update state for this tab only
+        const prev = createDefaultSettings((state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]) || {}, {});
+        const next = Object.assign({}, prev, { bypassGlobal: isBypassed });
+        state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, { [tabId]: next });
+        applyBypassUIState(isBypassed);
+        syncBypassInputsFromState();
+        queuePersistQuickbaseSettings();
+      });
+    }
+
+    // Wire bypass Report Link auto-extract
+    const bypassRLInput = root.querySelector('#qbBypassReportLink');
+    if (bypassRLInput) {
+      bypassRLInput.addEventListener('input', () => {
+        const tabId = getActiveTabId();
+        const link = bypassRLInput.value.trim();
+        const parsed = parseQuickbaseLink(link);
+        const realmEl = root.querySelector('#qbBypassRealm');
+        const tableEl = root.querySelector('#qbBypassTableId');
+        const qidEl = root.querySelector('#qbBypassQid');
+        if (realmEl) realmEl.value = parsed.realm || '';
+        if (tableEl) tableEl.value = parsed.tableId || '';
+        if (qidEl) qidEl.value = parsed.qid || '';
+        // Update tab settings with parsed values
+        const prev = createDefaultSettings((state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]) || {}, {});
+        const next = Object.assign({}, prev, {
+          bypassGlobal: true,
+          reportLink: link,
+          realm: parsed.realm || prev.realm,
+          tableId: parsed.tableId || prev.tableId,
+          qid: parsed.qid || prev.qid
+        });
+        state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, { [tabId]: next });
+      });
+    }
 
     // ── FORCE REFRESH "ACTIVE" BUTTON — wired once ──────────────────────────
     // Manual force-fetch from Quickbase. Bypasses the 300s auto-refresh.
@@ -2970,19 +3153,40 @@
       if (!me) return;
       const tabSnapshot = scrapeModalTabSnapshot();
       const activeIdx = Number(state.activeTabIndex || 0);
+      const saveTabId = String(getActiveTabId() || '').trim();
+
+      // ── BYPASS: Read bypass toggle + personal config inputs ─────────────
+      const bypassToggleEl = root.querySelector('#qbBypassToggle');
+      const isBypass = !!(bypassToggleEl && bypassToggleEl.checked);
+      const bypassRL   = String((root.querySelector('#qbBypassReportLink') || {}).value || '').trim();
+      const bypassTokEl = root.querySelector('#qbBypassToken');
+      const bypassTok  = String((bypassTokEl && bypassTokEl.value) || '').trim();
+
+      // If bypass ON, merge personal report config into snapshot
+      if (isBypass && bypassRL) {
+        const parsedBypass = parseQuickbaseLink(bypassRL);
+        tabSnapshot.reportLink = bypassRL;
+        tabSnapshot.realm      = parsedBypass.realm || tabSnapshot.realm;
+        tabSnapshot.tableId    = parsedBypass.tableId || tabSnapshot.tableId;
+        tabSnapshot.qid        = parsedBypass.qid || tabSnapshot.qid;
+      }
+      // Always carry bypassGlobal flag in the tab snapshot
+      tabSnapshot.bypassGlobal = isBypass;
+
       if (Array.isArray(state.quickbaseSettings.tabs) && state.quickbaseSettings.tabs[activeIdx]) {
         state.quickbaseSettings.tabs[activeIdx] = deepClone({
           ...state.quickbaseSettings.tabs[activeIdx],
           ...tabSnapshot
         });
       }
-      const activeTabId = String(getActiveTabId() || '').trim();
+      const activeTabId = saveTabId;
       if (activeTabId) {
         state.quickbaseSettings.settingsByTabId = state.quickbaseSettings.settingsByTabId || {};
         const prevTabSettings = createDefaultSettings(state.quickbaseSettings.settingsByTabId[activeTabId] || {}, {});
         state.quickbaseSettings.settingsByTabId[activeTabId] = createDefaultSettings({
           ...prevTabSettings,
           ...tabSnapshot,
+          bypassGlobal: isBypass,
           customColumns: deepClone(state.customColumns || prevTabSettings.customColumns || []),
           customFilters: deepClone(state.customFilters || prevTabSettings.customFilters || []),
           filterMatch: state.filterMatch || prevTabSettings.filterMatch || 'ALL',
@@ -3053,6 +3257,22 @@
           tabManager.updateTabLocal(targetTabId, managedSettings);
           await tabManager.saveTab(targetTabId);
         }
+        // ── BYPASS TOKEN SAVE: store personal QB token in profile if changed ──
+        // Token is stored in profile.qb_token (server-side, service-role).
+        // Only saved when bypass is ON and user entered a new token.
+        if (isBypass && bypassTok) {
+          try {
+            const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
+            await fetch('/api/users/update_me', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+              body: JSON.stringify({ qb_token: bypassTok })
+            });
+            // Clear the token input after save (security)
+            if (bypassTokEl) { bypassTokEl.value = ''; bypassTokEl.placeholder = '(token saved — enter new to change)'; }
+          } catch(_) {}
+        }
+
         await persistQuickbaseSettings();
         await refreshAvailableFieldsForActiveTab(targetTabId || getActiveTabId());
         const savedSettings = tabManager && targetTabId && typeof tabManager.getTab === 'function'

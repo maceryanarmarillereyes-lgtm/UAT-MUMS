@@ -218,10 +218,14 @@ module.exports = async (req, res) => {
       ? profileQuickbaseSettings
       : profileQuickbaseConfigRaw;
 
-    // Token: always from global QB settings (users no longer have their own tokens)
-    // Fallback to profile token for SUPER_ADMIN backward compat during transition
+    // Token resolution:
+    // - bypassGlobal=true → use profile.qb_token (personal token, any role)
+    // - bypassGlobal=false (default) → use globalToken, fallback to SA profile token
     const profileToken = String(profile.qb_token || profile.quickbase_token || profile.quickbase_user_token || '').trim();
-    const activeToken = globalToken || (isSuperAdmin ? profileToken : '');
+    const bypassGlobal = String(req?.query?.bypassGlobal || req?.query?.bypass_global || '').trim() === 'true';
+    const activeToken = (bypassGlobal && profileToken)
+      ? profileToken
+      : (globalToken || (isSuperAdmin ? profileToken : ''));
 
     // Realm/tableId/qid: from request params first, then global settings, then profile (legacy fallback)
     let qid = String(req?.query?.qid || req?.query?.qId || '').trim();
@@ -235,10 +239,14 @@ module.exports = async (req, res) => {
     const profileLink = globalReportLink || String(profileQuickbaseConfig.reportLink || profileQuickbaseConfig.qb_report_link || profile.qb_report_link || '').trim();
 
     if (!qid || !tableId || !realm) {
+      // When bypassGlobal=true: user's personal config is missing — prompt them to set it in tab settings
+      const msg = bypassGlobal
+        ? 'Personal Quickbase configuration not set. Configure Report Config in this tab\u2019s Settings.'
+        : 'Missing Quickbase configuration. Please configure Global QB Settings in the admin panel.';
       return sendJson(res, 400, {
         ok: false,
-        warning: 'quickbase_credentials_missing',
-        message: 'Missing Quickbase configuration. Please configure Global QB Settings in the admin panel.'
+        warning: bypassGlobal ? 'personal_qb_not_configured' : 'quickbase_credentials_missing',
+        message: msg
       });
     }
 
@@ -399,10 +407,12 @@ module.exports = async (req, res) => {
 
     const conditions = [];
 
-    // 0. PRIVACY FILTER — mandatory, always injected first, cannot be bypassed
-    //    Filters to ONLY records where "Assigned to" (#13) matches the user's QB name.
-    //    SUPER_ADMIN sees all records (no restriction). For all others this is non-removable.
-    if (!isSuperAdmin && userQbName && Number.isFinite(assignedToFieldId)) {
+    // 0. PRIVACY FILTER — mandatory, always injected first, cannot be bypassed.
+    //    Applies to ALL roles including SUPER_ADMIN. If a user has a qb_name set,
+    //    they ONLY see records assigned to that name — no exceptions.
+    //    SA with no qb_name: sees all (admin/troubleshooting mode).
+    //    SA with qb_name: sees only their own records (same as other roles).
+    if (userQbName && Number.isFinite(assignedToFieldId)) {
       conditions.push(`{${assignedToFieldId}.EX.'${encodeQuickbaseLiteral(userQbName)}'}`);
     }
 

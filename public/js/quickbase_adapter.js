@@ -251,6 +251,10 @@
       tableId: tableId,
       realm: realm
     });
+    // Bypass global QB config — use profile.qb_token on server
+    if (overrideParams && overrideParams.bypassGlobal) {
+      queryParams.set('bypassGlobal', 'true');
+    }
 
     const extraWhere = shouldUseDefaultReport ? '' : buildQuickbaseWhere(overrideParams && overrideParams.customFilters, overrideParams && overrideParams.filterMatch);
     appendParam(queryParams, 'where', (overrideParams && overrideParams.where) || extraWhere);
