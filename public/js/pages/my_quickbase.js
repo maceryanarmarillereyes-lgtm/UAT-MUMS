@@ -1786,7 +1786,11 @@
                   Personal QB Token
                   <span style="font-size:10px;opacity:.6;margin-left:6px;">(Secured — stored in your profile)</span>
                 </label>
-                <input class="qb-field-input" id="qbBypassToken" type="text" placeholder="Enter your personal QB User Token" autocomplete="off" data-lpignore="true" data-1p-ignore spellcheck="false" />
+                <!-- AUTOFILL TRAP: Hidden dummy field absorbs browser password-manager autofill.
+                     Chrome/Edge inject credentials into the FIRST password field they find.
+                     This invisible field takes the hit so #qbBypassToken stays clean. -->
+                <input type="password" aria-hidden="true" tabindex="-1" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden;" autocomplete="current-password" />
+                <input class="qb-field-input" id="qbBypassToken" type="password" placeholder="Enter your personal QB User Token" autocomplete="new-password" data-lpignore="true" data-1p-ignore />
                 <div style="margin-top:5px;font-size:11px;opacity:.55;">
                   ⚡ Realm, Table ID and QID auto-fill from the Report Link URL
                 </div>
