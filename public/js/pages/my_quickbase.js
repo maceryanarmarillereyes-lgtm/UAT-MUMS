@@ -1786,7 +1786,7 @@
                   Personal QB Token
                   <span style="font-size:10px;opacity:.6;margin-left:6px;">(Secured — stored in your profile)</span>
                 </label>
-                <input class="qb-field-input" id="qbBypassToken" type="password" placeholder="Enter your personal QB User Token" autocomplete="new-password" />
+                <input class="qb-field-input" id="qbBypassToken" type="text" placeholder="Enter your personal QB User Token" autocomplete="off" data-lpignore="true" data-1p-ignore spellcheck="false" />
                 <div style="margin-top:5px;font-size:11px;opacity:.55;">
                   ⚡ Realm, Table ID and QID auto-fill from the Report Link URL
                 </div>
@@ -2742,6 +2742,21 @@
       applyBypassUIState(_isBypassed);
       syncBypassInputsFromState();
 
+      // TOKEN FIX: Force-clear the token field on every modal open.
+      // Browser password managers (Chrome, 1Password, etc.) may autofill #qbBypassToken
+      // with the site login password even with autocomplete="off". Clearing it here
+      // guarantees that any previously-autofilled value is wiped before the user sees it,
+      // preventing a silently-wrong token from being submitted on Save.
+      const _tokEl = root.querySelector('#qbBypassToken');
+      if (_tokEl) {
+        _tokEl.value = '';
+        // Re-run placeholder logic after clearing so it shows the correct hint
+        const _hasRealToken = !!(profile && String(profile.qb_token || '').trim());
+        _tokEl.placeholder = _hasRealToken
+          ? '(token saved — enter new to change)'
+          : 'Enter your personal QB User Token';
+      }
+
       // FIX[Bug2]: If reportLink is already configured, prefetch fields in realtime so
       // Custom Columns, Filter Config, and Dashboard Counter dropdowns populate immediately
       // without requiring the user to re-type or re-paste the link.
@@ -2869,9 +2884,19 @@
       if (realmEl) realmEl.value = s.realm || '';
       if (tableEl) tableEl.value = s.tableId || '';
       if (qidEl) qidEl.value = s.qid || '';
-      // Token: show placeholder only — never expose actual token in UI
+      // TOKEN FIX: Check actual profile.qb_token from server — NOT reportLink presence.
+      // reportLink can be set without a token ever being saved. Using reportLink as the
+      // indicator caused the field to show "saved" even when no token existed in the DB,
+      // tricking the user into never entering a token.
       const tokEl = root.querySelector('#qbBypassToken');
-      if (tokEl) tokEl.placeholder = s.reportLink ? '(token saved — enter new to change)' : 'Enter your personal QB User Token';
+      if (tokEl) {
+        // Always clear the value — never pre-fill with the actual token (security)
+        tokEl.value = '';
+        const _hasRealToken = !!(profile && String(profile.qb_token || '').trim());
+        tokEl.placeholder = _hasRealToken
+          ? '(token saved — enter new to change)'
+          : 'Enter your personal QB User Token';
+      }
     }
 
     // Wire bypass toggle
@@ -3376,6 +3401,13 @@
             });
             const tokData = await tokRes.json().catch(() => ({}));
             if (tokRes.ok && tokData.ok) {
+              // TOKEN FIX: Update local profile cache so syncBypassInputsFromState reads
+              // the correct state on next open — without this, profile.qb_token stays
+              // empty in memory and the placeholder reverts to "Enter your token" on re-open.
+              profile = Object.assign({}, profile, { qb_token: bypassTok });
+              if (window.Store && typeof Store.setProfile === 'function' && me) {
+                Store.setProfile(me.id, Object.assign({}, profile, { updatedAt: Date.now() }));
+              }
               // Clear the token input after successful save (security — never show token in UI)
               if (bypassTokEl) {
                 bypassTokEl.value = '';
@@ -3384,6 +3416,7 @@
               console.log('[Bypass] QB token saved to profile');
             } else {
               console.warn('[Bypass] QB token save failed:', tokData);
+              if (window.UI && UI.toast) UI.toast('⚠️ Settings saved but QB token failed to save. Please re-enter it.', 'error');
             }
           } catch(tokErr) {
             console.error('[Bypass] QB token save error:', tokErr);
