@@ -23,6 +23,67 @@ function writeCache(cache, key, value) {
   cache.set(key, { at: Date.now(), value });
 }
 
+// ── BYPASS REPORT RUNNER ─────────────────────────────────────────────────────
+// Uses the correct Quickbase API: POST /v1/reports/{reportId}/run
+// This runs the report EXACTLY as configured in Quickbase — all built-in filters,
+// columns, and sorting are applied server-side by Quickbase itself.
+// This is the only reliable way to reproduce what you see in the QB web UI.
+// The previous approach (/v1/reports/{id} GET + manual filter reconstruction) fails
+// because Quickbase does not reliably expose filter formulas via the metadata API.
+async function runQuickbaseReport({ realm, token, tableId, reportId, limit, extraWhere }) {
+  const rawRealm = String(realm || '').trim();
+  const normalizedRealm = (rawRealm && !rawRealm.includes('.'))
+    ? `${rawRealm}.quickbase.com`
+    : rawRealm;
+
+  const top = Math.min(Number(limit) > 0 ? Number(limit) : 500, 1000);
+  const cacheKey = `run:${normalizedRealm}:${tableId}:${reportId}:${top}:${extraWhere || ''}`;
+  const cached = readCache(reportMetaCache, cacheKey, REPORT_META_CACHE_TTL_MS);
+  if (cached) return cached;
+
+  try {
+    const url = `https://api.quickbase.com/v1/reports/${encodeURIComponent(reportId)}/run?tableId=${encodeURIComponent(tableId)}&skip=0&top=${top}`;
+
+    // Build run body — extraWhere lets us AND additional conditions (e.g. search)
+    // on top of the report's own filters without overriding them.
+    const body = {};
+    if (extraWhere) body.where = extraWhere;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'QB-Realm-Hostname': normalizedRealm,
+        Authorization: `QB-USER-TOKEN ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    const rawText = await response.text();
+    let json;
+    try { json = rawText ? JSON.parse(rawText) : {}; } catch (_) { json = {}; }
+
+    if (!response.ok) {
+      console.error('[QB Report Run] failed:', response.status, json?.message || json);
+      return { ok: false, status: response.status, message: json?.message || 'Report run failed' };
+    }
+
+    const records = Array.isArray(json.data) ? json.data : [];
+    // fields array from run response tells us which field IDs are in the report
+    const reportFields = Array.isArray(json.fields)
+      ? json.fields.map(f => ({ id: Number(f.id), label: String(f.label || '') })).filter(f => Number.isFinite(f.id))
+      : [];
+
+    const result = { ok: true, records, fields: reportFields };
+    writeCache(reportMetaCache, cacheKey, result);
+    console.log(`[QB Report Run] ✅ reportId=${reportId} → ${records.length} records, ${reportFields.length} fields`);
+    return result;
+  } catch (err) {
+    console.error('[QB Report Run] exception:', err?.message || err);
+    return { ok: false, status: 500, message: String(err?.message || err) };
+  }
+}
+
 async function getQuickbaseReportMetadata({ config, qid }) {
   // REALM FIX: Normalize realm to full QB hostname before API call.
   // profile stores realm as bare subdomain (e.g. "copeland-coldchainservices") but
@@ -453,30 +514,110 @@ module.exports = async (req, res) => {
 
     const conditions = [];
 
-    // 0. PRIVACY FILTER — injected for global mode only.
-    //    BYPASS MODE EXCEPTION: When bypassGlobal=true, this tab uses its own personal
-    //    report URL for monitoring purposes (multi-user reports, team dashboards, etc.).
-    //    The privacy filter (Assigned To = qb_name) would restrict results to only ONE
-    //    user's records — completely defeating the purpose of a bypass report.
-    //    When bypass is ON → skip privacy filter entirely, show all records the report URL returns.
-    //    When bypass is OFF → apply normal privacy filter as usual.
+    // PRIVACY FILTER — global mode only (bypass exits early above via runQuickbaseReport)
     if (!bypassGlobal && userQbName && Number.isFinite(assignedToFieldId)) {
       conditions.push(`{${assignedToFieldId}.EX.'${encodeQuickbaseLiteral(userQbName)}'}`);
     }
 
-    // 1. Report Filters (from QB report metadata — applies in both modes)
-    if (hasPersonalQuickbaseQuery && reportMetadata?.filter) {
+    // 1. Report Filters (from QB report metadata — global mode only)
+    if (!bypassGlobal && hasPersonalQuickbaseQuery && reportMetadata?.filter) {
       conditions.push(String(reportMetadata.filter).trim());
     }
     // 2. Manual/Route Overrides
     if (typeof manualWhere !== 'undefined' && manualWhere) conditions.push(manualWhere);
     if (typeof routeWhere !== 'undefined' && routeWhere) conditions.push(routeWhere);
+    // ── BYPASS MODE: Use /v1/reports/{reportId}/run — the ONLY reliable way ──────
+    // to get exactly the same records as the Quickbase web UI shows.
+    // The /v1/records/query approach fails because:
+    //   1. Report's filter formula is NOT always in metadata response
+    //   2. queryId in records/query is a DIFFERENT ID system from ?qid= in browser URL
+    // runQuickbaseReport() calls POST /v1/reports/{id}/run?tableId=... which runs
+    // the report server-side in Quickbase with ALL its built-in filters intact.
+    if (bypassGlobal && qid) {
+      // Build extraWhere only from search (report's own filters run on QB side)
+      const bypassConditions = [];
+      if (searchClause) bypassConditions.push(searchClause);
+      const bypassExtraWhere = bypassConditions.filter(Boolean).join(' AND ') || undefined;
+
+      const runOut = await runQuickbaseReport({
+        realm,
+        token: activeToken,
+        tableId,
+        reportId: qid,
+        limit: Number(req?.query?.limit) || 500,
+        extraWhere: bypassExtraWhere
+      });
+
+      if (!runOut.ok) {
+        return sendJson(res, runOut.status || 500, {
+          ok: false,
+          error: 'bypass_report_run_failed',
+          message: runOut.message || 'Failed to run Quickbase report. Check your Personal QB Token and Report URL.'
+        });
+      }
+
+      // runOut.fields contains the report's column definitions (id + label)
+      const runFields = Array.isArray(runOut.fields) && runOut.fields.length
+        ? runOut.fields
+        : allAvailableFields.slice(0, 10);
+
+      // If user configured custom columns, apply ordering; otherwise use report's columns
+      const bypassEffectiveFields = mappedProfileColumns.length
+        ? mappedProfileColumns
+        : runFields;
+
+      const bypassCaseIdFieldId = resolveFieldId('Case #') || 3;
+      const bypassFieldsMetaById = Object.create(null);
+      (allAvailableFields || []).forEach((f) => {
+        bypassFieldsMetaById[String(f.id)] = { id: Number(f.id), label: String(f.label) };
+      });
+      runFields.forEach((f) => {
+        if (!bypassFieldsMetaById[String(f.id)]) bypassFieldsMetaById[String(f.id)] = f;
+      });
+
+      const bypassOrderedFields = sortFieldsByProfileOrder(bypassEffectiveFields, profileQuickbaseConfig.customColumns || profileQuickbaseConfig.qb_custom_columns || profile.qb_custom_columns);
+
+      const bypassColumns = bypassOrderedFields
+        .filter((f) => String(f.label || '').toLowerCase() !== 'case #' && Number(f.id) !== Number(bypassCaseIdFieldId))
+        .map((f) => ({ id: String(f.id), label: String(f.label) }));
+
+      const bypassRecords = (Array.isArray(runOut.records) ? runOut.records : []).map((row) => {
+        const normalized = {};
+        const fieldIds = bypassOrderedFields.length
+          ? bypassOrderedFields.map((f) => String(f.id))
+          : Object.keys(row || {}).filter(k => k !== 'recordId');
+
+        fieldIds.forEach((fid) => {
+          const fieldId = String(fid);
+          const cell = row?.[fieldId];
+          const rawVal = (cell && typeof cell === 'object' && Object.prototype.hasOwnProperty.call(cell, 'value'))
+            ? cell.value : cell;
+          normalized[fieldId] = { value: normalizeQuickbaseCellValue(rawVal) ?? '' };
+        });
+
+        const caseIdCell = row?.[String(bypassCaseIdFieldId)];
+        const qbRecordId = (caseIdCell && typeof caseIdCell === 'object' ? caseIdCell.value : caseIdCell)
+          || row?.recordId || 'N/A';
+
+        return { qbRecordId: String(qbRecordId), fields: normalized };
+      });
+
+      return sendJson(res, 200, {
+        ok: true,
+        columns: bypassColumns,
+        records: bypassRecords,
+        allAvailableFields,
+        settings: {
+          ...defaultSettings,
+          appliedWhere: bypassExtraWhere || null,
+          bypassMode: true
+        }
+      });
+    }
+
+    // ── GLOBAL MODE (non-bypass): existing path unchanged ──────────────────────
     // 3. Custom Counters / Profile Filters
-    // GUARD 1: Skip profileFilterClauses when the client already sent an explicit ?where= param.
-    // This prevents Tab 1's stored filters from contaminating Tab 2+ queries.
-    // GUARD 2: Skip profileFilterClauses entirely when bypassGlobal=true — bypass tabs define
-    // their own filter config independently, and global profile filters must not bleed in.
-    if (!bypassGlobal && !hasExplicitWhereParam && typeof profileFilterClauses !== 'undefined' && profileFilterClauses.length > 0) {
+    if (!hasExplicitWhereParam && typeof profileFilterClauses !== 'undefined' && profileFilterClauses.length > 0) {
       const groupedProfileClause = profileFilterClauses.length === 1
         ? profileFilterClauses[0]
         : `(${profileFilterClauses.join(` ${profileFilterMatch === 'ANY' ? 'OR' : 'AND'} `)})`;
@@ -490,20 +631,12 @@ module.exports = async (req, res) => {
     const finalWhere = conditions.filter(Boolean).join(' AND ') || null;
 
     const out = await queryQuickbaseRecords({
-      // BYPASS QUERYID FIX: For bypass mode, do NOT pass queryId in the records body.
-      // The `?qid=` in the browser URL is a REPORT ID, but Quickbase's /v1/records/query
-      // `queryId` field uses a DIFFERENT internal query ID system. Passing the report ID
-      // as queryId causes Quickbase to ignore it and return ALL table records.
-      // For bypass: rely exclusively on `where` (from reportMetadata.filter) for filtering.
-      // For global mode: keep existing behaviour unchanged.
-      config: bypassGlobal
-        ? Object.assign({}, userQuickbaseConfig, { qb_qid: '' })
-        : userQuickbaseConfig,
+      config: userQuickbaseConfig,
       where: finalWhere || undefined,
       limit: req?.query?.limit || 500,
       select: selectFields,
       allowEmptySelect: hasPersonalQuickbaseQuery && !reportMetadata,
-      enableQueryIdFallback: !hasPersonalQuickbaseQuery && !bypassGlobal,
+      enableQueryIdFallback: !hasPersonalQuickbaseQuery,
       sortBy: reportMetadata?.sortBy || [
         { fieldId: endUserFieldId || resolveFieldId('Case #') || 3, order: 'ASC' },
         { fieldId: typeFieldId || resolveFieldId('Case #') || 3, order: 'ASC' }
