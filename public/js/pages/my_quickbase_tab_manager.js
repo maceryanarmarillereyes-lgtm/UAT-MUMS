@@ -15,7 +15,8 @@
     qid: '',
     tableId: '',
     realm: '',
-    bypassGlobal: false
+    bypassGlobal: false,
+    virtualColumn: { enabled: false, label: 'Status', items: [], conditionalRules: [] }
   };
 
   const tabs = new Map();
@@ -75,7 +76,12 @@
     parsed.forEach((row) => {
       const tabId = String(row && (row.tab_id || row.tabId) || '').trim();
       if (!tabId) return;
-      const settings = cloneDeep(Object.assign({}, defaultQuickbaseSettings, row.settings_json || {}));
+      const rawSettings = cloneDeep(row.settings_json || {});
+      // Ensure virtualColumn is always present — merge defaults without overwriting user data
+      if (!rawSettings.virtualColumn || typeof rawSettings.virtualColumn !== 'object') {
+        rawSettings.virtualColumn = cloneDeep(defaultQuickbaseSettings.virtualColumn);
+      }
+      const settings = Object.assign({}, defaultQuickbaseSettings, rawSettings);
       tabs.set(tabId, {
         settings,
         meta: Object.assign({ createdAt: Date.now(), updatedAt: Date.now() }, row.meta || {})
@@ -208,9 +214,18 @@
       rows.forEach((row) => {
         const tabId = String(row && row.tab_id || '').trim();
         if (!tabId) return;
-        const settings = cloneDeep(Object.assign({}, defaultQuickbaseSettings, row.settings_json || {}, {
-          tabName: String(row.tab_name || (row.settings_json && row.settings_json.tabName) || '').trim()
-        }));
+        const rawSettings = cloneDeep(row.settings_json || {});
+        // Always ensure virtualColumn exists — don't let old API data wipe it
+        if (!rawSettings.virtualColumn || typeof rawSettings.virtualColumn !== 'object') {
+          // Preserve from existing in-memory tab if available, else use default
+          const existingEntry = tabs.get(tabId);
+          rawSettings.virtualColumn = (existingEntry && existingEntry.settings && existingEntry.settings.virtualColumn)
+            ? cloneDeep(existingEntry.settings.virtualColumn)
+            : cloneDeep(defaultQuickbaseSettings.virtualColumn);
+        }
+        const settings = Object.assign({}, defaultQuickbaseSettings, rawSettings, {
+          tabName: String(row.tab_name || (rawSettings && rawSettings.tabName) || '').trim()
+        });
         tabs.set(tabId, {
           settings,
           meta: {

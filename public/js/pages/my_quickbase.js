@@ -629,11 +629,21 @@
       if (vcEnabled) {
         const savedVal = (opts.virtualColumnValues && opts.virtualColumnValues[recordId]) || '';
         const cfStyle = _getConditionalStyle(savedVal, vcSettings.conditionalRules || []);
-        const optionsHtml = vcSettings.items.map(item =>
-          `<option value="${esc(item)}" ${savedVal === item ? 'selected' : ''}>${esc(item)}</option>`
-        ).join('');
-        vcCell = `<td class="qb-vc-cell" style="${cfStyle.vcCellStyle || ''}">
-          <select class="qb-vc-select" data-record-id="${esc(recordId)}" title="Set status for this record">
+        const hasVal = !!savedVal;
+        const optionsHtml = vcSettings.items.map(item => {
+          const itemRule = (vcSettings.conditionalRules || []).find(r => r.value === item) || {};
+          const optStyle = itemRule.bgColor
+            ? ` style="background:${itemRule.bgColor};color:${itemRule.textColor || '#fff'};"`
+            : '';
+          return `<option value="${esc(item)}"${optStyle} ${savedVal === item ? 'selected' : ''}>${esc(item)}</option>`;
+        }).join('');
+        // Build pill accent from the matching CF rule when a value is set
+        const vcRule = hasVal ? ((vcSettings.conditionalRules || []).find(r => r.value === savedVal) || {}) : {};
+        const pillAccent = hasVal && vcRule.bgColor
+          ? `background:${_hexToRgba(vcRule.bgColor, 0.22)}!important;border-color:${_hexToRgba(vcRule.bgColor, 0.55)}!important;color:${vcRule.textColor || '#e2e8f0'}!important;`
+          : '';
+        vcCell = `<td class="qb-vc-cell">
+          <select class="qb-vc-select${hasVal ? ' qb-vc-has-value' : ''}" data-record-id="${esc(recordId)}" data-vc-value="${esc(savedVal)}" title="${esc(savedVal || 'Set status…')}" style="${pillAccent}">
             <option value="">—</option>${optionsHtml}
           </select>
         </td>`;
@@ -673,12 +683,22 @@
     // ── PREMIUM TOOLTIP SETUP ─────────────────────────────────────────────
     _setupQbTooltips(host);
 
-    // ── VIRTUAL COLUMN CHANGE HANDLER ─────────────────────────────────────
+    // ── VIRTUAL COLUMN CHANGE HANDLER (PREMIUM) ───────────────────────────
     if (vcEnabled && typeof opts.onVirtualColumnChange === 'function') {
       host.querySelectorAll('.qb-vc-select').forEach(sel => {
+        // Apply initial pill accent if value already set
+        _applyVcPillAccent(sel, vcSettings.conditionalRules || []);
+
         sel.addEventListener('change', () => {
           const rid = sel.getAttribute('data-record-id');
-          opts.onVirtualColumnChange(rid, sel.value);
+          const val = sel.value;
+          // Toggle has-value class for CSS pill styling
+          sel.classList.toggle('qb-vc-has-value', !!val);
+          sel.setAttribute('data-vc-value', val);
+          sel.title = val || 'Set status…';
+          // Apply accent color from CF rule immediately (no re-render needed)
+          _applyVcPillAccent(sel, vcSettings.conditionalRules || []);
+          opts.onVirtualColumnChange(rid, val);
         });
       });
     }
@@ -817,6 +837,29 @@
       if (isNaN(r) || isNaN(g) || isNaN(b)) return hex;
       return `rgba(${r},${g},${b},${alpha})`;
     } catch(_) { return hex; }
+  }
+
+  // Apply dynamic accent color + pill styling to a .qb-vc-select element
+  // based on its current value and the CF rules. Called on render + on change.
+  function _applyVcPillAccent(sel, rules) {
+    if (!sel) return;
+    const val = sel.value;
+    if (!val) {
+      sel.style.cssText = '';
+      sel.classList.remove('qb-vc-has-value');
+      return;
+    }
+    sel.classList.add('qb-vc-has-value');
+    const rule = Array.isArray(rules) ? rules.find(r => String(r.value || '') === val) : null;
+    if (rule && rule.bgColor) {
+      const bg = _hexToRgba(rule.bgColor, 0.22);
+      const border = _hexToRgba(rule.bgColor, 0.55);
+      const textClr = rule.textColor || '#e2e8f0';
+      sel.style.cssText = `background:${bg}!important;border-color:${border}!important;color:${textClr}!important;`;
+    } else {
+      // Has value but no CF rule — use default accent
+      sel.style.cssText = 'border-color:rgba(56,189,248,.35)!important;color:#7dd3fc!important;';
+    }
   }
 
   function renderEmptyState(root, message) {
@@ -1254,11 +1297,12 @@
         const tabId = String(tab && tab.id || '').trim();
         if (!tabId) return;
         const tabSettings = (state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]) || {};
-        if (tabSettings.reportLink || tabSettings.qid || tabSettings.tableId) {
-          tabManager.updateTabLocal(tabId, Object.assign({}, tabSettings, {
-            tabName: String(tab.tabName || 'Report').trim()
-          }));
-        }
+        // FIX: Always seed ALL tabs into TabManager — not just those with reportLink/qid/tableId.
+        // The old gate was silently dropping virtualColumn for bypass tabs and bare tabs.
+        // settingsByTabId from backendQuickbaseSettings (mums_profiles) is authoritative.
+        tabManager.updateTabLocal(tabId, Object.assign({}, tabSettings, {
+          tabName: String(tab.tabName || 'Report').trim()
+        }));
       });
     }
 
