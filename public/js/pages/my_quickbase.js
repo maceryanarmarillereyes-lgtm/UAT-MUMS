@@ -1461,18 +1461,33 @@
         : deepClone(state.dashboardCounters || activeTab.dashboard_counters || []);
 
       activeTab.tabName = tabNameInput || activeTab.tabName || 'Main Report';
-      activeTab.reportLink = reportLink;
-      activeTab.qid = hasReportLink ? (tabBaseQidInput || qidInput || parsed.qid || '') : '';
-      activeTab.tableId = hasReportLink ? (tableIdInput || parsed.tableId || '') : '';
-      activeTab.realm = hasReportLink ? (parsed.realm || '') : '';
       activeTab.dashboard_counters = safeCounters;
-
       state.tabName = activeTab.tabName;
-      state.reportLink = activeTab.reportLink;
-      state.qid = activeTab.qid;
-      state.tableId = activeTab.tableId;
-      state.realm = activeTab.realm;
       state.dashboardCounters = safeCounters;
+
+      // ── BYPASS GUARD ────────────────────────────────────────────────────
+      // When tab is in bypass mode, reportLink/qid/tableId/realm come from
+      // #qbBypassReportLink (Report Config section), NOT from #qbReportLink.
+      // Scraping #qbReportLink (which is empty for bypass tabs) would wipe the
+      // bypass settings. Only update these fields for non-bypass tabs.
+      const _activeTabId = String(getActiveTabId() || '').trim();
+      const _activeTabSettings = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[_activeTabId];
+      const _isActiveBypassed = !!(_activeTabSettings && _activeTabSettings.bypassGlobal);
+
+      if (!_isActiveBypassed) {
+        // Non-bypass: scrape normally from the standard report link inputs
+        activeTab.reportLink = reportLink;
+        activeTab.qid = hasReportLink ? (tabBaseQidInput || qidInput || parsed.qid || '') : '';
+        activeTab.tableId = hasReportLink ? (tableIdInput || parsed.tableId || '') : '';
+        activeTab.realm = hasReportLink ? (parsed.realm || '') : '';
+        state.reportLink = activeTab.reportLink;
+        state.qid = activeTab.qid;
+        state.tableId = activeTab.tableId;
+        state.realm = activeTab.realm;
+      }
+      // For bypass tabs: reportLink/qid/tableId/realm are preserved from
+      // state.quickbaseSettings.settingsByTabId (already updated in save handler)
+
       syncActiveTabFromState();
     }
 
@@ -1515,12 +1530,21 @@
       scrapeModalSettingsIntoActiveTab();
       syncActiveTabFromState();
       const activeTab = getActiveTab();
-      const parsed = parseQuickbaseLink(activeTab.reportLink);
+      // For bypass tabs: use settingsByTabId as source of truth for reportLink/qid/realm/tableId
+      const _persistTabId = String(getActiveTabId() || '').trim();
+      const _persistTabSettings = _persistTabId && state.quickbaseSettings.settingsByTabId
+        ? (state.quickbaseSettings.settingsByTabId[_persistTabId] || {})
+        : {};
+      const _isBypassPersist = !!(_persistTabSettings.bypassGlobal);
+      const _effectiveRL = _isBypassPersist
+        ? String(_persistTabSettings.reportLink || activeTab.reportLink || '').trim()
+        : String(activeTab.reportLink || '').trim();
+      const parsed = parseQuickbaseLink(_effectiveRL);
       const activeSettingsObject = {
-        reportLink: activeTab.reportLink,
-        qid: activeTab.qid || parsed.qid,
-        realm: activeTab.realm || parsed.realm,
-        tableId: activeTab.tableId || parsed.tableId,
+        reportLink: _effectiveRL,
+        qid: (_isBypassPersist ? _persistTabSettings.qid : activeTab.qid) || parsed.qid || '',
+        realm: (_isBypassPersist ? _persistTabSettings.realm : activeTab.realm) || parsed.realm || '',
+        tableId: (_isBypassPersist ? _persistTabSettings.tableId : activeTab.tableId) || parsed.tableId || '',
         customColumns: activeTab.customColumns,
         customFilters: activeTab.customFilters,
         filterMatch: activeTab.filterMatch,
@@ -3310,17 +3334,28 @@
         // ── BYPASS TOKEN SAVE: store personal QB token in profile if changed ──
         // Token is stored in profile.qb_token (server-side, service-role).
         // Only saved when bypass is ON and user entered a new token.
-        if (isBypass && bypassTok) {
+        if (isBypass && bypassTok && bypassTok.length > 0) {
           try {
             const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
-            await fetch('/api/users/update_me', {
+            const tokRes = await fetch('/api/users/update_me', {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
               body: JSON.stringify({ qb_token: bypassTok })
             });
-            // Clear the token input after save (security)
-            if (bypassTokEl) { bypassTokEl.value = ''; bypassTokEl.placeholder = '(token saved — enter new to change)'; }
-          } catch(_) {}
+            const tokData = await tokRes.json().catch(() => ({}));
+            if (tokRes.ok && tokData.ok) {
+              // Clear the token input after successful save (security — never show token in UI)
+              if (bypassTokEl) {
+                bypassTokEl.value = '';
+                bypassTokEl.placeholder = '(token saved — enter new to change)';
+              }
+              console.log('[Bypass] QB token saved to profile');
+            } else {
+              console.warn('[Bypass] QB token save failed:', tokData);
+            }
+          } catch(tokErr) {
+            console.error('[Bypass] QB token save error:', tokErr);
+          }
         }
 
         await persistQuickbaseSettings();
