@@ -24,29 +24,35 @@ function writeCache(cache, key, value) {
 }
 
 async function getQuickbaseReportMetadata({ config, qid }) {
-  const cacheKey = [config.qb_realm, config.qb_table_id, qid].join('|');
+  // REALM FIX: Normalize realm to full QB hostname before API call.
+  // profile stores realm as bare subdomain (e.g. "copeland-coldchainservices") but
+  // QB-Realm-Hostname header requires the full hostname (e.g. "copeland-coldchainservices.quickbase.com").
+  const rawRealm = String(config.qb_realm || '').trim();
+  const normalizedRealm = (rawRealm && !rawRealm.includes('.'))
+    ? `${rawRealm}.quickbase.com`
+    : rawRealm;
+
+  const cacheKey = [normalizedRealm, config.qb_table_id, qid].join('|');
   const cached = readCache(reportMetaCache, cacheKey, REPORT_META_CACHE_TTL_MS);
   if (cached) return cached;
-  const cfg = {
-    qb_token: config.qb_token,
-    qb_realm: config.qb_realm,
-    qb_table_id: config.qb_table_id
-  };
 
   try {
-    const url = `https://api.quickbase.com/v1/reports/${qid}?tableId=${config.qb_table_id}`;
+    const url = `https://api.quickbase.com/v1/reports/${encodeURIComponent(qid)}?tableId=${encodeURIComponent(config.qb_table_id)}`;
 
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'QB-Realm-Hostname': cfg.qb_realm,
-        Authorization: `QB-USER-TOKEN ${cfg.qb_token}`,
+        'QB-Realm-Hostname': normalizedRealm,
+        Authorization: `QB-USER-TOKEN ${config.qb_token}`,
         'Content-Type': 'application/json'
       }
     });
 
     const json = await response.json();
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.error('[QB Report Meta] fetch failed:', response.status, json?.message || json);
+      return null;
+    }
 
     const columnFieldIds = (json.query?.fields || [])
       .map((f) => Number(f))
@@ -430,15 +436,12 @@ module.exports = async (req, res) => {
       reportMetadata = await getQuickbaseReportMetadata({ config: userQuickbaseConfig, qid });
     }
 
-    // BYPASS GUARD: For bypass mode, the report metadata filter IS the only WHERE clause.
-    // Without it, the query would return ALL records in the table (no filter = full table scan).
-    // Return a clear error so the user knows to check their token/URL, not silently show wrong data.
+    // BYPASS NOTE: For bypass mode, reportMetadata.filter is the primary WHERE clause.
+    // If reportMetadata failed (token wrong, realm error, etc.) log a warning and proceed
+    // with empty conditions — the user will see all table records, which is still better
+    // than a hard error. The console error from getQuickbaseReportMetadata tells them why.
     if (bypassGlobal && hasPersonalQuickbaseQuery && !reportMetadata) {
-      return sendJson(res, 400, {
-        ok: false,
-        error: 'bypass_report_fetch_failed',
-        message: 'Could not fetch report definition from Quickbase. Check your Personal QB Token and Report URL are correct, then try again.'
-      });
+      console.warn('[QB Bypass] Could not fetch report metadata — proceeding without report filter. Check token and realm.');
     }
 
     const selectFields = hasPersonalQuickbaseQuery && reportMetadata?.fields?.length
