@@ -2746,19 +2746,15 @@
       applyBypassUIState(_isBypassed);
       syncBypassInputsFromState();
 
-      // TOKEN FIX: Force-clear the token field on every modal open.
-      // Browser password managers (Chrome, 1Password, etc.) may autofill #qbBypassToken
-      // with the site login password even with autocomplete="off". Clearing it here
-      // guarantees that any previously-autofilled value is wiped before the user sees it,
-      // preventing a silently-wrong token from being submitted on Save.
+      // TOKEN MASK FIX: Apply masked-dots or empty state on every modal open.
+      // Force-clear any browser autofill first, then re-apply correct visual state.
       const _tokEl = root.querySelector('#qbBypassToken');
       if (_tokEl) {
+        // Wipe any browser-autofilled value first
         _tokEl.value = '';
-        // Use qb_token_set (server-side boolean flag) — actual token is never sent to client
-        const _hasRealToken = !!(profile && (profile.qb_token_set || String(profile.qb_token || '').trim()));
-        _tokEl.placeholder = _hasRealToken
-          ? '(token saved — enter new to change)'
-          : 'Enter your personal QB User Token';
+        _tokEl.removeAttribute('data-token-masked');
+        // Then apply the correct visual state (dots if saved, empty if not)
+        _applyTokenSavedUI(_tokEl);
       }
 
       // FIX[Bug2]: If reportLink is already configured, prefetch fields in realtime so
@@ -2877,6 +2873,45 @@
       }
     }
 
+    // Sentinel value used internally to mark "token is saved in DB".
+    // This is NEVER sent to the server — it's stripped in the save handler.
+    // Its only purpose is to show the password dots so users see the token is saved.
+    const _QB_TOKEN_SAVED_SENTINEL = '__QB_TOKEN_SAVED__';
+
+    function _applyTokenSavedUI(tokEl) {
+      if (!tokEl) return;
+      const _hasRealToken = !!(profile && (profile.qb_token_set || String(profile.qb_token || '').trim()));
+      if (_hasRealToken) {
+        // Show masked dots so user clearly sees a token is stored
+        tokEl.value = _QB_TOKEN_SAVED_SENTINEL;
+        tokEl.placeholder = '';
+        tokEl.setAttribute('data-token-masked', '1');
+        // On focus: clear so user can type a new token
+        if (!tokEl._maskFocusBound) {
+          tokEl._maskFocusBound = true;
+          tokEl.addEventListener('focus', function _clearOnFocus() {
+            if (tokEl.value === _QB_TOKEN_SAVED_SENTINEL) {
+              tokEl.value = '';
+              tokEl.removeAttribute('data-token-masked');
+            }
+          });
+          tokEl.addEventListener('blur', function _restoreOnBlur() {
+            if (tokEl.value === '') {
+              const _stillHasToken = !!(profile && (profile.qb_token_set || String(profile.qb_token || '').trim()));
+              if (_stillHasToken) {
+                tokEl.value = _QB_TOKEN_SAVED_SENTINEL;
+                tokEl.setAttribute('data-token-masked', '1');
+              }
+            }
+          });
+        }
+      } else {
+        tokEl.value = '';
+        tokEl.placeholder = 'Enter your personal QB User Token';
+        tokEl.removeAttribute('data-token-masked');
+      }
+    }
+
     function syncBypassInputsFromState() {
       const tabId = getActiveTabId();
       const s = createDefaultSettings((state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]) || {}, {});
@@ -2888,18 +2923,10 @@
       if (realmEl) realmEl.value = s.realm || '';
       if (tableEl) tableEl.value = s.tableId || '';
       if (qidEl) qidEl.value = s.qid || '';
-      // TOKEN FIX: Use qb_token_set (boolean flag from server) to detect if token is saved.
-      // The actual token value is NEVER returned to the client (me.js strips it for security).
-      // qb_token_set=true means the token IS saved in the DB and ready for server-side use.
-      const tokEl = root.querySelector('#qbBypassToken');
-      if (tokEl) {
-        // Always clear the value — never pre-fill with the actual token (security)
-        tokEl.value = '';
-        const _hasRealToken = !!(profile && (profile.qb_token_set || String(profile.qb_token || '').trim()));
-        tokEl.placeholder = _hasRealToken
-          ? '(token saved — enter new to change)'
-          : 'Enter your personal QB User Token';
-      }
+      // TOKEN MASK FIX: Show masked dots (password field filled) when token is saved in DB.
+      // Empty field = confusing to users ("did my token save?"). Filled dots = clear confirmation.
+      // The sentinel value is stripped before any save — never reaches the server.
+      _applyTokenSavedUI(root.querySelector('#qbBypassToken'));
     }
 
     // Wire bypass toggle
@@ -3245,7 +3272,10 @@
       const isBypass = !!(bypassToggleEl && bypassToggleEl.checked);
       const bypassRL   = String((root.querySelector('#qbBypassReportLink') || {}).value || '').trim();
       const bypassTokEl = root.querySelector('#qbBypassToken');
-      const bypassTok  = String((bypassTokEl && bypassTokEl.value) || '').trim();
+      // SENTINEL STRIP: If value is the masked-dots sentinel, treat as empty (no new token entered).
+      // The sentinel is only a visual indicator — it must NEVER be sent to the server.
+      const _rawTokVal = String((bypassTokEl && bypassTokEl.value) || '').trim();
+      const bypassTok  = (_rawTokVal === _QB_TOKEN_SAVED_SENTINEL) ? '' : _rawTokVal;
 
       // If bypass ON, merge personal report config into snapshot
       if (isBypass && bypassRL) {
@@ -3410,11 +3440,8 @@
               if (window.Store && typeof Store.setProfile === 'function' && me) {
                 Store.setProfile(me.id, Object.assign({}, profile, { qb_token_set: true, updatedAt: Date.now() }));
               }
-              // Clear the token input after successful save (security — never show token in UI)
-              if (bypassTokEl) {
-                bypassTokEl.value = '';
-                bypassTokEl.placeholder = '(token saved — enter new to change)';
-              }
+              // Restore masked-dots visual so user sees the token is saved
+              if (bypassTokEl) _applyTokenSavedUI(bypassTokEl);
               console.log('[Bypass] QB token saved to profile');
             } else {
               console.warn('[Bypass] QB token save failed:', tokData);
