@@ -429,16 +429,18 @@ module.exports = async (req, res) => {
 
     const conditions = [];
 
-    // 0. PRIVACY FILTER — mandatory, always injected first, cannot be bypassed.
-    //    Applies to ALL roles including SUPER_ADMIN. If a user has a qb_name set,
-    //    they ONLY see records assigned to that name — no exceptions.
-    //    SA with no qb_name: sees all (admin/troubleshooting mode).
-    //    SA with qb_name: sees only their own records (same as other roles).
-    if (userQbName && Number.isFinite(assignedToFieldId)) {
+    // 0. PRIVACY FILTER — injected for global mode only.
+    //    BYPASS MODE EXCEPTION: When bypassGlobal=true, this tab uses its own personal
+    //    report URL for monitoring purposes (multi-user reports, team dashboards, etc.).
+    //    The privacy filter (Assigned To = qb_name) would restrict results to only ONE
+    //    user's records — completely defeating the purpose of a bypass report.
+    //    When bypass is ON → skip privacy filter entirely, show all records the report URL returns.
+    //    When bypass is OFF → apply normal privacy filter as usual.
+    if (!bypassGlobal && userQbName && Number.isFinite(assignedToFieldId)) {
       conditions.push(`{${assignedToFieldId}.EX.'${encodeQuickbaseLiteral(userQbName)}'}`);
     }
 
-    // 1. Report Filters
+    // 1. Report Filters (from QB report metadata — applies in both modes)
     if (hasPersonalQuickbaseQuery && reportMetadata?.filter) {
       conditions.push(String(reportMetadata.filter).trim());
     }
@@ -446,9 +448,11 @@ module.exports = async (req, res) => {
     if (typeof manualWhere !== 'undefined' && manualWhere) conditions.push(manualWhere);
     if (typeof routeWhere !== 'undefined' && routeWhere) conditions.push(routeWhere);
     // 3. Custom Counters / Profile Filters
-    // GUARD: Skip profileFilterClauses when the client already sent an explicit ?where= param.
+    // GUARD 1: Skip profileFilterClauses when the client already sent an explicit ?where= param.
     // This prevents Tab 1's stored filters from contaminating Tab 2+ queries.
-    if (!hasExplicitWhereParam && typeof profileFilterClauses !== 'undefined' && profileFilterClauses.length > 0) {
+    // GUARD 2: Skip profileFilterClauses entirely when bypassGlobal=true — bypass tabs define
+    // their own filter config independently, and global profile filters must not bleed in.
+    if (!bypassGlobal && !hasExplicitWhereParam && typeof profileFilterClauses !== 'undefined' && profileFilterClauses.length > 0) {
       const groupedProfileClause = profileFilterClauses.length === 1
         ? profileFilterClauses[0]
         : `(${profileFilterClauses.join(` ${profileFilterMatch === 'ANY' ? 'OR' : 'AND'} `)})`;
