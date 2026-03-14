@@ -632,40 +632,43 @@
         const optionsHtml = vcSettings.items.map(item =>
           `<option value="${esc(item)}" ${savedVal === item ? 'selected' : ''}>${esc(item)}</option>`
         ).join('');
-        vcCell = `<td class="qb-vc-cell" style="${cfStyle.cellStyle || ''}">
+        vcCell = `<td class="qb-vc-cell" style="${cfStyle.vcCellStyle || ''}">
           <select class="qb-vc-select" data-record-id="${esc(recordId)}" title="Set status for this record">
             <option value="">—</option>${optionsHtml}
           </select>
         </td>`;
       }
 
+      // Apply row-level conditional formatting from virtual column
+      const savedVcVal = vcEnabled ? ((opts.virtualColumnValues && opts.virtualColumnValues[recordId]) || '') : '';
+      const rowCf = vcEnabled ? _getConditionalStyle(savedVcVal, vcSettings.conditionalRules || []) : {};
+      const rowStyleAttr = rowCf.rowStyle ? ` style="${rowCf.rowStyle}"` : '';
+      const rowClassAttr = rowCf.rowClass ? ` class="${rowCf.rowClass}"` : '';
+      // FIX: cellStyle must go on each <td> individually — tr-level color is overridden by td CSS specificity
+      const tdStyle = rowCf.cellStyle ? ` style="${rowCf.cellStyle}"` : '';
+
       const cells = columns.map((c) => {
         const field = r && r.fields ? r.fields[String(c.id)] : null;
         const rawValue = field && field.value != null ? field.value : 'N/A';
         const normalizedLabel = String(c && c.label || '').trim().toLowerCase();
         if (normalizedLabel === 'case status' || normalizedLabel === 'status') {
-          return `<td>${renderStatusBadge(String(rawValue))}</td>`;
+          return `<td${tdStyle}>${renderStatusBadge(String(rawValue))}</td>`;
         }
         const displayValue = (normalizedLabel === 'last update days' || normalizedLabel === 'age')
           ? toDurationLabel(rawValue)
           : String(rawValue);
         const safeVal = esc(displayValue);
         const rawStr = String(displayValue);
-        if (rawStr.length <= 60) return `<td><span class="qb-cell-text">${safeVal}</span></td>`;
-        return `<td><div class="qb-cell-clamp" data-full="${esc(rawStr)}"><span class="qb-cell-text">${safeVal}</span></div></td>`;
+        if (rawStr.length <= 60) return `<td${tdStyle}><span class="qb-cell-text">${safeVal}</span></td>`;
+        return `<td${tdStyle}><div class="qb-cell-clamp" data-full="${esc(rawStr)}"><span class="qb-cell-text">${safeVal}</span></div></td>`;
       }).join('');
 
-      // Apply row-level conditional formatting from virtual column
-      const savedVcVal = vcEnabled ? ((opts.virtualColumnValues && opts.virtualColumnValues[recordId]) || '') : '';
-      const rowCf = vcEnabled ? _getConditionalStyle(savedVcVal, vcSettings.conditionalRules || []) : {};
-      const rowStyleAttr = rowCf.rowStyle ? ` style="${rowCf.rowStyle}"` : '';
-      const rowClassAttr = rowCf.rowClass ? ` class="${rowCf.rowClass}"` : '';
-
-      return `<tr${rowClassAttr}${rowStyleAttr}>${vcCell}<td class="qb-row-num-cell"><span class="qb-row-num-pill">${globalRowNum}</span></td><td class="qb-case-id">${esc(recordId)}</td>${cells}</tr>`;
+      // FIX: Column order — # first, then Virtual Column, then user-defined columns
+      return `<tr${rowClassAttr}${rowStyleAttr}><td class="qb-row-num-cell"${tdStyle}><span class="qb-row-num-pill">${globalRowNum}</span></td>${vcCell}<td class="qb-case-id"${tdStyle}>${esc(recordId)}</td>${cells}</tr>`;
     }).join('');
 
     const vcThPrefix = vcEnabled ? vcHeader : '';
-    host.innerHTML = `<div class="qb-table-inner"><table class="qb-data-table"><thead><tr>${vcThPrefix}<th class="qb-row-num-th">#</th><th>Case #</th>${headers}</tr></thead><tbody>${body}</tbody></table></div>`;
+    host.innerHTML = `<div class="qb-table-inner"><table class="qb-data-table"><thead><tr><th class="qb-row-num-th">#</th>${vcThPrefix}<th>Case #</th>${headers}</tr></thead><tbody>${body}</tbody></table></div>`;
 
     // ── PREMIUM TOOLTIP SETUP ─────────────────────────────────────────────
     _setupQbTooltips(host);
@@ -759,21 +762,62 @@
   }
 
   // ── VIRTUAL COLUMN CONDITIONAL FORMATTING HELPER ───────────────────────────
+  // FIX: Removed full-row background (ugly on wide tables). Replaced with:
+  //   1. Premium left-border accent strip on the row
+  //   2. Subtle row tint via CSS custom property (low opacity, not blinding)
+  //   3. Text color + typography applied per-cell via data attribute CSS
+  //      (fixes specificity bug where <tr> color was overridden by <td> styles)
   function _getConditionalStyle(value, rules) {
     if (!value || !Array.isArray(rules) || !rules.length) return {};
     const rule = rules.find(r => String(r.value || '') === String(value));
     if (!rule) return {};
-    const parts = [];
-    if (rule.bgColor)    parts.push(`background:${rule.bgColor}!important`);
-    if (rule.textColor)  parts.push(`color:${rule.textColor}!important`);
-    if (rule.fontWeight) parts.push(`font-weight:${rule.fontWeight}!important`);
-    if (rule.fontSize)   parts.push(`font-size:${rule.fontSize}!important`);
-    if (rule.fontStyle)  parts.push(`font-style:${rule.fontStyle}!important`);
-    if (rule.textDecoration) parts.push(`text-decoration:${rule.textDecoration}!important`);
-    if (rule.textAlign)  parts.push(`text-align:${rule.textAlign}!important`);
-    const rowStyle = parts.join(';');
-    const cellStyle = rule.bgColor ? `background:${rule.bgColor}22!important` : '';
-    return { rowStyle, cellStyle, rowClass: rowStyle ? 'qb-cf-row' : '' };
+
+    const hasBg  = !!(rule.bgColor);
+    const hasTxt = !!(rule.textColor);
+
+    // Row style: left-border accent + very subtle background tint (15% opacity max)
+    // This gives premium enterprise feel without the garish full-color rows
+    const rowParts = [];
+    if (hasBg) {
+      // Parse hex to rgb for rgba tint — fallback to direct color
+      const tint = _hexToRgba(rule.bgColor, 0.13);
+      rowParts.push(`background:${tint}!important`);
+      rowParts.push(`box-shadow:inset 3px 0 0 ${rule.bgColor}!important`);
+    }
+    const rowStyle = rowParts.join(';');
+
+    // Cell style: applied to each <td> individually so text color actually works
+    // (CSS specificity: td-level > tr-level, so must push color to td)
+    const cellParts = [];
+    if (hasTxt) cellParts.push(`color:${rule.textColor}!important`);
+    if (rule.fontWeight) cellParts.push(`font-weight:${rule.fontWeight}!important`);
+    if (rule.fontSize)   cellParts.push(`font-size:${rule.fontSize}!important`);
+    if (rule.fontStyle)  cellParts.push(`font-style:${rule.fontStyle}!important`);
+    if (rule.textDecoration) cellParts.push(`text-decoration:${rule.textDecoration}!important`);
+    if (rule.textAlign)  cellParts.push(`text-align:${rule.textAlign}!important`);
+    const cellStyle = cellParts.join(';');
+
+    // VC cell (the dropdown cell itself) gets the solid accent bg for clear identification
+    const vcCellStyle = hasBg ? `background:${rule.bgColor}26!important` : '';
+
+    return {
+      rowStyle,
+      cellStyle,  // applied to every <td> individually in the row renderer
+      vcCellStyle,
+      rowClass: (rowStyle || cellStyle) ? 'qb-cf-row' : ''
+    };
+  }
+
+  // Helper: convert hex color to rgba string
+  function _hexToRgba(hex, alpha) {
+    try {
+      const h = hex.replace('#', '');
+      const r = parseInt(h.substring(0,2), 16);
+      const g = parseInt(h.substring(2,4), 16);
+      const b = parseInt(h.substring(4,6), 16);
+      if (isNaN(r) || isNaN(g) || isNaN(b)) return hex;
+      return `rgba(${r},${g},${b},${alpha})`;
+    } catch(_) { return hex; }
   }
 
   function renderEmptyState(root, message) {
@@ -1644,6 +1688,27 @@
       // For bypass tabs: reportLink/qid/tableId/realm are preserved from
       // state.quickbaseSettings.settingsByTabId (already updated in save handler)
 
+      // ── VIRTUAL COLUMN SCRAPE FIX ────────────────────────────────────────
+      // BUG: The modal toggle (#qbVcEnabled) was never read back into state.virtualColumn
+      // during save — _saveVcState() only fires on live toggle change, not on Save click.
+      // FIX: Always sync the enabled state from the DOM toggle into state before persist.
+      const _vcEnabledEl = root.querySelector('#qbVcEnabled');
+      if (_vcEnabledEl) {
+        const _curVc = _getVcState();
+        _curVc.enabled = _vcEnabledEl.checked;
+        state.virtualColumn = deepClone(_curVc);
+        // Also ensure settingsByTabId is in sync for the active tab
+        const _vcTabId = getActiveTabId();
+        if (_vcTabId) {
+          const _vcPrev = createDefaultSettings(
+            (state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[_vcTabId]) || {}, {}
+          );
+          state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, {
+            [_vcTabId]: Object.assign({}, _vcPrev, { virtualColumn: deepClone(_curVc) })
+          });
+        }
+      }
+
       syncActiveTabFromState();
     }
 
@@ -2371,69 +2436,119 @@
       const vc = _getVcState();
       const items = vc.items || [];
       if (!items.length) {
-        cfRulesEl.innerHTML = '<div class="small muted">Add dropdown options first to configure formatting.</div>';
+        cfRulesEl.innerHTML = '<div style="padding:12px 0;font-size:12px;color:rgba(148,163,184,.6);">Add dropdown options first to configure formatting.</div>';
         return;
       }
 
-      cfRulesEl.innerHTML = items.map((item, idx) => {
-        const rule = (vc.conditionalRules || []).find(r => r.value === item) || { value: item };
-        const bg = rule.bgColor || '';
-        const tc = rule.textColor || '';
-        const fw = rule.fontWeight || 'normal';
-        const fs = rule.fontSize || '12px';
-        const fi = rule.fontStyle || 'normal';
-        const td = rule.textDecoration || 'none';
-        const ta = rule.textAlign || 'left';
-        return `
-          <div class="qb-vc-cf-rule" data-cf-value="${esc(item)}">
-            <div class="qb-vc-cf-rule-header">
-              <span class="qb-vc-cf-badge" style="background:${bg||'rgba(255,255,255,.08)'};color:${tc||'#c8d8f0'};font-weight:${fw};font-style:${fi};text-decoration:${td};font-size:${fs};text-align:${ta};">${esc(item)}</span>
-              <span class="small muted" style="font-size:10px;">Row formatting when "${esc(item)}" selected</span>
-            </div>
-            <div class="qb-vc-cf-controls">
-              <label class="qb-vc-cf-ctrl"><span>Row BG</span><input type="color" class="qb-vc-cf-color" data-cf-key="bgColor" value="${bg||'#0f172a'}" /></label>
-              <label class="qb-vc-cf-ctrl"><span>Text Color</span><input type="color" class="qb-vc-cf-color" data-cf-key="textColor" value="${tc||'#c8d8f0'}" /></label>
-              <label class="qb-vc-cf-ctrl"><span>Bold</span>
-                <select class="qb-field-input qb-vc-cf-sel" data-cf-key="fontWeight" style="font-size:11px;padding:4px 6px;">
-                  <option value="normal" ${fw==='normal'?'selected':''}>Normal</option>
-                  <option value="600" ${fw==='600'?'selected':''}>Semi-Bold</option>
-                  <option value="700" ${fw==='700'?'selected':''}>Bold</option>
-                  <option value="800" ${fw==='800'?'selected':''}>Extra Bold</option>
-                </select>
-              </label>
-              <label class="qb-vc-cf-ctrl"><span>Style</span>
-                <select class="qb-field-input qb-vc-cf-sel" data-cf-key="fontStyle" style="font-size:11px;padding:4px 6px;">
-                  <option value="normal" ${fi==='normal'?'selected':''}>Normal</option>
-                  <option value="italic" ${fi==='italic'?'selected':''}>Italic</option>
-                </select>
-              </label>
-              <label class="qb-vc-cf-ctrl"><span>Decoration</span>
-                <select class="qb-field-input qb-vc-cf-sel" data-cf-key="textDecoration" style="font-size:11px;padding:4px 6px;">
-                  <option value="none" ${td==='none'?'selected':''}>None</option>
-                  <option value="underline" ${td==='underline'?'selected':''}>Underline</option>
-                  <option value="line-through" ${td==='line-through'?'selected':''}>Strikethrough</option>
-                </select>
-              </label>
-              <label class="qb-vc-cf-ctrl"><span>Align</span>
-                <select class="qb-field-input qb-vc-cf-sel" data-cf-key="textAlign" style="font-size:11px;padding:4px 6px;">
-                  <option value="left" ${ta==='left'?'selected':''}>Left</option>
-                  <option value="center" ${ta==='center'?'selected':''}>Center</option>
-                  <option value="right" ${ta==='right'?'selected':''}>Right</option>
-                </select>
-              </label>
-              <label class="qb-vc-cf-ctrl"><span>Font Size</span>
-                <select class="qb-field-input qb-vc-cf-sel" data-cf-key="fontSize" style="font-size:11px;padding:4px 6px;">
-                  <option value="11px" ${fs==='11px'?'selected':''}>Small (11px)</option>
-                  <option value="12px" ${fs==='12px'?'selected':''}>Default (12px)</option>
-                  <option value="13px" ${fs==='13px'?'selected':''}>Medium (13px)</option>
-                  <option value="14px" ${fs==='14px'?'selected':''}>Large (14px)</option>
-                </select>
-              </label>
-            </div>
-          </div>
-        `;
-      }).join('');
+      // PREMIUM ENTERPRISE DESIGN: Card-based per-rule layout with live preview badge
+      // No ugly full-row color swatches — accent bar + subtle tint + badge typography
+      cfRulesEl.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px;">
+          ${items.map((item) => {
+            const rule = (vc.conditionalRules || []).find(r => r.value === item) || { value: item };
+            const bg = rule.bgColor || '';
+            const tc = rule.textColor || '';
+            const fw = rule.fontWeight || 'normal';
+            const fs = rule.fontSize || '12px';
+            const fi = rule.fontStyle || 'normal';
+            const td = rule.textDecoration || 'none';
+            const ta = rule.textAlign || 'left';
+            // Compute preview badge styles — badge uses the user colors directly
+            const badgeBg = bg ? _hexToRgba(bg, 0.22) : 'rgba(255,255,255,.07)';
+            const badgeBorder = bg ? `1px solid ${_hexToRgba(bg, 0.55)}` : '1px solid rgba(255,255,255,.12)';
+            const badgeTxt = tc || '#c8d8f0';
+            const accentBar = bg ? `background:${bg};` : 'background:rgba(255,255,255,.15);';
+            return `
+            <div class="qb-vc-cf-rule" data-cf-value="${esc(item)}" style="
+              background:rgba(15,23,42,0.6);
+              border:1px solid rgba(148,163,184,0.12);
+              border-radius:10px;
+              overflow:hidden;
+              transition:border-color .2s;
+            ">
+              <!-- Rule header: accent bar + badge preview + label -->
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid rgba(148,163,184,0.1);">
+                <div style="width:4px;min-width:4px;height:32px;border-radius:4px;${accentBar}flex-shrink:0;"></div>
+                <span class="qb-vc-cf-badge" data-preview-badge style="
+                  display:inline-flex;align-items:center;
+                  padding:4px 12px;border-radius:20px;
+                  background:${badgeBg};
+                  border:${badgeBorder};
+                  color:${badgeTxt};
+                  font-size:${fs};font-weight:${fw};font-style:${fi};text-decoration:${td};
+                  letter-spacing:.03em;white-space:nowrap;
+                  box-shadow:0 1px 4px rgba(0,0,0,.2);
+                  transition:all .15s;
+                ">${esc(item)}</span>
+                <span style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:rgba(148,163,184,.55);flex:1;">Row formatting when <strong style="color:rgba(226,232,240,.7);">"${esc(item)}"</strong> selected</span>
+              </div>
+              <!-- Controls grid -->
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;padding:12px 14px;">
+                <!-- Accent Color -->
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.6);">Accent Color</span>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="position:relative;width:32px;height:28px;border-radius:6px;border:1px solid rgba(148,163,184,.25);overflow:hidden;cursor:pointer;flex-shrink:0;">
+                      <input type="color" class="qb-vc-cf-color" data-cf-key="bgColor" value="${bg||'#3b82f6'}" style="position:absolute;inset:-4px;width:calc(100% + 8px);height:calc(100% + 8px);border:none;padding:0;cursor:pointer;opacity:0.01;" />
+                      <div data-swatch style="position:absolute;inset:0;border-radius:5px;background:${bg||'rgba(148,163,184,.2)'};pointer-events:none;"></div>
+                    </div>
+                    <span style="font-size:11px;color:rgba(148,163,184,.7);font-family:monospace;">${bg||'—'}</span>
+                  </div>
+                </div>
+                <!-- Text Color -->
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.6);">Text Color</span>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="position:relative;width:32px;height:28px;border-radius:6px;border:1px solid rgba(148,163,184,.25);overflow:hidden;cursor:pointer;flex-shrink:0;">
+                      <input type="color" class="qb-vc-cf-color" data-cf-key="textColor" value="${tc||'#e2e8f0'}" style="position:absolute;inset:-4px;width:calc(100% + 8px);height:calc(100% + 8px);border:none;padding:0;cursor:pointer;opacity:0.01;" />
+                      <div data-swatch style="position:absolute;inset:0;border-radius:5px;background:${tc||'rgba(148,163,184,.2)'};pointer-events:none;"></div>
+                    </div>
+                    <span style="font-size:11px;color:rgba(148,163,184,.7);font-family:monospace;">${tc||'—'}</span>
+                  </div>
+                </div>
+                <!-- Weight -->
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.6);">Weight</span>
+                  <select class="qb-field-input qb-vc-cf-sel" data-cf-key="fontWeight" style="font-size:11px;padding:4px 7px;height:28px;border-radius:6px;">
+                    <option value="normal" ${fw==='normal'?'selected':''}>Normal</option>
+                    <option value="600" ${fw==='600'?'selected':''}>Semi-Bold</option>
+                    <option value="700" ${fw==='700'?'selected':''}>Bold</option>
+                    <option value="800" ${fw==='800'?'selected':''}>Extra Bold</option>
+                  </select>
+                </div>
+                <!-- Style -->
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.6);">Style</span>
+                  <select class="qb-field-input qb-vc-cf-sel" data-cf-key="fontStyle" style="font-size:11px;padding:4px 7px;height:28px;border-radius:6px;">
+                    <option value="normal" ${fi==='normal'?'selected':''}>Normal</option>
+                    <option value="italic" ${fi==='italic'?'selected':''}>Italic</option>
+                  </select>
+                </div>
+                <!-- Decoration -->
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.6);">Decoration</span>
+                  <select class="qb-field-input qb-vc-cf-sel" data-cf-key="textDecoration" style="font-size:11px;padding:4px 7px;height:28px;border-radius:6px;">
+                    <option value="none" ${td==='none'?'selected':''}>None</option>
+                    <option value="underline" ${td==='underline'?'selected':''}>Underline</option>
+                    <option value="line-through" ${td==='line-through'?'selected':''}>Strike</option>
+                  </select>
+                </div>
+                <!-- Font Size -->
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.6);">Size</span>
+                  <select class="qb-field-input qb-vc-cf-sel" data-cf-key="fontSize" style="font-size:11px;padding:4px 7px;height:28px;border-radius:6px;">
+                    <option value="11px" ${fs==='11px'?'selected':''}>11px</option>
+                    <option value="12px" ${fs==='12px'?'selected':''}>12px</option>
+                    <option value="13px" ${fs==='13px'?'selected':''}>13px</option>
+                    <option value="14px" ${fs==='14px'?'selected':''}>14px</option>
+                  </select>
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
 
+      // Wire all controls with live preview update
       cfRulesEl.querySelectorAll('[data-cf-key]').forEach(input => {
         const evtName = input.tagName === 'SELECT' ? 'change' : 'input';
         input.addEventListener(evtName, () => {
@@ -2446,12 +2561,32 @@
           if (!rule) { rule = { value: val }; (cur.conditionalRules = cur.conditionalRules || []).push(rule); }
           rule[key] = input.value;
           _saveVcState(cur);
-          // Update live preview badge
-          const badge = ruleEl.querySelector('.qb-vc-cf-badge');
+
+          // Update swatch preview next to color input
+          const swatch = input.parentElement && input.parentElement.querySelector('[data-swatch]');
+          if (swatch) swatch.style.background = input.value;
+          // Update hex label
+          const hexLabel = input.parentElement && input.parentElement.nextElementSibling;
+          if (hexLabel && hexLabel.tagName !== 'SELECT') hexLabel.textContent = input.value;
+
+          // Live badge preview update
+          const r2 = (cur.conditionalRules || []).find(r => r.value === val) || {};
+          const badge = ruleEl.querySelector('[data-preview-badge]');
           if (badge) {
-            const r2 = (cur.conditionalRules || []).find(r => r.value === val) || {};
-            badge.style.cssText = `background:${r2.bgColor||'rgba(255,255,255,.08)'};color:${r2.textColor||'#c8d8f0'};font-weight:${r2.fontWeight||'normal'};font-style:${r2.fontStyle||'normal'};text-decoration:${r2.textDecoration||'none'};font-size:${r2.fontSize||'12px'};text-align:${r2.textAlign||'left'};`;
+            const nb = r2.bgColor ? _hexToRgba(r2.bgColor, 0.22) : 'rgba(255,255,255,.07)';
+            const nb2 = r2.bgColor ? `1px solid ${_hexToRgba(r2.bgColor, 0.55)}` : '1px solid rgba(255,255,255,.12)';
+            badge.style.background = nb;
+            badge.style.border = nb2;
+            badge.style.color = r2.textColor || '#c8d8f0';
+            badge.style.fontWeight = r2.fontWeight || 'normal';
+            badge.style.fontStyle = r2.fontStyle || 'normal';
+            badge.style.textDecoration = r2.textDecoration || 'none';
+            badge.style.fontSize = r2.fontSize || '12px';
           }
+          // Update accent bar color
+          const accentBar = ruleEl.querySelector('[data-cf-value] div');
+          const firstDiv = ruleEl.querySelector('div > div');
+          if (firstDiv && r2.bgColor) firstDiv.style.background = r2.bgColor;
         });
       });
     }

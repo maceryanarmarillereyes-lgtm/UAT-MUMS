@@ -9431,3 +9431,77 @@ body[data-theme="nexus"] .duty-pill[data-tone="manager"] { background: rgba(0,21
 body[data-theme="nexus"] .duty-pill[data-tone="call"]    { background: rgba(255,170,0,.10) !important; color: #FFDA80 !important; border: 1px solid rgba(255,170,0,.26) !important; }
 body[data-theme="nexus"] .duty-pill[data-tone="break"]   { background: rgba(255,69,96,.09) !important; color: #FFB0BA !important; border: 1px solid rgba(255,69,96,.22) !important; }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Virtual Column — Conditional Formatting Premium Row Styling
+   FIX: Premium badge-style CF instead of garish full-row background
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* CF row: left accent bar + subtle tint — rendered via inline style on <tr>  */
+/* Transition for smooth live updates when dropdown value changes              */
+.qb-cf-row {
+  transition: background .18s ease, box-shadow .18s ease;
+}
+.qb-cf-row td {
+  transition: color .15s ease, font-weight .1s ease;
+}
+/* Ensure row hover doesn't obliterate the CF tint */
+.qb-cf-row:hover {
+  filter: brightness(1.06);
+}
+
+/* Virtual Column header cell */
+.qb-vc-th {
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap;
+  min-width: 110px;
+}
+
+/* Virtual Column data cell */
+.qb-vc-cell {
+  min-width: 110px;
+  max-width: 150px;
+  padding: 5px 8px !important;
+  vertical-align: middle;
+}
+
+/* Virtual Column dropdown select */
+.qb-vc-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(148,163,184,.2);
+  border-radius: 6px;
+  color: #c8d8f0;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 24px 4px 8px;
+  width: 100%;
+  cursor: pointer;
+  transition: border-color .18s, background .18s, box-shadow .18s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+}
+.qb-vc-select:hover {
+  border-color: rgba(148,163,184,.45);
+  background-color: rgba(255,255,255,.09);
+  box-shadow: 0 1px 4px rgba(0,0,0,.15);
+}
+.qb-vc-select:focus {
+  outline: none;
+  border-color: rgba(56,189,248,.5);
+  box-shadow: 0 0 0 2px rgba(56,189,248,.12);
+}
+.qb-vc-select option {
+  background: #1e293b;
+  color: #c8d8f0;
+}
+
+/* Settings modal — CF rule card hover state */
+.qb-vc-cf-rule:hover {
+  border-color: rgba(148,163,184,.25) !important;
+}
