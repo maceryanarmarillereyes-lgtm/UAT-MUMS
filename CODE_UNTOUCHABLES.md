@@ -1,5 +1,5 @@
 🛑 SUPREME AI GUARDRAIL ACTIVE v2.0: You are STRICTLY FORBIDDEN from modifying existing High Level Enterprise UI/UX layouts, CSS themes, Core System Logics, Realtime Sync behaviors (e.g., realtime.js, WebSockets), State Management isolated arrays, Database API Adapters, and Auth flow structures without explicit clearance.
-PROTOCOL: If a requested feature overlaps with, alters, or risks breaking these critical domains, you MUST STOP immediately. You MUST output a "RISK IMPACT REPORT" detailing the specific files and logic conflicts. End your response strictly with "AWAITING CLEARANCE TO PROCEED FROM THUNTER BOY". Do NOT output execution code until cleared.
+PROTOCOL: If a requested feature overlaps with, alters, or risks breaking these critical domains, you MUST STOP immediately. You MUST output a "RISK IMPACT REPORT" detailing the specific files and logic conflicts. End your response strictly with "AWAITING CLEARANCE TO PROCEED FROM MACE". Do NOT output execution code until cleared.
 
 # CODE UNTOUCHABLES (Permanent)
 
