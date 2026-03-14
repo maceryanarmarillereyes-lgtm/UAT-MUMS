@@ -212,11 +212,33 @@ module.exports = async (req, res) => {
     }
 
     // Per-tab settings (for custom columns / filters) — report config comes from global
-    const profileQuickbaseSettings = parseQuickbaseSettings(profile.quickbase_settings, auth.id);
+    const profileQuickbaseSettingsRaw = parseQuickbaseSettings(profile.quickbase_settings, auth.id);
     const profileQuickbaseConfigRaw = parseQuickbaseSettings(profile.quickbase_config, auth.id);
-    const profileQuickbaseConfig = Object.keys(profileQuickbaseSettings).length
-      ? profileQuickbaseSettings
-      : profileQuickbaseConfigRaw;
+
+    // TAB-RESOLUTION FIX: When quickbase_settings has a tabs array, resolve the ACTIVE TAB's
+    // settings for customColumns/customFilters. Using the full { activeTabIndex, tabs } object
+    // as profileQuickbaseConfig means .customColumns/.customFilters are always undefined —
+    // they live under tabs[N], not at the top level.
+    let profileQuickbaseConfig;
+    if (Array.isArray(profileQuickbaseSettingsRaw.tabs) && profileQuickbaseSettingsRaw.tabs.length) {
+      const _activeIdx = Math.min(
+        Math.max(Number(profileQuickbaseSettingsRaw.activeTabIndex || 0), 0),
+        profileQuickbaseSettingsRaw.tabs.length - 1
+      );
+      // For bypassGlobal, prefer the tab whose bypassGlobal=true — it's the one making this request
+      let _resolvedTab = profileQuickbaseSettingsRaw.tabs[_activeIdx] || {};
+      const _bypassTabOverride = String(req?.query?.bypassGlobal || '').trim() === 'true';
+      if (_bypassTabOverride) {
+        // Find the first tab with bypassGlobal=true (the tab making this bypass request)
+        const _bypassTab = profileQuickbaseSettingsRaw.tabs.find(t => !!(t && t.bypassGlobal));
+        if (_bypassTab) _resolvedTab = _bypassTab;
+      }
+      profileQuickbaseConfig = _resolvedTab;
+    } else if (Object.keys(profileQuickbaseSettingsRaw).length) {
+      profileQuickbaseConfig = profileQuickbaseSettingsRaw;
+    } else {
+      profileQuickbaseConfig = profileQuickbaseConfigRaw;
+    }
 
     // Token resolution:
     // - bypassGlobal=true → use profile.qb_token (personal token, any role)

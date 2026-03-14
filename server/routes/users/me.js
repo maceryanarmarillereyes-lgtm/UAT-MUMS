@@ -140,12 +140,19 @@ module.exports = async (req, res) => {
     }
     // Attach for frontend convenience (email may be persisted in profiles; auth email remains source of truth).
     try {
+      // SECURITY + TOKEN-STATUS FIX:
+      // Expose qb_token_set (boolean) so the frontend can show the correct placeholder
+      // WITHOUT exposing the actual token value in the browser. The actual qb_token is
+      // only read server-side (monitoring.js via getProfileForUserId with service role).
+      const _hasQbToken = !!(profile && String(profile.qb_token || '').trim());
       profile = Object.assign({}, profile, {
         settingsRaw: originalSettings ?? null,
         settings: normalizedSettings,
         email,
         teamOverride,
-        team_override: teamOverride
+        team_override: teamOverride,
+        qb_token_set: _hasQbToken,
+        qb_token: undefined  // never expose raw token to client
       });
     } catch (_) {}
 

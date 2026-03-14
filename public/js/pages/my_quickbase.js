@@ -2750,8 +2750,8 @@
       const _tokEl = root.querySelector('#qbBypassToken');
       if (_tokEl) {
         _tokEl.value = '';
-        // Re-run placeholder logic after clearing so it shows the correct hint
-        const _hasRealToken = !!(profile && String(profile.qb_token || '').trim());
+        // Use qb_token_set (server-side boolean flag) — actual token is never sent to client
+        const _hasRealToken = !!(profile && (profile.qb_token_set || String(profile.qb_token || '').trim()));
         _tokEl.placeholder = _hasRealToken
           ? '(token saved — enter new to change)'
           : 'Enter your personal QB User Token';
@@ -2884,15 +2884,14 @@
       if (realmEl) realmEl.value = s.realm || '';
       if (tableEl) tableEl.value = s.tableId || '';
       if (qidEl) qidEl.value = s.qid || '';
-      // TOKEN FIX: Check actual profile.qb_token from server — NOT reportLink presence.
-      // reportLink can be set without a token ever being saved. Using reportLink as the
-      // indicator caused the field to show "saved" even when no token existed in the DB,
-      // tricking the user into never entering a token.
+      // TOKEN FIX: Use qb_token_set (boolean flag from server) to detect if token is saved.
+      // The actual token value is NEVER returned to the client (me.js strips it for security).
+      // qb_token_set=true means the token IS saved in the DB and ready for server-side use.
       const tokEl = root.querySelector('#qbBypassToken');
       if (tokEl) {
         // Always clear the value — never pre-fill with the actual token (security)
         tokEl.value = '';
-        const _hasRealToken = !!(profile && String(profile.qb_token || '').trim());
+        const _hasRealToken = !!(profile && (profile.qb_token_set || String(profile.qb_token || '').trim()));
         tokEl.placeholder = _hasRealToken
           ? '(token saved — enter new to change)'
           : 'Enter your personal QB User Token';
@@ -3402,11 +3401,10 @@
             const tokData = await tokRes.json().catch(() => ({}));
             if (tokRes.ok && tokData.ok) {
               // TOKEN FIX: Update local profile cache so syncBypassInputsFromState reads
-              // the correct state on next open — without this, profile.qb_token stays
-              // empty in memory and the placeholder reverts to "Enter your token" on re-open.
-              profile = Object.assign({}, profile, { qb_token: bypassTok });
+              // the correct state on next open — set qb_token_set:true (never store actual value).
+              profile = Object.assign({}, profile, { qb_token_set: true });
               if (window.Store && typeof Store.setProfile === 'function' && me) {
-                Store.setProfile(me.id, Object.assign({}, profile, { updatedAt: Date.now() }));
+                Store.setProfile(me.id, Object.assign({}, profile, { qb_token_set: true, updatedAt: Date.now() }));
               }
               // Clear the token input after successful save (security — never show token in UI)
               if (bypassTokEl) {
