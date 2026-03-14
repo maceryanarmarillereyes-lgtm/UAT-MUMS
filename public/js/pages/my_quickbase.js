@@ -2371,7 +2371,10 @@
             : String(globalQbSettings.realm || freshTabSettings.realm || _tabParsed.realm || '').trim();
           const hasExplicitLoadMore = Number(opts.offset || 0) >= 100;
           const hasActiveSearch = !!String(getActiveSearchTerm() || '').trim();
-          const requestLimit = 100;
+          // BYPASS FIX: For bypass mode, fetch the full report in one shot (limit 500).
+          // The server uses /v1/reports/{id}/run which handles pagination on QB's side.
+          // For global mode: keep the 100-record first-load + background progressive fetch.
+          const requestLimit = isTabBypassed ? 500 : 100;
           const cacheKey = getQuickbaseCacheKey({
             tabId: activeTabId,
             tableId: activeTableId,
@@ -2476,8 +2479,13 @@
             records: state.baseRecords.slice(),
             allAvailableFields: state.allAvailableFields
           }, thisLoadTabId);
-          // FIX: [Issue 2] - Progressive background fetch for full dataset.
-          if (requestLimit < QUICKBASE_BACKGROUND_LIMIT && !hasExplicitLoadMore && !hasActiveSearch) {
+          // BYPASS FIX: Progressive background fetch is DISABLED for bypass mode.
+          // Bypass tabs use POST /v1/reports/{id}/run (server-side) which already returns
+          // the complete report dataset in one call. The background fetch uses the old
+          // /v1/records/query path which ignores report filters → fetches 500 raw table
+          // records → merges them with correct 80 bypass records → corrupts the display.
+          // For global mode: progressive fetch still works as before (no change).
+          if (!isTabBypassed && requestLimit < QUICKBASE_BACKGROUND_LIMIT && !hasExplicitLoadMore && !hasActiveSearch) {
             setTimeout(async () => {
               try {
                 const bgData = await window.QuickbaseAdapter.fetchMonitoringData({
