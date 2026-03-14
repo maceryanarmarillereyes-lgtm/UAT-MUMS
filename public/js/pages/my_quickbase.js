@@ -251,7 +251,8 @@
         ? (src.customColumns || src.qb_custom_columns || base.customColumns).map((v) => String(v))
         : []),
       customFilters: deepClone(normalizeFilters(src.customFilters || src.qb_custom_filters || base.customFilters || [])),
-      filterMatch: normalizeFilterMatch(src.filterMatch || src.qb_filter_match || base.filterMatch)
+      filterMatch: normalizeFilterMatch(src.filterMatch || src.qb_filter_match || base.filterMatch),
+      virtualColumn: deepClone(src.virtualColumn || base.virtualColumn || { enabled: false, label: 'Status', items: [], conditionalRules: [] })
     };
   }
 
@@ -281,7 +282,8 @@
       dashboard_counters: deepClone(normalizeDashboardCounters(src.dashboard_counters || src.dashboardCounters || [])),
       customColumns: deepClone(Array.isArray(src.customColumns || src.qb_custom_columns) ? (src.customColumns || src.qb_custom_columns).map((v) => String(v)) : []),
       customFilters: deepClone(normalizeFilters(src.customFilters || src.qb_custom_filters || [])),
-      filterMatch: normalizeFilterMatch(src.filterMatch || src.qb_filter_match || 'ALL')
+      filterMatch: normalizeFilterMatch(src.filterMatch || src.qb_filter_match || 'ALL'),
+      virtualColumn: deepClone(src.virtualColumn || base.virtualColumn || { enabled: false, label: 'Status', items: [], conditionalRules: [] })
     };
   }
 
@@ -567,27 +569,21 @@
     // FIX: [Issue 2] - Pagination for large record sets to avoid DOM-heavy render blocking.
     const visibleRows = rows.slice((activePage - 1) * pageSize, activePage * pageSize);
     meta.innerHTML = `${rows.length} record${rows.length === 1 ? '' : 's'} loaded${rows.length > pageSize ? ` • Page ${activePage}/${totalPages}` : ''}`;
+
+    // ENHANCEMENT 1: Days-only duration — never show hours
     const toDurationLabel = (value) => {
       const numeric = Number(value);
       if (!Number.isFinite(numeric) || numeric < 0) return String(value == null ? 'N/A' : value);
       const hours = numeric / (1000 * 60 * 60);
-      if (hours < 24) {
-        const roundedHours = Math.max(1, Math.round(hours));
-        return `${roundedHours} hr${roundedHours === 1 ? '' : 's'}`;
-      }
-      const days = Math.floor(hours / 24);
-      const remainingHours = Math.round(hours - (days * 24));
-      if (remainingHours <= 0) return `${days} day${days === 1 ? '' : 's'}`;
-      return `${days} day${days === 1 ? '' : 's'} ${remainingHours} hr${remainingHours === 1 ? '' : 's'}`;
+      const days = Math.round(hours / 24);
+      if (days < 1) return '< 1 day';
+      return `${days} day${days === 1 ? '' : 's'}`;
     };
 
     const headers = columns.map((c) => `<th>${esc(c.label || c.id || 'Field')}</th>`).join('');
     const rowStartIndex = (activePage - 1) * pageSize;
 
     // ── SCROLL POSITION SAVE ─────────────────────────────────────────────────
-    // Capture current scroll before innerHTML wipes the DOM. This prevents
-    // auto-refresh (10s interval) and realtime data updates from jumping the
-    // user back to the top while they're actively scrolling through records.
     const existingTableInner = host.querySelector('.qb-table-inner');
     const savedScrollTop  = existingTableInner ? existingTableInner.scrollTop  : 0;
     const savedScrollLeft = existingTableInner ? existingTableInner.scrollLeft : 0;
@@ -609,28 +605,82 @@
       return `<span class="qb-status-badge ${cls}"><span class="qb-status-dot"></span>${esc(s)}</span>`;
     }
 
+    // ENHANCEMENT 2: 3-line clamp cell renderer with premium tooltip
+    function renderClampedCell(value, isStatus) {
+      if (isStatus) return `<td>${renderStatusBadge(String(value))}</td>`;
+      const safeVal = esc(String(value == null ? '' : value));
+      // Only apply clamp + tooltip for cells that may contain long text
+      const rawStr = String(value == null ? '' : value);
+      if (rawStr.length <= 60) return `<td><span class="qb-cell-text">${safeVal}</span></td>`;
+      return `<td><div class="qb-cell-clamp" data-full="${esc(rawStr)}"><span class="qb-cell-text">${safeVal}</span></div></td>`;
+    }
+
+    // ENHANCEMENT 3: Virtual Column support
+    const vcSettings = opts.virtualColumnSettings || null;
+    const vcEnabled = !!(vcSettings && vcSettings.enabled && vcSettings.items && vcSettings.items.length);
+    const vcHeader = vcEnabled ? `<th class="qb-vc-th" title="Virtual Column">⬡ ${esc(vcSettings.label || 'Status')}</th>` : '';
+
     const body = visibleRows.map((r, rowIdx) => {
       const globalRowNum = rowStartIndex + rowIdx + 1;
+      const recordId = String(r && r.qbRecordId || 'N/A');
+
+      // Virtual Column cell
+      let vcCell = '';
+      if (vcEnabled) {
+        const savedVal = (opts.virtualColumnValues && opts.virtualColumnValues[recordId]) || '';
+        const cfStyle = _getConditionalStyle(savedVal, vcSettings.conditionalRules || []);
+        const optionsHtml = vcSettings.items.map(item =>
+          `<option value="${esc(item)}" ${savedVal === item ? 'selected' : ''}>${esc(item)}</option>`
+        ).join('');
+        vcCell = `<td class="qb-vc-cell" style="${cfStyle.cellStyle || ''}">
+          <select class="qb-vc-select" data-record-id="${esc(recordId)}" title="Set status for this record">
+            <option value="">—</option>${optionsHtml}
+          </select>
+        </td>`;
+      }
+
       const cells = columns.map((c) => {
         const field = r && r.fields ? r.fields[String(c.id)] : null;
         const rawValue = field && field.value != null ? field.value : 'N/A';
         const normalizedLabel = String(c && c.label || '').trim().toLowerCase();
-        // Case Status gets color badge treatment
         if (normalizedLabel === 'case status' || normalizedLabel === 'status') {
           return `<td>${renderStatusBadge(String(rawValue))}</td>`;
         }
-        const value = (normalizedLabel === 'last update days' || normalizedLabel === 'age')
+        const displayValue = (normalizedLabel === 'last update days' || normalizedLabel === 'age')
           ? toDurationLabel(rawValue)
           : String(rawValue);
-        return `<td>${esc(value)}</td>`;
+        const safeVal = esc(displayValue);
+        const rawStr = String(displayValue);
+        if (rawStr.length <= 60) return `<td><span class="qb-cell-text">${safeVal}</span></td>`;
+        return `<td><div class="qb-cell-clamp" data-full="${esc(rawStr)}"><span class="qb-cell-text">${safeVal}</span></div></td>`;
       }).join('');
-      return `<tr><td class="qb-row-num-cell"><span class="qb-row-num-pill">${globalRowNum}</span></td><td class="qb-case-id">${esc(String(r && r.qbRecordId || 'N/A'))}</td>${cells}</tr>`;
+
+      // Apply row-level conditional formatting from virtual column
+      const savedVcVal = vcEnabled ? ((opts.virtualColumnValues && opts.virtualColumnValues[recordId]) || '') : '';
+      const rowCf = vcEnabled ? _getConditionalStyle(savedVcVal, vcSettings.conditionalRules || []) : {};
+      const rowStyleAttr = rowCf.rowStyle ? ` style="${rowCf.rowStyle}"` : '';
+      const rowClassAttr = rowCf.rowClass ? ` class="${rowCf.rowClass}"` : '';
+
+      return `<tr${rowClassAttr}${rowStyleAttr}>${vcCell}<td class="qb-row-num-cell"><span class="qb-row-num-pill">${globalRowNum}</span></td><td class="qb-case-id">${esc(recordId)}</td>${cells}</tr>`;
     }).join('');
 
-    host.innerHTML = `<div class="qb-table-inner"><table class="qb-data-table"><thead><tr><th class="qb-row-num-th">#</th><th>Case #</th>${headers}</tr></thead><tbody>${body}</tbody></table></div>`;
+    const vcThPrefix = vcEnabled ? vcHeader : '';
+    host.innerHTML = `<div class="qb-table-inner"><table class="qb-data-table"><thead><tr>${vcThPrefix}<th class="qb-row-num-th">#</th><th>Case #</th>${headers}</tr></thead><tbody>${body}</tbody></table></div>`;
+
+    // ── PREMIUM TOOLTIP SETUP ─────────────────────────────────────────────
+    _setupQbTooltips(host);
+
+    // ── VIRTUAL COLUMN CHANGE HANDLER ─────────────────────────────────────
+    if (vcEnabled && typeof opts.onVirtualColumnChange === 'function') {
+      host.querySelectorAll('.qb-vc-select').forEach(sel => {
+        sel.addEventListener('change', () => {
+          const rid = sel.getAttribute('data-record-id');
+          opts.onVirtualColumnChange(rid, sel.value);
+        });
+      });
+    }
+
     // ── SCROLL POSITION PRESERVATION ──────────────────────────────────────────
-    // After innerHTML replaces the inner DOM, restore saved scroll so that
-    // auto-refresh (every 10s) and data updates don't jump the user back to top.
     if (savedScrollTop > 0 || savedScrollLeft > 0) {
       const newTableInner = host.querySelector('.qb-table-inner');
       if (newTableInner) {
@@ -655,6 +705,75 @@
         };
       });
     }
+  }
+
+  // ── PREMIUM TOOLTIP ENGINE ──────────────────────────────────────────────────
+  // Singleton tooltip DOM node — created once, reused on hover
+  let _qbTooltipEl = null;
+  function _getTooltip() {
+    if (_qbTooltipEl) return _qbTooltipEl;
+    _qbTooltipEl = document.createElement('div');
+    _qbTooltipEl.className = 'qb-cell-tooltip';
+    _qbTooltipEl.setAttribute('role', 'tooltip');
+    _qbTooltipEl.setAttribute('aria-live', 'polite');
+    document.body.appendChild(_qbTooltipEl);
+    return _qbTooltipEl;
+  }
+
+  function _setupQbTooltips(host) {
+    const clampEls = host.querySelectorAll('.qb-cell-clamp');
+    clampEls.forEach(el => {
+      el.addEventListener('mouseenter', _qbTooltipEnter);
+      el.addEventListener('mousemove', _qbTooltipMove);
+      el.addEventListener('mouseleave', _qbTooltipLeave);
+    });
+  }
+
+  function _qbTooltipEnter(e) {
+    const el = e.currentTarget;
+    const full = el.getAttribute('data-full') || '';
+    if (!full) return;
+    const tip = _getTooltip();
+    tip.textContent = full;
+    tip.classList.add('is-visible');
+    _positionTooltip(tip, e);
+  }
+  function _qbTooltipMove(e) {
+    const tip = _getTooltip();
+    _positionTooltip(tip, e);
+  }
+  function _qbTooltipLeave() {
+    const tip = _getTooltip();
+    tip.classList.remove('is-visible');
+  }
+  function _positionTooltip(tip, e) {
+    const GAP = 14;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    tip.style.left = '0'; tip.style.top = '0'; // reset to measure
+    const tw = tip.offsetWidth || 280, th = tip.offsetHeight || 60;
+    let x = e.clientX + GAP, y = e.clientY + GAP;
+    if (x + tw > vw - 10) x = e.clientX - tw - GAP;
+    if (y + th > vh - 10) y = e.clientY - th - GAP;
+    tip.style.left = `${Math.max(8, x)}px`;
+    tip.style.top  = `${Math.max(8, y)}px`;
+  }
+
+  // ── VIRTUAL COLUMN CONDITIONAL FORMATTING HELPER ───────────────────────────
+  function _getConditionalStyle(value, rules) {
+    if (!value || !Array.isArray(rules) || !rules.length) return {};
+    const rule = rules.find(r => String(r.value || '') === String(value));
+    if (!rule) return {};
+    const parts = [];
+    if (rule.bgColor)    parts.push(`background:${rule.bgColor}!important`);
+    if (rule.textColor)  parts.push(`color:${rule.textColor}!important`);
+    if (rule.fontWeight) parts.push(`font-weight:${rule.fontWeight}!important`);
+    if (rule.fontSize)   parts.push(`font-size:${rule.fontSize}!important`);
+    if (rule.fontStyle)  parts.push(`font-style:${rule.fontStyle}!important`);
+    if (rule.textDecoration) parts.push(`text-decoration:${rule.textDecoration}!important`);
+    if (rule.textAlign)  parts.push(`text-align:${rule.textAlign}!important`);
+    const rowStyle = parts.join(';');
+    const cellStyle = rule.bgColor ? `background:${rule.bgColor}22!important` : '';
+    return { rowStyle, cellStyle, rowClass: rowStyle ? 'qb-cf-row' : '' };
   }
 
   function renderEmptyState(root, message) {
@@ -970,7 +1089,9 @@
       qbCache: {},
       _tabDataCache: {},
       settingsModalView: 'custom-columns',  // report-config moved to Global QB Settings
-      settingsEditingTabId: ''
+      settingsEditingTabId: '',
+      virtualColumn: deepClone(initialTabSettings.virtualColumn || { enabled: false, label: 'Status', items: [], conditionalRules: [] }),
+      virtualColumnValues: {}  // { [recordId]: selectedValue } — persisted per-tab in localStorage
     };
 
     function syncTabManagerFromState(tabId) {
@@ -1177,6 +1298,7 @@
       state.filterMatch = normalizeFilterMatch(freshSettings.filterMatch || 'ALL');
       state.dashboardCounters = deepClone(normalizeDashboardCounters(freshSettings.dashboard_counters || []));
       state.activeCounterIndex = -1;
+      state.virtualColumn = deepClone(freshSettings.virtualColumn || { enabled: false, label: 'Status', items: [], conditionalRules: [] });
       const headerSearch = root.querySelector('#qbHeaderSearch');
       if (headerSearch) headerSearch.value = getActiveSearchTerm();
       const instanceTitle = root.querySelector('#qbInstanceTitle');
@@ -1239,7 +1361,8 @@
           customColumns: Array.isArray(state.customColumns) ? state.customColumns.map((v) => String(v)) : [],
           customFilters: normalizeFilters(state.customFilters),
           filterMatch: normalizeFilterMatch(state.filterMatch),
-          dashboard_counters: normalizeDashboardCounters(state.dashboardCounters)
+          dashboard_counters: normalizeDashboardCounters(state.dashboardCounters),
+          virtualColumn: deepClone(state.virtualColumn || (_existingTabSettings && _existingTabSettings.virtualColumn) || { enabled: false, label: 'Status', items: [], conditionalRules: [] })
         }, {}));
       } else {
         nextSettings = deepClone(createDefaultSettings({
@@ -1251,7 +1374,8 @@
           customColumns: Array.isArray(state.customColumns) ? state.customColumns.map((v) => String(v)) : [],
           customFilters: normalizeFilters(state.customFilters),
           filterMatch: normalizeFilterMatch(state.filterMatch),
-          dashboard_counters: normalizeDashboardCounters(state.dashboardCounters)
+          dashboard_counters: normalizeDashboardCounters(state.dashboardCounters),
+          virtualColumn: deepClone(state.virtualColumn || (_existingTabSettings && _existingTabSettings.virtualColumn) || { enabled: false, label: 'Status', items: [], conditionalRules: [] })
         }, {}));
       }
 
@@ -1431,7 +1555,7 @@
     }
 
     function setSettingsModalView(viewKey) {
-      const allowedViews = new Set(['report-config', 'custom-columns', 'filter-config', 'dashboard-counters']);
+      const allowedViews = new Set(['report-config', 'custom-columns', 'filter-config', 'dashboard-counters', 'virtual-column']);
       const nextView = allowedViews.has(String(viewKey || '').trim()) ? String(viewKey).trim() : 'custom-columns';
       state.settingsModalView = nextView;
 
@@ -1752,6 +1876,7 @@
             <button type="button" class="qb-modal-tab active" data-qb-settings-tab="custom-columns">Custom Columns</button>
             <button type="button" class="qb-modal-tab" data-qb-settings-tab="filter-config">Filter Config</button>
             <button type="button" class="qb-modal-tab" data-qb-settings-tab="dashboard-counters">Dashboard Counters</button>
+            <button type="button" class="qb-modal-tab" data-qb-settings-tab="virtual-column">⬡ Virtual Column</button>
           </div>
 
           <div class="qb-modal-body">
@@ -1839,6 +1964,55 @@
                 <button class="qb-btn qb-btn-primary qb-btn-sm" id="qbAddCounterBtn" type="button">+ Add Counter</button>
               </div>
               <div id="qbCounterRows" class="qb-counter-rows"></div>
+            </section>
+
+            <!-- VIRTUAL COLUMN SECTION -->
+            <section class="qb-modal-section" data-qb-settings-view="virtual-column" style="display:none;">
+              <div class="qb-section-title" style="margin-bottom:16px;">
+                <span class="qb-section-num" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);">⬡</span>Virtual Column
+              </div>
+
+              <!-- Enable toggle -->
+              <div class="qb-vc-enable-row">
+                <label class="qb-toggle" title="Enable Virtual Column">
+                  <input type="checkbox" id="qbVcEnabled" />
+                  <span class="qb-toggle-track"><span class="qb-toggle-thumb"></span></span>
+                </label>
+                <div>
+                  <div style="font-size:13px;font-weight:700;color:#e2e8f0;">Enable Virtual Column</div>
+                  <div style="font-size:11px;color:rgba(148,163,184,.7);margin-top:2px;">Adds a dropdown column as the first column of every row</div>
+                </div>
+              </div>
+
+              <!-- Column config (visible when enabled) -->
+              <div id="qbVcConfig" style="display:none;margin-top:16px;">
+                <div class="qb-field" style="margin-bottom:14px;">
+                  <label class="qb-field-label">Column Label</label>
+                  <input class="qb-field-input" id="qbVcLabel" type="text" placeholder="e.g. Status, Action, Priority" />
+                </div>
+
+                <!-- Dropdown items -->
+                <div class="qb-section-header" style="margin-bottom:10px;">
+                  <div class="qb-field-label" style="margin:0;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;">Dropdown Menu Items</div>
+                  <button class="qb-btn qb-btn-ghost qb-btn-sm" id="qbVcAddItem" type="button">+ Add Option</button>
+                </div>
+                <div id="qbVcItems" class="qb-vc-items"></div>
+
+                <!-- Conditional formatting -->
+                <div style="margin-top:18px;">
+                  <div class="qb-vc-enable-row" style="margin-bottom:10px;">
+                    <label class="qb-toggle" title="Enable Conditional Formatting">
+                      <input type="checkbox" id="qbVcCfEnabled" />
+                      <span class="qb-toggle-track"><span class="qb-toggle-thumb"></span></span>
+                    </label>
+                    <div>
+                      <div style="font-size:13px;font-weight:700;color:#e2e8f0;">Conditional Formatting</div>
+                      <div style="font-size:11px;color:rgba(148,163,184,.7);margin-top:2px;">Apply row styles based on selected dropdown value</div>
+                    </div>
+                  </div>
+                  <div id="qbVcCfRules" style="display:none;"></div>
+                </div>
+              </div>
             </section>
 
           </div>
@@ -2097,6 +2271,233 @@
           });
         });
       });
+    }
+
+    // ── VIRTUAL COLUMN RENDER & WIRE ──────────────────────────────────────────
+    function _getVcState() {
+      const tabId = getActiveTabId();
+      const s = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId];
+      return (s && s.virtualColumn) ? deepClone(s.virtualColumn) : { enabled: false, label: 'Status', items: [], conditionalRules: [] };
+    }
+
+    function _saveVcState(vc) {
+      const tabId = getActiveTabId();
+      if (!tabId) return;
+      const prev = createDefaultSettings((state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]) || {}, {});
+      state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, {
+        [tabId]: Object.assign({}, prev, { virtualColumn: deepClone(vc) })
+      });
+      state.virtualColumn = deepClone(vc);
+      queuePersistQuickbaseSettings();
+    }
+
+    // localStorage key for per-tab virtual column values (dropdown selections per row)
+    function _getVcValuesKey(tabId) {
+      const uid = me && me.id ? String(me.id) : 'anon';
+      return `qb_vc_values:${uid}:${tabId}`;
+    }
+    function _loadVcValues(tabId) {
+      try {
+        const raw = localStorage.getItem(_getVcValuesKey(tabId));
+        return raw ? JSON.parse(raw) : {};
+      } catch (_) { return {}; }
+    }
+    function _saveVcValues(tabId, values) {
+      try { localStorage.setItem(_getVcValuesKey(tabId), JSON.stringify(values)); } catch (_) {}
+    }
+
+    function renderVirtualColumnSettings() {
+      const vc = _getVcState();
+
+      const enabledEl = root.querySelector('#qbVcEnabled');
+      const configEl  = root.querySelector('#qbVcConfig');
+      const labelEl   = root.querySelector('#qbVcLabel');
+      const cfEnabledEl = root.querySelector('#qbVcCfEnabled');
+      const cfRulesEl   = root.querySelector('#qbVcCfRules');
+      const itemsEl   = root.querySelector('#qbVcItems');
+
+      if (!enabledEl || !configEl) return;
+
+      enabledEl.checked = !!vc.enabled;
+      configEl.style.display = vc.enabled ? '' : 'none';
+      if (labelEl) labelEl.value = vc.label || 'Status';
+
+      const cfEnabled = !!(vc.conditionalRules && vc.conditionalRules.length);
+      if (cfEnabledEl) cfEnabledEl.checked = cfEnabled;
+      if (cfRulesEl) cfRulesEl.style.display = cfEnabled ? '' : 'none';
+
+      // Render dropdown items
+      if (itemsEl) {
+        if (!vc.items || !vc.items.length) {
+          itemsEl.innerHTML = '<div class="small muted" style="padding:6px 0;">No options yet. Click "+ Add Option" to begin.</div>';
+        } else {
+          itemsEl.innerHTML = vc.items.map((item, idx) => `
+            <div class="qb-vc-item-row" data-vc-item-idx="${idx}">
+              <span class="qb-vc-item-drag" title="Drag to reorder">⠿</span>
+              <input class="qb-field-input qb-vc-item-input" type="text" value="${esc(item)}" placeholder="Option label" data-vc-idx="${idx}" />
+              <button class="qb-btn qb-btn-ghost qb-btn-sm qb-vc-item-del" data-vc-del="${idx}" type="button" title="Remove">✕</button>
+            </div>
+          `).join('');
+
+          itemsEl.querySelectorAll('.qb-vc-item-input').forEach(inp => {
+            inp.addEventListener('input', () => {
+              const idx = Number(inp.getAttribute('data-vc-idx'));
+              const cur = _getVcState();
+              cur.items[idx] = inp.value.trim();
+              _saveVcState(cur);
+              if (cfRulesEl && cfRulesEl.style.display !== 'none') renderVcCfRules();
+            });
+          });
+          itemsEl.querySelectorAll('[data-vc-del]').forEach(btn => {
+            btn.onclick = () => {
+              const idx = Number(btn.getAttribute('data-vc-del'));
+              const cur = _getVcState();
+              cur.items.splice(idx, 1);
+              // Remove orphaned CF rules
+              cur.conditionalRules = (cur.conditionalRules || []).filter(r => cur.items.includes(r.value));
+              _saveVcState(cur);
+              renderVirtualColumnSettings();
+            };
+          });
+        }
+      }
+
+      if (cfEnabled) renderVcCfRules();
+    }
+
+    function renderVcCfRules() {
+      const cfRulesEl = root.querySelector('#qbVcCfRules');
+      if (!cfRulesEl) return;
+      const vc = _getVcState();
+      const items = vc.items || [];
+      if (!items.length) {
+        cfRulesEl.innerHTML = '<div class="small muted">Add dropdown options first to configure formatting.</div>';
+        return;
+      }
+
+      cfRulesEl.innerHTML = items.map((item, idx) => {
+        const rule = (vc.conditionalRules || []).find(r => r.value === item) || { value: item };
+        const bg = rule.bgColor || '';
+        const tc = rule.textColor || '';
+        const fw = rule.fontWeight || 'normal';
+        const fs = rule.fontSize || '12px';
+        const fi = rule.fontStyle || 'normal';
+        const td = rule.textDecoration || 'none';
+        const ta = rule.textAlign || 'left';
+        return `
+          <div class="qb-vc-cf-rule" data-cf-value="${esc(item)}">
+            <div class="qb-vc-cf-rule-header">
+              <span class="qb-vc-cf-badge" style="background:${bg||'rgba(255,255,255,.08)'};color:${tc||'#c8d8f0'};font-weight:${fw};font-style:${fi};text-decoration:${td};font-size:${fs};text-align:${ta};">${esc(item)}</span>
+              <span class="small muted" style="font-size:10px;">Row formatting when "${esc(item)}" selected</span>
+            </div>
+            <div class="qb-vc-cf-controls">
+              <label class="qb-vc-cf-ctrl"><span>Row BG</span><input type="color" class="qb-vc-cf-color" data-cf-key="bgColor" value="${bg||'#0f172a'}" /></label>
+              <label class="qb-vc-cf-ctrl"><span>Text Color</span><input type="color" class="qb-vc-cf-color" data-cf-key="textColor" value="${tc||'#c8d8f0'}" /></label>
+              <label class="qb-vc-cf-ctrl"><span>Bold</span>
+                <select class="qb-field-input qb-vc-cf-sel" data-cf-key="fontWeight" style="font-size:11px;padding:4px 6px;">
+                  <option value="normal" ${fw==='normal'?'selected':''}>Normal</option>
+                  <option value="600" ${fw==='600'?'selected':''}>Semi-Bold</option>
+                  <option value="700" ${fw==='700'?'selected':''}>Bold</option>
+                  <option value="800" ${fw==='800'?'selected':''}>Extra Bold</option>
+                </select>
+              </label>
+              <label class="qb-vc-cf-ctrl"><span>Style</span>
+                <select class="qb-field-input qb-vc-cf-sel" data-cf-key="fontStyle" style="font-size:11px;padding:4px 6px;">
+                  <option value="normal" ${fi==='normal'?'selected':''}>Normal</option>
+                  <option value="italic" ${fi==='italic'?'selected':''}>Italic</option>
+                </select>
+              </label>
+              <label class="qb-vc-cf-ctrl"><span>Decoration</span>
+                <select class="qb-field-input qb-vc-cf-sel" data-cf-key="textDecoration" style="font-size:11px;padding:4px 6px;">
+                  <option value="none" ${td==='none'?'selected':''}>None</option>
+                  <option value="underline" ${td==='underline'?'selected':''}>Underline</option>
+                  <option value="line-through" ${td==='line-through'?'selected':''}>Strikethrough</option>
+                </select>
+              </label>
+              <label class="qb-vc-cf-ctrl"><span>Align</span>
+                <select class="qb-field-input qb-vc-cf-sel" data-cf-key="textAlign" style="font-size:11px;padding:4px 6px;">
+                  <option value="left" ${ta==='left'?'selected':''}>Left</option>
+                  <option value="center" ${ta==='center'?'selected':''}>Center</option>
+                  <option value="right" ${ta==='right'?'selected':''}>Right</option>
+                </select>
+              </label>
+              <label class="qb-vc-cf-ctrl"><span>Font Size</span>
+                <select class="qb-field-input qb-vc-cf-sel" data-cf-key="fontSize" style="font-size:11px;padding:4px 6px;">
+                  <option value="11px" ${fs==='11px'?'selected':''}>Small (11px)</option>
+                  <option value="12px" ${fs==='12px'?'selected':''}>Default (12px)</option>
+                  <option value="13px" ${fs==='13px'?'selected':''}>Medium (13px)</option>
+                  <option value="14px" ${fs==='14px'?'selected':''}>Large (14px)</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      cfRulesEl.querySelectorAll('[data-cf-key]').forEach(input => {
+        const evtName = input.tagName === 'SELECT' ? 'change' : 'input';
+        input.addEventListener(evtName, () => {
+          const ruleEl = input.closest('[data-cf-value]');
+          if (!ruleEl) return;
+          const val = ruleEl.getAttribute('data-cf-value');
+          const key = input.getAttribute('data-cf-key');
+          const cur = _getVcState();
+          let rule = (cur.conditionalRules || []).find(r => r.value === val);
+          if (!rule) { rule = { value: val }; (cur.conditionalRules = cur.conditionalRules || []).push(rule); }
+          rule[key] = input.value;
+          _saveVcState(cur);
+          // Update live preview badge
+          const badge = ruleEl.querySelector('.qb-vc-cf-badge');
+          if (badge) {
+            const r2 = (cur.conditionalRules || []).find(r => r.value === val) || {};
+            badge.style.cssText = `background:${r2.bgColor||'rgba(255,255,255,.08)'};color:${r2.textColor||'#c8d8f0'};font-weight:${r2.fontWeight||'normal'};font-style:${r2.fontStyle||'normal'};text-decoration:${r2.textDecoration||'none'};font-size:${r2.fontSize||'12px'};text-align:${r2.textAlign||'left'};`;
+          }
+        });
+      });
+    }
+
+    // Wire virtual column modal controls (called once after HTML is rendered)
+    function bindVirtualColumnControls() {
+      const enabledEl   = root.querySelector('#qbVcEnabled');
+      const labelEl     = root.querySelector('#qbVcLabel');
+      const addItemBtn  = root.querySelector('#qbVcAddItem');
+      const cfEnabledEl = root.querySelector('#qbVcCfEnabled');
+      const cfRulesEl   = root.querySelector('#qbVcCfRules');
+      const configEl    = root.querySelector('#qbVcConfig');
+
+      if (enabledEl) {
+        enabledEl.addEventListener('change', () => {
+          const cur = _getVcState();
+          cur.enabled = enabledEl.checked;
+          _saveVcState(cur);
+          if (configEl) configEl.style.display = cur.enabled ? '' : 'none';
+        });
+      }
+      if (labelEl) {
+        labelEl.addEventListener('input', () => {
+          const cur = _getVcState();
+          cur.label = labelEl.value.trim() || 'Status';
+          _saveVcState(cur);
+        });
+      }
+      if (addItemBtn) {
+        addItemBtn.onclick = () => {
+          const cur = _getVcState();
+          cur.items = cur.items || [];
+          cur.items.push('New Option');
+          _saveVcState(cur);
+          renderVirtualColumnSettings();
+        };
+      }
+      if (cfEnabledEl) {
+        cfEnabledEl.addEventListener('change', () => {
+          const cur = _getVcState();
+          if (!cfEnabledEl.checked) cur.conditionalRules = [];
+          _saveVcState(cur);
+          if (cfRulesEl) cfRulesEl.style.display = cfEnabledEl.checked ? '' : 'none';
+          if (cfEnabledEl.checked) renderVcCfRules();
+        });
+      }
     }
 
     function bindColumnSearch() {
@@ -2619,10 +3020,25 @@
       const totalRows = Array.isArray(state.currentPayload.records) ? state.currentPayload.records.length : 0;
       const maxPage = Math.max(1, Math.ceil(totalRows / state.pageSize));
       state.currentPage = Math.min(Math.max(state.currentPage, 1), maxPage);
+
+      // Virtual Column: load per-tab saved values for dropdown selections
+      const _vcActiveTabId = getActiveTabId();
+      const _vcSettings = state.virtualColumn && state.virtualColumn.enabled ? state.virtualColumn : null;
+      const _vcValues = _vcSettings ? _loadVcValues(_vcActiveTabId) : {};
+
       renderRecords(root, state.currentPayload, {
         userInitiatedSearch: !!getActiveUserSearched() && !!normalizedSearch.length,
         page: state.currentPage,
         pageSize: state.pageSize,
+        virtualColumnSettings: _vcSettings,
+        virtualColumnValues: _vcValues,
+        onVirtualColumnChange: (recordId, value) => {
+          const cur = _loadVcValues(_vcActiveTabId);
+          cur[recordId] = value;
+          _saveVcValues(_vcActiveTabId, cur);
+          // Re-render to apply conditional formatting instantly
+          applySearchAndRender();
+        },
         onPageChange: (nextPage) => {
           state.currentPage = nextPage;
           applySearchAndRender();
@@ -2741,11 +3157,13 @@
       renderColumnGrid();
       renderFilters();
       renderCounterFilters();
+      renderVirtualColumnSettings();
       setSettingsModalView('report-config');
       if (window.UI && UI.openModal) UI.openModal('qbSettingsModal');
       bindColumnSearch();
       bindFloatingDrag();
       bindReportLinkAutoExtract();
+      bindVirtualColumnControls();
       modalBindingsActive = true;
       // Sync bypass UI state when opening settings modal
       const _openTabId = state.settingsEditingTabId || getActiveTabId();
