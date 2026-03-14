@@ -129,6 +129,8 @@ function normalizeQuickbaseConfig(raw) {
     qid: String(src.qid || src.qb_qid || '').trim(),
     realm: String(src.realm || src.qb_realm || '').trim().toLowerCase(),
     tableId: String(src.tableId || src.qb_table_id || '').trim(),
+    // BYPASS FIX: preserve bypassGlobal flag — must survive server normalization round-trip
+    bypassGlobal: !!(src.bypassGlobal || src.bypass_global || false),
     customColumns,
     customFilters,
     filterMatch,
@@ -175,13 +177,19 @@ function normalizeQuickbaseSettingsPayload(raw) {
       const reportLink = String(normalizedTab.reportLink || '').trim();
       const qid = String(normalizedTab.qid || parsed.qid || '').trim();
       const tableId = String(normalizedTab.tableId || parsed.tableId || '').trim();
-      if (reportLink && (!qid || !tableId)) return null;
+      // BYPASS FIX: do NOT reject bypass tabs — they are allowed to have a reportLink
+      // with partial qid/tableId if URL parsing fails. Non-bypass tabs still require both.
+      const isBypassTab = !!(tab.bypassGlobal || normalizedTab.bypassGlobal || false);
+      if (reportLink && !isBypassTab && (!qid || !tableId)) return null;
       return {
         id: String(tab.id || '').trim(),
         tabName: String(tab.tabName || tab.name || '').trim() || 'Main Report',
         reportLink,
         qid,
         tableId,
+        realm: String(normalizedTab.realm || '').trim(),
+        // BYPASS FIX: always persist bypassGlobal so toggle state survives save/reload
+        bypassGlobal: isBypassTab,
         customColumns: deepClone(normalizedTab.customColumns || []),
         customFilters: deepClone(normalizedTab.customFilters || []),
         filterMatch: normalizedTab.filterMatch,
@@ -197,6 +205,8 @@ function normalizeQuickbaseSettingsPayload(raw) {
     reportLink: '',
     qid: '',
     tableId: '',
+    realm: '',
+    bypassGlobal: false,
     customColumns: [],
     customFilters: [],
     filterMatch: 'ALL',
