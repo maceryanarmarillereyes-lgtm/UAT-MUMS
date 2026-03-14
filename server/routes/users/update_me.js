@@ -134,7 +134,11 @@ function normalizeQuickbaseConfig(raw) {
     customColumns,
     customFilters,
     filterMatch,
-    dashboardCounters
+    dashboardCounters,
+    // VIRTUAL COLUMN: pass through as-is — validated at tab level in normalizeQuickbaseSettingsPayload
+    virtualColumn: (src.virtualColumn && typeof src.virtualColumn === 'object' && !Array.isArray(src.virtualColumn))
+      ? src.virtualColumn
+      : undefined
   };
 }
 
@@ -181,6 +185,35 @@ function normalizeQuickbaseSettingsPayload(raw) {
       // with partial qid/tableId if URL parsing fails. Non-bypass tabs still require both.
       const isBypassTab = !!(tab.bypassGlobal || normalizedTab.bypassGlobal || false);
       if (reportLink && !isBypassTab && (!qid || !tableId)) return null;
+
+      // VIRTUAL COLUMN FIX: preserve virtualColumn through server normalization.
+      // Previously this field was stripped entirely — causing wipe-on-save from server.
+      const rawVc = tab.virtualColumn;
+      const virtualColumn = (rawVc && typeof rawVc === 'object' && !Array.isArray(rawVc))
+        ? {
+            enabled: !!(rawVc.enabled || false),
+            label: String(rawVc.label || 'Status').trim() || 'Status',
+            items: Array.isArray(rawVc.items)
+              ? rawVc.items.map((i) => String(i || '').trim()).filter(Boolean).slice(0, 100)
+              : [],
+            conditionalRules: Array.isArray(rawVc.conditionalRules)
+              ? rawVc.conditionalRules
+                  .filter((r) => r && typeof r === 'object' && r.value)
+                  .map((r) => ({
+                    value: String(r.value || '').trim(),
+                    bgColor: String(r.bgColor || '').trim(),
+                    textColor: String(r.textColor || '').trim(),
+                    fontWeight: String(r.fontWeight || 'normal').trim(),
+                    fontStyle: String(r.fontStyle || 'normal').trim(),
+                    textDecoration: String(r.textDecoration || 'none').trim(),
+                    fontSize: String(r.fontSize || '12px').trim(),
+                    textAlign: String(r.textAlign || 'left').trim()
+                  }))
+                  .slice(0, 100)
+              : []
+          }
+        : { enabled: false, label: 'Status', items: [], conditionalRules: [] };
+
       return {
         id: String(tab.id || '').trim(),
         tabName: String(tab.tabName || tab.name || '').trim() || 'Main Report',
@@ -193,7 +226,9 @@ function normalizeQuickbaseSettingsPayload(raw) {
         customColumns: deepClone(normalizedTab.customColumns || []),
         customFilters: deepClone(normalizedTab.customFilters || []),
         filterMatch: normalizedTab.filterMatch,
-        dashboard_counters: deepClone(normalizedTab.dashboardCounters || [])
+        dashboard_counters: deepClone(normalizedTab.dashboardCounters || []),
+        // VIRTUAL COLUMN: persisted through server — never stripped
+        virtualColumn: deepClone(virtualColumn)
       };
     })
     .filter(Boolean)
