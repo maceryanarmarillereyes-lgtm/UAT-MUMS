@@ -762,11 +762,8 @@
   }
 
   // ── VIRTUAL COLUMN CONDITIONAL FORMATTING HELPER ───────────────────────────
-  // FIX: Removed full-row background (ugly on wide tables). Replaced with:
-  //   1. Premium left-border accent strip on the row
-  //   2. Subtle row tint via CSS custom property (low opacity, not blinding)
-  //   3. Text color + typography applied per-cell via data attribute CSS
-  //      (fixes specificity bug where <tr> color was overridden by <td> styles)
+  // PREMIUM DESIGN: Left accent bar only on <tr>. Background tint + typography on each <td>.
+  // This eliminates full-row garish background while keeping clean enterprise look.
   function _getConditionalStyle(value, rules) {
     if (!value || !Array.isArray(rules) || !rules.length) return {};
     const rule = rules.find(r => String(r.value || '') === String(value));
@@ -775,20 +772,19 @@
     const hasBg  = !!(rule.bgColor);
     const hasTxt = !!(rule.textColor);
 
-    // Row style: left-border accent + very subtle background tint (15% opacity max)
-    // This gives premium enterprise feel without the garish full-color rows
-    const rowParts = [];
-    if (hasBg) {
-      // Parse hex to rgb for rgba tint — fallback to direct color
-      const tint = _hexToRgba(rule.bgColor, 0.13);
-      rowParts.push(`background:${tint}!important`);
-      rowParts.push(`box-shadow:inset 3px 0 0 ${rule.bgColor}!important`);
-    }
-    const rowStyle = rowParts.join(';');
+    // <tr> gets ONLY the left accent bar — no background fill on the row itself.
+    // Full-row fill is ugly on wide tables and conflicts with zebra striping themes.
+    const rowStyle = hasBg
+      ? `box-shadow:inset 3px 0 0 ${rule.bgColor}!important`
+      : '';
 
-    // Cell style: applied to each <td> individually so text color actually works
-    // (CSS specificity: td-level > tr-level, so must push color to td)
+    // All styling (tint + typography) goes on each <td> individually.
+    // tr-level color/bg is always overridden by td-level CSS specificity — must be per-cell.
     const cellParts = [];
+    if (hasBg) {
+      const tint = _hexToRgba(rule.bgColor, 0.10);
+      cellParts.push(`background:${tint}!important`);
+    }
     if (hasTxt) cellParts.push(`color:${rule.textColor}!important`);
     if (rule.fontWeight) cellParts.push(`font-weight:${rule.fontWeight}!important`);
     if (rule.fontSize)   cellParts.push(`font-size:${rule.fontSize}!important`);
@@ -797,16 +793,19 @@
     if (rule.textAlign)  cellParts.push(`text-align:${rule.textAlign}!important`);
     const cellStyle = cellParts.join(';');
 
-    // VC cell (the dropdown cell itself) gets the solid accent bg for clear identification
-    const vcCellStyle = hasBg ? `background:${rule.bgColor}26!important` : '';
+    // VC dropdown cell: slightly stronger accent tint + right divider for visual anchoring
+    const vcCellStyle = hasBg
+      ? `background:${_hexToRgba(rule.bgColor, 0.20)}!important;border-right:1px solid ${_hexToRgba(rule.bgColor, 0.35)}!important`
+      : '';
 
     return {
-      rowStyle,
-      cellStyle,  // applied to every <td> individually in the row renderer
-      vcCellStyle,
+      rowStyle,    // left accent bar only — on <tr>
+      cellStyle,   // tint + typography — applied to every <td>
+      vcCellStyle, // stronger accent on the VC dropdown <td>
       rowClass: (rowStyle || cellStyle) ? 'qb-cf-row' : ''
     };
   }
+
 
   // Helper: convert hex color to rgba string
   function _hexToRgba(hex, alpha) {
@@ -3922,6 +3921,25 @@
         if (!validation.ok) throw new Error(validation.message);
         const nextActiveTabId = String(getActiveTabId() || '').trim();
         const targetTabId = String(state.settingsEditingTabId || nextActiveTabId || '').trim();
+        // ── VIRTUAL COLUMN: capture current VC state from modal toggle BEFORE building pendingTabSettings ──
+        // BUG FIX: virtualColumn was missing from pendingTabSettings — causing tabManager.saveTab()
+        // to persist settings WITHOUT virtualColumn, wiping it on next refresh.
+        const _vcToggleAtSave = root.querySelector('#qbVcEnabled');
+        if (_vcToggleAtSave) {
+          const _vcAtSave = _getVcState();
+          _vcAtSave.enabled = _vcToggleAtSave.checked;
+          state.virtualColumn = deepClone(_vcAtSave);
+          const _vcSaveTabId = String(getActiveTabId() || '').trim();
+          if (_vcSaveTabId) {
+            const _vcSavePrev = createDefaultSettings(
+              (state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[_vcSaveTabId]) || {}, {}
+            );
+            state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, {
+              [_vcSaveTabId]: Object.assign({}, _vcSavePrev, { virtualColumn: deepClone(_vcAtSave) })
+            });
+          }
+        }
+
         const pendingTabSettings = {
           tabName: deepClone(state.tabName) || '',
           // When bypass ON: use the bypass reportLink from the Report Config input
@@ -3935,7 +3953,9 @@
           customColumns: deepClone(state.customColumns || []),
           customFilters: deepClone(state.customFilters || []),
           filterMatch: state.filterMatch || 'ALL',
-          dashboard_counters: deepClone(state.dashboardCounters || [])
+          dashboard_counters: deepClone(state.dashboardCounters || []),
+          // FIX: Always include virtualColumn — was missing, causing wipe-on-refresh
+          virtualColumn: deepClone(state.virtualColumn || { enabled: false, label: 'Status', items: [], conditionalRules: [] })
         };
         // Sync parsed fields from bypass reportLink
         if (_isBypassAtSave && _bypassRLAtSave) {
@@ -3977,7 +3997,9 @@
             customColumns: deepClone(pendingTabSettings.customColumns || []),
             customFilters: deepClone(pendingTabSettings.customFilters || []),
             filterMatch: pendingTabSettings.filterMatch || 'ALL',
-            dashboard_counters: deepClone(pendingTabSettings.dashboard_counters || [])
+            dashboard_counters: deepClone(pendingTabSettings.dashboard_counters || []),
+            // FIX: Explicitly carry virtualColumn through tabManager so it survives saveTab()
+            virtualColumn: deepClone(pendingTabSettings.virtualColumn || state.virtualColumn || { enabled: false, label: 'Status', items: [], conditionalRules: [] })
           };
           tabManager.updateTabLocal(targetTabId, managedSettings);
           await tabManager.saveTab(targetTabId);
@@ -4025,6 +4047,16 @@
         renderTabBar();
         if (window.UI && UI.toast) UI.toast('Quickbase settings saved successfully!');
         closeSettings();
+
+        // ── INSTANT REALTIME APPLY: re-render current cached records immediately ──
+        // Virtual Column changes (enable/disable/formatting) must be visible WITHOUT
+        // waiting for loadQuickbaseData to finish. Sync state from the freshly saved
+        // settingsByTabId, then re-render with existing baseRecords.
+        syncStateFromActiveTab();
+        if (Array.isArray(state.baseRecords) && state.baseRecords.length) {
+          applySearchAndRender();
+        }
+
         // FIX[Bug1]: Render counters immediately with current cached records so they
         // appear INSTANTLY after save — no page refresh needed.
         const _savedCounters = deepClone(state.dashboardCounters || []);

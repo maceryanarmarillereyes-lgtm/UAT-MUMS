@@ -9434,20 +9434,21 @@ body[data-theme="nexus"] .duty-pill[data-tone="break"]   { background: rgba(255,
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Virtual Column — Conditional Formatting Premium Row Styling
-   FIX: Premium badge-style CF instead of garish full-row background
+   DESIGN: Left accent bar on <tr> only. Background tint + typography on <td>.
+   NO full-row background — that looks garish on wide enterprise tables.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* CF row: left accent bar + subtle tint — rendered via inline style on <tr>  */
-/* Transition for smooth live updates when dropdown value changes              */
+/* CF row: only the left accent bar via box-shadow — no background on <tr> */
 .qb-cf-row {
-  transition: background .18s ease, box-shadow .18s ease;
+  transition: box-shadow .18s ease;
 }
+/* td cells carry the tint and typography — set via inline style from JS */
 .qb-cf-row td {
-  transition: color .15s ease, font-weight .1s ease;
+  transition: background .18s ease, color .15s ease;
 }
-/* Ensure row hover doesn't obliterate the CF tint */
-.qb-cf-row:hover {
-  filter: brightness(1.06);
+/* Hover: brighten slightly without wiping the per-td tint */
+.qb-cf-row:hover td {
+  filter: brightness(1.07);
 }
 
 /* Virtual Column header cell */
