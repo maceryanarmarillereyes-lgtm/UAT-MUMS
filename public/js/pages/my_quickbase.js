@@ -3229,6 +3229,11 @@
       state.dashboardCounters = normalizeDashboardCounters(tabSnapshot.dashboard_counters);
       syncActiveTabFromState();
 
+      // Read bypass state once — used in validation AND pendingTabSettings below
+      const _bypassToggleAtSave = root.querySelector('#qbBypassToggle');
+      const _isBypassAtSave = !!(_bypassToggleAtSave && _bypassToggleAtSave.checked);
+      const _bypassRLAtSave = String((root.querySelector('#qbBypassReportLink') || {}).value || '').trim();
+
       state.isSaving = true;
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
@@ -3242,10 +3247,6 @@
         if (!validation.ok) throw new Error(validation.message);
         const nextActiveTabId = String(getActiveTabId() || '').trim();
         const targetTabId = String(state.settingsEditingTabId || nextActiveTabId || '').trim();
-        // Read bypass state directly from toggle (authoritative source at save time)
-        const _bypassToggleAtSave = root.querySelector('#qbBypassToggle');
-        const _isBypassAtSave = !!(_bypassToggleAtSave && _bypassToggleAtSave.checked);
-        const _bypassRLAtSave = String((root.querySelector('#qbBypassReportLink') || {}).value || '').trim();
         const pendingTabSettings = {
           tabName: deepClone(state.tabName) || '',
           // When bypass ON: use the bypass reportLink from the Report Config input
