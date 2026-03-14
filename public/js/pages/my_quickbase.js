@@ -277,6 +277,7 @@
       qid: hasReportLink ? String(src.qid || src.qb_qid || parsed.qid || '').trim() : '',
       tableId: hasReportLink ? String(src.tableId || src.qb_table_id || parsed.tableId || '').trim() : '',
       realm: hasReportLink ? String(src.realm || src.qb_realm || parsed.realm || '').trim() : '',
+      bypassGlobal: !!(src.bypassGlobal || base.bypassGlobal || false),
       dashboard_counters: deepClone(normalizeDashboardCounters(src.dashboard_counters || src.dashboardCounters || [])),
       customColumns: deepClone(Array.isArray(src.customColumns || src.qb_custom_columns) ? (src.customColumns || src.qb_custom_columns).map((v) => String(v)) : []),
       customFilters: deepClone(normalizeFilters(src.customFilters || src.qb_custom_filters || [])),
@@ -3183,10 +3184,17 @@
       if (activeTabId) {
         state.quickbaseSettings.settingsByTabId = state.quickbaseSettings.settingsByTabId || {};
         const prevTabSettings = createDefaultSettings(state.quickbaseSettings.settingsByTabId[activeTabId] || {}, {});
+        const _newBypassRL = (isBypass && bypassRL) ? bypassRL : (tabSnapshot.reportLink || prevTabSettings.reportLink || '');
+        const _newParsed   = parseQuickbaseLink(_newBypassRL);
         state.quickbaseSettings.settingsByTabId[activeTabId] = createDefaultSettings({
           ...prevTabSettings,
           ...tabSnapshot,
           bypassGlobal: isBypass,
+          // When bypass, persist the bypass reportLink into the tab's own settings
+          reportLink: isBypass ? _newBypassRL : (tabSnapshot.reportLink || prevTabSettings.reportLink || ''),
+          qid:        isBypass ? (_newParsed.qid || prevTabSettings.qid || '') : (tabSnapshot.qid || prevTabSettings.qid || ''),
+          tableId:    isBypass ? (_newParsed.tableId || prevTabSettings.tableId || '') : (tabSnapshot.tableId || prevTabSettings.tableId || ''),
+          realm:      isBypass ? (_newParsed.realm || prevTabSettings.realm || '') : (tabSnapshot.realm || prevTabSettings.realm || ''),
           customColumns: deepClone(state.customColumns || prevTabSettings.customColumns || []),
           customFilters: deepClone(state.customFilters || prevTabSettings.customFilters || []),
           filterMatch: state.filterMatch || prevTabSettings.filterMatch || 'ALL',
@@ -3194,10 +3202,30 @@
         }, {});
       }
       state.tabName = tabSnapshot.tabName;
-      state.reportLink = tabSnapshot.reportLink;
-      state.qid = tabSnapshot.qid;
-      state.tableId = tabSnapshot.tableId;
-      state.realm = tabSnapshot.realm;
+      // Bypass tab: keep its own reportLink/qid/tableId/realm isolated from global state
+      if (tabSnapshot.bypassGlobal) {
+        // Only update per-tab settings, don't stomp global state.reportLink
+        const _btid = String(getActiveTabId() || '').trim();
+        if (_btid) {
+          state.quickbaseSettings.settingsByTabId = state.quickbaseSettings.settingsByTabId || {};
+          state.quickbaseSettings.settingsByTabId[_btid] = Object.assign(
+            {},
+            state.quickbaseSettings.settingsByTabId[_btid] || {},
+            {
+              bypassGlobal: true,
+              reportLink: tabSnapshot.reportLink,
+              qid: tabSnapshot.qid,
+              tableId: tabSnapshot.tableId,
+              realm: tabSnapshot.realm
+            }
+          );
+        }
+      } else {
+        state.reportLink = tabSnapshot.reportLink;
+        state.qid = tabSnapshot.qid;
+        state.tableId = tabSnapshot.tableId;
+        state.realm = tabSnapshot.realm;
+      }
       state.dashboardCounters = normalizeDashboardCounters(tabSnapshot.dashboard_counters);
       syncActiveTabFromState();
 
@@ -3206,21 +3234,40 @@
       saveBtn.textContent = 'Saving...';
       if (saveLock) saveLock.style.display = 'flex';
       try {
-        const validation = validateQuickbaseTabSettings(getActiveTab());
+        // Bypass tab: validate against personal reportLink, not global
+        const _validationTab = _isBypassAtSave
+          ? Object.assign({}, getActiveTab(), { reportLink: _bypassRLAtSave, bypassGlobal: true })
+          : getActiveTab();
+        const validation = validateQuickbaseTabSettings(_validationTab);
         if (!validation.ok) throw new Error(validation.message);
         const nextActiveTabId = String(getActiveTabId() || '').trim();
         const targetTabId = String(state.settingsEditingTabId || nextActiveTabId || '').trim();
+        // Read bypass state directly from toggle (authoritative source at save time)
+        const _bypassToggleAtSave = root.querySelector('#qbBypassToggle');
+        const _isBypassAtSave = !!(_bypassToggleAtSave && _bypassToggleAtSave.checked);
+        const _bypassRLAtSave = String((root.querySelector('#qbBypassReportLink') || {}).value || '').trim();
         const pendingTabSettings = {
           tabName: deepClone(state.tabName) || '',
-          reportLink: deepClone(state.reportLink) || '',
+          // When bypass ON: use the bypass reportLink from the Report Config input
+          reportLink: _isBypassAtSave
+            ? (_bypassRLAtSave || deepClone(state.reportLink) || '')
+            : (deepClone(state.reportLink) || ''),
           qid: deepClone(state.qid) || '',
           tableId: deepClone(state.tableId) || '',
           realm: deepClone(state.realm) || '',
+          bypassGlobal: _isBypassAtSave,
           customColumns: deepClone(state.customColumns || []),
           customFilters: deepClone(state.customFilters || []),
           filterMatch: state.filterMatch || 'ALL',
           dashboard_counters: deepClone(state.dashboardCounters || [])
         };
+        // Sync parsed fields from bypass reportLink
+        if (_isBypassAtSave && _bypassRLAtSave) {
+          const _p = parseQuickbaseLink(_bypassRLAtSave);
+          if (_p.qid) pendingTabSettings.qid = _p.qid;
+          if (_p.tableId) pendingTabSettings.tableId = _p.tableId;
+          if (_p.realm) pendingTabSettings.realm = _p.realm;
+        }
         const tabIndex = state.quickbaseSettings.tabs.findIndex((t) => String(t && t.id || '').trim() === targetTabId);
         if (tabIndex !== -1) {
           state.quickbaseSettings.tabs[tabIndex] = deepClone({
@@ -3230,6 +3277,7 @@
             qid: pendingTabSettings.qid,
             tableId: pendingTabSettings.tableId,
             realm: pendingTabSettings.realm,
+            bypassGlobal: pendingTabSettings.bypassGlobal,
             customColumns: deepClone(pendingTabSettings.customColumns || []),
             customFilters: deepClone(pendingTabSettings.customFilters || []),
             filterMatch: pendingTabSettings.filterMatch || 'ALL',
@@ -3249,6 +3297,7 @@
             qid: String(pendingTabSettings.qid || '').trim(),
             tableId: String(pendingTabSettings.tableId || '').trim(),
             realm: String(pendingTabSettings.realm || '').trim(),
+            bypassGlobal: !!pendingTabSettings.bypassGlobal,
             customColumns: deepClone(pendingTabSettings.customColumns || []),
             customFilters: deepClone(pendingTabSettings.customFilters || []),
             filterMatch: pendingTabSettings.filterMatch || 'ALL',

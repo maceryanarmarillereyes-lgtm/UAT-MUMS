@@ -13,7 +13,9 @@
     reportLink: '',
     baseReportQid: '',
     qid: '',
-    tableId: ''
+    tableId: '',
+    realm: '',
+    bypassGlobal: false
   };
 
   const tabs = new Map();
