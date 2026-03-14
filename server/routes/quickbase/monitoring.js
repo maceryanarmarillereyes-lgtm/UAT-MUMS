@@ -52,9 +52,19 @@ async function getQuickbaseReportMetadata({ config, qid }) {
       .map((f) => Number(f))
       .filter((id) => Number.isFinite(id));
 
+    // FILTER FIX: Quickbase API returns the WHERE formula under different field names
+    // depending on report type and API version. Check all known locations in priority order.
+    const reportFilter = String(
+      json.query?.filterFormula ||   // newer API versions
+      json.query?.formula ||          // some report types
+      json.query?.filter ||           // older API versions
+      json.query?.queryString ||      // legacy
+      ''
+    ).trim();
+
     const payload = {
       fields: columnFieldIds,
-      filter: json.query?.filter || '',
+      filter: reportFilter,
       sortBy: json.query?.sortBy || []
     };
     writeCache(reportMetaCache, cacheKey, payload);
@@ -420,6 +430,17 @@ module.exports = async (req, res) => {
       reportMetadata = await getQuickbaseReportMetadata({ config: userQuickbaseConfig, qid });
     }
 
+    // BYPASS GUARD: For bypass mode, the report metadata filter IS the only WHERE clause.
+    // Without it, the query would return ALL records in the table (no filter = full table scan).
+    // Return a clear error so the user knows to check their token/URL, not silently show wrong data.
+    if (bypassGlobal && hasPersonalQuickbaseQuery && !reportMetadata) {
+      return sendJson(res, 400, {
+        ok: false,
+        error: 'bypass_report_fetch_failed',
+        message: 'Could not fetch report definition from Quickbase. Check your Personal QB Token and Report URL are correct, then try again.'
+      });
+    }
+
     const selectFields = hasPersonalQuickbaseQuery && reportMetadata?.fields?.length
       ? (mappedProfileColumns.length ? mappedProfileColumns.map((f) => f.id) : reportMetadata.fields)
       : selectedFields.map((f) => f.id);
@@ -466,12 +487,20 @@ module.exports = async (req, res) => {
     const finalWhere = conditions.filter(Boolean).join(' AND ') || null;
 
     const out = await queryQuickbaseRecords({
-      config: userQuickbaseConfig,
+      // BYPASS QUERYID FIX: For bypass mode, do NOT pass queryId in the records body.
+      // The `?qid=` in the browser URL is a REPORT ID, but Quickbase's /v1/records/query
+      // `queryId` field uses a DIFFERENT internal query ID system. Passing the report ID
+      // as queryId causes Quickbase to ignore it and return ALL table records.
+      // For bypass: rely exclusively on `where` (from reportMetadata.filter) for filtering.
+      // For global mode: keep existing behaviour unchanged.
+      config: bypassGlobal
+        ? Object.assign({}, userQuickbaseConfig, { qb_qid: '' })
+        : userQuickbaseConfig,
       where: finalWhere || undefined,
       limit: req?.query?.limit || 500,
       select: selectFields,
       allowEmptySelect: hasPersonalQuickbaseQuery && !reportMetadata,
-      enableQueryIdFallback: !hasPersonalQuickbaseQuery,
+      enableQueryIdFallback: !hasPersonalQuickbaseQuery && !bypassGlobal,
       sortBy: reportMetadata?.sortBy || [
         { fieldId: endUserFieldId || resolveFieldId('Case #') || 3, order: 'ASC' },
         { fieldId: typeFieldId || resolveFieldId('Case #') || 3, order: 'ASC' }
