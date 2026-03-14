@@ -1218,16 +1218,43 @@
         id: tabId,
         tabName: String(state.tabName || 'Main Report').trim() || 'Main Report'
       });
-      const nextSettings = deepClone(createDefaultSettings({
-        reportLink: String(state.reportLink || '').trim(),
-        qid: String(state.qid || '').trim(),
-        tableId: String(state.tableId || '').trim(),
-        realm: String(state.realm || '').trim(),
-        customColumns: Array.isArray(state.customColumns) ? state.customColumns.map((v) => String(v)) : [],
-        customFilters: normalizeFilters(state.customFilters),
-        filterMatch: normalizeFilterMatch(state.filterMatch),
-        dashboard_counters: normalizeDashboardCounters(state.dashboardCounters)
-      }, {}));
+
+      // ── BYPASS GUARD ─────────────────────────────────────────────────────
+      // Read existing bypassGlobal from settingsByTabId BEFORE building nextSettings.
+      // syncActiveTabFromState rebuilds settings from state.reportLink etc, but bypass
+      // tabs store their config in settingsByTabId — not in state.reportLink.
+      // Without this guard, every sync call wipes bypassGlobal and the bypass reportLink.
+      const _existingTabSettings = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId];
+      const _isBypassTab = !!(_existingTabSettings && _existingTabSettings.bypassGlobal);
+
+      let nextSettings;
+      if (_isBypassTab) {
+        // Bypass tab: preserve all bypass-specific fields, only sync non-report fields
+        nextSettings = deepClone(createDefaultSettings({
+          reportLink: String(_existingTabSettings.reportLink || '').trim(),
+          qid: String(_existingTabSettings.qid || '').trim(),
+          tableId: String(_existingTabSettings.tableId || '').trim(),
+          realm: String(_existingTabSettings.realm || '').trim(),
+          bypassGlobal: true,
+          customColumns: Array.isArray(state.customColumns) ? state.customColumns.map((v) => String(v)) : [],
+          customFilters: normalizeFilters(state.customFilters),
+          filterMatch: normalizeFilterMatch(state.filterMatch),
+          dashboard_counters: normalizeDashboardCounters(state.dashboardCounters)
+        }, {}));
+      } else {
+        nextSettings = deepClone(createDefaultSettings({
+          reportLink: String(state.reportLink || '').trim(),
+          qid: String(state.qid || '').trim(),
+          tableId: String(state.tableId || '').trim(),
+          realm: String(state.realm || '').trim(),
+          bypassGlobal: false,
+          customColumns: Array.isArray(state.customColumns) ? state.customColumns.map((v) => String(v)) : [],
+          customFilters: normalizeFilters(state.customFilters),
+          filterMatch: normalizeFilterMatch(state.filterMatch),
+          dashboard_counters: normalizeDashboardCounters(state.dashboardCounters)
+        }, {}));
+      }
+
       // ISOLATION: Write only to this tab's slot — never mutate another tab's settings
       state.quickbaseSettings.tabs[state.activeTabIndex] = deepClone(nextMeta);
       state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, {
@@ -1246,7 +1273,12 @@
         ? deepClone(state.quickbaseSettings.settingsByTabId[safeTabId])
         : createDefaultSettings({}, {});
       // ISOLATION: always produce a fresh object — no reference sharing across tabs
-      const nextSettings = createDefaultSettings(Object.assign({}, prevSettings, nextPartial), {});
+      // Preserve bypassGlobal from prevSettings unless explicitly overriding
+      const nextSettings = createDefaultSettings(Object.assign({}, prevSettings, nextPartial, {
+        bypassGlobal: Object.prototype.hasOwnProperty.call(nextPartial, 'bypassGlobal')
+          ? !!nextPartial.bypassGlobal
+          : !!prevSettings.bypassGlobal
+      }), {});
       state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, {
         [safeTabId]: deepClone(nextSettings)
       });
