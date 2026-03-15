@@ -10129,3 +10129,297 @@ body.density-compact .main.card.pad {
 .mc-list-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(148,163,184,.4);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LEAVE MONITOR WIDGET — Option B: Timeline Rail
+   Right Sidebar component. Shows who is on leave today and tomorrow.
+   Source: Manila Calendar Quickbase data via /api/calendar/records
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Outer wrapper ───────────────────────────────────────────────────────── */
+.lm-widget {
+  width: 100%;
+  background: linear-gradient(180deg, rgba(13,148,136,.07) 0%, rgba(8,145,178,.04) 100%);
+  border: 1px solid rgba(20,184,166,.2);
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.lm-widget-inner {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.lm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 11px 8px;
+  border-bottom: 1px solid rgba(20,184,166,.12);
+}
+.lm-header-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.lm-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: rgba(13,148,136,.15);
+  border: 1px solid rgba(20,184,166,.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.lm-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #e2e8f0;
+}
+
+/* Pulsing live dot */
+.lm-live-pip {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #14b8a6;
+  flex-shrink: 0;
+  animation: lm-pip-pulse 1.6s ease-in-out infinite;
+}
+@keyframes lm-pip-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .2; }
+}
+
+.lm-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* "7 out" count badge */
+.lm-count-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: rgba(20,184,166,.15);
+  color: #2dd4bf;
+  border: 1px solid rgba(20,184,166,.28);
+}
+.lm-badge-loading {
+  background: rgba(148,163,184,.1);
+  color: rgba(148,163,184,.5);
+  border-color: rgba(148,163,184,.15);
+  letter-spacing: .12em;
+}
+.lm-badge-error {
+  background: rgba(239,68,68,.12);
+  color: #f87171;
+  border-color: rgba(239,68,68,.25);
+}
+
+/* Refresh button */
+.lm-refresh-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(148,163,184,.12);
+  background: rgba(255,255,255,.05);
+  color: rgba(148,163,184,.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.lm-refresh-btn:hover {
+  background: rgba(255,255,255,.1);
+  color: rgba(148,163,184,.9);
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+.lm-body {
+  padding: 0;
+}
+
+/* ── Timeline Rail ───────────────────────────────────────────────────────── */
+.lm-timeline {
+  padding: 10px 12px 6px 12px;
+  position: relative;
+}
+
+/* Vertical connecting rail */
+.lm-rail {
+  position: absolute;
+  left: 22px;   /* aligns with center of dot */
+  top: 18px;
+  bottom: 18px;
+  width: 1px;
+  background: linear-gradient(180deg,
+    rgba(20,184,166,.35) 0%,
+    rgba(59,130,246,.2) 60%,
+    rgba(59,130,246,.05) 100%
+  );
+}
+
+/* Day blocks */
+.lm-day-block {
+  position: relative;
+  margin-bottom: 10px;
+  padding-left: 20px;
+}
+.lm-day-block-last {
+  margin-bottom: 2px;
+}
+
+/* Day dot on the rail */
+.lm-day-dot {
+  position: absolute;
+  left: -10px;
+  top: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid;
+  z-index: 1;
+  background: #0d1f3a; /* fill matches sidebar bg */
+}
+.lm-day-dot-today {
+  background: #0d9488;
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 3px rgba(20,184,166,.2), 0 0 0 5px rgba(20,184,166,.08);
+}
+.lm-day-dot-tmrw {
+  background: #1e40af;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+}
+
+/* Day label above rows */
+.lm-day-label {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+  line-height: 1;
+}
+.lm-label-today { color: #2dd4bf; }
+.lm-label-tmrw  { color: #60a5fa; }
+
+/* Person rows */
+.lm-tl-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.lm-tl-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.05);
+  transition: background .12s ease;
+}
+.lm-tl-row:hover {
+  background: rgba(255,255,255,.055);
+  border-color: rgba(255,255,255,.09);
+}
+
+/* Avatar circle */
+.lm-tl-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 9px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: .01em;
+}
+
+/* Name */
+.lm-tl-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #cbd5e1;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Leave type badge */
+.lm-badge {
+  padding: 1px 6px;
+  border-radius: 20px;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Empty row inside a day block */
+.lm-tl-empty {
+  font-size: 10px;
+  color: rgba(148,163,184,.35);
+  font-style: italic;
+  padding: 3px 7px;
+}
+
+/* ── Loading skeleton ────────────────────────────────────────────────────── */
+.lm-skeleton-wrap {
+  padding: 10px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lm-skel {
+  border-radius: 5px;
+  background: rgba(148,163,184,.07);
+  animation: lm-skel-pulse .9s ease-in-out infinite alternate;
+}
+.lm-skel-row {
+  height: 22px;
+  width: 100%;
+}
+@keyframes lm-skel-pulse {
+  from { opacity: .4; }
+  to   { opacity: .8; }
+}
+
+/* ── Error state ─────────────────────────────────────────────────────────── */
+.lm-error-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  font-size: 10px;
+  color: rgba(248,113,113,.7);
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.lm-footer {
+  padding: 6px 12px;
+  border-top: 1px solid rgba(255,255,255,.05);
+}
+.lm-footer-txt {
+  font-size: 9px;
+  color: rgba(148,163,184,.35);
+  font-weight: 600;
+  letter-spacing: .02em;
+}
