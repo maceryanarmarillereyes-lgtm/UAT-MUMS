@@ -3706,8 +3706,8 @@ body[data-theme="classic_style"] .card.pad{ padding: 18px; }
 
 /* App grid spacing (tight, classic) */
 body[data-theme="classic_style"] .app{
-  gap: 12px;
-  padding: 12px;
+  gap: 6px;
+  padding: 6px;
 }
 
 /* Top bar: fixed/sticky classic header */
@@ -3938,8 +3938,8 @@ body[data-theme="monday_workspace"]{
 }
 
 body[data-theme="monday_workspace"] .app{
-  gap: 14px;
-  padding: 14px;
+  gap: 6px;
+  padding: 6px;
   background: linear-gradient(180deg, #f8f9fc 0%, #f4f5f7 100%);
 }
 
@@ -4141,8 +4141,8 @@ body[data-theme="monday_workspace"] .rtabs{
 
 @media (max-width: 980px){
   body[data-theme="monday_workspace"] .app{
-    gap: 10px;
-    padding: 10px;
+    gap: 6px;
+    padding: 6px;
   }
 
   body[data-theme="monday_workspace"] .topbar,
@@ -4522,21 +4522,21 @@ body[data-theme="aurora_midnight"] {
 
    CORRECT pattern for any theme that needs custom .app spacing:
      body[data-theme="your_theme"] .app {
-       gap: 12px;                    ✅ OK — just changes gap
-       padding: 12px;                ❌ WRONG — resets padding-bottom
-       padding-top: 12px;            ✅ CORRECT way to set top only
-       padding-left: 12px;           ✅ CORRECT
-       padding-right: 12px;          ✅ CORRECT
+       gap: 6px;                    ✅ OK — just changes gap
+       padding: 6px;                ❌ WRONG — resets padding-bottom
+       padding-top: 6px;            ✅ CORRECT way to set top only
+       padding-left: 6px;           ✅ CORRECT
+       padding-right: 6px;          ✅ CORRECT
        /* padding-bottom: NEVER TOUCH — set by base layout */
      }
    ══════════════════════════════════════════════════════════════════ */
 
 /* ── APP GRID ── */
 body[data-theme="aurora_midnight"] .app {
-  gap: 12px;
-  padding-top: 12px;
-  padding-left: 12px;
-  padding-right: 12px;
+  gap: 6px;
+  padding-top: 6px;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 /* ── CARDS — Brighter, deeper contrast ── */
@@ -8329,10 +8329,10 @@ body[data-theme="apex"] {
 
 /* ── 2. App grid ─────────────────────────────────────────────────────────── */
 body[data-theme="apex"] .app {
-  gap: 12px;
-  padding-top: 12px;
-  padding-left: 12px;
-  padding-right: 12px;
+  gap: 6px;
+  padding-top: 6px;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 /* ── 3. Cards ────────────────────────────────────────────────────────────── */
@@ -9017,10 +9017,10 @@ body[data-theme="nexus"] {
 
 /* ── 2. App grid ─────────────────────────────────────────────────────────── */
 body[data-theme="nexus"] .app {
-  gap: 10px;
-  padding-top: 10px;
-  padding-left: 10px;
-  padding-right: 10px;
+  gap: 6px;
+  padding-top: 6px;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 /* ── 3. Cards ────────────────────────────────────────────────────────────── */
