@@ -66,6 +66,7 @@ async function getRoutes(env) {
     'settings/login_mode': unwrapCjs(await import('../../server/routes/settings/login_mode.js')),
     'settings/global_quickbase': unwrapCjs(await import('../../server/routes/settings/global_quickbase.js')),
     'settings/global_calendar': unwrapCjs(await import('../../server/routes/settings/global_calendar.js')),
+    'calendar/records': unwrapCjs(await import('../../server/routes/calendar/records.js')),
 
     overall_stats: unwrapCjs(await import('../../server/routes/overall_stats.js')),
 
