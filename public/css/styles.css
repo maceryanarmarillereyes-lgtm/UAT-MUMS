@@ -159,7 +159,7 @@ select:disabled{opacity:.65;color:var(--text)}
 .err{display:none;margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,91,110,.5);background:rgba(255,91,110,.12);color:#ffd7dc}
 
 /* App layout */
-.app{height:100%;max-height:100%;display:grid;grid-template-columns:248px 1fr 300px;grid-template-rows:auto 1fr;gap:6px;padding:6px;padding-bottom:calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 10px);overflow:hidden}
+.app{height:100%;max-height:100%;display:grid;grid-template-columns:244px 1fr 296px;grid-template-rows:auto 1fr;gap:1px;padding:0;padding-bottom:calc(var(--mums-dock-h) + var(--mums-onlinebar-h));overflow:hidden}
 @media(max-width:1100px){.app{grid-template-columns:240px 1fr;grid-template-rows:auto auto 1fr;}.right{grid-column:1/-1;grid-row:2}.main{grid-column:1/-1;grid-row:3}}
 .topbar{grid-column:1/-1;display:grid;grid-template-columns:248px 1fr auto;align-items:center;gap:8px}
 .topbar-center{display:flex;justify-content:center;align-items:center;min-width:0}
@@ -3023,7 +3023,7 @@ body.attendance-locked #app{
 
 /* Ensure the app body never gets hidden behind the online bar + dock.
    Keep this tight so we don't waste vertical real estate. */
-.app{ padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 10px); transition: padding-bottom .28s cubic-bezier(.4,0,.2,1); }
+.app{ padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)); transition: padding-bottom .28s cubic-bezier(.4,0,.2,1); }
 
 /* When a modal is open, prevent fixed overlays (dock + online bar) from intercepting clicks.
    This also avoids visual "overlap" when modals are positioned close to the bottom. */
@@ -3706,8 +3706,8 @@ body[data-theme="classic_style"] .card.pad{ padding: 18px; }
 
 /* App grid spacing (tight, classic) */
 body[data-theme="classic_style"] .app{
-  gap: 6px;
-  padding: 6px;
+  gap: 1px;
+  padding: 0;
 }
 
 /* Top bar: fixed/sticky classic header */
@@ -3938,8 +3938,8 @@ body[data-theme="monday_workspace"]{
 }
 
 body[data-theme="monday_workspace"] .app{
-  gap: 6px;
-  padding: 6px;
+  gap: 1px;
+  padding: 0;
   background: linear-gradient(180deg, #f8f9fc 0%, #f4f5f7 100%);
 }
 
@@ -4141,8 +4141,8 @@ body[data-theme="monday_workspace"] .rtabs{
 
 @media (max-width: 980px){
   body[data-theme="monday_workspace"] .app{
-    gap: 6px;
-    padding: 6px;
+    gap: 1px;
+    padding: 0;
   }
 
   body[data-theme="monday_workspace"] .topbar,
@@ -4522,21 +4522,21 @@ body[data-theme="aurora_midnight"] {
 
    CORRECT pattern for any theme that needs custom .app spacing:
      body[data-theme="your_theme"] .app {
-       gap: 6px;                    ✅ OK — just changes gap
-       padding: 6px;                ❌ WRONG — resets padding-bottom
-       padding-top: 6px;            ✅ CORRECT way to set top only
-       padding-left: 6px;           ✅ CORRECT
-       padding-right: 6px;          ✅ CORRECT
+       gap: 1px;                    ✅ OK — just changes gap
+       padding: 0;                ❌ WRONG — resets padding-bottom
+       padding-top: 0;            ✅ CORRECT way to set top only
+       padding-left: 0;           ✅ CORRECT
+       padding-right: 0;          ✅ CORRECT
        /* padding-bottom: NEVER TOUCH — set by base layout */
      }
    ══════════════════════════════════════════════════════════════════ */
 
 /* ── APP GRID ── */
 body[data-theme="aurora_midnight"] .app {
-  gap: 6px;
-  padding-top: 6px;
-  padding-left: 6px;
-  padding-right: 6px;
+  gap: 1px;
+  padding-top: 0;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* ── CARDS — Brighter, deeper contrast ── */
@@ -5262,7 +5262,7 @@ body[data-theme="mums_light"] {
 
 /* ── 1. App shell ───────────────────────────────────────────────────────────── */
 body[data-theme="mums_light"] .app {
-  gap: 6px; padding: 6px; padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 10px); background: #f6f7fb;
+  gap: 1px; padding: 0; padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)); background: #f6f7fb;
 }
 
 /* ── 2. Topbar ──────────────────────────────────────────────────────────────── */
@@ -6049,7 +6049,7 @@ body[data-theme="ivory_executive"] {
 
 /* ── 1. App shell ───────────────────────────────────────────────────────────── */
 body[data-theme="ivory_executive"] .app {
-  gap: 6px; padding: 6px; padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 10px); background: #f5f5f2;
+  gap: 1px; padding: 0; padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)); background: #f5f5f2;
 }
 
 /* ── 2. Topbar ──────────────────────────────────────────────────────────────── */
@@ -7051,7 +7051,7 @@ body[data-theme="ivory_executive"] .up-sub { color: #8a8a9a !important; }
 
 /* ── 40. Mobile responsive tweaks ───────────────────────────────────────────── */
 @media (max-width: 900px) {
-  body[data-theme="ivory_executive"] .app { padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 10px) !important; }
+  body[data-theme="ivory_executive"] .app { padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) !important; }
   body[data-theme="ivory_executive"] .topbar { padding: 0 12px !important; }
 }
 
@@ -8329,10 +8329,10 @@ body[data-theme="apex"] {
 
 /* ── 2. App grid ─────────────────────────────────────────────────────────── */
 body[data-theme="apex"] .app {
-  gap: 6px;
-  padding-top: 6px;
-  padding-left: 6px;
-  padding-right: 6px;
+  gap: 1px;
+  padding-top: 0;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* ── 3. Cards ────────────────────────────────────────────────────────────── */
@@ -9017,10 +9017,10 @@ body[data-theme="nexus"] {
 
 /* ── 2. App grid ─────────────────────────────────────────────────────────── */
 body[data-theme="nexus"] .app {
-  gap: 6px;
-  padding-top: 6px;
-  padding-left: 6px;
-  padding-right: 6px;
+  gap: 1px;
+  padding-top: 0;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 /* ── 3. Cards ────────────────────────────────────────────────────────────── */
@@ -9607,9 +9607,11 @@ body:not(.quicklinks-bar-hidden) .online-users-bar {
 
 /* ── Topbar: flush with panel edges, refined height ──────────────────────── */
 .topbar {
-  padding: 0;
+  padding: 0 10px;
   min-height: 52px;
   align-items: center;
+  background: var(--panel, rgba(10,20,40,0.98));
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
 }
 
 /* ── Panel cards: refined border and inner radius ────────────────────────── */
@@ -9651,13 +9653,72 @@ body:not(.quicklinks-bar-hidden) .online-users-bar {
 
 /* ── Density: compact mode gets even tighter ─────────────────────────────── */
 body.density-compact .app {
-  gap: 4px !important;
-  padding: 4px !important;
-  padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 8px) !important;
+  gap: 1px !important;
+  padding: 0 !important;
+  padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) !important;
 }
 body.density-compact .card.pad {
   padding: 10px 12px !important;
 }
 body.density-compact .main.card.pad {
   padding: 10px 12px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PREMIUM FRAMELESS LAYOUT v2 — True edge-to-edge, zero wasted space
+   .app padding:0, gap:1px → panels touch viewport edges, 1px seam between
+   Panel border-radius removed on viewport-edge sides → clean flush look
+   Topbar gets its own background so no body bg shows through
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Panel cards: NO border-radius on outer viewport edges ──────────────── */
+/* Side panel: flush left + top edges */
+.side.card {
+  border-radius: 0 0 0 0;
+  border-top: none;
+  border-left: none;
+  border-bottom: none;
+}
+/* Main panel: flush top edge */
+.main.card {
+  border-radius: 0;
+  border-top: none;
+  border-bottom: none;
+}
+/* Right panel: flush right + top edges */
+.right.card {
+  border-radius: 0 0 0 0;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+}
+
+/* ── Topbar: seamless with body — no card, own bg ───────────────────────── */
+.topbrand {
+  min-width: 0;
+  overflow: hidden;
+}
+.topbar-center {
+  padding: 0 4px;
+}
+
+/* ── Internal padding: comfortable but not wasteful ─────────────────────── */
+.main.card.pad {
+  padding: 12px 14px;
+}
+.right.card.pad {
+  padding: 10px 12px;
+}
+
+/* ── Density: compact stays lean ────────────────────────────────────────── */
+body.density-compact .app {
+  gap: 1px !important;
+  padding: 0 !important;
+  padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) !important;
+}
+body.density-compact .card.pad {
+  padding: 8px 10px !important;
+}
+body.density-compact .main.card.pad {
+  padding: 8px 10px !important;
 }
