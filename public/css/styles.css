@@ -9726,10 +9726,15 @@ body.density-compact .main.card.pad {
    MANILA CALENDAR — Premium Enterprise Design
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Page Shell ──────────────────────────────────────────────────────────── */
+/* ── Page Shell — full bleed inside .main.card.pad ──────────────────────── */
+/* Strip the main panel's padding so the calendar fills edge-to-edge          */
+.main.card.pad:has(.mc-page-shell) {
+  padding: 0 !important;
+}
 .mc-page-shell {
   display: flex;
   flex-direction: column;
+  width: 100%;
   height: 100%;
   min-height: 0;
   gap: 0;
@@ -9808,12 +9813,12 @@ body.density-compact .main.card.pad {
 
 /* ── Content Area ────────────────────────────────────────────────────────── */
 .mc-content-area {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
+  height: 0;           /* Force flex child to honour min-height:0 in Safari */
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  /* Children (mc-list-outer, mc-calendar) must fill this fully */
 }
 
 /* ── Loading ─────────────────────────────────────────────────────────────── */
@@ -9855,8 +9860,21 @@ body.density-compact .main.card.pad {
   padding: 12px 18px; flex-shrink: 0;
   border-bottom: 1px solid rgba(148,163,184,.08);
 }
+.mc-nav-left {
+  display: flex; align-items: center; gap: 10px;
+}
 .mc-month-title {
   font-size: 18px; font-weight: 800; color: #e2e8f0; letter-spacing: -.02em;
+}
+/* Live date pill in month nav */
+.mc-today-live-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+  color: #2dd4bf;
+  background: rgba(13,148,136,.15);
+  border: 1px solid rgba(20,184,166,.35);
+  border-radius: 20px;
+  padding: 3px 10px;
 }
 .mc-nav-btns { display: flex; align-items: center; gap: 6px; }
 .mc-nav-btn {
@@ -9902,17 +9920,85 @@ body.density-compact .main.card.pad {
 .mc-cell:last-child { border-right: none; }
 .mc-cell:hover { background: rgba(255,255,255,.02); }
 .mc-cell-other { opacity: .28; }
-.mc-cell-today { background: rgba(20,184,166,.04); }
+/* ── Today cell — high-visibility border + glow ──────────────────────── */
+.mc-cell-today {
+  background: rgba(20,184,166,.07);
+  border-right-color: rgba(20,184,166,.35) !important;
+  outline: 1.5px solid rgba(20,184,166,.55);
+  outline-offset: -1.5px;
+  position: relative;
+  z-index: 1;
+}
+/* Top accent bar — full-width teal stripe at top of today cell */
+.mc-cell-today::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2.5px;
+  background: linear-gradient(90deg, #0d9488, #06b6d4);
+  border-radius: 0 0 2px 2px;
+}
+/* Pulsing outer ring on the cell border */
+.mc-cell-today::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border: 1.5px solid rgba(20,184,166,.4);
+  border-radius: 0;
+  animation: mc-today-pulse 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes mc-today-pulse {
+  0%, 100% { opacity: 1; border-color: rgba(20,184,166,.45); }
+  50%       { opacity: .4; border-color: rgba(20,184,166,.15); }
+}
+
 .mc-day-num {
   font-size: 11px; font-weight: 700; color: rgba(148,163,184,.55);
   margin-bottom: 4px; display: inline-block;
   width: 22px; height: 22px; line-height: 22px; text-align: center;
   border-radius: 50%;
 }
+/* Today date number — bright teal circle with glow ring */
 .mc-today-num {
-  background: #14b8a6; color: #fff !important;
+  background: linear-gradient(135deg, #0d9488, #0891b2);
+  color: #fff !important;
   font-weight: 900;
+  box-shadow:
+    0 0 0 3px rgba(13,148,136,.28),
+    0 0 0 6px rgba(13,148,136,.10);
 }
+/* Today label pill inside cell */
+.mc-today-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #2dd4bf;
+  background: rgba(13,148,136,.18);
+  border: 1px solid rgba(20,184,166,.3);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-bottom: 3px;
+  line-height: 1.4;
+}
+/* Pulsing live dot inside label */
+.mc-today-pip {
+  display: inline-block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #14b8a6;
+  flex-shrink: 0;
+  animation: mc-pip-pulse 1.6s ease-in-out infinite;
+}
+@keyframes mc-pip-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: .35; transform: scale(.7); }
+}
+
 .mc-events { display: flex; flex-direction: column; gap: 2px; }
 .mc-event-bar {
   padding: 2px 6px; border-radius: 4px; cursor: pointer;

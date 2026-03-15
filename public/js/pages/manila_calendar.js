@@ -223,7 +223,11 @@
           </div>`;
         }).join('');
 
+        const todayLabel = isToday
+          ? `<div class="mc-today-label"><span class="mc-today-pip"></span>Today</div>`
+          : '';
         return `<div class="mc-cell${isOther?' mc-cell-other':''}${isToday?' mc-cell-today':''}">
+          ${todayLabel}
           <div class="mc-day-num${isToday?' mc-today-num':''}">${cell.day}</div>
           <div class="mc-events">${bars}${extra>0?`<div class="mc-overflow">+${extra} more</div>`:''}</div>
         </div>`;
@@ -238,10 +242,19 @@
       .map(([k,c])=>`<span class="mc-legend-item"><span class="mc-legend-dot" style="background:${c.dot};"></span>${k}</span>`)
       .join('');
 
+    const todayInView = (today.getFullYear()===year && today.getMonth()===month);
+    const DAY_ABBR = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const livePill = todayInView
+      ? `<div class="mc-today-live-pill"><span class="mc-today-pip"></span>${DAY_ABBR[today.getDay()]} · ${MONTHS[month].slice(0,3)} ${today.getDate()}</div>`
+      : '';
+
     container.innerHTML = `
       <div class="mc-calendar">
         <div class="mc-nav">
-          <div class="mc-month-title">${MONTHS[month]} ${year}</div>
+          <div class="mc-nav-left">
+            <div class="mc-month-title">${MONTHS[month]} ${year}</div>
+            ${livePill}
+          </div>
           <div class="mc-nav-btns">
             <button class="mc-nav-btn" id="mcPrev">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
