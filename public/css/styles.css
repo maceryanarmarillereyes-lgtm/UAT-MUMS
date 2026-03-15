@@ -3021,7 +3021,7 @@ body.attendance-locked #app{
 
 /* Ensure the app body never gets hidden behind the online bar + dock.
    Keep this tight so we don't waste vertical real estate. */
-.app{ padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 18px); }
+.app{ padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 18px); transition: padding-bottom .28s cubic-bezier(.4,0,.2,1); }
 
 /* When a modal is open, prevent fixed overlays (dock + online bar) from intercepting clicks.
    This also avoids visual "overlap" when modals are positioned close to the bottom. */
@@ -7049,7 +7049,7 @@ body[data-theme="ivory_executive"] .up-sub { color: #8a8a9a !important; }
 
 /* ── 40. Mobile responsive tweaks ───────────────────────────────────────────── */
 @media (max-width: 900px) {
-  body[data-theme="ivory_executive"] .app { padding-bottom: 140px !important; }
+  body[data-theme="ivory_executive"] .app { padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 18px) !important; }
   body[data-theme="ivory_executive"] .topbar { padding: 0 12px !important; }
 }
 
@@ -9563,29 +9563,23 @@ body:not(.quicklinks-bar-hidden) .quicklinks-bar {
   transition: transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
 }
 
-/* ── Dynamic padding-bottom adjustment on .app ──────────────────────────── */
-/* Both bars hidden — no padding needed */
-body.online-bar-hidden.quicklinks-bar-hidden .app {
-  padding-bottom: 8px;
-  transition: padding-bottom .28s cubic-bezier(.4,0,.2,1);
+/* ── Dynamic layout: CSS variables drive all bar-height-dependent spacing ── */
+/* CORRECT APPROACH: update --mums-dock-h and --mums-onlinebar-h via body classes.
+   The existing rule ".app{ padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 18px) }"
+   automatically recalculates — no direct padding-bottom overrides needed. */
+
+/* Quicklinks bar hidden: zero out dock height variable.
+   Drives: .app { padding-bottom: calc(var(--mums-dock-h) + ...) } to shrink,
+   which expands the 1fr grid row → sidebars + main grow automatically. */
+body.quicklinks-bar-hidden {
+  --mums-dock-h: 0px;
 }
-/* Only online bar hidden — only dock height padding */
-body.online-bar-hidden:not(.quicklinks-bar-hidden) .app {
-  padding-bottom: calc(var(--mums-dock-h) + 8px);
-  transition: padding-bottom .28s cubic-bezier(.4,0,.2,1);
-}
-/* Only quicklinks hidden — no dock, just online bar */
-body.quicklinks-bar-hidden:not(.online-bar-hidden) .app {
-  padding-bottom: calc(var(--mums-onlinebar-h) + 8px);
-  transition: padding-bottom .28s cubic-bezier(.4,0,.2,1);
-}
-/* Both visible — restore original (uses default .app rule) */
-body:not(.online-bar-hidden):not(.quicklinks-bar-hidden) .app {
-  padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 18px);
-  transition: padding-bottom .28s cubic-bezier(.4,0,.2,1);
+/* Online users bar hidden: zero out online bar height variable */
+body.online-bar-hidden {
+  --mums-onlinebar-h: 0px;
 }
 
-/* Also move online bar down when quicklinks bar is hidden */
+/* Online users bar: adjust bottom anchor when quicklinks bar is hidden */
 body.quicklinks-bar-hidden .online-users-bar {
   bottom: 0;
   transition: bottom .28s cubic-bezier(.4,0,.2,1), transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
@@ -9594,3 +9588,9 @@ body:not(.quicklinks-bar-hidden) .online-users-bar {
   bottom: var(--mums-dock-h);
   transition: bottom .28s cubic-bezier(.4,0,.2,1), transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
 }
+
+/* Sidebar + right panel already use overflow:hidden (established pattern in this codebase).
+   Grid item sizing is handled by align-self:stretch (the default) — do NOT set height:100%
+   on .side as this causes Chrome to resolve to grid-container height (see note at line ~5057).
+   The --mums-dock-h / --mums-onlinebar-h variables above correctly drive .app padding-bottom,
+   which in turn resizes the 1fr grid row — sidebars expand automatically. */

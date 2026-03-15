@@ -3741,8 +3741,16 @@ function updateClocksPreviewTimes(){
 
   // ── BOTTOM BARS VISIBILITY ────────────────────────────────────────────────────
   // Persists per user via localStorage. Keys: mums_bar_online | mums_bar_quicklinks
-  // Toggles CSS classes on <body>: online-bar-hidden | quicklinks-bar-hidden
-  // CSS transitions handle the smooth slide-out animation.
+  //
+  // LAYOUT STRATEGY (correct approach):
+  // ─ Toggling CSS classes (online-bar-hidden / quicklinks-bar-hidden) on <body>
+  //   drives the CSS variables --mums-dock-h and --mums-onlinebar-h to 0px.
+  // ─ The existing rule:
+  //     .app { padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 18px) }
+  //   automatically recalculates — no padding-bottom override needed.
+  // ─ Sidebars (.side/.right) are grid items in the 1fr row and auto-expand
+  //   as the available grid height grows. No explicit height override required.
+  // ─ The bars themselves use transform:translateY(100%) for smooth slide-out.
 
   const BAR_KEYS = {
     online:     'mums_bar_online',
@@ -3751,10 +3759,10 @@ function updateClocksPreviewTimes(){
 
   function applyBarVisibility() {
     try {
-      // Default: both bars VISIBLE (show = '1', hidden = '0')
+      // Default: both bars VISIBLE (stored '1' or null = show; '0' = hide)
       const onlineShow     = localStorage.getItem(BAR_KEYS.online)     !== '0';
       const quicklinksShow = localStorage.getItem(BAR_KEYS.quicklinks) !== '0';
-      document.body.classList.toggle('online-bar-hidden',    !onlineShow);
+      document.body.classList.toggle('online-bar-hidden',     !onlineShow);
       document.body.classList.toggle('quicklinks-bar-hidden', !quicklinksShow);
     } catch (_) {}
   }
@@ -3763,7 +3771,6 @@ function updateClocksPreviewTimes(){
     try {
       localStorage.setItem(BAR_KEYS[barKey], visible ? '1' : '0');
       applyBarVisibility();
-      // Sync the checkbox state if settings modal is open
       _syncBarVisibilityCheckboxes();
     } catch (_) {}
   }
@@ -3784,7 +3791,6 @@ function updateClocksPreviewTimes(){
 
       if (onlineChk && !onlineChk.__barBound) {
         onlineChk.__barBound = true;
-        // Sync initial state
         onlineChk.checked = localStorage.getItem(BAR_KEYS.online) !== '0';
         onlineChk.addEventListener('change', () => {
           setBarVisibility('online', onlineChk.checked);
