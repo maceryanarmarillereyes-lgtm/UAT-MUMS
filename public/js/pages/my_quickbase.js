@@ -3809,8 +3809,14 @@
       // If cache hit — leave the previous content visible during load (smooth transition)
 
       const newActiveTabId = getActiveTabId();
-      state.settingsEditingTabId = newActiveTabId;
-      state.modalDraft = deepClone(getActiveTab()) || buildDefaultTab();
+      // FIX[TabName]: Do NOT overwrite settingsEditingTabId when settings modal is open.
+      // If user clicks a QB tab WHILE editing settings, the modal is still editing the
+      // ORIGINAL tab. Overwriting settingsEditingTabId causes Save to write tabName
+      // to the WRONG tab, silently discarding the rename.
+      if (!_isSettingsModalOpen()) {
+        state.settingsEditingTabId = newActiveTabId;
+        state.modalDraft = deepClone(getActiveTab()) || buildDefaultTab();
+      }
 
       syncSettingsInputsFromState();
       queuePersistQuickbaseSettings();
@@ -3874,8 +3880,15 @@
     saveBtn.onclick = async () => {
       if (!me) return;
       const tabSnapshot = scrapeModalTabSnapshot();
-      const activeIdx = Number(state.activeTabIndex || 0);
-      const saveTabId = String(getActiveTabId() || '').trim();
+      // FIX[TabName]: Use settingsEditingTabId as the authoritative source for which tab
+      // is being edited. state.activeTabIndex can change if user clicks another tab
+      // while the settings modal is open — that must NOT redirect the save to the wrong tab.
+      const _editingTabId = String(state.settingsEditingTabId || getActiveTabId() || '').trim();
+      const activeIdx = state.quickbaseSettings.tabs.findIndex(
+        (t) => String(t && t.id || '').trim() === _editingTabId
+      );
+      const safeActiveIdx = activeIdx >= 0 ? activeIdx : Number(state.activeTabIndex || 0);
+      const saveTabId = _editingTabId || String(getActiveTabId() || '').trim();
 
       // ── BYPASS: Read bypass toggle + personal config inputs ─────────────
       const bypassToggleEl = root.querySelector('#qbBypassToggle');
@@ -3898,9 +3911,9 @@
       // Always carry bypassGlobal flag in the tab snapshot
       tabSnapshot.bypassGlobal = isBypass;
 
-      if (Array.isArray(state.quickbaseSettings.tabs) && state.quickbaseSettings.tabs[activeIdx]) {
-        state.quickbaseSettings.tabs[activeIdx] = deepClone({
-          ...state.quickbaseSettings.tabs[activeIdx],
+      if (Array.isArray(state.quickbaseSettings.tabs) && state.quickbaseSettings.tabs[safeActiveIdx]) {
+        state.quickbaseSettings.tabs[safeActiveIdx] = deepClone({
+          ...state.quickbaseSettings.tabs[safeActiveIdx],
           ...tabSnapshot
         });
       }
@@ -3990,8 +4003,27 @@
           }
         }
 
+        // FIX[TabName]: Read tabName directly from the modal input — state.tabName
+        // may have been reset by syncActiveTabFromState() if user switched tabs.
+        const _tabNameInputEl = root.querySelector('#qbTabName');
+        const _finalTabName = (_tabNameInputEl && _tabNameInputEl.value.trim())
+          ? _tabNameInputEl.value.trim()
+          : (tabSnapshot.tabName || state.tabName || 'Main Report');
+        // Force-write the correct name to the editing tab in tabs array RIGHT NOW
+        const _editingTabIdx = state.quickbaseSettings.tabs.findIndex(
+          (t) => String(t && t.id || '').trim() === targetTabId
+        );
+        if (_editingTabIdx >= 0) {
+          state.quickbaseSettings.tabs[_editingTabIdx] = deepClone({
+            ...state.quickbaseSettings.tabs[_editingTabIdx],
+            tabName: _finalTabName
+          });
+        }
+        // Also ensure state.tabName is correct for serialization
+        state.tabName = _finalTabName;
+
         const pendingTabSettings = {
-          tabName: deepClone(state.tabName) || '',
+          tabName: _finalTabName,
           // When bypass ON: use the bypass reportLink from the Report Config input
           reportLink: _isBypassAtSave
             ? (_bypassRLAtSave || deepClone(state.reportLink) || '')
@@ -4093,6 +4125,17 @@
         const newReportLink = String(savedSettings.reportLink || '').trim();
         if (newReportLink && typeof populateFieldDropdowns === 'function') {
           populateFieldDropdowns(savedSettings.realm, savedSettings.tableId, savedSettings.qid);
+        }
+        // FIX[TabName]: Explicitly sync the editing tab's new name into the tabs array
+        // BEFORE renderTabBar() — ensures the tab bar shows the updated name immediately.
+        const _postSaveEditingIdx = state.quickbaseSettings.tabs.findIndex(
+          (t) => String(t && t.id || '').trim() === targetTabId
+        );
+        if (_postSaveEditingIdx >= 0 && _finalTabName) {
+          state.quickbaseSettings.tabs[_postSaveEditingIdx] = deepClone({
+            ...state.quickbaseSettings.tabs[_postSaveEditingIdx],
+            tabName: _finalTabName
+          });
         }
         renderTabBar();
         if (window.UI && UI.toast) UI.toast('Quickbase settings saved successfully!');
