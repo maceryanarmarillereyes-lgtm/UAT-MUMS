@@ -9434,3 +9434,163 @@ body[data-theme="nexus"] .duty-pill[data-tone="active"]  { background: rgba(0,22
 body[data-theme="nexus"] .duty-pill[data-tone="manager"] { background: rgba(0,212,255,.10) !important; color: #60E8FF !important; border: 1px solid rgba(0,212,255,.26) !important; }
 body[data-theme="nexus"] .duty-pill[data-tone="call"]    { background: rgba(255,170,0,.10) !important; color: #FFDA80 !important; border: 1px solid rgba(255,170,0,.26) !important; }
 body[data-theme="nexus"] .duty-pill[data-tone="break"]   { background: rgba(255,69,96,.09) !important; color: #FFB0BA !important; border: 1px solid rgba(255,69,96,.22) !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BOTTOM BARS VISIBILITY — Settings Tile + Hidden States
+   All users can toggle the online-users-bar and quicklinks-bar independently.
+   State persisted to localStorage: mums_bar_online | mums_bar_quicklinks
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Settings Tile Layout ─────────────────────────────────────────────────── */
+.stngs-tile-bottombars {
+  cursor: default;
+  align-items: flex-start;
+}
+.stngs-bottombars-content {
+  flex: 1;
+  min-width: 0;
+}
+.stngs-bottombars-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+/* ── Individual Bar Toggle Row ────────────────────────────────────────────── */
+.stngs-barvis-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148,163,184,.14);
+  background: rgba(255,255,255,.03);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+  user-select: none;
+}
+.stngs-barvis-row:hover {
+  background: rgba(255,255,255,.06);
+  border-color: rgba(148,163,184,.26);
+}
+.stngs-barvis-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(148,163,184,.1);
+  color: rgba(148,163,184,.8);
+  flex-shrink: 0;
+}
+.stngs-barvis-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text, #e2e8f0);
+  letter-spacing: .01em;
+}
+.stngs-barvis-spacer { flex: 1; }
+
+/* ── Custom Toggle Switch ────────────────────────────────────────────────── */
+.stngs-toggle-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.stngs-barvis-chk {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.stngs-toggle-track {
+  display: inline-flex;
+  align-items: center;
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(148,163,184,.22);
+  border: 1px solid rgba(148,163,184,.2);
+  transition: background .18s ease, border-color .18s ease;
+  cursor: pointer;
+  position: relative;
+}
+.stngs-barvis-chk:checked + .stngs-toggle-track {
+  background: rgba(34,197,94,.85);
+  border-color: rgba(34,197,94,.6);
+}
+.stngs-toggle-thumb {
+  position: absolute;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  transition: transform .18s ease;
+}
+.stngs-barvis-chk:checked + .stngs-toggle-track .stngs-toggle-thumb {
+  transform: translateX(16px);
+}
+
+/* ── Bar Hidden States — smooth slide-out ─────────────────────────────────── */
+
+/* Online Users Bar hidden */
+body.online-bar-hidden .online-users-bar {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
+}
+body:not(.online-bar-hidden) .online-users-bar {
+  transform: translateY(0);
+  opacity: 1;
+  transition: transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
+}
+
+/* Quick Links Bar hidden */
+body.quicklinks-bar-hidden .quicklinks-bar {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
+}
+body:not(.quicklinks-bar-hidden) .quicklinks-bar {
+  transform: translateY(0);
+  opacity: 1;
+  transition: transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
+}
+
+/* ── Dynamic padding-bottom adjustment on .app ──────────────────────────── */
+/* Both bars hidden — no padding needed */
+body.online-bar-hidden.quicklinks-bar-hidden .app {
+  padding-bottom: 8px;
+  transition: padding-bottom .28s cubic-bezier(.4,0,.2,1);
+}
+/* Only online bar hidden — only dock height padding */
+body.online-bar-hidden:not(.quicklinks-bar-hidden) .app {
+  padding-bottom: calc(var(--mums-dock-h) + 8px);
+  transition: padding-bottom .28s cubic-bezier(.4,0,.2,1);
+}
+/* Only quicklinks hidden — no dock, just online bar */
+body.quicklinks-bar-hidden:not(.online-bar-hidden) .app {
+  padding-bottom: calc(var(--mums-onlinebar-h) + 8px);
+  transition: padding-bottom .28s cubic-bezier(.4,0,.2,1);
+}
+/* Both visible — restore original (uses default .app rule) */
+body:not(.online-bar-hidden):not(.quicklinks-bar-hidden) .app {
+  padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 18px);
+  transition: padding-bottom .28s cubic-bezier(.4,0,.2,1);
+}
+
+/* Also move online bar down when quicklinks bar is hidden */
+body.quicklinks-bar-hidden .online-users-bar {
+  bottom: 0;
+  transition: bottom .28s cubic-bezier(.4,0,.2,1), transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
+}
+body:not(.quicklinks-bar-hidden) .online-users-bar {
+  bottom: var(--mums-dock-h);
+  transition: bottom .28s cubic-bezier(.4,0,.2,1), transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
+}

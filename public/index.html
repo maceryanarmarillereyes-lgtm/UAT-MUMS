@@ -263,6 +263,41 @@
             </div>
           </button>
 
+          <!-- ── Bottom Bars Visibility (available to all users) ───── -->
+          <div class="stngs-tile stngs-tile-bottombars" id="bottomBarsSettingsTile" role="group" aria-label="Bottom Bars Visibility">
+            <div class="stngs-tile-icon stngs-icon-bottombars">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="2" y1="20" x2="22" y2="20"/><line x1="2" y1="17" x2="22" y2="17"/></svg>
+            </div>
+            <div class="stngs-tile-content stngs-bottombars-content">
+              <div class="stngs-tile-name">Bottom Bars</div>
+              <div class="stngs-tile-desc">Show or hide the bars below for a larger view</div>
+              <div class="stngs-bottombars-toggles">
+                <label class="stngs-barvis-row" title="Online Users Bar">
+                  <span class="stngs-barvis-icon">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                  </span>
+                  <span class="stngs-barvis-label">Online Users Bar</span>
+                  <span class="stngs-barvis-spacer"></span>
+                  <span class="stngs-toggle-wrap" aria-hidden="true">
+                    <input type="checkbox" id="toggleOnlineBar" class="stngs-barvis-chk" />
+                    <span class="stngs-toggle-track"><span class="stngs-toggle-thumb"></span></span>
+                  </span>
+                </label>
+                <label class="stngs-barvis-row" title="Quick Links Bar">
+                  <span class="stngs-barvis-icon">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  </span>
+                  <span class="stngs-barvis-label">Quick Links Bar</span>
+                  <span class="stngs-barvis-spacer"></span>
+                  <span class="stngs-toggle-wrap" aria-hidden="true">
+                    <input type="checkbox" id="toggleQuickLinksBar" class="stngs-barvis-chk" />
+                    <span class="stngs-toggle-track"><span class="stngs-toggle-thumb"></span></span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+
         </div>
 
         <!-- ── SECTION: ADMIN (conditionally visible) ─────────────── -->

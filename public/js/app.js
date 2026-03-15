@@ -3739,6 +3739,68 @@ function updateClocksPreviewTimes(){
     } catch (_) {}
   }
 
+  // ── BOTTOM BARS VISIBILITY ────────────────────────────────────────────────────
+  // Persists per user via localStorage. Keys: mums_bar_online | mums_bar_quicklinks
+  // Toggles CSS classes on <body>: online-bar-hidden | quicklinks-bar-hidden
+  // CSS transitions handle the smooth slide-out animation.
+
+  const BAR_KEYS = {
+    online:     'mums_bar_online',
+    quicklinks: 'mums_bar_quicklinks',
+  };
+
+  function applyBarVisibility() {
+    try {
+      // Default: both bars VISIBLE (show = '1', hidden = '0')
+      const onlineShow     = localStorage.getItem(BAR_KEYS.online)     !== '0';
+      const quicklinksShow = localStorage.getItem(BAR_KEYS.quicklinks) !== '0';
+      document.body.classList.toggle('online-bar-hidden',    !onlineShow);
+      document.body.classList.toggle('quicklinks-bar-hidden', !quicklinksShow);
+    } catch (_) {}
+  }
+
+  function setBarVisibility(barKey, visible) {
+    try {
+      localStorage.setItem(BAR_KEYS[barKey], visible ? '1' : '0');
+      applyBarVisibility();
+      // Sync the checkbox state if settings modal is open
+      _syncBarVisibilityCheckboxes();
+    } catch (_) {}
+  }
+
+  function _syncBarVisibilityCheckboxes() {
+    try {
+      const onlineChk     = document.getElementById('toggleOnlineBar');
+      const quicklinksChk = document.getElementById('toggleQuickLinksBar');
+      if (onlineChk)     onlineChk.checked     = localStorage.getItem(BAR_KEYS.online)     !== '0';
+      if (quicklinksChk) quicklinksChk.checked = localStorage.getItem(BAR_KEYS.quicklinks) !== '0';
+    } catch (_) {}
+  }
+
+  function bindBarVisibilityControls() {
+    try {
+      const onlineChk     = document.getElementById('toggleOnlineBar');
+      const quicklinksChk = document.getElementById('toggleQuickLinksBar');
+
+      if (onlineChk && !onlineChk.__barBound) {
+        onlineChk.__barBound = true;
+        // Sync initial state
+        onlineChk.checked = localStorage.getItem(BAR_KEYS.online) !== '0';
+        onlineChk.addEventListener('change', () => {
+          setBarVisibility('online', onlineChk.checked);
+        });
+      }
+
+      if (quicklinksChk && !quicklinksChk.__barBound) {
+        quicklinksChk.__barBound = true;
+        quicklinksChk.checked = localStorage.getItem(BAR_KEYS.quicklinks) !== '0';
+        quicklinksChk.addEventListener('change', () => {
+          setBarVisibility('quicklinks', quicklinksChk.checked);
+        });
+      }
+    } catch (_) {}
+  }
+
   // ── NAV KEYBOARD ─────────────────────────────────────────────────────────────
   function bindNavKeyboard() {
     try {
@@ -3801,6 +3863,7 @@ async function boot(){
     try{ applyRightbarState(); }catch(e){}
     try{ bindRightbarToggle(); }catch(e){}
     try{ applyDensity(); }catch(e){}
+    try{ applyBarVisibility(); }catch(e){}
     try{ bindNavKeyboard(); }catch(e){}
 
     try{
@@ -4049,6 +4112,9 @@ async function boot(){
     if(settingsBtn){
       settingsBtn.onclick = ()=>{
         UI.openModal('settingsModal');
+        // Sync bar visibility checkboxes to current state each time modal opens
+        try{ bindBarVisibilityControls(); }catch(_){}
+        try{ _syncBarVisibilityCheckboxes(); }catch(_){}
       };
     }
     const openSoundBtn = document.getElementById('openSoundBtn');
