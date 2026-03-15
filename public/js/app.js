@@ -1726,6 +1726,7 @@ function updateClocksPreviewTimes(){
     function canAccessNavItem(n){
       const id = String(n && n.id || '').trim();
       if(id === 'my_quickbase') return true;
+      if(id === 'manila_calendar') return true;
       return !!Config.can(user, n.perm);
     }
 
@@ -4784,6 +4785,107 @@ async function boot(){
           UI.openModal('globalQbModal');
           // Auto-fetch fields in background so columns are ready when user switches tab
           if (gqbState.realm && gqbState.tableId) setTimeout(() => fetchGqbFields(), 300);
+        };
+      }
+    } catch (_) {}
+
+    // ── Manila Calendar Settings (Super Admin only) ──────────────────────────
+    try {
+      if (isSA) {
+        const calCard = document.getElementById('calendarSettingsCard');
+        const calOpenBtn = document.getElementById('openCalendarSettingsBtn');
+        if (calCard) { calCard.style.display = ''; _revealAdminSection(); }
+
+        function parseCalLink(url) {
+          const out = { realm: '', tableId: '', qid: '' };
+          try {
+            const u = new URL(url);
+            const host = u.hostname;
+            const m = host.match(/^([a-z0-9-]+)\.quickbase\.com$/i);
+            if (m) out.realm = m[1] + '.quickbase.com';
+            const navM = u.pathname.match(/\/table\/([a-zA-Z0-9]+)/);
+            if (navM) out.tableId = navM[1];
+            out.qid = u.searchParams.get('qid') || u.searchParams.get('QID') || '';
+          } catch (_) {}
+          return out;
+        }
+
+        async function loadCalSettings() {
+          try {
+            const tok = getBearerToken();
+            const r = await fetch('/api/settings/global_calendar', { headers: { 'Authorization': 'Bearer ' + tok } });
+            const d = await r.json();
+            if (d.ok && d.settings) {
+              const s = d.settings;
+              const el = (id) => document.getElementById(id);
+              if (el('calRL')) el('calRL').value = s.reportLink || '';
+              if (el('calRealm')) el('calRealm').value = s.realm || '';
+              if (el('calTableId')) el('calTableId').value = s.tableId || '';
+              if (el('calQid')) el('calQid').value = s.qid || '';
+              if (el('calToken')) el('calToken').value = s.qbToken ? '••••••••••••••' : '';
+              if (el('calFEmployee')) el('calFEmployee').value = s.fieldEmployee || '';
+              if (el('calFNote')) el('calFNote').value = s.fieldNote || '';
+              if (el('calFStart')) el('calFStart').value = s.fieldStartDate || '';
+              if (el('calFEnd')) el('calFEnd').value = s.fieldEndDate || '';
+            }
+          } catch (_) {}
+        }
+
+        const calRLInput = document.getElementById('calRL');
+        if (calRLInput) {
+          calRLInput.oninput = () => {
+            const p = parseCalLink(calRLInput.value.trim());
+            const el = (id) => document.getElementById(id);
+            if (el('calRealm')) el('calRealm').value = p.realm;
+            if (el('calTableId')) el('calTableId').value = p.tableId;
+            if (el('calQid')) el('calQid').value = p.qid;
+          };
+        }
+
+        const calSaveBtn = document.getElementById('calSaveBtn');
+        if (calSaveBtn) {
+          calSaveBtn.onclick = async () => {
+            const el = (id) => document.getElementById(id);
+            const msg = el('calSaveMsg');
+            const rawToken = el('calToken') ? el('calToken').value.trim() : '';
+            const payload = {
+              reportLink: el('calRL') ? el('calRL').value.trim() : '',
+              realm: el('calRealm') ? el('calRealm').value.trim() : '',
+              tableId: el('calTableId') ? el('calTableId').value.trim() : '',
+              qid: el('calQid') ? el('calQid').value.trim() : '',
+              fieldEmployee: el('calFEmployee') ? el('calFEmployee').value.trim() : '',
+              fieldNote: el('calFNote') ? el('calFNote').value.trim() : '',
+              fieldStartDate: el('calFStart') ? el('calFStart').value.trim() : '',
+              fieldEndDate: el('calFEnd') ? el('calFEnd').value.trim() : '',
+            };
+            // Only send token if user actually changed it (not the masked placeholder)
+            if (rawToken && !rawToken.startsWith('•')) payload.qbToken = rawToken;
+            try {
+              calSaveBtn.disabled = true;
+              calSaveBtn.textContent = 'Saving…';
+              const tok = getBearerToken();
+              const r = await fetch('/api/settings/global_calendar', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+              const d = await r.json();
+              if (msg) { msg.textContent = d.ok ? '✅ Saved!' : '❌ ' + (d.message || 'Error'); msg.style.opacity = '1'; setTimeout(() => { msg.style.opacity = '0'; }, 3000); }
+            } catch (e) {
+              if (msg) { msg.textContent = '❌ Network error'; msg.style.opacity = '1'; setTimeout(() => { msg.style.opacity = '0'; }, 3000); }
+            } finally {
+              calSaveBtn.disabled = false;
+              calSaveBtn.textContent = 'Save Calendar Settings';
+            }
+          };
+        }
+
+        document.querySelectorAll('[data-close="calendarSettingsModal"]').forEach(b => b.onclick = () => { UI.closeModal('calendarSettingsModal'); });
+
+        if (calOpenBtn) calOpenBtn.onclick = async () => {
+          await loadCalSettings();
+          UI.closeModal('settingsModal');
+          UI.openModal('calendarSettingsModal');
         };
       }
     } catch (_) {}

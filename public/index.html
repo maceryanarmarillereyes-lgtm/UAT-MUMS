@@ -345,6 +345,20 @@
           </div>
 
           <!-- Login Mode Control — Super Admin only -->
+          <!-- Calendar Settings — Super Admin only -->
+          <div class="stngs-tile" id="calendarSettingsCard" style="display:none" role="group">
+            <div class="stngs-tile-icon stngs-icon-calendar" style="background:linear-gradient(135deg,rgba(20,184,166,.25),rgba(6,182,212,.15));border-color:rgba(20,184,166,.3);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </div>
+            <div class="stngs-tile-content">
+              <div class="stngs-tile-name">Calendar Settings</div>
+              <div class="stngs-tile-desc">Manila vacation calendar QB config</div>
+            </div>
+            <button class="stngs-tile-arrow stngs-tile-inner-btn" id="openCalendarSettingsBtn" type="button" aria-label="Configure Calendar Settings">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+
           <div class="stngs-tile stngs-tile-login-mode" id="loginModeCard" style="display:none" role="group">
             <div class="stngs-tile-icon stngs-icon-login">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -380,6 +394,84 @@
 
       </div><!-- /stngs-body -->
     </div><!-- /stngs-panel -->
+  </div>
+
+  <!-- Manila Calendar Settings Modal — Super Admin Only -->
+  <div class="modal" id="calendarSettingsModal">
+    <div class="panel" style="width:min(640px,96vw);max-height:min(86vh,760px);overflow:auto;background:linear-gradient(180deg,rgba(12,27,51,.98),rgba(10,22,43,.98));border:1px solid rgba(20,184,166,.2);border-radius:18px;box-shadow:0 24px 64px rgba(0,0,0,.55);">
+      <div class="head" style="padding:20px 24px 16px;border-bottom:1px solid rgba(20,184,166,.15);">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,rgba(20,184,166,.25),rgba(6,182,212,.15));border:1px solid rgba(20,184,166,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <div>
+            <div style="font-size:16px;font-weight:800;color:#e2e8f0;letter-spacing:-.01em;">Calendar Settings</div>
+            <div style="font-size:12px;color:rgba(148,163,184,.7);margin-top:1px;">Quickbase config for Manila Vacation Calendar</div>
+          </div>
+        </div>
+        <button class="btn ghost" type="button" data-close="calendarSettingsModal" style="width:30px;height:30px;padding:0;display:grid;place-items:center;border-radius:8px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="body" style="padding:20px 24px;">
+        <div style="font-size:12px;color:rgba(148,163,184,.7);margin-bottom:18px;padding:10px 14px;background:rgba(20,184,166,.06);border:1px solid rgba(20,184,166,.14);border-radius:10px;">
+          ⚡ Configure the Quickbase report used by the Manila Calendar page. All users can view the calendar but only Super Admins can change these settings.
+        </div>
+
+        <div class="field" style="margin-bottom:14px;">
+          <label class="small" style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:rgba(148,163,184,.7);display:block;margin-bottom:6px;">Report Link (URL)</label>
+          <input id="calRL" type="url" class="input" placeholder="https://yourcompany.quickbase.com/nav/app/.../table/.../action/q?qid=20" style="width:100%;" />
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+          <div class="field">
+            <label class="small" style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:rgba(148,163,184,.7);display:block;margin-bottom:6px;">Realm <span style="font-weight:400;text-transform:none;">(auto-filled)</span></label>
+            <input id="calRealm" type="text" class="input" readonly placeholder="yourco.quickbase.com" />
+          </div>
+          <div class="field">
+            <label class="small" style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:rgba(148,163,184,.7);display:block;margin-bottom:6px;">Table ID <span style="font-weight:400;text-transform:none;">(auto-filled)</span></label>
+            <input id="calTableId" type="text" class="input" readonly placeholder="bpvmztzr7" />
+          </div>
+          <div class="field">
+            <label class="small" style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:rgba(148,163,184,.7);display:block;margin-bottom:6px;">QID <span style="font-weight:400;text-transform:none;">(auto-filled)</span></label>
+            <input id="calQid" type="text" class="input" readonly placeholder="20" />
+          </div>
+        </div>
+
+        <div class="field" style="margin-bottom:14px;">
+          <label class="small" style="font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:rgba(148,163,184,.7);display:block;margin-bottom:6px;">QB Token <span style="font-weight:400;text-transform:none;">(Secured — server-side only)</span></label>
+          <input id="calToken" type="password" class="input" placeholder="••••••••••••••••••••" autocomplete="new-password" style="width:100%;" />
+          <div class="small muted" style="margin-top:6px;">⚡ Realm, Table ID and QID auto-fill from the Report Link URL</div>
+        </div>
+
+        <div style="border-top:1px solid rgba(148,163,184,.1);padding-top:14px;margin-top:4px;">
+          <div class="small" style="font-weight:700;color:rgba(148,163,184,.6);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px;">Field Mappings <span style="font-weight:400;text-transform:none;">(optional — auto-detected if blank)</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="field">
+              <label class="small muted" style="display:block;margin-bottom:4px;">Employee Field ID</label>
+              <input id="calFEmployee" type="text" class="input" placeholder="e.g. 7" />
+            </div>
+            <div class="field">
+              <label class="small muted" style="display:block;margin-bottom:4px;">Activity/Note Field ID</label>
+              <input id="calFNote" type="text" class="input" placeholder="e.g. 8" />
+            </div>
+            <div class="field">
+              <label class="small muted" style="display:block;margin-bottom:4px;">Start Date Field ID</label>
+              <input id="calFStart" type="text" class="input" placeholder="e.g. 9" />
+            </div>
+            <div class="field">
+              <label class="small muted" style="display:block;margin-bottom:4px;">End Date Field ID</label>
+              <input id="calFEnd" type="text" class="input" placeholder="e.g. 10" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:14px 24px;border-top:1px solid rgba(148,163,184,.1);display:flex;justify-content:flex-end;align-items:center;gap:12px;">
+        <span id="calSaveMsg" style="font-size:12px;opacity:0;transition:opacity .3s;color:#4ade80;"></span>
+        <button class="btn ghost" type="button" data-close="calendarSettingsModal">Cancel</button>
+        <button class="btn primary" type="button" id="calSaveBtn" style="background:linear-gradient(135deg,#0d9488,#0891b2);border-color:rgba(20,184,166,.5);">Save Calendar Settings</button>
+      </div>
+    </div>
   </div>
 
   <!-- Global Quickbase Settings Modal -->
@@ -980,6 +1072,7 @@
   <script src="/js/pages/my_task.js?v=p1-663"></script>
   <script src="/js/pages/my_quickbase_tab_manager.js?v=p1-663"></script>
   <script src="/js/pages/my_quickbase.js?v=p1-663"></script>
+  <script src="/js/pages/manila_calendar.js?v=p1-663"></script>
   <script src="/js/pages/commands.js?v=p1-663"></script>
   <script src="/js/pages/privileges.js?v=p1-663"></script>
   <script src="/js/pages/gmt_overview.js?v=p1-663"></script>

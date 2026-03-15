@@ -284,6 +284,7 @@ THEMES: [
           { id: 'my_case', label: 'My Case', icon: '📨', perm: 'view_my_record' },
           { id: 'my_task', label: 'My Task', icon: '✅', perm: 'view_my_record' },
           { id: 'my_quickbase', label: 'My Quickbase', icon: 'database' },
+          { id: 'manila_calendar', label: 'Manila Calendar', icon: '📆' },
         ]
       },
 
