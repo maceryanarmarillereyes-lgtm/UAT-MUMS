@@ -159,7 +159,7 @@ select:disabled{opacity:.65;color:var(--text)}
 .err{display:none;margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,91,110,.5);background:rgba(255,91,110,.12);color:#ffd7dc}
 
 /* App layout */
-.app{height:100%;display:grid;grid-template-columns:260px 1fr 320px;grid-template-rows:auto 1fr;gap:14px;padding:14px;padding-bottom:92px}
+.app{height:100%;max-height:100%;display:grid;grid-template-columns:260px 1fr 320px;grid-template-rows:auto 1fr;gap:14px;padding:14px;padding-bottom:calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 18px);overflow:hidden}
 @media(max-width:1100px){.app{grid-template-columns:240px 1fr;grid-template-rows:auto auto 1fr;}.right{grid-column:1/-1;grid-row:2}.main{grid-column:1/-1;grid-row:3}}
 .topbar{grid-column:1/-1;display:grid;grid-template-columns:260px 1fr auto;align-items:center;gap:12px}
 .topbar-center{display:flex;justify-content:center;align-items:center;min-width:0}
@@ -259,7 +259,7 @@ body[data-mode="light"] .sp-photo-sm{background:rgba(15,23,42,.04)}
 
 /* Keep app content from being covered by the bottom bar.
    Increased to account for: quick links labels + circles + world clocks. */
-.app{padding-bottom:120px}
+/* padding-bottom on .app is controlled by CSS variables: see --mums-dock-h and --mums-onlinebar-h */
 
 /* Theme picker */
 .theme-grid{display:grid;grid-template-columns:repeat(5, 1fr);gap:12px}
@@ -276,15 +276,17 @@ body[data-mode="light"] .sp-photo-sm{background:rgba(15,23,42,.04)}
 
 html{
   --app-scale: 1;
-  overflow-x: hidden;
+  overflow: hidden;
+  height: 100%;
 }
 
 body{
   transform: scale(var(--app-scale));
   transform-origin: top left;
   width: calc(100% / var(--app-scale));
-  min-height: calc(100vh / var(--app-scale));
-  overflow-x: hidden;
+  height: calc(100vh / var(--app-scale));
+  max-height: calc(100vh / var(--app-scale));
+  overflow: hidden;
 }
 
 /* Disable narrow-screen grid reflow that causes "layout shatter".
@@ -5260,7 +5262,7 @@ body[data-theme="mums_light"] {
 
 /* ── 1. App shell ───────────────────────────────────────────────────────────── */
 body[data-theme="mums_light"] .app {
-  gap: 0; padding: 0; padding-bottom: 120px; background: #f6f7fb;
+  gap: 0; padding: 0; padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 18px); background: #f6f7fb;
 }
 
 /* ── 2. Topbar ──────────────────────────────────────────────────────────────── */
@@ -6047,7 +6049,7 @@ body[data-theme="ivory_executive"] {
 
 /* ── 1. App shell ───────────────────────────────────────────────────────────── */
 body[data-theme="ivory_executive"] .app {
-  gap: 0; padding: 0; padding-bottom: 120px; background: #f5f5f2;
+  gap: 0; padding: 0; padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 18px); background: #f5f5f2;
 }
 
 /* ── 2. Topbar ──────────────────────────────────────────────────────────────── */
@@ -9573,10 +9575,12 @@ body:not(.quicklinks-bar-hidden) .quicklinks-bar {
    which expands the 1fr grid row → sidebars + main grow automatically. */
 body.quicklinks-bar-hidden {
   --mums-dock-h: 0px;
+  transition: --mums-dock-h .28s cubic-bezier(.4,0,.2,1);
 }
 /* Online users bar hidden: zero out online bar height variable */
 body.online-bar-hidden {
   --mums-onlinebar-h: 0px;
+  transition: --mums-onlinebar-h .28s cubic-bezier(.4,0,.2,1);
 }
 
 /* Online users bar: adjust bottom anchor when quicklinks bar is hidden */
