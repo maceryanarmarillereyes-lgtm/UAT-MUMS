@@ -109,14 +109,35 @@
 
     return rawRows.map((row, idx) => {
       // QB run-report row format: { [fieldId]: { value } }
+      // value can be: string, number, boolean, or nested object {name, email, id} / {url, label}
+      function unwrapQBValue(val) {
+        if (val === null || val === undefined) return '';
+        if (typeof val === 'object') {
+          // User field: { id, email, name } or { id, userName, screenName }
+          if (val.name)       return String(val.name);
+          if (val.screenName) return String(val.screenName);
+          if (val.userName)   return String(val.userName);
+          if (val.email)      return String(val.email);
+          // URL/rich text field: { url, label }
+          if (val.label)      return String(val.label);
+          if (val.url)        return String(val.url);
+          // Record reference
+          if (val.value !== undefined) return unwrapQBValue(val.value);
+          // Array (multi-select)
+          if (Array.isArray(val)) return val.map(unwrapQBValue).filter(Boolean).join(', ');
+          return '';
+        }
+        return String(val);
+      }
+
       function fv(id) {
         if (!id) return '';
         const cell = row[String(id)];
         if (cell === null || cell === undefined) return '';
         if (typeof cell === 'object' && Object.prototype.hasOwnProperty.call(cell, 'value')) {
-          return cell.value === null ? '' : String(cell.value);
+          return unwrapQBValue(cell.value);
         }
-        return String(cell);
+        return unwrapQBValue(cell);
       }
 
       const startDate = parseDate(fv(startId));
@@ -282,19 +303,21 @@
     }).join('');
 
     container.innerHTML = `
-      <div class="mc-list-wrap">
-        <table class="mc-list-table">
-          <thead>
-            <tr class="mc-list-head">
-              <th class="mc-list-th" style="width:44px">#</th>
-              <th class="mc-list-th">Employee</th>
-              <th class="mc-list-th">Activity / Leave Type</th>
-              <th class="mc-list-th">Date Range</th>
-              <th class="mc-list-th">Duration</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
+      <div class="mc-list-outer">
+        <div class="mc-list-scroll">
+          <table class="mc-list-table">
+            <thead class="mc-list-thead">
+              <tr class="mc-list-head">
+                <th class="mc-list-th" style="width:44px">#</th>
+                <th class="mc-list-th">Employee</th>
+                <th class="mc-list-th">Activity / Leave Type</th>
+                <th class="mc-list-th">Date Range</th>
+                <th class="mc-list-th">Duration</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
       </div>`;
   }
 
