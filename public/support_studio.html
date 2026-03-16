@@ -1412,7 +1412,7 @@
     <div class="cat-modal">
       <div class="cat-modal-title">
         <span><i class="fas fa-plus-circle" style="color:#58a6ff;margin-right:8px;"></i>Add New Item</span>
-        <button class="cat-modal-close" id="cat-modal-close-btn">✕</button>
+        <button class="cat-modal-close" id="cat-modal-close-btn" onclick="window._catCloseAddModal()">✕</button>
       </div>
       <div class="cat-modal-grid">
         <div class="cat-field">
@@ -1442,8 +1442,8 @@
         </div>
       </div>
       <div class="cat-modal-btns">
-        <button class="cat-btn-cancel" id="cat-modal-cancel-btn">Cancel</button>
-        <button class="cat-btn-save" id="cat-modal-save-btn"><i class="fas fa-plus"></i> Create Item</button>
+        <button class="cat-btn-cancel" id="cat-modal-cancel-btn" onclick="window._catCloseAddModal()">Cancel</button>
+        <button class="cat-btn-save" id="cat-modal-save-btn" onclick="window._catDoCreateItem(this)"><i class="fas fa-plus"></i> Create Item</button>
         <span class="cat-save-msg" id="cat-modal-msg"></span>
       </div>
     </div>
@@ -1454,7 +1454,7 @@
     <div class="cat-modal">
       <div class="cat-modal-title">
         <span><i class="fas fa-code-branch" style="color:#a25ddc;margin-right:8px;"></i>Add Sub-Item</span>
-        <button class="cat-modal-close" id="cat-sub-modal-close">✕</button>
+        <button class="cat-modal-close" id="cat-sub-modal-close" onclick="window._catCloseSubModal()">✕</button>
       </div>
       <div style="background:rgba(162,93,220,.08);border:1px solid rgba(162,93,220,.2);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:var(--ss-muted);">
         <i class="fas fa-info-circle" style="color:#a25ddc;margin-right:5px;"></i>
@@ -1487,12 +1487,12 @@
           </select>
         </div>
       </div>
-      <div id="cat-sub-modal-msg" style="display:none;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);border-radius:7px;padding:7px 12px;font-size:11px;font-weight:600;color:#f85149;margin-bottom:10px;display:none;align-items:center;gap:7px;">
+      <div id="cat-sub-modal-msg" style="display:none;">
         <i class="fas fa-exclamation-circle"></i><span id="cat-sub-modal-msg-text"></span>
       </div>
       <div class="cat-modal-btns">
-        <button class="cat-btn-cancel" id="cat-sub-modal-cancel">← Cancel</button>
-        <button class="cat-btn-save" id="cat-sub-modal-save"><i class="fas fa-code-branch"></i> Add Sub-Item</button>
+        <button class="cat-btn-cancel" id="cat-sub-modal-cancel" onclick="window._catCloseSubModal()">← Cancel</button>
+        <button class="cat-btn-save" id="cat-sub-modal-save" onclick="window._catDoAddSubItem(this)"><i class="fas fa-code-branch"></i> Add Sub-Item</button>
       </div>
     </div>
   </div>
@@ -2054,6 +2054,7 @@
     document.getElementById('cat-add-modal').classList.add('open');
   }
   function closeAddModal() { document.getElementById('cat-add-modal').classList.remove('open'); }
+  window._catCloseAddModal = closeAddModal;
 
   async function createItem() {
     const code = document.getElementById('cmi-code').value.trim().toUpperCase();
@@ -2086,6 +2087,7 @@
     } catch(e) { showMsg(msg, '✗ ' + e.message, false); }
     finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus"></i> Create Item'; }
   }
+  window._catDoCreateItem = function(btnEl) { createItem(btnEl); };
 
   /* ── Add Sub-Item Modal ────────────────────────────────────── */
   async function openSubModal(parentItem) {
@@ -2107,76 +2109,97 @@
     document.getElementById('cat-sub-modal').classList.remove('open');
     hideSubError();
   }
+  window._catCloseSubModal = closeSubModal;
 
   function showSubError(text) {
+    // Primary: show banner in modal
     const wrap = document.getElementById('cat-sub-modal-msg');
     const span = document.getElementById('cat-sub-modal-msg-text');
-    if (!wrap || !span) return;
-    span.textContent = text;
-    wrap.style.display = 'flex';
-    clearTimeout(wrap._t);
-    wrap._t = setTimeout(() => { wrap.style.display = 'none'; }, 4000);
+    if (wrap && span) {
+      span.textContent = text;
+      wrap.style.cssText = 'display:flex !important;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);border-radius:7px;padding:7px 12px;font-size:11px;font-weight:600;color:#f85149;margin-bottom:10px;align-items:center;gap:7px;';
+      clearTimeout(wrap._hideT);
+      wrap._hideT = setTimeout(() => { wrap.style.display = 'none'; }, 5000);
+    } else {
+      // Guaranteed fallback — always visible
+      alert('[Add Sub-Item] ' + text);
+    }
   }
   function hideSubError() {
     const wrap = document.getElementById('cat-sub-modal-msg');
     if (wrap) wrap.style.display = 'none';
   }
 
-  async function createSubItem() {
+  async function createSubItem(btnEl) {
     hideSubError();
     const codeRaw  = (document.getElementById('csmi-code').value || '').trim();
     const code     = codeRaw.toUpperCase();
     const name     = (document.getElementById('csmi-name').value || '').trim();
-    const parentId = document.getElementById('cat-sub-modal').dataset.parentId;
 
-    // Validate — code must have content after the last dash
+    // Get parentId — stored in modal dataset
+    const modalEl  = document.getElementById('cat-sub-modal');
+    const parentId = modalEl ? (modalEl.dataset.parentId || modalEl.getAttribute('data-parent-id')) : null;
+
+    // Validations
     if (!code) { showSubError('Sub-item code is required'); return; }
     if (!name) { showSubError('Name is required'); return; }
-    if (code.endsWith('-')) { showSubError('Add a suffix after the dash — e.g. CTR-001-A'); return; }
     if (!parentId) { showSubError('No parent item found — close and try again'); return; }
 
-    // Check local state for duplicates (instant, before API)
-    if (state.items.some(i => i.item_code === code)) {
+    // Check local duplicates
+    if (state.items.some(function(i) { return i.item_code === code; })) {
       showSubError('Code "' + code + '" already exists — use a unique code');
       return;
     }
 
-    const btn = document.getElementById('cat-sub-modal-save');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding…';
+    // Lock button + show spinner
+    const btn = btnEl || document.getElementById('cat-sub-modal-save');
+    const origHtml = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding…'; }
+
     try {
-      const sel = document.getElementById('csmi-assigned_to');
-      const r = await apiFetch('/api/catalog/items', { method:'POST', body:JSON.stringify({
+      const sel      = document.getElementById('csmi-assigned_to');
+      const catEl    = document.getElementById('csmi-category');
+      const brandEl  = document.getElementById('csmi-brand');
+      const payload  = {
         item_code:        code,
         name:             name,
-        category:         document.getElementById('csmi-category').value,
-        brand:            (document.getElementById('csmi-brand').value || '').trim(),
-        assigned_to:      sel && sel.value ? sel.value : null,
-        assigned_to_name: sel && sel.value ? (sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '') : '',
+        category:         catEl    ? catEl.value                           : 'Controller',
+        brand:            brandEl  ? (brandEl.value || '').trim()          : '',
+        assigned_to:      sel && sel.value ? sel.value                     : null,
+        assigned_to_name: sel && sel.value && sel.options[sel.selectedIndex]
+                          ? sel.options[sel.selectedIndex].text : '',
         parent_id:        parentId,
-      })});
+      };
+
+      const r = await apiFetch('/api/catalog/items', { method: 'POST', body: JSON.stringify(payload) });
       const d = await r.json();
+
       if (!d.ok) {
         if (r.status === 409 || d.error === 'duplicate_code') {
           showSubError('Code "' + code + '" already exists — use a unique code');
           return;
         }
-        throw new Error(d.message || d.error || 'Server error — please try again');
+        showSubError(d.message || d.error || 'Server error — please try again');
+        return;
       }
+
+      // Success
       state.expandedNodes.add(parentId);
       await loadItems();
       closeSubModal();
-      const newItem = state.items.find(i => i.item_code === code);
+      const newItem = state.items.find(function(i) { return i.item_code === code; });
       if (newItem) selectItem(newItem);
+
     } catch(e) {
-      showSubError(e.message || 'Create failed — please try again');
+      showSubError(e.message || 'Network error — please try again');
     } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-code-branch"></i> Add Sub-Item';
+      if (btn) { btn.disabled = false; btn.innerHTML = origHtml || '<i class="fas fa-code-branch"></i> Add Sub-Item'; }
     }
   }
+  // Expose globally — onclick attribute primary trigger
+  window._catDoAddSubItem = function(btnEl) { createSubItem(btnEl); };
 
-  /* ── Users dropdown ────────────────────────────────────────── */
+    /* ── Users dropdown ────────────────────────────────────────── */
   async function loadUsersIntoSelect(selectId, currentValue) {
     if (state.users.length === 0) {
       try {
@@ -2283,13 +2306,23 @@
   }
 
   // ── Call Information ────────────────────────────────────────────
+  // Uses in-memory store as primary (Edge Tracking Prevention blocks localStorage).
+  // localStorage used as best-effort persistence fallback only.
   const CI_KEY = 'mums_ss_call_notes';
+  let _ciNotesMemory = null; // in-memory cache
 
   function loadCallNotes() {
-    try { return JSON.parse(localStorage.getItem(CI_KEY) || '[]'); } catch(_) { return []; }
+    if (_ciNotesMemory !== null) return _ciNotesMemory.slice();
+    try {
+      const raw = localStorage.getItem(CI_KEY) || sessionStorage.getItem(CI_KEY) || '[]';
+      _ciNotesMemory = JSON.parse(raw);
+    } catch(_) { _ciNotesMemory = []; }
+    return _ciNotesMemory.slice();
   }
   function saveCallNotes(notes) {
-    try { localStorage.setItem(CI_KEY, JSON.stringify(notes.slice(0, 50))); } catch(_) {}
+    _ciNotesMemory = notes.slice(0, 50); // always update in-memory
+    try { localStorage.setItem(CI_KEY, JSON.stringify(_ciNotesMemory)); } catch(_) {}
+    try { sessionStorage.setItem(CI_KEY, JSON.stringify(_ciNotesMemory)); } catch(_) {}
   }
 
   function renderRecentNotes() {
@@ -2347,7 +2380,12 @@
       all.unshift(note);
       saveCallNotes(all);
       renderRecentNotes();
-      if (ciMsg) { ciMsg.textContent = '✓ Note saved!'; ciMsg.style.opacity = '1'; setTimeout(() => { ciMsg.style.opacity = '0'; }, 2500); }
+      if (ciMsg) {
+        ciMsg.textContent = '✓ Note saved!';
+        ciMsg.style.cssText = 'font-size:10px;color:#3fb950;text-align:center;margin-top:4px;opacity:1;transition:opacity .3s;';
+        clearTimeout(ciMsg._t);
+        ciMsg._t = setTimeout(function() { ciMsg.style.opacity = '0'; }, 2500);
+      }
     });
   }
 
