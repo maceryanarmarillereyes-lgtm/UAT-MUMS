@@ -1378,35 +1378,71 @@
           </select>
         </div>
         <div class="ss-btn-row" style="margin-top:8px;gap:6px;">
-          <button class="ss-action-btn" id="ci-save-btn" style="flex:1;background:rgba(63,185,80,.12);border-color:rgba(63,185,80,.3);color:#3fb950;">
+          <button id="ci-save-btn" onclick="window._ciSaveNote()" style="flex:1;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);border-radius:7px;color:#3fb950;padding:7px 10px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s;">
             <i class="fas fa-save"></i> Save Note
           </button>
-          <button class="ss-action-btn" id="ci-clear-btn" style="flex:1;">
+          <button id="ci-clear-btn" onclick="window._ciClearForm()" style="flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:7px;color:var(--ss-muted);padding:7px 10px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s;">
             <i class="fas fa-times"></i> Clear
           </button>
         </div>
         <div id="ci-save-msg" style="font-size:10px;color:#3fb950;text-align:center;margin-top:4px;opacity:0;transition:opacity .3s;"></div>
         <hr class="ss-divider" style="margin:10px 0;">
-        <div class="ss-panel-title" style="margin-bottom:6px;"><i class="fas fa-clock"></i> Recent Notes</div>
-        <div id="ci-recent-list" style="display:flex;flex-direction:column;gap:4px;overflow-y:auto;max-height:140px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div class="ss-panel-title" style="margin-bottom:0;"><i class="fas fa-clock"></i> Recent Notes</div>
+          <button onclick="window._ciOpenNotesPanel()" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:5px;color:#58a6ff;font-size:9px;font-weight:700;padding:3px 8px;cursor:pointer;font-family:var(--ss-font);white-space:nowrap;">View All</button>
+        </div>
+        <div id="ci-recent-list" style="display:flex;flex-direction:column;gap:4px;overflow-y:auto;max-height:160px;">
           <div class="ss-empty-note" style="padding:8px 0;font-size:10px;">No saved notes yet.</div>
         </div>
       </div>
 
-      <!-- Element Inspector -->
-      <div class="ss-panel" id="right-element-inspector">
-        <div class="ss-panel-title"><i class="fas fa-sliders-h"></i> Element Inspector</div>
-        <div class="ss-inspector-empty" style="padding:20px 10px;">
-          <i class="fas fa-mouse-pointer" style="font-size:24px;"></i>
-          <p>Enable Support Mode and click any element to inspect.</p>
-        </div>
-      </div>
+
 
     </aside>
 
   </div><!-- /ss-main-body -->
 
 
+
+  <!-- ── Notes Panel (premium full-screen overlay) ──────────── -->
+  <div id="ci-notes-panel" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(1,4,9,.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:ciPanelIn .22s ease;">
+    <style>
+      @keyframes ciPanelIn { from { opacity:0; } to { opacity:1; } }
+      @keyframes ciCardIn  { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+      .ci-np-card { animation: ciCardIn .2s ease both; }
+      #ci-notes-panel ::-webkit-scrollbar { width:5px; }
+      #ci-notes-panel ::-webkit-scrollbar-thumb { background:rgba(255,255,255,.12); border-radius:99px; }
+    </style>
+    <div style="position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto;">
+      <div style="width:100%;max-width:780px;">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
+          <div>
+            <div style="font-size:22px;font-weight:800;color:#e6edf3;letter-spacing:-.01em;">Call Notes Log</div>
+            <div style="font-size:12px;color:var(--ss-muted);margin-top:3px;" id="ci-np-subtitle">All saved call notes</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input id="ci-np-search" type="text" placeholder="Search notes…" oninput="window._ciNpFilter(this.value)"
+              style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:8px 14px;color:#e6edf3;font-size:12px;font-family:var(--ss-font);outline:none;width:220px;">
+            <button onclick="window._ciCloseNotesPanel()"
+              style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:var(--ss-muted);padding:8px 14px;font-size:12px;font-weight:700;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:6px;">
+              <i class="fas fa-times"></i> Close
+            </button>
+          </div>
+        </div>
+        <!-- Stats bar -->
+        <div id="ci-np-stats" style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;"></div>
+        <!-- Notes grid -->
+        <div id="ci-np-grid" style="display:flex;flex-direction:column;gap:12px;"></div>
+        <!-- Empty state -->
+        <div id="ci-np-empty" style="display:none;text-align:center;padding:60px 20px;color:var(--ss-muted);">
+          <i class="fas fa-sticky-note" style="font-size:40px;opacity:.15;display:block;margin-bottom:12px;"></i>
+          <div style="font-size:14px;font-weight:600;opacity:.4;">No notes found</div>
+          <div style="font-size:11px;opacity:.25;margin-top:4px;">Try a different search term</div>
+        </div>
+      </div>
+    </div>
+  </div>
   <!-- ── Add Item Modal ─────────────────────────────────────── -->
   <div class="cat-modal-overlay" id="cat-add-modal">
     <div class="cat-modal">
@@ -2399,6 +2435,247 @@
       if (s) s.value = '';
     });
   }
+
+  // Init
+  renderRecentNotes();
+  document.title = 'MUMS Support Studio';
+
+})();
+</script>
+</body>
+</html>  // ── Call Information ──────────────────────────────────────────
+  const CI_KEY = 'mums_ss_call_notes';
+  let _ciNotesMemory = null;
+
+  function loadCallNotes() {
+    if (_ciNotesMemory !== null) return _ciNotesMemory.slice();
+    try {
+      var raw = localStorage.getItem(CI_KEY) || sessionStorage.getItem(CI_KEY) || '[]';
+      _ciNotesMemory = JSON.parse(raw);
+    } catch(_) { _ciNotesMemory = []; }
+    return _ciNotesMemory.slice();
+  }
+  function saveCallNotes(notes) {
+    _ciNotesMemory = notes.slice(0, 100);
+    try { localStorage.setItem(CI_KEY, JSON.stringify(_ciNotesMemory)); } catch(_) {}
+    try { sessionStorage.setItem(CI_KEY, JSON.stringify(_ciNotesMemory)); } catch(_) {}
+  }
+
+  /* ── Sidebar mini-list ───────────────────────────────── */
+  function renderRecentNotes() {
+    var list = document.getElementById('ci-recent-list');
+    if (!list) return;
+    var notes = loadCallNotes();
+    if (!notes.length) {
+      list.innerHTML = '<div class="ss-empty-note" style="padding:8px 0;font-size:10px;">No saved notes yet.</div>';
+      return;
+    }
+    list.innerHTML = notes.slice(0, 5).map(function(n, i) {
+      var dt = new Date(n.savedAt || Date.now());
+      var timeStr = dt.toLocaleDateString('en-PH',{month:'short',day:'numeric'}) + ' ' +
+                    dt.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'});
+      var statusColor = {Open:'#58a6ff','In Progress':'#d29922',Escalated:'#f85149',Resolved:'#3fb950','Follow-up Required':'#a25ddc'}[n.status] || 'var(--ss-muted)';
+      var statusDot = n.status ? '<span style="width:6px;height:6px;border-radius:50%;background:' + statusColor + ';display:inline-block;margin-right:5px;flex-shrink:0;"></span>' : '';
+      return '<div class="ci-note-card" data-idx="' + i + '" onclick="window._ciLoadNote(' + i + ')" style="cursor:pointer;">' +
+        '<div class="ci-note-time">' + timeStr + (n.status ? ' · ' + statusDot + '<span style="color:' + statusColor + ';font-weight:700;">' + n.status + '</span>' : '') + '</div>' +
+        '<div class="ci-note-caller">' + (n.callerName || '(no name)') + (n.ticket ? ' &nbsp;·&nbsp; ' + n.ticket : '') + '</div>' +
+        '<div style="font-size:9px;color:var(--ss-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (n.issue || n.notes || '—') + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  window._ciLoadNote = function(idx) {
+    var notes = loadCallNotes();
+    var n = notes[idx];
+    if (!n) return;
+    var el = function(id) { return document.getElementById(id); };
+    if (el('ci-caller-name')) el('ci-caller-name').value = n.callerName || '';
+    if (el('ci-ticket'))      el('ci-ticket').value      = n.ticket     || '';
+    if (el('ci-issue'))       el('ci-issue').value       = n.issue      || '';
+    if (el('ci-product'))     el('ci-product').value     = n.product    || '';
+    if (el('ci-notes'))       el('ci-notes').value       = n.notes      || '';
+    if (el('ci-status'))      el('ci-status').value      = n.status     || '';
+  };
+
+  /* ── Save & Clear ───────────────────────────────────── */
+  window._ciSaveNote = function() {
+    var el = function(id) { return document.getElementById(id); };
+    var note = {
+      callerName: el('ci-caller-name') ? el('ci-caller-name').value.trim() : '',
+      ticket:     el('ci-ticket')      ? el('ci-ticket').value.trim()      : '',
+      issue:      el('ci-issue')       ? el('ci-issue').value.trim()       : '',
+      product:    el('ci-product')     ? el('ci-product').value.trim()     : '',
+      notes:      el('ci-notes')       ? el('ci-notes').value.trim()       : '',
+      status:     el('ci-status')      ? el('ci-status').value             : '',
+      savedAt:    new Date().toISOString(),
+    };
+    var all = loadCallNotes();
+    all.unshift(note);
+    saveCallNotes(all);
+    renderRecentNotes();
+    // Show success message
+    var ciMsg = el('ci-save-msg');
+    if (ciMsg) {
+      ciMsg.textContent = '✓ Note saved!';
+      ciMsg.style.cssText = 'font-size:10px;color:#3fb950;text-align:center;margin-top:4px;opacity:1;transition:opacity .4s;';
+      clearTimeout(ciMsg._t);
+      ciMsg._t = setTimeout(function() { ciMsg.style.opacity = '0'; }, 2500);
+    }
+  };
+
+  window._ciClearForm = function() {
+    ['ci-caller-name','ci-ticket','ci-issue','ci-product','ci-notes'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    var s = document.getElementById('ci-status');
+    if (s) s.value = '';
+  };
+
+  /* ── Premium Notes Panel ────────────────────────────── */
+  var STATUS_COLORS = {
+    'Open':              '#58a6ff',
+    'In Progress':       '#d29922',
+    'Escalated':         '#f85149',
+    'Resolved':          '#3fb950',
+    'Follow-up Required':'#a25ddc'
+  };
+
+  function buildNpCard(n, idx) {
+    var dt      = new Date(n.savedAt || Date.now());
+    var dateStr = dt.toLocaleDateString('en-PH',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+    var timeStr = dt.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'});
+    var sc      = STATUS_COLORS[n.status] || 'var(--ss-muted)';
+    var hasCaller = n.callerName || n.ticket;
+    var fields = [
+      ['Issue',    n.issue],
+      ['Product',  n.product],
+      ['Notes',    n.notes],
+    ].filter(function(f){ return f[1]; });
+
+    return '<div class="ci-np-card" style="background:rgba(13,17,23,.9);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px 20px;transition:border-color .18s;cursor:default;" ' +
+      'onmouseenter="this.style.borderColor='rgba(88,166,255,.3)'" onmouseleave="this.style.borderColor='rgba(255,255,255,.08)'" data-npidx="' + idx + '">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;">' +
+        '<div>' +
+          (hasCaller ? '<div style="font-size:14px;font-weight:800;color:#e6edf3;">' + escHtml(n.callerName || '(no name)') + (n.ticket ? '<span style="font-size:11px;font-weight:600;color:var(--ss-muted);margin-left:8px;">#' + escHtml(n.ticket) + '</span>' : '') + '</div>' : '') +
+          '<div style="font-size:10px;color:var(--ss-muted);margin-top:2px;">' + escHtml(dateStr) + ' &nbsp;·&nbsp; ' + escHtml(timeStr) + '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
+          (n.status ? '<span style="font-size:9px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid ' + sc + '30;background:' + sc + '18;color:' + sc + ';">' + escHtml(n.status) + '</span>' : '') +
+          '<button onclick="window._ciLoadNoteAndClose(' + idx + ')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:6px;color:#58a6ff;font-size:10px;font-weight:700;padding:4px 10px;cursor:pointer;font-family:var(--ss-font);white-space:nowrap;">Load</button>' +
+          '<button onclick="window._ciDeleteNote(' + idx + ')" style="background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:6px;color:#f85149;font-size:10px;font-weight:700;padding:4px 8px;cursor:pointer;font-family:var(--ss-font);" title="Delete note"><i class="fas fa-trash-alt"></i></button>' +
+        '</div>' +
+      '</div>' +
+      (fields.length ? '<div style="display:flex;flex-direction:column;gap:8px;">' +
+        fields.map(function(f) {
+          return '<div style="display:flex;gap:8px;">' +
+            '<span style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--ss-muted);padding-top:2px;flex-shrink:0;width:52px;">' + escHtml(f[0]) + '</span>' +
+            '<span style="font-size:11px;color:var(--ss-text);line-height:1.5;word-break:break-word;">' + escHtml(f[1]) + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>' : '<div style="font-size:11px;color:var(--ss-muted);opacity:.4;">No additional details</div>') +
+      '</div>';
+  }
+
+  function escHtml(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function buildNpStats(notes) {
+    var total  = notes.length;
+    var open   = notes.filter(function(n){return n.status==='Open';}).length;
+    var esc    = notes.filter(function(n){return n.status==='Escalated';}).length;
+    var res    = notes.filter(function(n){return n.status==='Resolved';}).length;
+    var stats  = [
+      {label:'Total', val:total,  color:'#58a6ff'},
+      {label:'Open',  val:open,   color:'#58a6ff'},
+      {label:'Escalated', val:esc, color:'#f85149'},
+      {label:'Resolved',  val:res, color:'#3fb950'},
+    ];
+    return stats.map(function(s) {
+      return '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px;">' +
+        '<div style="font-size:20px;font-weight:900;color:' + s.color + ';">' + s.val + '</div>' +
+        '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ss-muted);">' + s.label + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderNpGrid(filter) {
+    var notes   = loadCallNotes();
+    var q       = (filter||'').toLowerCase().trim();
+    var filtered = q ? notes.filter(function(n) {
+      return (n.callerName||'').toLowerCase().includes(q) ||
+             (n.ticket||'').toLowerCase().includes(q)     ||
+             (n.issue||'').toLowerCase().includes(q)      ||
+             (n.notes||'').toLowerCase().includes(q)      ||
+             (n.product||'').toLowerCase().includes(q)    ||
+             (n.status||'').toLowerCase().includes(q);
+    }) : notes;
+
+    var grid    = document.getElementById('ci-np-grid');
+    var empty   = document.getElementById('ci-np-empty');
+    var subtitle = document.getElementById('ci-np-subtitle');
+    if (!grid) return;
+
+    if (subtitle) subtitle.textContent = filtered.length + ' note' + (filtered.length!==1?'s':'') + ' saved';
+    if (!filtered.length) {
+      grid.innerHTML  = '';
+      if (empty) empty.style.display = 'block';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    grid.innerHTML = filtered.map(function(n, i) {
+      // Use original index for load/delete
+      var origIdx = notes.indexOf(n);
+      return buildNpCard(n, origIdx);
+    }).join('');
+  }
+
+  window._ciNpFilter = function(val) { renderNpGrid(val); };
+
+  window._ciOpenNotesPanel = function() {
+    var panel = document.getElementById('ci-notes-panel');
+    if (!panel) return;
+    var stats = document.getElementById('ci-np-stats');
+    var notes = loadCallNotes();
+    if (stats) stats.innerHTML = buildNpStats(notes);
+    var searchEl = document.getElementById('ci-np-search');
+    if (searchEl) searchEl.value = '';
+    renderNpGrid('');
+    panel.style.display = 'block';
+    // Close on backdrop click
+    panel.onclick = function(e) { if (e.target === panel || e.target.parentElement === panel) window._ciCloseNotesPanel(); };
+  };
+
+  window._ciCloseNotesPanel = function() {
+    var panel = document.getElementById('ci-notes-panel');
+    if (panel) panel.style.display = 'none';
+  };
+
+  window._ciLoadNoteAndClose = function(idx) {
+    window._ciLoadNote(idx);
+    window._ciCloseNotesPanel();
+  };
+
+  window._ciDeleteNote = function(idx) {
+    if (!confirm('Delete this note?')) return;
+    var all = loadCallNotes();
+    all.splice(idx, 1);
+    saveCallNotes(all);
+    renderRecentNotes();
+    var stats = document.getElementById('ci-np-stats');
+    if (stats) stats.innerHTML = buildNpStats(loadCallNotes());
+    renderNpGrid(document.getElementById('ci-np-search') ? document.getElementById('ci-np-search').value : '');
+  };
+
+  // Keyboard: Escape closes panel
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      var panel = document.getElementById('ci-notes-panel');
+      if (panel && panel.style.display !== 'none') window._ciCloseNotesPanel();
+    }
+  });
+
 
   // Init
   renderRecentNotes();
