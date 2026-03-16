@@ -583,7 +583,11 @@ if (!createAllowed) {
 
 
 function applyDevOptionForRole(role){
-  const isSuper = String(role || '').toUpperCase() === String(Config.ROLES.SUPER_ADMIN);
+  const roleUpper = String(role || '').toUpperCase();
+  const isSuperRole = (
+    roleUpper === String(Config.ROLES.SUPER_ADMIN) ||
+    roleUpper === 'SUPER_USER'
+  );
   const sel = UI.el('#u_team');
   if (!sel) return;
 
@@ -591,7 +595,7 @@ function applyDevOptionForRole(role){
   // Correct approach: physically remove or re-insert the Developer Access option.
   let devOpt = sel.querySelector('option[value=""]');
 
-  if (isSuper) {
+  if (isSuperRole) {
     // Ensure Developer Access option exists at the top
     if (!devOpt) {
       devOpt = document.createElement('option');
@@ -601,7 +605,7 @@ function applyDevOptionForRole(role){
     }
     devOpt.disabled = false;
   } else {
-    // Remove Developer Access option entirely for non-SUPER_ADMIN
+    // Remove Developer Access option entirely for non-super roles
     if (devOpt) devOpt.remove();
     // If value is empty (Developer Access), force to first shift
     if (sel.value === '') {
@@ -637,10 +641,16 @@ function openUserModal(actor, user){
   }
 
   // Team: SUPER_ADMIN may be Developer Access (empty string); others must be shift team.
-  // FIX: explicitly check for empty string '' (Developer Access) — falsy check was treating it as no team.
+  // FIX: preserve Developer Access (empty string) for SUPER_ADMIN and SUPER_USER.
+  // Only default to first shift for roles that cannot have Developer Access.
+  const editRoleUpper = String((user && user.role) || '').toUpperCase();
+  const editIsSuperRole = (
+    editRoleUpper === String(Config.ROLES.SUPER_ADMIN) ||
+    editRoleUpper === 'SUPER_USER'
+  );
   const resolvedTeam = (user && user.teamId !== undefined && user.teamId !== null)
     ? user.teamId
-    : ((Config.TEAMS[0] && Config.TEAMS[0].id) || 'morning');
+    : (editIsSuperRole ? '' : ((Config.TEAMS[0] && Config.TEAMS[0].id) || 'morning'));
   UI.el('#u_team').value = resolvedTeam;
 
   // Email is required and explicitly managed as the Microsoft identity.
@@ -775,12 +785,18 @@ function openUserModal(actor, user){
       }
       if(actor.role===Config.ROLES.TEAM_LEAD && teamId!==actor.teamId) return err('Team Lead can only manage users in their team.');
 
-      // Developer Access restriction
-      // FIX: SUPER_ADMIN role CAN have Developer Access (empty teamId). Only block for non-SUPER_ADMIN roles.
-      const isSuperAdminRole = String(role||'').toUpperCase() === String(Config.ROLES.SUPER_ADMIN);
-      const isEditingExistingSuperAdmin = isEdit && user && String(user.role||'').toUpperCase() === String(Config.ROLES.SUPER_ADMIN);
-      if(!isSuperAdminRole && !isEditingExistingSuperAdmin && String(teamId||'')===''){
-        return err('Developer Access is reserved for Super Admin. Choose Morning/Mid/Night shift.');
+      // Developer Access restriction — allowed for SUPER_ADMIN and SUPER_USER
+      const targetRoleUpper = String(role||'').toUpperCase();
+      const isSuperRole = (
+        targetRoleUpper === String(Config.ROLES.SUPER_ADMIN) ||
+        targetRoleUpper === 'SUPER_USER'
+      );
+      const isEditingExistingSuperRole = isEdit && user && (
+        String(user.role||'').toUpperCase() === String(Config.ROLES.SUPER_ADMIN) ||
+        String(user.role||'').toUpperCase() === 'SUPER_USER'
+      );
+      if(!isSuperRole && !isEditingExistingSuperRole && String(teamId||'')===''){
+        return err('Developer Access is reserved for Super Admin and Super User roles. Choose Morning/Mid/Night shift.');
       }
 
 
@@ -797,7 +813,12 @@ function openUserModal(actor, user){
             if(actor.role === Config.ROLES.SUPER_ADMIN && qbName !== undefined){
               patch.qb_name = qbName;
             }
-            if(String(user.role||'').toUpperCase()===String(Config.ROLES.SUPER_ADMIN)){
+            const selfRoleUpper = String(user.role||'').toUpperCase();
+            const selfIsSuperRole = (
+              selfRoleUpper === String(Config.ROLES.SUPER_ADMIN) ||
+              selfRoleUpper === 'SUPER_USER'
+            );
+            if(selfIsSuperRole){
               if(String(teamId)===''){
                 patch.team_override = false;
                 patch.team_id = null;
@@ -815,7 +836,12 @@ function openUserModal(actor, user){
             }
             if(actor && actor.role===Config.ROLES.SUPER_ADMIN){
               payload.role = role;
-              if(String(user.role||'').toUpperCase()===String(Config.ROLES.SUPER_ADMIN)){
+              const targetRoleUp = String(user.role||'').toUpperCase();
+              const targetIsSuperRole = (
+                targetRoleUp === String(Config.ROLES.SUPER_ADMIN) ||
+                targetRoleUp === 'SUPER_USER'
+              );
+              if(targetIsSuperRole){
                 if(String(teamId)===''){
                   payload.team_override = false;
                   payload.team_id = null;

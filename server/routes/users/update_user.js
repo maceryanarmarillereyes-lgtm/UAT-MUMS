@@ -129,7 +129,8 @@ module.exports = async (req, res) => {
     );
 
     if (wantsTeam) {
-      if (actorRole !== 'SUPER_ADMIN' && String(actor.user_id) !== targetId) {
+      const actorIsSuperRole = (actorRole === 'SUPER_ADMIN' || actorRole === 'SUPER_USER');
+      if (!actorIsSuperRole && String(actor.user_id) !== targetId) {
         return sendJson(res, 403, { ok: false, error: 'forbidden_team_change' });
       }
 
@@ -142,8 +143,9 @@ module.exports = async (req, res) => {
 
       const teamId = normalizeTeamId(teamIn);
 
-      if (roleAfter === 'SUPER_ADMIN') {
-        // Super Admin may have NULL team_id when team_override=false (Developer Access).
+      const roleAfterIsSuperRole = (roleAfter === 'SUPER_ADMIN' || roleAfter === 'SUPER_USER');
+      if (roleAfterIsSuperRole) {
+        // Super Admin and Super User may have NULL team_id (Developer Access).
         if (overrideProvided && overrideBool === false) {
           patch.team_override = false;
           patch.team_id = null;
@@ -166,7 +168,7 @@ module.exports = async (req, res) => {
       } else {
         // Non-Super accounts must always be on a shift team.
         if (!teamId) {
-          return sendJson(res, 400, { ok: false, error: 'invalid_team', message: 'Developer Access is reserved for Super Admin. Choose Morning/Mid/Night.' });
+          return sendJson(res, 400, { ok: false, error: 'invalid_team', message: 'Developer Access is reserved for Super Admin and Super User roles. Choose Morning/Mid/Night.' });
         }
         if (!ALLOWED_TEAMS.has(teamId)) return sendJson(res, 400, { ok: false, error: 'invalid_team' });
         patch.team_override = false;
