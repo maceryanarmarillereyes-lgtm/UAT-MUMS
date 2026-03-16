@@ -258,8 +258,9 @@ module.exports = async (req, res) => {
       }
     }
 
-    if (role !== 'SUPER_ADMIN' && !finalTeamId) {
-      return sendJson(res, 400, { ok: false, error: 'team_required', message: 'Team is required for non-super-admin users.' });
+    const roleAllowsDevAccess = (role === 'SUPER_ADMIN' || role === 'SUPER_USER');
+    if (!roleAllowsDevAccess && !finalTeamId) {
+      return sendJson(res, 400, { ok: false, error: 'team_required', message: 'Team is required for non-super users.' });
     }
 
     const lockKey = `invite:${username}:${email}`;
