@@ -507,7 +507,7 @@ module.exports = async (req, res) => {
     const prof = await getProfileForUserId(authed.id);
     if (!prof) return sendJson(res, 404, { ok: false, error: 'profile_missing', message: 'Profile not found. Call /api/users/me first.' });
 
-    // SUPER_ADMIN team override
+    // SUPER_ADMIN + SUPER_USER team override
     // - team_override=false => team_id NULL (Developer Access)
     // - team_override=true  => team_id one of the configured shift buckets (morning/mid/night)
     const wantsTeam = (
@@ -519,7 +519,8 @@ module.exports = async (req, res) => {
 
     if (wantsTeam) {
       const roleUpper = String(prof.role || '').trim().toUpperCase();
-      if (roleUpper !== 'SUPER_ADMIN') return sendJson(res, 403, { ok: false, error: 'forbidden_team_change' });
+      const canChangeTeam = (roleUpper === 'SUPER_ADMIN' || roleUpper === 'SUPER_USER');
+      if (!canChangeTeam) return sendJson(res, 403, { ok: false, error: 'forbidden_team_change' });
 
       const allowed = new Set(['morning','mid','night']);
       const teamIn = (Object.prototype.hasOwnProperty.call(body, 'team_id') ? body.team_id : body.teamId);

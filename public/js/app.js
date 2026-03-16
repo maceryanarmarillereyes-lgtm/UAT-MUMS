@@ -2122,7 +2122,7 @@ function updateClocksPreviewTimes(){
     const qbTokenEl = null; // field removed from UI
 
     let teamSel = UI.el('#profileTeamSelect');
-    if(isSuperAdmin0){
+    if(isSuperRole0){
       try{
         if(!teamSel){
           teamSel = document.createElement('select');
@@ -2178,7 +2178,7 @@ function updateClocksPreviewTimes(){
     // qbTokenEl removed
 
     try{
-      if(isSuperAdmin0 && teamSel){
+      if(isSuperRole0 && teamSel){
         if(teamEl) teamEl.style.display = 'none';
         teamSel.style.display = '';
 
@@ -2216,7 +2216,7 @@ function updateClocksPreviewTimes(){
 
             if(emailEl && p.email) emailEl.value = p.email;
             // qbTokenEl removed — QB token is now global-only
-            if(isSuperAdmin0 && teamSel){
+            if(isSuperRole0 && teamSel){
               const roleUp = String(p.role || user.role || '').toUpperCase();
               const isSuperRole = (roleUp === 'SUPER_ADMIN' || roleUp === 'SUPER_USER');
               const teamIdRaw = (p.team_id === null || p.team_id === undefined) ? '' : String(p.team_id||'').trim();
@@ -2293,7 +2293,7 @@ function updateClocksPreviewTimes(){
       let teamIdSel = '';
       let teamOverrideSel = false;
       try{
-        if(isSuperAdmin0 && teamSel){
+        if(isSuperRole0 && teamSel){
           teamIdSel = String(teamSel.value||'').trim();
           teamOverrideSel = !!teamIdSel;
         }
@@ -2301,7 +2301,7 @@ function updateClocksPreviewTimes(){
 
       if(cloudProfileEnabled()){
         const payload = { name: name || (user.name||user.username), qb_token: qbToken };
-        if(isSuperAdmin0){
+        if(isSuperRole0){
           payload.team_id = teamOverrideSel ? teamIdSel : null;
           payload.team_override = !!teamOverrideSel;
         }
@@ -2316,7 +2316,7 @@ function updateClocksPreviewTimes(){
       }
 
       const localPatch = { name: name || user.username };
-      if(isSuperAdmin0){
+      if(isSuperRole0){
         localPatch.teamOverride = !!teamOverrideSel;
         localPatch.teamId = teamOverrideSel ? teamIdSel : '';
       }
