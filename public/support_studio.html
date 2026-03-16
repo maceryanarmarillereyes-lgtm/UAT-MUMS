@@ -10,6 +10,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
   <style>
     /* ─────────────────────────────────────────────────────────────────
        MUMS SUPPORT STUDIO — Base Styles
@@ -677,6 +679,317 @@
       color: #c9d1d9 !important;
     }
 
+  
+    /* ═══════════════════════════════════════════════════════════════
+       PRODUCT CATALOG — Support Studio Module
+    ═══════════════════════════════════════════════════════════════ */
+    /* Catalog layout */
+    .cat-sidebar {
+      width: 260px; min-width: 220px; max-width: 280px;
+      display: flex; flex-direction: column;
+      background: var(--ss-surface); border-right: 1px solid var(--ss-border);
+      overflow: hidden; flex-shrink: 0;
+    }
+    .cat-sidebar-head {
+      padding: 10px 12px 8px;
+      border-bottom: 1px solid var(--ss-border);
+      flex-shrink: 0;
+    }
+    .cat-sidebar-title {
+      font-size: 10px; font-weight: 800; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--ss-muted);
+      margin-bottom: 8px; display: flex; align-items: center;
+      justify-content: space-between;
+    }
+    .cat-add-btn {
+      background: rgba(88,166,255,.12); border: 1px solid rgba(88,166,255,.3);
+      color: #58a6ff; border-radius: 6px; padding: 3px 8px;
+      font-size: 11px; font-weight: 700; cursor: pointer;
+      display: none; align-items: center; gap: 4px;
+      transition: background .15s;
+    }
+    .cat-add-btn:hover { background: rgba(88,166,255,.22); }
+    .cat-add-btn.visible { display: flex; }
+    .cat-search {
+      width: 100%; padding: 6px 10px; border-radius: 6px;
+      background: var(--ss-surface3); border: 1px solid var(--ss-border);
+      color: var(--ss-text); font-size: 12px; outline: none;
+    }
+    .cat-search:focus { border-color: rgba(88,166,255,.4); }
+    .cat-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+    .cat-item-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 12px; cursor: pointer;
+      border-bottom: 1px solid var(--ss-border2);
+      transition: background .1s;
+    }
+    .cat-item-row:hover { background: rgba(255,255,255,.04); }
+    .cat-item-row.active { background: rgba(88,166,255,.1); border-left: 2px solid #58a6ff; }
+    .cat-item-code {
+      font-size: 9px; font-weight: 800; letter-spacing: .06em;
+      color: #58a6ff; background: rgba(88,166,255,.1);
+      border-radius: 4px; padding: 1px 5px; flex-shrink: 0;
+    }
+    .cat-item-name {
+      font-size: 11px; font-weight: 600; color: var(--ss-text);
+      flex: 1; min-width: 0; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .cat-item-avatar {
+      width: 20px; height: 20px; border-radius: 6px;
+      background: rgba(63,185,80,.15); color: #3fb950;
+      font-size: 9px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .cat-item-avatar.unassigned {
+      background: rgba(139,148,158,.1); color: var(--ss-muted);
+    }
+
+    /* Detail area */
+    .cat-detail {
+      flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    }
+    .cat-detail-empty {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; color: var(--ss-muted);
+    }
+    .cat-detail-empty i { font-size: 36px; opacity: .25; }
+    .cat-detail-empty p { font-size: 13px; opacity: .5; }
+
+    /* Detail header */
+    .cat-detail-header {
+      padding: 12px 18px 10px;
+      border-bottom: 1px solid var(--ss-border);
+      flex-shrink: 0; background: var(--ss-surface);
+    }
+    .cat-detail-top {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    }
+    .cat-detail-code {
+      font-size: 10px; font-weight: 900; letter-spacing: .08em;
+      color: #58a6ff; background: rgba(88,166,255,.12);
+      border: 1px solid rgba(88,166,255,.25); border-radius: 5px;
+      padding: 2px 8px;
+    }
+    .cat-detail-name {
+      font-size: 16px; font-weight: 800; color: #e6edf3; flex: 1;
+    }
+    .cat-status-badge {
+      font-size: 9px; font-weight: 800; padding: 2px 8px;
+      border-radius: 20px; letter-spacing: .04em;
+    }
+    .cat-status-active { background: rgba(63,185,80,.15); color: #3fb950; border: 1px solid rgba(63,185,80,.3); }
+    .cat-status-disc { background: rgba(248,81,73,.12); color: #f85149; border: 1px solid rgba(248,81,73,.3); }
+    .cat-detail-meta {
+      display: flex; gap: 14px; flex-wrap: wrap;
+    }
+    .cat-meta-item {
+      font-size: 10px; color: var(--ss-muted);
+    }
+    .cat-meta-item span { color: var(--ss-text); font-weight: 600; }
+
+    /* Detail tabs */
+    .cat-detail-tabs {
+      display: flex; gap: 0;
+      border-bottom: 1px solid var(--ss-border);
+      background: var(--ss-surface2); flex-shrink: 0;
+    }
+    .cat-dtab {
+      padding: 8px 14px; font-size: 11px; font-weight: 700;
+      color: var(--ss-muted); cursor: pointer; border: none;
+      background: transparent; border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .cat-dtab:hover { color: var(--ss-text); }
+    .cat-dtab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+
+    /* Detail content */
+    .cat-detail-body {
+      flex: 1; overflow: auto; padding: 16px 18px;
+    }
+    .cat-dpanel { display: none; }
+    .cat-dpanel.active { display: block; }
+
+    /* Specs form */
+    .cat-specs-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      margin-bottom: 14px;
+    }
+    .cat-field { display: flex; flex-direction: column; gap: 4px; }
+    .cat-field label {
+      font-size: 9px; font-weight: 800; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--ss-muted);
+    }
+    .cat-field input, .cat-field select {
+      background: var(--ss-surface3); border: 1px solid var(--ss-border);
+      border-radius: 6px; padding: 6px 10px; color: var(--ss-text);
+      font-size: 12px; font-family: var(--ss-font); outline: none;
+      width: 100%;
+    }
+    .cat-field input:focus, .cat-field select:focus {
+      border-color: rgba(88,166,255,.4);
+    }
+    .cat-field input[readonly], .cat-field select[disabled] {
+      opacity: .5; cursor: default;
+    }
+    .cat-save-row {
+      display: flex; align-items: center; gap: 10px;
+      padding-top: 12px; border-top: 1px solid var(--ss-border);
+      margin-top: 4px;
+    }
+    .cat-btn-save {
+      background: linear-gradient(135deg, #1a7f37, #2da44e);
+      border: 1px solid rgba(63,185,80,.4); color: #fff;
+      border-radius: 7px; padding: 6px 16px; font-size: 12px;
+      font-weight: 700; cursor: pointer; transition: filter .15s;
+    }
+    .cat-btn-save:hover { filter: brightness(1.1); }
+    .cat-btn-save:disabled { opacity: .4; cursor: default; }
+    .cat-save-msg { font-size: 11px; opacity: 0; transition: opacity .3s; }
+    .cat-save-msg.ok { color: #3fb950; opacity: 1; }
+    .cat-save-msg.err { color: #f85149; opacity: 1; }
+
+    /* Quill editor wrapper */
+    .cat-editor-wrap { margin-bottom: 14px; }
+    .cat-editor-wrap .ql-toolbar {
+      background: var(--ss-surface3); border-color: var(--ss-border);
+      border-radius: 6px 6px 0 0;
+    }
+    .cat-editor-wrap .ql-container {
+      background: var(--ss-surface3); border-color: var(--ss-border);
+      border-radius: 0 0 6px 6px; min-height: 180px;
+      color: var(--ss-text); font-family: var(--ss-font); font-size: 13px;
+    }
+    .cat-editor-wrap .ql-toolbar .ql-stroke { stroke: var(--ss-muted); }
+    .cat-editor-wrap .ql-toolbar .ql-fill { fill: var(--ss-muted); }
+    .cat-editor-wrap .ql-toolbar button:hover .ql-stroke { stroke: #58a6ff; }
+    .cat-editor-wrap .ql-toolbar .ql-active .ql-stroke { stroke: #58a6ff; }
+    .cat-readonly .ql-toolbar { display: none; }
+    .cat-readonly .ql-container {
+      border-radius: 6px; border-top: 1px solid var(--ss-border);
+    }
+
+    /* Comments */
+    .cat-comment-input-wrap {
+      display: flex; gap: 8px; margin-bottom: 14px;
+    }
+    .cat-comment-input {
+      flex: 1; background: var(--ss-surface3);
+      border: 1px solid var(--ss-border); border-radius: 8px;
+      padding: 8px 12px; color: var(--ss-text); font-size: 12px;
+      font-family: var(--ss-font); resize: vertical; min-height: 60px;
+      outline: none;
+    }
+    .cat-comment-input:focus { border-color: rgba(88,166,255,.4); }
+    .cat-btn-comment {
+      background: rgba(88,166,255,.12); border: 1px solid rgba(88,166,255,.3);
+      color: #58a6ff; border-radius: 8px; padding: 0 14px;
+      font-size: 12px; font-weight: 700; cursor: pointer; align-self: flex-end;
+      height: 36px; white-space: nowrap; transition: background .15s;
+    }
+    .cat-btn-comment:hover { background: rgba(88,166,255,.22); }
+    .cat-comment-list { display: flex; flex-direction: column; gap: 8px; }
+    .cat-comment-card {
+      background: var(--ss-surface2); border: 1px solid var(--ss-border);
+      border-radius: 10px; padding: 10px 12px;
+      transition: opacity .3s;
+    }
+    .cat-comment-card.acknowledged {
+      opacity: .45; border-color: var(--ss-border2);
+    }
+    .cat-comment-head {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+    }
+    .cat-comment-avatar {
+      width: 22px; height: 22px; border-radius: 6px;
+      background: rgba(88,166,255,.15); color: #58a6ff;
+      font-size: 9px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .cat-comment-author { font-size: 11px; font-weight: 700; color: #e6edf3; flex: 1; }
+    .cat-comment-time { font-size: 9px; color: var(--ss-muted); }
+    .cat-comment-body { font-size: 12px; color: var(--ss-text); line-height: 1.5; }
+    .cat-comment-footer {
+      display: flex; align-items: center; gap: 8px; margin-top: 8px;
+    }
+    .cat-ack-badge {
+      font-size: 9px; font-weight: 700; color: #3fb950;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .cat-btn-ack {
+      font-size: 10px; font-weight: 700; color: #3fb950;
+      background: rgba(63,185,80,.1); border: 1px solid rgba(63,185,80,.25);
+      border-radius: 5px; padding: 2px 9px; cursor: pointer;
+      transition: background .15s;
+    }
+    .cat-btn-ack:hover { background: rgba(63,185,80,.2); }
+
+    /* History */
+    .cat-history-row {
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 7px 0; border-bottom: 1px solid var(--ss-border2);
+      font-size: 11px;
+    }
+    .cat-history-row:last-child { border-bottom: none; }
+    .cat-history-time { color: var(--ss-muted); white-space: nowrap; flex-shrink: 0; width: 130px; }
+    .cat-history-who { color: #58a6ff; font-weight: 700; flex-shrink: 0; width: 100px; }
+    .cat-history-field { color: var(--ss-warn); font-weight: 700; flex-shrink: 0; width: 90px; }
+    .cat-history-val { color: var(--ss-text); flex: 1; min-width: 0; }
+
+    /* Add item modal */
+    .cat-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.65);
+      z-index: 9000; display: none; align-items: center; justify-content: center;
+    }
+    .cat-modal-overlay.open { display: flex; }
+    .cat-modal {
+      background: var(--ss-surface); border: 1px solid var(--ss-border);
+      border-radius: 14px; padding: 20px 24px; width: min(480px, 94vw);
+      box-shadow: 0 24px 60px rgba(0,0,0,.5);
+    }
+    .cat-modal-title {
+      font-size: 14px; font-weight: 800; color: #e6edf3;
+      margin-bottom: 16px; display: flex; align-items: center;
+      justify-content: space-between;
+    }
+    .cat-modal-close {
+      background: none; border: none; color: var(--ss-muted);
+      cursor: pointer; font-size: 16px; padding: 2px 6px;
+    }
+    .cat-modal-close:hover { color: var(--ss-text); }
+    .cat-modal-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      margin-bottom: 14px;
+    }
+    .cat-modal-full { grid-column: 1 / -1; }
+    .cat-modal-btns {
+      display: flex; justify-content: flex-end; gap: 8px;
+      padding-top: 12px; border-top: 1px solid var(--ss-border);
+    }
+    .cat-btn-cancel {
+      background: var(--ss-surface3); border: 1px solid var(--ss-border);
+      color: var(--ss-text); border-radius: 7px; padding: 6px 14px;
+      font-size: 12px; font-weight: 700; cursor: pointer;
+    }
+
+    /* Assign dropdown */
+    .cat-assign-wrap { position: relative; }
+    .cat-assign-wrap select {
+      background: var(--ss-surface3); border: 1px solid var(--ss-border);
+      border-radius: 6px; padding: 6px 10px; color: var(--ss-text);
+      font-size: 12px; width: 100%; outline: none;
+    }
+
+    /* Empty states */
+    .cat-panel-empty {
+      text-align: center; color: var(--ss-muted); padding: 32px 16px;
+      font-size: 12px; opacity: .6;
+    }
+
   </style>
 </head>
 <body>
@@ -708,6 +1021,9 @@
         </button>
         <button class="ss-tab" data-tab="config">
           <i class="fas fa-cog"></i> Config
+        </button>
+        <button class="ss-tab" data-tab="catalog" id="ss-tab-catalog">
+          <i class="fas fa-microchip"></i> Product Controllers
         </button>
       </nav>
 
@@ -1043,6 +1359,770 @@
 
   // ── Page title ──────────────────────────────────────────
   document.title = 'MUMS Support Studio';
+
+})();
+</script>
+
+
+  <!-- ══════════════════════════════════════════════════
+       TAB: PRODUCT CONTROLLERS (Catalog)
+  ══════════════════════════════════════════════════════ -->
+  <div class="ss-tab-content" id="tab-catalog">
+    <div class="ss-body" style="overflow:hidden;">
+
+      <!-- LEFT: Item list sidebar -->
+      <aside class="cat-sidebar">
+        <div class="cat-sidebar-head">
+          <div class="cat-sidebar-title">
+            <span><i class="fas fa-microchip" style="margin-right:5px;color:#58a6ff;"></i>Product Items</span>
+            <button class="cat-add-btn" id="cat-add-btn" title="Add new item">
+              <i class="fas fa-plus"></i> Add
+            </button>
+          </div>
+          <input class="cat-search" id="cat-search" type="text" placeholder="Search items…" autocomplete="off">
+        </div>
+        <div class="cat-list" id="cat-list">
+          <div class="cat-panel-empty"><i class="fas fa-spinner fa-spin"></i><br>Loading items…</div>
+        </div>
+      </aside>
+
+      <!-- CENTER: Item detail -->
+      <main class="cat-detail" id="cat-detail">
+        <div class="cat-detail-empty" id="cat-detail-empty">
+          <i class="fas fa-microchip"></i>
+          <p>Select an item from the list to view details.</p>
+        </div>
+        <div id="cat-detail-view" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
+
+          <!-- Detail header -->
+          <div class="cat-detail-header">
+            <div class="cat-detail-top">
+              <span class="cat-detail-code" id="cdd-code">CTR-001</span>
+              <span class="cat-detail-name" id="cdd-name">Product Item 1</span>
+              <span class="cat-status-badge cat-status-active" id="cdd-status">Active</span>
+            </div>
+            <div class="cat-detail-meta">
+              <span class="cat-meta-item">Category: <span id="cdd-category">—</span></span>
+              <span class="cat-meta-item">Brand: <span id="cdd-brand">—</span></span>
+              <span class="cat-meta-item">Part #: <span id="cdd-part">—</span></span>
+              <span class="cat-meta-item">Assigned: <span id="cdd-assigned">Unassigned</span></span>
+            </div>
+          </div>
+
+          <!-- Detail tabs -->
+          <div class="cat-detail-tabs">
+            <button class="cat-dtab active" data-dtab="specs"><i class="fas fa-list-alt"></i> Specs</button>
+            <button class="cat-dtab" data-dtab="guide"><i class="fas fa-book"></i> User Guide</button>
+            <button class="cat-dtab" data-dtab="troubleshoot"><i class="fas fa-tools"></i> Troubleshooting</button>
+            <button class="cat-dtab" data-dtab="comments"><i class="fas fa-comments"></i> Comments <span id="cat-comment-badge" style="background:rgba(88,166,255,.2);color:#58a6ff;border-radius:10px;padding:0 6px;font-size:9px;margin-left:2px;display:none;"></span></button>
+            <button class="cat-dtab" data-dtab="history"><i class="fas fa-history"></i> History</button>
+          </div>
+
+          <!-- Detail body panels -->
+          <div class="cat-detail-body">
+
+            <!-- SPECS panel -->
+            <div class="cat-dpanel active" id="cdp-specs">
+              <div class="cat-specs-grid">
+                <div class="cat-field">
+                  <label>Item Code</label>
+                  <input type="text" id="cdf-code" readonly>
+                </div>
+                <div class="cat-field">
+                  <label>Name</label>
+                  <input type="text" id="cdf-name">
+                </div>
+                <div class="cat-field">
+                  <label>Category</label>
+                  <select id="cdf-category">
+                    <option>Controller</option>
+                    <option>Sensor</option>
+                    <option>Valve</option>
+                    <option>Compressor</option>
+                    <option>Drive</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+                <div class="cat-field">
+                  <label>Brand / Manufacturer</label>
+                  <input type="text" id="cdf-brand" placeholder="e.g. Emerson, Danfoss">
+                </div>
+                <div class="cat-field">
+                  <label>Part Number</label>
+                  <input type="text" id="cdf-part_number" placeholder="Official part #">
+                </div>
+                <div class="cat-field">
+                  <label>Compatible Units</label>
+                  <input type="text" id="cdf-compatible_units" placeholder="e.g. Model A, Model B">
+                </div>
+                <div class="cat-field">
+                  <label>Status</label>
+                  <select id="cdf-status">
+                    <option value="Active">Active</option>
+                    <option value="Discontinued">Discontinued</option>
+                    <option value="EOL">End of Life</option>
+                  </select>
+                </div>
+                <div class="cat-field" id="cdf-assign-wrap" style="display:none;">
+                  <label>Assigned To</label>
+                  <select id="cdf-assigned_to">
+                    <option value="">— Unassigned —</option>
+                  </select>
+                </div>
+              </div>
+              <div class="cat-field" style="margin-bottom:14px;">
+                <label>Basic Specs / Description</label>
+                <div class="cat-editor-wrap" id="cat-specs-editor-wrap">
+                  <div id="cat-specs-editor"></div>
+                </div>
+              </div>
+              <div class="cat-save-row" id="cat-specs-save-row" style="display:none;">
+                <button class="cat-btn-save" id="cat-save-specs-btn">
+                  <i class="fas fa-save"></i> Save Changes
+                </button>
+                <span class="cat-save-msg" id="cat-specs-msg"></span>
+              </div>
+            </div>
+
+            <!-- USER GUIDE panel -->
+            <div class="cat-dpanel" id="cdp-guide">
+              <div class="cat-editor-wrap" id="cat-guide-editor-wrap">
+                <div id="cat-guide-editor"></div>
+              </div>
+              <div class="cat-save-row" id="cat-guide-save-row" style="display:none;">
+                <button class="cat-btn-save" id="cat-save-guide-btn">
+                  <i class="fas fa-save"></i> Save User Guide
+                </button>
+                <span class="cat-save-msg" id="cat-guide-msg"></span>
+              </div>
+            </div>
+
+            <!-- TROUBLESHOOTING panel -->
+            <div class="cat-dpanel" id="cdp-troubleshoot">
+              <div class="cat-editor-wrap" id="cat-ts-editor-wrap">
+                <div id="cat-ts-editor"></div>
+              </div>
+              <div class="cat-save-row" id="cat-ts-save-row" style="display:none;">
+                <button class="cat-btn-save" id="cat-save-ts-btn">
+                  <i class="fas fa-save"></i> Save Troubleshooting Guide
+                </button>
+                <span class="cat-save-msg" id="cat-ts-msg"></span>
+              </div>
+            </div>
+
+            <!-- COMMENTS panel -->
+            <div class="cat-dpanel" id="cdp-comments">
+              <div class="cat-comment-input-wrap">
+                <textarea class="cat-comment-input" id="cat-comment-input" placeholder="Share knowledge, suggest updates, or ask questions…"></textarea>
+                <button class="cat-btn-comment" id="cat-post-comment-btn">
+                  <i class="fas fa-paper-plane"></i> Post
+                </button>
+              </div>
+              <div class="cat-comment-list" id="cat-comment-list">
+                <div class="cat-panel-empty">No comments yet. Be the first to contribute!</div>
+              </div>
+            </div>
+
+            <!-- HISTORY panel -->
+            <div class="cat-dpanel" id="cdp-history">
+              <div id="cat-history-list">
+                <div class="cat-panel-empty">No edit history yet.</div>
+              </div>
+            </div>
+
+          </div><!-- /cat-detail-body -->
+        </div><!-- /cat-detail-view -->
+      </main>
+
+    </div>
+  </div>
+
+  <!-- Add Item Modal -->
+  <div class="cat-modal-overlay" id="cat-add-modal">
+    <div class="cat-modal">
+      <div class="cat-modal-title">
+        <span><i class="fas fa-plus-circle" style="color:#58a6ff;margin-right:8px;"></i>Add New Item</span>
+        <button class="cat-modal-close" id="cat-modal-close-btn">✕</button>
+      </div>
+      <div class="cat-modal-grid">
+        <div class="cat-field">
+          <label>Item Code *</label>
+          <input type="text" id="cmi-code" placeholder="e.g. CTR-003" style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:6px;padding:6px 10px;color:var(--ss-text);font-size:12px;width:100%;outline:none;">
+        </div>
+        <div class="cat-field">
+          <label>Name *</label>
+          <input type="text" id="cmi-name" placeholder="Product name" style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:6px;padding:6px 10px;color:var(--ss-text);font-size:12px;width:100%;outline:none;">
+        </div>
+        <div class="cat-field">
+          <label>Category</label>
+          <select id="cmi-category" style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:6px;padding:6px 10px;color:var(--ss-text);font-size:12px;width:100%;outline:none;">
+            <option>Controller</option><option>Sensor</option><option>Valve</option>
+            <option>Compressor</option><option>Drive</option><option>Other</option>
+          </select>
+        </div>
+        <div class="cat-field">
+          <label>Brand</label>
+          <input type="text" id="cmi-brand" placeholder="e.g. Emerson" style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:6px;padding:6px 10px;color:var(--ss-text);font-size:12px;width:100%;outline:none;">
+        </div>
+        <div class="cat-field cat-modal-full">
+          <label>Assign To</label>
+          <select id="cmi-assigned_to" style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:6px;padding:6px 10px;color:var(--ss-text);font-size:12px;width:100%;outline:none;">
+            <option value="">— Unassigned —</option>
+          </select>
+        </div>
+      </div>
+      <div class="cat-modal-btns">
+        <button class="cat-btn-cancel" id="cat-modal-cancel-btn">Cancel</button>
+        <button class="cat-btn-save" id="cat-modal-save-btn">
+          <i class="fas fa-plus"></i> Create Item
+        </button>
+        <span class="cat-save-msg" id="cat-modal-msg"></span>
+      </div>
+    </div>
+  </div>
+
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   PRODUCT CATALOG MODULE — Support Studio
+   Handles: item list, item detail, rich text editing,
+   comments + acknowledge, history, add item modal
+═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  // ── Auth token ──────────────────────────────────────────────────
+  function getToken() {
+    try {
+      // Support Studio opens in new tab — try localStorage tokens
+      const keys = ['mums_access_token','sb-access-token','supabase.auth.token'];
+      for (const k of keys) {
+        const v = localStorage.getItem(k);
+        if (v) return v;
+      }
+      // Try sessionStorage
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const k = sessionStorage.key(i);
+        if (k && (k.includes('token') || k.includes('auth'))) {
+          const v = sessionStorage.getItem(k);
+          if (v && v.length > 20) return v;
+        }
+      }
+      // Try reading from window.opener (MUMS main window)
+      if (window.opener && window.opener.CloudAuth) {
+        const t = window.opener.CloudAuth.accessToken();
+        if (t) return t;
+      }
+    } catch(_) {}
+    return '';
+  }
+
+  async function apiFetch(url, opts) {
+    const tok = getToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
+    const res = await fetch(url, { ...opts, headers: { ...headers, ...(opts && opts.headers || {}) } });
+    return res;
+  }
+
+  // ── State ────────────────────────────────────────────────────────
+  let state = {
+    items: [],
+    currentItem: null,
+    users: [],
+    currentUserId: null,
+    currentUserName: '',
+    isSA: false,
+    isAssigned: false,
+    quillSpecs: null,
+    quillGuide: null,
+    quillTs: null,
+  };
+
+  // ── Init ─────────────────────────────────────────────────────────
+  async function init() {
+    await loadCurrentUser();
+    setupCatalogTab();
+  }
+
+  async function loadCurrentUser() {
+    try {
+      const r = await apiFetch('/api/users/me');
+      const d = await r.json();
+      if (d.ok && d.profile) {
+        state.currentUserId = d.profile.user_id || d.profile.id;
+        state.currentUserName = d.profile.name || d.profile.username || 'Me';
+        const role = String(d.profile.role || '').toUpperCase().replace(/\s+/g,'_');
+        state.isSA = (role === 'SUPER_ADMIN');
+      }
+    } catch(_) {}
+  }
+
+  function setupCatalogTab() {
+    // Show Add button for SA
+    const addBtn = document.getElementById('cat-add-btn');
+    if (addBtn && state.isSA) addBtn.classList.add('visible');
+
+    // Load items when catalog tab becomes active
+    document.getElementById('ss-tab-catalog').addEventListener('click', () => {
+      if (!state.items.length) loadItems();
+    });
+
+    // Search
+    const searchEl = document.getElementById('cat-search');
+    if (searchEl) searchEl.addEventListener('input', () => renderItemList(searchEl.value));
+
+    // Detail tabs
+    document.querySelectorAll('.cat-dtab').forEach(btn => {
+      btn.addEventListener('click', () => switchDetailTab(btn.dataset.dtab));
+    });
+
+    // Save buttons
+    document.getElementById('cat-save-specs-btn').addEventListener('click', saveSpecs);
+    document.getElementById('cat-save-guide-btn').addEventListener('click', () => saveRichField('user_guide', state.quillGuide, 'cat-guide-msg'));
+    document.getElementById('cat-save-ts-btn').addEventListener('click', () => saveRichField('troubleshooting', state.quillTs, 'cat-ts-msg'));
+
+    // Comments
+    document.getElementById('cat-post-comment-btn').addEventListener('click', postComment);
+
+    // Add modal
+    if (addBtn) addBtn.addEventListener('click', openAddModal);
+    document.getElementById('cat-modal-close-btn').addEventListener('click', closeAddModal);
+    document.getElementById('cat-modal-cancel-btn').addEventListener('click', closeAddModal);
+    document.getElementById('cat-modal-save-btn').addEventListener('click', createItem);
+
+    // Init Quill editors
+    initEditors();
+
+    // Pre-load if tab is already visible
+    if (document.getElementById('tab-catalog').classList.contains('active')) {
+      loadItems();
+    }
+  }
+
+  function initEditors() {
+    const toolbarOpts = [
+      [{ header: [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline'],
+      [{ list: 'ordered' }, { list: 'bullet' }],
+      ['blockquote', 'code-block'],
+      ['clean']
+    ];
+
+    state.quillSpecs = new Quill('#cat-specs-editor', {
+      theme: 'snow', placeholder: 'Enter basic specs and description…',
+      modules: { toolbar: toolbarOpts }
+    });
+    state.quillGuide = new Quill('#cat-guide-editor', {
+      theme: 'snow', placeholder: 'Write the user guide here…',
+      modules: { toolbar: toolbarOpts }
+    });
+    state.quillTs = new Quill('#cat-ts-editor', {
+      theme: 'snow', placeholder: 'Write troubleshooting steps here…',
+      modules: { toolbar: toolbarOpts }
+    });
+  }
+
+  function setEditorsReadonly(readonly) {
+    [state.quillSpecs, state.quillGuide, state.quillTs].forEach(q => {
+      if (q) q.enable(!readonly);
+    });
+    document.querySelectorAll('.cat-editor-wrap').forEach(el => {
+      el.classList.toggle('cat-readonly', readonly);
+    });
+    ['cat-specs-save-row','cat-guide-save-row','cat-ts-save-row'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = readonly ? 'none' : 'flex';
+    });
+    // Assign dropdown — SA only
+    const assignWrap = document.getElementById('cdf-assign-wrap');
+    if (assignWrap) assignWrap.style.display = state.isSA ? '' : 'none';
+    // Specs fields
+    ['cdf-name','cdf-category','cdf-brand','cdf-part_number','cdf-compatible_units','cdf-status'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.readOnly = readonly; if (el.tagName === 'SELECT') el.disabled = readonly; }
+    });
+  }
+
+  // ── Load items ───────────────────────────────────────────────────
+  async function loadItems() {
+    const list = document.getElementById('cat-list');
+    if (list) list.innerHTML = '<div class="cat-panel-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div>';
+    try {
+      const r = await apiFetch('/api/catalog/items');
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.message || 'Failed to load');
+      state.items = d.items || [];
+      renderItemList('');
+    } catch(e) {
+      if (list) list.innerHTML = '<div class="cat-panel-empty" style="color:#f85149;">⚠ ' + esc(String(e.message)) + '</div>';
+    }
+  }
+
+  function renderItemList(query) {
+    const list = document.getElementById('cat-list');
+    if (!list) return;
+    const q = String(query || '').toLowerCase().trim();
+    const filtered = q
+      ? state.items.filter(i => i.item_code.toLowerCase().includes(q) || i.name.toLowerCase().includes(q) || (i.category||'').toLowerCase().includes(q))
+      : state.items;
+
+    if (!filtered.length) {
+      list.innerHTML = '<div class="cat-panel-empty">No items found.</div>';
+      return;
+    }
+
+    list.innerHTML = filtered.map(item => {
+      const ini = item.assigned_to_name ? item.assigned_to_name.slice(0,2).toUpperCase() : '—';
+      const isActive = state.currentItem && state.currentItem.id === item.id;
+      const assigned = !!item.assigned_to;
+      return `<div class="cat-item-row${isActive?' active':''}" data-id="${esc(item.id)}" onclick="window._catSelectItem('${esc(item.id)}')">
+        <span class="cat-item-code">${esc(item.item_code)}</span>
+        <span class="cat-item-name">${esc(item.name)}</span>
+        <span class="cat-item-avatar${assigned?'':' unassigned'}" title="${esc(item.assigned_to_name||'Unassigned')}">${esc(ini)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  window._catSelectItem = function(id) {
+    const item = state.items.find(i => i.id === id);
+    if (!item) return;
+    selectItem(item);
+  };
+
+  // ── Select item ──────────────────────────────────────────────────
+  async function selectItem(item) {
+    state.currentItem = item;
+    state.isAssigned = item.assigned_to && String(item.assigned_to) === String(state.currentUserId);
+    const canEdit = state.isSA || state.isAssigned;
+
+    // Update active row
+    document.querySelectorAll('.cat-item-row').forEach(r => {
+      r.classList.toggle('active', r.dataset.id === item.id);
+    });
+
+    // Show detail view
+    document.getElementById('cat-detail-empty').style.display = 'none';
+    const view = document.getElementById('cat-detail-view');
+    view.style.display = 'flex';
+
+    // Fill header
+    document.getElementById('cdd-code').textContent = item.item_code;
+    document.getElementById('cdd-name').textContent = item.name;
+    const statusEl = document.getElementById('cdd-status');
+    statusEl.textContent = item.status || 'Active';
+    statusEl.className = 'cat-status-badge ' + (item.status === 'Active' ? 'cat-status-active' : 'cat-status-disc');
+    document.getElementById('cdd-category').textContent = item.category || '—';
+    document.getElementById('cdd-brand').textContent = item.brand || '—';
+    document.getElementById('cdd-part').textContent = item.part_number || '—';
+    document.getElementById('cdd-assigned').textContent = item.assigned_to_name || 'Unassigned';
+
+    // Fill specs form
+    document.getElementById('cdf-code').value = item.item_code;
+    document.getElementById('cdf-name').value = item.name;
+    document.getElementById('cdf-category').value = item.category || 'Controller';
+    document.getElementById('cdf-brand').value = item.brand || '';
+    document.getElementById('cdf-part_number').value = item.part_number || '';
+    document.getElementById('cdf-compatible_units').value = item.compatible_units || '';
+    document.getElementById('cdf-status').value = item.status || 'Active';
+
+    // Set editor content
+    if (state.quillSpecs) state.quillSpecs.root.innerHTML = item.specs || '';
+    if (state.quillGuide) state.quillGuide.root.innerHTML = item.user_guide || '';
+    if (state.quillTs)    state.quillTs.root.innerHTML = item.troubleshooting || '';
+
+    // Load assign dropdown if SA
+    if (state.isSA) {
+      await loadUsersIntoSelect('cdf-assigned_to', item.assigned_to);
+    }
+
+    // Set readonly based on permissions
+    setEditorsReadonly(!canEdit);
+
+    // Switch to specs tab
+    switchDetailTab('specs');
+
+    // Load comments
+    loadComments(item.id);
+    loadHistory(item.id);
+  }
+
+  // ── Detail tab switching ─────────────────────────────────────────
+  function switchDetailTab(tab) {
+    document.querySelectorAll('.cat-dtab').forEach(b => b.classList.toggle('active', b.dataset.dtab === tab));
+    document.querySelectorAll('.cat-dpanel').forEach(p => p.classList.toggle('active', p.id === 'cdp-' + tab));
+    if (tab === 'comments' && state.currentItem) loadComments(state.currentItem.id);
+    if (tab === 'history'  && state.currentItem) loadHistory(state.currentItem.id);
+  }
+
+  // ── Save specs ───────────────────────────────────────────────────
+  async function saveSpecs() {
+    if (!state.currentItem) return;
+    const btn = document.getElementById('cat-save-specs-btn');
+    const msg = document.getElementById('cat-specs-msg');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const payload = {
+        id: state.currentItem.id,
+        name: document.getElementById('cdf-name').value.trim(),
+        category: document.getElementById('cdf-category').value,
+        brand: document.getElementById('cdf-brand').value.trim(),
+        part_number: document.getElementById('cdf-part_number').value.trim(),
+        compatible_units: document.getElementById('cdf-compatible_units').value.trim(),
+        status: document.getElementById('cdf-status').value,
+        specs: state.quillSpecs ? state.quillSpecs.root.innerHTML : '',
+      };
+      // Assign — SA only
+      if (state.isSA) {
+        const sel = document.getElementById('cdf-assigned_to');
+        if (sel) {
+          payload.assigned_to = sel.value || null;
+          const opt = sel.options[sel.selectedIndex];
+          payload.assigned_to_name = sel.value ? (opt ? opt.text : '') : '';
+        }
+      }
+      const r = await apiFetch('/api/catalog/items', { method: 'PATCH', body: JSON.stringify(payload) });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.message || 'Save failed');
+      // Update local state
+      const idx = state.items.findIndex(i => i.id === state.currentItem.id);
+      if (idx > -1) { state.items[idx] = { ...state.items[idx], ...payload }; state.currentItem = state.items[idx]; }
+      renderItemList(document.getElementById('cat-search').value);
+      // Update header
+      document.getElementById('cdd-name').textContent = payload.name;
+      document.getElementById('cdd-category').textContent = payload.category;
+      document.getElementById('cdd-brand').textContent = payload.brand || '—';
+      document.getElementById('cdd-part').textContent = payload.part_number || '—';
+      const statusEl = document.getElementById('cdd-status');
+      statusEl.textContent = payload.status;
+      statusEl.className = 'cat-status-badge ' + (payload.status === 'Active' ? 'cat-status-active' : 'cat-status-disc');
+      showMsg(msg, '✓ Saved!', true);
+    } catch(e) {
+      showMsg(msg, '✗ ' + e.message, false);
+    } finally {
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+    }
+  }
+
+  async function saveRichField(field, quill, msgId) {
+    if (!state.currentItem || !quill) return;
+    const btn = document.getElementById('cat-save-' + (field === 'user_guide' ? 'guide' : 'ts') + '-btn');
+    const msg = document.getElementById(msgId);
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    try {
+      const payload = { id: state.currentItem.id, [field]: quill.root.innerHTML };
+      const r = await apiFetch('/api/catalog/items', { method: 'PATCH', body: JSON.stringify(payload) });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.message || 'Save failed');
+      const idx = state.items.findIndex(i => i.id === state.currentItem.id);
+      if (idx > -1) { state.items[idx][field] = payload[field]; state.currentItem[field] = payload[field]; }
+      showMsg(msg, '✓ Saved!', true);
+    } catch(e) {
+      showMsg(msg, '✗ ' + e.message, false);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Save ' + (field === 'user_guide' ? 'User Guide' : 'Troubleshooting Guide');
+      }
+    }
+  }
+
+  // ── Comments ─────────────────────────────────────────────────────
+  async function loadComments(itemId) {
+    const list = document.getElementById('cat-comment-list');
+    if (!list) return;
+    list.innerHTML = '<div class="cat-panel-empty"><i class="fas fa-spinner fa-spin"></i></div>';
+    try {
+      const r = await apiFetch('/api/catalog/comments?item_id=' + itemId);
+      const d = await r.json();
+      if (!d.ok) throw new Error('Failed');
+      const comments = d.comments || [];
+      // Update badge
+      const badge = document.getElementById('cat-comment-badge');
+      const unacked = comments.filter(c => !c.is_acknowledged).length;
+      if (badge) { badge.textContent = unacked; badge.style.display = unacked > 0 ? '' : 'none'; }
+      if (!comments.length) { list.innerHTML = '<div class="cat-panel-empty">No comments yet. Be the first to contribute!</div>'; return; }
+      list.innerHTML = comments.map(c => renderComment(c)).join('');
+      // Bind ack buttons
+      list.querySelectorAll('[data-ack-id]').forEach(btn => {
+        btn.addEventListener('click', () => acknowledgeComment(btn.dataset.ackId));
+      });
+    } catch(_) {
+      list.innerHTML = '<div class="cat-panel-empty">Failed to load comments.</div>';
+    }
+  }
+
+  function renderComment(c) {
+    const ini = String(c.user_name || '?').slice(0,2).toUpperCase();
+    const dt = new Date(c.created_at);
+    const timeStr = dt.toLocaleDateString('en-PH', { month:'short', day:'numeric' }) + ' ' +
+                    dt.toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit' });
+    const canAck = (state.isSA || state.isAssigned) && !c.is_acknowledged;
+    const ackHtml = c.is_acknowledged
+      ? `<span class="cat-ack-badge"><i class="fas fa-check-circle"></i> Acknowledged by ${esc(c.acknowledged_name || '')} · Updated</span>`
+      : (canAck ? `<button class="cat-btn-ack" data-ack-id="${esc(c.id)}"><i class="fas fa-check"></i> Acknowledge & Mark Updated</button>` : '');
+
+    return `<div class="cat-comment-card${c.is_acknowledged?' acknowledged':''}" id="cc-${esc(c.id)}">
+      <div class="cat-comment-head">
+        <div class="cat-comment-avatar">${esc(ini)}</div>
+        <span class="cat-comment-author">${esc(c.user_name)}</span>
+        <span class="cat-comment-time">${esc(timeStr)}</span>
+      </div>
+      <div class="cat-comment-body">${esc(c.comment)}</div>
+      <div class="cat-comment-footer">${ackHtml}</div>
+    </div>`;
+  }
+
+  async function postComment() {
+    const input = document.getElementById('cat-comment-input');
+    const comment = String(input && input.value || '').trim();
+    if (!comment || !state.currentItem) return;
+    const btn = document.getElementById('cat-post-comment-btn');
+    btn.disabled = true; btn.textContent = 'Posting…';
+    try {
+      const r = await apiFetch('/api/catalog/comments', {
+        method: 'POST',
+        body: JSON.stringify({ item_id: state.currentItem.id, comment })
+      });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.message || 'Failed');
+      input.value = '';
+      await loadComments(state.currentItem.id);
+    } catch(e) {
+      alert('Failed to post comment: ' + e.message);
+    } finally {
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Post';
+    }
+  }
+
+  async function acknowledgeComment(commentId) {
+    try {
+      const r = await apiFetch('/api/catalog/comments', {
+        method: 'PATCH',
+        body: JSON.stringify({ id: commentId })
+      });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.message || 'Failed');
+      if (state.currentItem) await loadComments(state.currentItem.id);
+    } catch(e) {
+      alert('Failed to acknowledge: ' + e.message);
+    }
+  }
+
+  // ── History ───────────────────────────────────────────────────────
+  async function loadHistory(itemId) {
+    const list = document.getElementById('cat-history-list');
+    if (!list) return;
+    try {
+      const r = await apiFetch('/api/catalog/items');
+      // We'll load history via a dedicated call when we have it
+      // For now show from the response
+      list.innerHTML = '<div class="cat-panel-empty">Edit history loads here.</div>';
+      // Load actual history
+      const hr = await apiFetch('/api/catalog/history?item_id=' + itemId);
+      if (hr.ok) {
+        const hd = await hr.json();
+        if (hd.ok && hd.history && hd.history.length) {
+          list.innerHTML = hd.history.map(h => {
+            const dt = new Date(h.edited_at);
+            const timeStr = dt.toLocaleDateString('en-PH', { month:'short', day:'numeric', year:'numeric' }) + ' ' +
+                            dt.toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit' });
+            return `<div class="cat-history-row">
+              <span class="cat-history-time">${esc(timeStr)}</span>
+              <span class="cat-history-who">${esc(h.edited_by_name)}</span>
+              <span class="cat-history-field">${esc(h.field_changed)}</span>
+              <span class="cat-history-val">${esc(String(h.new_value || '').slice(0, 80))}</span>
+            </div>`;
+          }).join('');
+        }
+      }
+    } catch(_) {}
+  }
+
+  // ── Add Item Modal ────────────────────────────────────────────────
+  async function openAddModal() {
+    await loadUsersIntoSelect('cmi-assigned_to', null);
+    document.getElementById('cmi-code').value = '';
+    document.getElementById('cmi-name').value = '';
+    document.getElementById('cmi-brand').value = '';
+    document.getElementById('cat-modal-msg').className = 'cat-save-msg';
+    document.getElementById('cat-modal-msg').textContent = '';
+    document.getElementById('cat-add-modal').classList.add('open');
+  }
+
+  function closeAddModal() {
+    document.getElementById('cat-add-modal').classList.remove('open');
+  }
+
+  async function createItem() {
+    const code = document.getElementById('cmi-code').value.trim().toUpperCase();
+    const name = document.getElementById('cmi-name').value.trim();
+    const msg  = document.getElementById('cat-modal-msg');
+    if (!code || !name) { showMsg(msg, '✗ Item code and name are required', false); return; }
+    const btn = document.getElementById('cat-modal-save-btn');
+    btn.disabled = true; btn.textContent = 'Creating…';
+    try {
+      const sel = document.getElementById('cmi-assigned_to');
+      const assignedId = sel && sel.value ? sel.value : null;
+      const assignedName = sel && sel.value ? (sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '') : '';
+      const payload = {
+        item_code: code, name,
+        category: document.getElementById('cmi-category').value,
+        brand: document.getElementById('cmi-brand').value.trim(),
+        assigned_to: assignedId, assigned_to_name: assignedName,
+      };
+      const r = await apiFetch('/api/catalog/items', { method: 'POST', body: JSON.stringify(payload) });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.message || d.error || 'Create failed');
+      await loadItems();
+      closeAddModal();
+      // Select the new item
+      const newItem = state.items.find(i => i.item_code === code);
+      if (newItem) selectItem(newItem);
+    } catch(e) {
+      showMsg(msg, '✗ ' + e.message, false);
+    } finally {
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus"></i> Create Item';
+    }
+  }
+
+  // ── Users dropdown ────────────────────────────────────────────────
+  async function loadUsersIntoSelect(selectId, currentValue) {
+    if (state.users.length === 0) {
+      try {
+        const r = await apiFetch('/api/users/list');
+        const d = await r.json();
+        if (d.ok && Array.isArray(d.users)) {
+          state.users = d.users.filter(u => u.role !== 'MEMBER' || true); // all users
+        }
+      } catch(_) {}
+    }
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Unassigned —</option>' +
+      state.users.map(u =>
+        `<option value="${esc(u.id || u.user_id)}" ${String(u.id || u.user_id) === String(currentValue || '') ? 'selected' : ''}>${esc(u.name || u.username)}</option>`
+      ).join('');
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function showMsg(el, text, ok) {
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'cat-save-msg ' + (ok ? 'ok' : 'err');
+    setTimeout(() => { if (el) { el.textContent = ''; el.className = 'cat-save-msg'; } }, 3500);
+  }
+
+  // ── Boot ──────────────────────────────────────────────────────────
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    setTimeout(init, 200);
+  }
 
 })();
 </script>

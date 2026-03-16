@@ -54,6 +54,9 @@ const ROUTES = {
   'settings/global-theme': require('../server/routes/settings/global_theme'),
   'settings/global_calendar': require('../server/routes/settings/global_calendar'),
   'calendar/records': require('../server/routes/calendar/records'),
+  'catalog/items': require('../server/routes/catalog/items'),
+  'catalog/comments': require('../server/routes/catalog/comments'),
+  'catalog/history': require('../server/routes/catalog/history'),
   'settings/login_mode': require('../server/routes/settings/login_mode'),
 
   'overall_stats': require('../server/routes/overall_stats'),
