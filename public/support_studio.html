@@ -2341,109 +2341,7 @@
     });
   }
 
-  // ── Call Information ────────────────────────────────────────────
-  // Uses in-memory store as primary (Edge Tracking Prevention blocks localStorage).
-  // localStorage used as best-effort persistence fallback only.
-  const CI_KEY = 'mums_ss_call_notes';
-  let _ciNotesMemory = null; // in-memory cache
-
-  function loadCallNotes() {
-    if (_ciNotesMemory !== null) return _ciNotesMemory.slice();
-    try {
-      const raw = localStorage.getItem(CI_KEY) || sessionStorage.getItem(CI_KEY) || '[]';
-      _ciNotesMemory = JSON.parse(raw);
-    } catch(_) { _ciNotesMemory = []; }
-    return _ciNotesMemory.slice();
-  }
-  function saveCallNotes(notes) {
-    _ciNotesMemory = notes.slice(0, 50); // always update in-memory
-    try { localStorage.setItem(CI_KEY, JSON.stringify(_ciNotesMemory)); } catch(_) {}
-    try { sessionStorage.setItem(CI_KEY, JSON.stringify(_ciNotesMemory)); } catch(_) {}
-  }
-
-  function renderRecentNotes() {
-    const list = document.getElementById('ci-recent-list');
-    if (!list) return;
-    const notes = loadCallNotes();
-    if (!notes.length) {
-      list.innerHTML = '<div class="ss-empty-note" style="padding:8px 0;font-size:10px;">No saved notes yet.</div>';
-      return;
-    }
-    list.innerHTML = notes.slice(0, 8).map((n, i) => {
-      const dt = new Date(n.savedAt || Date.now());
-      const timeStr = dt.toLocaleDateString('en-PH',{month:'short',day:'numeric'}) + ' ' +
-                      dt.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'});
-      return `<div class="ci-note-card" data-idx="${i}" title="Click to load">
-        <div class="ci-note-time">${timeStr}</div>
-        <div class="ci-note-caller">${n.callerName || '(no name)'} &nbsp;·&nbsp; ${n.ticket || ''}</div>
-        <div style="font-size:9px;color:var(--ss-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n.issue || n.notes || ''}</div>
-      </div>`;
-    }).join('');
-
-    list.querySelectorAll('.ci-note-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const idx = Number(card.dataset.idx);
-        const n = notes[idx];
-        if (!n) return;
-        const el = id => document.getElementById(id);
-        if (el('ci-caller-name')) el('ci-caller-name').value = n.callerName || '';
-        if (el('ci-ticket'))      el('ci-ticket').value      = n.ticket || '';
-        if (el('ci-issue'))       el('ci-issue').value       = n.issue || '';
-        if (el('ci-product'))     el('ci-product').value     = n.product || '';
-        if (el('ci-notes'))       el('ci-notes').value       = n.notes || '';
-        if (el('ci-status'))      el('ci-status').value      = n.status || '';
-      });
-    });
-  }
-
-  const saveBtn  = document.getElementById('ci-save-btn');
-  const clearBtn = document.getElementById('ci-clear-btn');
-  const ciMsg    = document.getElementById('ci-save-msg');
-
-  if (saveBtn) {
-    saveBtn.addEventListener('click', () => {
-      const el = id => document.getElementById(id);
-      const note = {
-        callerName: el('ci-caller-name') ? el('ci-caller-name').value.trim() : '',
-        ticket:     el('ci-ticket')      ? el('ci-ticket').value.trim()      : '',
-        issue:      el('ci-issue')       ? el('ci-issue').value.trim()       : '',
-        product:    el('ci-product')     ? el('ci-product').value.trim()     : '',
-        notes:      el('ci-notes')       ? el('ci-notes').value.trim()       : '',
-        status:     el('ci-status')      ? el('ci-status').value             : '',
-        savedAt:    new Date().toISOString(),
-      };
-      const all = loadCallNotes();
-      all.unshift(note);
-      saveCallNotes(all);
-      renderRecentNotes();
-      if (ciMsg) {
-        ciMsg.textContent = '✓ Note saved!';
-        ciMsg.style.cssText = 'font-size:10px;color:#3fb950;text-align:center;margin-top:4px;opacity:1;transition:opacity .3s;';
-        clearTimeout(ciMsg._t);
-        ciMsg._t = setTimeout(function() { ciMsg.style.opacity = '0'; }, 2500);
-      }
-    });
-  }
-
-  if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
-      ['ci-caller-name','ci-ticket','ci-issue','ci-product','ci-notes'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-      });
-      const s = document.getElementById('ci-status');
-      if (s) s.value = '';
-    });
-  }
-
-  // Init
-  renderRecentNotes();
-  document.title = 'MUMS Support Studio';
-
-})();
-</script>
-</body>
-</html>  // ── Call Information ──────────────────────────────────────────
+  // ── Call Information ──────────────────────────────────────────
   const CI_KEY = 'mums_ss_call_notes';
   let _ciNotesMemory = null;
 
@@ -2680,6 +2578,7 @@
   // Init
   renderRecentNotes();
   document.title = 'MUMS Support Studio';
+
 
 })();
 </script>
