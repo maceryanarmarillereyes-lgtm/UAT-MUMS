@@ -2098,6 +2098,8 @@
     const name = document.getElementById('cmi-name').value.trim();
     const msg  = document.getElementById('cat-modal-msg');
     if (!code || !name) { showMsg(msg, '✗ Item code and name are required', false); return; }
+    if (code.endsWith('-')) { showMsg(msg, '✗ Remove trailing dash from item code', false); return; }
+    if (/--/.test(code)) { showMsg(msg, '✗ Code cannot have consecutive dashes', false); return; }
     const btn = document.getElementById('cat-modal-save-btn');
     btn.disabled = true; btn.textContent = 'Creating…';
     try {
@@ -2181,6 +2183,9 @@
     if (!code) { showSubError('Sub-item code is required'); return; }
     if (!name) { showSubError('Name is required'); return; }
     if (!parentId) { showSubError('No parent item found — close and try again'); return; }
+    // Reject trailing dashes — prevents dirty codes like CTR-001- or CTR-001--
+    if (code.endsWith('-')) { showSubError('Add a suffix after the dash — e.g. CTR-001-A or CTR-001-200'); return; }
+    if (/--/.test(code)) { showSubError('Code cannot have consecutive dashes'); return; }
 
     // Check local duplicates
     if (state.items.some(function(i) { return i.item_code === code; })) {

@@ -75,6 +75,9 @@ module.exports = async (req, res) => {
         updated_at:       new Date().toISOString(),
       };
       if (!row.item_code || !row.name) return sendJson(res, 400, { ok: false, error: 'missing_fields', message: 'item_code and name are required.' });
+      // Reject dirty codes — trailing/double dashes cause duplicate confusion
+      if (row.item_code.endsWith('-')) return sendJson(res, 400, { ok: false, error: 'invalid_code', message: 'Item code cannot end with a dash.' });
+      if (row.item_code.includes('--')) return sendJson(res, 400, { ok: false, error: 'invalid_code', message: 'Item code cannot have consecutive dashes.' });
 
       const out = await serviceInsert('support_catalog', [row]);
       if (!out.ok) {
