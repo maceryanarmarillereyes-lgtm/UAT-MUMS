@@ -683,13 +683,8 @@
     /* ═══════════════════════════════════════════════════════════════
        PRODUCT CATALOG — Support Studio Module
     ═══════════════════════════════════════════════════════════════ */
-    /* Catalog layout */
-    .cat-sidebar {
-      width: 260px; min-width: 220px; max-width: 280px;
-      display: flex; flex-direction: column;
-      background: var(--ss-surface); border-right: 1px solid var(--ss-border);
-      overflow: hidden; flex-shrink: 0;
-    }
+
+    /* ── Treeview sidebar ─────────────────────────────────────── */
     .cat-sidebar-head {
       padding: 10px 12px 8px;
       border-bottom: 1px solid var(--ss-border);
@@ -717,24 +712,49 @@
     }
     .cat-search:focus { border-color: rgba(88,166,255,.4); }
     .cat-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+
+    /* Tree node rows */
+    .cat-tree-node { user-select: none; }
     .cat-item-row {
-      display: flex; align-items: center; gap: 8px;
-      padding: 7px 12px; cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 12px; cursor: pointer;
       border-bottom: 1px solid var(--ss-border2);
-      transition: background .1s;
+      transition: background .1s; position: relative;
     }
     .cat-item-row:hover { background: rgba(255,255,255,.04); }
     .cat-item-row.active { background: rgba(88,166,255,.1); border-left: 2px solid #58a6ff; }
+    .cat-item-row.is-child { padding-left: 28px; background: rgba(0,0,0,.15); }
+    .cat-item-row.is-child:hover { background: rgba(255,255,255,.03); }
+    .cat-item-row.is-child.active { background: rgba(88,166,255,.08); border-left: 2px solid rgba(88,166,255,.6); }
+
+    /* Chevron toggle */
+    .cat-chevron {
+      width: 14px; height: 14px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--ss-muted); font-size: 9px;
+      transition: transform .2s; cursor: pointer;
+    }
+    .cat-chevron.open { transform: rotate(90deg); }
+    .cat-chevron.leaf { opacity: 0; pointer-events: none; }
+
+    /* Sub-tree connector line */
+    .cat-subtree { border-left: 1px dashed rgba(88,166,255,.2); margin-left: 20px; }
+
     .cat-item-code {
       font-size: 9px; font-weight: 800; letter-spacing: .06em;
       color: #58a6ff; background: rgba(88,166,255,.1);
       border-radius: 4px; padding: 1px 5px; flex-shrink: 0;
+    }
+    .cat-item-row.is-child .cat-item-code {
+      color: rgba(88,166,255,.7); background: rgba(88,166,255,.06);
+      font-size: 8px;
     }
     .cat-item-name {
       font-size: 11px; font-weight: 600; color: var(--ss-text);
       flex: 1; min-width: 0; white-space: nowrap;
       overflow: hidden; text-overflow: ellipsis;
     }
+    .cat-item-row.is-child .cat-item-name { font-size: 10px; color: var(--ss-muted); }
     .cat-item-avatar {
       width: 20px; height: 20px; border-radius: 6px;
       background: rgba(63,185,80,.15); color: #3fb950;
@@ -742,11 +762,42 @@
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
-    .cat-item-avatar.unassigned {
-      background: rgba(139,148,158,.1); color: var(--ss-muted);
+    .cat-item-avatar.unassigned { background: rgba(139,148,158,.1); color: var(--ss-muted); }
+
+    /* ── Right-click context menu ─────────────────────────────── */
+    .cat-ctx-menu {
+      position: fixed; z-index: 9999;
+      background: var(--ss-surface2); border: 1px solid var(--ss-border);
+      border-radius: 9px; padding: 5px 0;
+      box-shadow: 0 12px 36px rgba(0,0,0,.55);
+      min-width: 190px;
+      display: none;
+      animation: ctxFadeIn .12s ease;
+    }
+    @keyframes ctxFadeIn {
+      from { opacity: 0; transform: scale(.97) translateY(-4px); }
+      to   { opacity: 1; transform: scale(1)  translateY(0);     }
+    }
+    .cat-ctx-menu.open { display: block; }
+    .cat-ctx-item {
+      padding: 7px 14px; font-size: 12px; font-weight: 600;
+      color: var(--ss-text); cursor: pointer; display: flex;
+      align-items: center; gap: 9px; transition: background .1s;
+    }
+    .cat-ctx-item:hover { background: rgba(88,166,255,.1); color: #58a6ff; }
+    .cat-ctx-item i { width: 14px; text-align: center; font-size: 11px; color: var(--ss-muted); }
+    .cat-ctx-item:hover i { color: #58a6ff; }
+    .cat-ctx-item.danger { color: var(--ss-danger); }
+    .cat-ctx-item.danger:hover { background: rgba(248,81,73,.1); }
+    .cat-ctx-item.danger i { color: var(--ss-danger); }
+    .cat-ctx-sep { height: 1px; background: var(--ss-border); margin: 4px 0; }
+    .cat-ctx-label {
+      padding: 5px 14px 3px; font-size: 9px; font-weight: 800;
+      letter-spacing: .08em; text-transform: uppercase;
+      color: var(--ss-muted); pointer-events: none;
     }
 
-    /* Detail area */
+    /* ── Detail area ──────────────────────────────────────────── */
     .cat-detail {
       flex: 1; display: flex; flex-direction: column; overflow: hidden;
     }
@@ -776,19 +827,55 @@
     .cat-detail-name {
       font-size: 16px; font-weight: 800; color: #e6edf3; flex: 1;
     }
+    .cat-parent-crumb {
+      font-size: 10px; color: var(--ss-muted);
+      background: rgba(255,255,255,.04); border: 1px solid var(--ss-border2);
+      border-radius: 4px; padding: 2px 8px; cursor: pointer;
+      display: none; align-items: center; gap: 5px;
+      transition: color .15s;
+    }
+    .cat-parent-crumb:hover { color: #58a6ff; }
+    .cat-parent-crumb.visible { display: inline-flex; }
     .cat-status-badge {
       font-size: 9px; font-weight: 800; padding: 2px 8px;
       border-radius: 20px; letter-spacing: .04em;
     }
     .cat-status-active { background: rgba(63,185,80,.15); color: #3fb950; border: 1px solid rgba(63,185,80,.3); }
-    .cat-status-disc { background: rgba(248,81,73,.12); color: #f85149; border: 1px solid rgba(248,81,73,.3); }
+    .cat-status-disc   { background: rgba(248,81,73,.12); color: #f85149; border: 1px solid rgba(248,81,73,.3); }
     .cat-detail-meta {
       display: flex; gap: 14px; flex-wrap: wrap;
     }
-    .cat-meta-item {
-      font-size: 10px; color: var(--ss-muted);
-    }
+    .cat-meta-item { font-size: 10px; color: var(--ss-muted); }
     .cat-meta-item span { color: var(--ss-text); font-weight: 600; }
+
+    /* ── Edit Mode button ─────────────────────────────────────── */
+    .cat-edit-mode-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 6px; font-size: 11px;
+      font-weight: 700; font-family: var(--ss-font); cursor: pointer;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04); color: var(--ss-muted);
+      transition: all .18s; white-space: nowrap;
+    }
+    .cat-edit-mode-btn:hover {
+      background: rgba(88,166,255,.1); border-color: rgba(88,166,255,.3);
+      color: #58a6ff;
+    }
+    .cat-edit-mode-btn.editing {
+      background: rgba(63,185,80,.1); border-color: rgba(63,185,80,.35);
+      color: #3fb950;
+    }
+    .cat-edit-mode-btn.editing i { color: #3fb950; }
+    .cat-delete-btn {
+      display: none; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 6px; font-size: 11px;
+      font-weight: 700; font-family: var(--ss-font); cursor: pointer;
+      border: 1px solid rgba(248,81,73,.25);
+      background: rgba(248,81,73,.06); color: var(--ss-danger);
+      transition: all .18s;
+    }
+    .cat-delete-btn:hover { background: rgba(248,81,73,.14); }
+    .cat-delete-btn.visible { display: flex; }
 
     /* Detail tabs */
     .cat-detail-tabs {
@@ -807,9 +894,7 @@
     .cat-dtab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
 
     /* Detail content */
-    .cat-detail-body {
-      flex: 1; overflow: auto; padding: 16px 18px;
-    }
+    .cat-detail-body { flex: 1; overflow: auto; padding: 16px 18px; }
     .cat-dpanel { display: none; }
     .cat-dpanel.active { display: block; }
 
@@ -829,12 +914,8 @@
       font-size: 12px; font-family: var(--ss-font); outline: none;
       width: 100%;
     }
-    .cat-field input:focus, .cat-field select:focus {
-      border-color: rgba(88,166,255,.4);
-    }
-    .cat-field input[readonly], .cat-field select[disabled] {
-      opacity: .5; cursor: default;
-    }
+    .cat-field input:focus, .cat-field select:focus { border-color: rgba(88,166,255,.4); }
+    .cat-field input[readonly], .cat-field select[disabled] { opacity: .5; cursor: default; }
     .cat-save-row {
       display: flex; align-items: center; gap: 10px;
       padding-top: 12px; border-top: 1px solid var(--ss-border);
@@ -849,7 +930,7 @@
     .cat-btn-save:hover { filter: brightness(1.1); }
     .cat-btn-save:disabled { opacity: .4; cursor: default; }
     .cat-save-msg { font-size: 11px; opacity: 0; transition: opacity .3s; }
-    .cat-save-msg.ok { color: #3fb950; opacity: 1; }
+    .cat-save-msg.ok  { color: #3fb950; opacity: 1; }
     .cat-save-msg.err { color: #f85149; opacity: 1; }
 
     /* Quill editor wrapper */
@@ -864,24 +945,19 @@
       color: var(--ss-text); font-family: var(--ss-font); font-size: 13px;
     }
     .cat-editor-wrap .ql-toolbar .ql-stroke { stroke: var(--ss-muted); }
-    .cat-editor-wrap .ql-toolbar .ql-fill { fill: var(--ss-muted); }
+    .cat-editor-wrap .ql-toolbar .ql-fill   { fill: var(--ss-muted); }
     .cat-editor-wrap .ql-toolbar button:hover .ql-stroke { stroke: #58a6ff; }
-    .cat-editor-wrap .ql-toolbar .ql-active .ql-stroke { stroke: #58a6ff; }
+    .cat-editor-wrap .ql-toolbar .ql-active .ql-stroke  { stroke: #58a6ff; }
     .cat-readonly .ql-toolbar { display: none; }
-    .cat-readonly .ql-container {
-      border-radius: 6px; border-top: 1px solid var(--ss-border);
-    }
+    .cat-readonly .ql-container { border-radius: 6px; border-top: 1px solid var(--ss-border); }
 
     /* Comments */
-    .cat-comment-input-wrap {
-      display: flex; gap: 8px; margin-bottom: 14px;
-    }
+    .cat-comment-input-wrap { display: flex; gap: 8px; margin-bottom: 14px; }
     .cat-comment-input {
       flex: 1; background: var(--ss-surface3);
       border: 1px solid var(--ss-border); border-radius: 8px;
       padding: 8px 12px; color: var(--ss-text); font-size: 12px;
-      font-family: var(--ss-font); resize: vertical; min-height: 60px;
-      outline: none;
+      font-family: var(--ss-font); resize: vertical; min-height: 60px; outline: none;
     }
     .cat-comment-input:focus { border-color: rgba(88,166,255,.4); }
     .cat-btn-comment {
@@ -894,28 +970,20 @@
     .cat-comment-list { display: flex; flex-direction: column; gap: 8px; }
     .cat-comment-card {
       background: var(--ss-surface2); border: 1px solid var(--ss-border);
-      border-radius: 10px; padding: 10px 12px;
-      transition: opacity .3s;
+      border-radius: 10px; padding: 10px 12px; transition: opacity .3s;
     }
-    .cat-comment-card.acknowledged {
-      opacity: .45; border-color: var(--ss-border2);
-    }
-    .cat-comment-head {
-      display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
-    }
+    .cat-comment-card.acknowledged { opacity: .45; border-color: var(--ss-border2); }
+    .cat-comment-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     .cat-comment-avatar {
       width: 22px; height: 22px; border-radius: 6px;
       background: rgba(88,166,255,.15); color: #58a6ff;
       font-size: 9px; font-weight: 800;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
     .cat-comment-author { font-size: 11px; font-weight: 700; color: #e6edf3; flex: 1; }
-    .cat-comment-time { font-size: 9px; color: var(--ss-muted); }
-    .cat-comment-body { font-size: 12px; color: var(--ss-text); line-height: 1.5; }
-    .cat-comment-footer {
-      display: flex; align-items: center; gap: 8px; margin-top: 8px;
-    }
+    .cat-comment-time   { font-size: 9px; color: var(--ss-muted); }
+    .cat-comment-body   { font-size: 12px; color: var(--ss-text); line-height: 1.5; }
+    .cat-comment-footer { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
     .cat-ack-badge {
       font-size: 9px; font-weight: 700; color: #3fb950;
       display: flex; align-items: center; gap: 4px;
@@ -923,24 +991,22 @@
     .cat-btn-ack {
       font-size: 10px; font-weight: 700; color: #3fb950;
       background: rgba(63,185,80,.1); border: 1px solid rgba(63,185,80,.25);
-      border-radius: 5px; padding: 2px 9px; cursor: pointer;
-      transition: background .15s;
+      border-radius: 5px; padding: 2px 9px; cursor: pointer; transition: background .15s;
     }
     .cat-btn-ack:hover { background: rgba(63,185,80,.2); }
 
     /* History */
     .cat-history-row {
       display: flex; gap: 10px; align-items: flex-start;
-      padding: 7px 0; border-bottom: 1px solid var(--ss-border2);
-      font-size: 11px;
+      padding: 7px 0; border-bottom: 1px solid var(--ss-border2); font-size: 11px;
     }
     .cat-history-row:last-child { border-bottom: none; }
-    .cat-history-time { color: var(--ss-muted); white-space: nowrap; flex-shrink: 0; width: 130px; }
-    .cat-history-who { color: #58a6ff; font-weight: 700; flex-shrink: 0; width: 100px; }
+    .cat-history-time  { color: var(--ss-muted); white-space: nowrap; flex-shrink: 0; width: 130px; }
+    .cat-history-who   { color: #58a6ff; font-weight: 700; flex-shrink: 0; width: 100px; }
     .cat-history-field { color: var(--ss-warn); font-weight: 700; flex-shrink: 0; width: 90px; }
-    .cat-history-val { color: var(--ss-text); flex: 1; min-width: 0; }
+    .cat-history-val   { color: var(--ss-text); flex: 1; min-width: 0; }
 
-    /* Add item modal */
+    /* Modals — shared base */
     .cat-modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,.65);
       z-index: 9000; display: none; align-items: center; justify-content: center;
@@ -950,6 +1016,11 @@
       background: var(--ss-surface); border: 1px solid var(--ss-border);
       border-radius: 14px; padding: 20px 24px; width: min(480px, 94vw);
       box-shadow: 0 24px 60px rgba(0,0,0,.5);
+      animation: modalIn .18s ease;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(.96) translateY(8px); }
+      to   { opacity: 1; transform: scale(1)  translateY(0); }
     }
     .cat-modal-title {
       font-size: 14px; font-weight: 800; color: #e6edf3;
@@ -969,20 +1040,19 @@
     .cat-modal-btns {
       display: flex; justify-content: flex-end; gap: 8px;
       padding-top: 12px; border-top: 1px solid var(--ss-border);
+      align-items: center;
     }
     .cat-btn-cancel {
       background: var(--ss-surface3); border: 1px solid var(--ss-border);
       color: var(--ss-text); border-radius: 7px; padding: 6px 14px;
       font-size: 12px; font-weight: 700; cursor: pointer;
     }
-
-    /* Assign dropdown */
-    .cat-assign-wrap { position: relative; }
-    .cat-assign-wrap select {
+    .cat-modal-field-style {
       background: var(--ss-surface3); border: 1px solid var(--ss-border);
       border-radius: 6px; padding: 6px 10px; color: var(--ss-text);
-      font-size: 12px; width: 100%; outline: none;
+      font-size: 12px; width: 100%; outline: none; font-family: var(--ss-font);
     }
+    .cat-modal-field-style:focus { border-color: rgba(88,166,255,.4); }
 
     /* Empty states */
     .cat-panel-empty {
@@ -990,7 +1060,6 @@
       font-size: 12px; opacity: .6;
     }
 
-  
     /* ── Single-body tab switching ─────────────────────────────── */
     .ss-canvas-inner { display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
     .ss-canvas-inner.active { display: flex; }
@@ -1002,6 +1071,7 @@
     #left-panel-catalog.active  { display: flex; }
     #left-panel-history.active  { display: flex; }
     #left-panel-config.active   { display: flex; }
+
     /* Call Info inputs match ss-input style */
     #right-call-info .ss-input {
       background: var(--ss-surface3);
@@ -1017,7 +1087,7 @@
       color: var(--ss-text); cursor: pointer; transition: background .1s;
     }
     .ci-note-card:hover { background: rgba(255,255,255,.06); }
-    .ci-note-time { font-size: 9px; color: var(--ss-muted); margin-bottom: 2px; }
+    .ci-note-time   { font-size: 9px; color: var(--ss-muted); margin-bottom: 2px; }
     .ci-note-caller { font-weight: 700; color: #58a6ff; }
   </style>
 </head>
@@ -1114,7 +1184,7 @@
         <div class="cat-sidebar-head">
           <div class="cat-sidebar-title">
             <span><i class="fas fa-microchip" style="margin-right:5px;color:#58a6ff;"></i>Product Items</span>
-            <button class="cat-add-btn" id="cat-add-btn" title="Add new item"><i class="fas fa-plus"></i> Add</button>
+            <button class="cat-add-btn" id="cat-add-btn" title="Add root item"><i class="fas fa-plus"></i> Add</button>
           </div>
           <input class="cat-search" id="cat-search" type="text" placeholder="Search items…" autocomplete="off">
         </div>
@@ -1184,9 +1254,21 @@
         <div id="cat-detail-view" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
           <div class="cat-detail-header">
             <div class="cat-detail-top">
+              <button class="cat-parent-crumb" id="cdd-parent-crumb" title="Go to parent item">
+                <i class="fas fa-arrow-left" style="font-size:9px;"></i>
+                <span id="cdd-parent-label"></span>
+              </button>
               <span class="cat-detail-code" id="cdd-code">CTR-001</span>
               <span class="cat-detail-name" id="cdd-name">Product Item 1</span>
               <span class="cat-status-badge cat-status-active" id="cdd-status">Active</span>
+              <div style="flex:1;"></div>
+              <button class="cat-edit-mode-btn" id="cat-edit-mode-btn" title="Toggle edit mode">
+                <i class="fas fa-lock" id="cat-edit-mode-icon"></i>
+                <span id="cat-edit-mode-label">Edit Mode</span>
+              </button>
+              <button class="cat-delete-btn" id="cat-detail-delete-btn" title="Delete this item">
+                <i class="fas fa-trash-alt"></i> Delete
+              </button>
             </div>
             <div class="cat-detail-meta">
               <span class="cat-meta-item">Category: <span id="cdd-category">—</span></span>
@@ -1261,15 +1343,6 @@
     <!-- ── PERSISTENT RIGHT SIDEBAR ──────────────────────────── -->
     <aside class="ss-sidebar right" id="ss-right-sidebar">
 
-      <!-- Case Inspector — always visible -->
-      <div class="ss-panel" id="right-case-inspector">
-        <div class="ss-panel-title"><i class="fas fa-info-circle"></i> Case Inspector</div>
-        <div class="ss-inspector-empty">
-          <i class="fas fa-search-plus"></i>
-          <p>Select a support ticket or case to inspect full details here.</p>
-        </div>
-      </div>
-
       <!-- Agent Panel — always visible -->
       <div class="ss-panel" id="right-agent-panel">
         <div class="ss-panel-title"><i class="fas fa-user-shield"></i> Agent Panel</div>
@@ -1343,7 +1416,7 @@
   </div><!-- /ss-main-body -->
 
 
-  <!-- Add Item Modal -->
+  <!-- ── Add Item Modal ─────────────────────────────────────── -->
   <div class="cat-modal-overlay" id="cat-add-modal">
     <div class="cat-modal">
       <div class="cat-modal-title">
@@ -1353,60 +1426,108 @@
       <div class="cat-modal-grid">
         <div class="cat-field">
           <label>Item Code *</label>
-          <input type="text" id="cmi-code" placeholder="e.g. CTR-003" style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:6px;padding:6px 10px;color:var(--ss-text);font-size:12px;width:100%;outline:none;">
+          <input type="text" id="cmi-code" placeholder="e.g. CTR-003" class="cat-modal-field-style">
         </div>
         <div class="cat-field">
           <label>Name *</label>
-          <input type="text" id="cmi-name" placeholder="Product name" style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:6px;padding:6px 10px;color:var(--ss-text);font-size:12px;width:100%;outline:none;">
+          <input type="text" id="cmi-name" placeholder="Product name" class="cat-modal-field-style">
         </div>
         <div class="cat-field">
           <label>Category</label>
-          <select id="cmi-category" style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:6px;padding:6px 10px;color:var(--ss-text);font-size:12px;width:100%;outline:none;">
+          <select id="cmi-category" class="cat-modal-field-style">
             <option>Controller</option><option>Sensor</option><option>Valve</option>
             <option>Compressor</option><option>Drive</option><option>Other</option>
           </select>
         </div>
         <div class="cat-field">
           <label>Brand</label>
-          <input type="text" id="cmi-brand" placeholder="e.g. Emerson" style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:6px;padding:6px 10px;color:var(--ss-text);font-size:12px;width:100%;outline:none;">
+          <input type="text" id="cmi-brand" placeholder="e.g. Emerson" class="cat-modal-field-style">
         </div>
         <div class="cat-field cat-modal-full">
           <label>Assign To</label>
-          <select id="cmi-assigned_to" style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:6px;padding:6px 10px;color:var(--ss-text);font-size:12px;width:100%;outline:none;">
+          <select id="cmi-assigned_to" class="cat-modal-field-style">
             <option value="">— Unassigned —</option>
           </select>
         </div>
       </div>
       <div class="cat-modal-btns">
         <button class="cat-btn-cancel" id="cat-modal-cancel-btn">Cancel</button>
-        <button class="cat-btn-save" id="cat-modal-save-btn">
-          <i class="fas fa-plus"></i> Create Item
-        </button>
+        <button class="cat-btn-save" id="cat-modal-save-btn"><i class="fas fa-plus"></i> Create Item</button>
         <span class="cat-save-msg" id="cat-modal-msg"></span>
       </div>
     </div>
   </div>
 
+  <!-- ── Add Sub-Item Modal ──────────────────────────────────── -->
+  <div class="cat-modal-overlay" id="cat-sub-modal">
+    <div class="cat-modal">
+      <div class="cat-modal-title">
+        <span><i class="fas fa-code-branch" style="color:#a25ddc;margin-right:8px;"></i>Add Sub-Item</span>
+        <button class="cat-modal-close" id="cat-sub-modal-close">✕</button>
+      </div>
+      <div style="background:rgba(162,93,220,.08);border:1px solid rgba(162,93,220,.2);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:var(--ss-muted);">
+        <i class="fas fa-info-circle" style="color:#a25ddc;margin-right:5px;"></i>
+        Parent: <strong id="cat-sub-parent-label" style="color:#e6edf3;"></strong>
+      </div>
+      <div class="cat-modal-grid">
+        <div class="cat-field">
+          <label>Sub-Item Code *</label>
+          <input type="text" id="csmi-code" placeholder="e.g. CTR-001-A" class="cat-modal-field-style">
+        </div>
+        <div class="cat-field">
+          <label>Name *</label>
+          <input type="text" id="csmi-name" placeholder="Sub-item name / series" class="cat-modal-field-style">
+        </div>
+        <div class="cat-field">
+          <label>Category</label>
+          <select id="csmi-category" class="cat-modal-field-style">
+            <option>Controller</option><option>Sensor</option><option>Valve</option>
+            <option>Compressor</option><option>Drive</option><option>Other</option>
+          </select>
+        </div>
+        <div class="cat-field">
+          <label>Brand</label>
+          <input type="text" id="csmi-brand" placeholder="e.g. Emerson" class="cat-modal-field-style">
+        </div>
+        <div class="cat-field cat-modal-full">
+          <label>Assign To</label>
+          <select id="csmi-assigned_to" class="cat-modal-field-style">
+            <option value="">— Unassigned —</option>
+          </select>
+        </div>
+      </div>
+      <div class="cat-modal-btns">
+        <button class="cat-btn-cancel" id="cat-sub-modal-cancel">← Cancel</button>
+        <button class="cat-btn-save" id="cat-sub-modal-save"><i class="fas fa-code-branch"></i> Add Sub-Item</button>
+        <span class="cat-save-msg" id="cat-sub-modal-msg"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Right-click Context Menu ───────────────────────────── -->
+  <div class="cat-ctx-menu" id="cat-ctx-menu">
+    <div class="cat-ctx-label" id="cat-ctx-item-label">Item Options</div>
+    <div class="cat-ctx-item" id="ctx-view"><i class="fas fa-eye"></i> View Details</div>
+    <div class="cat-ctx-item" id="ctx-add-sub"><i class="fas fa-code-branch"></i> Add Sub-Item</div>
+    <div class="cat-ctx-sep"></div>
+    <div class="cat-ctx-item danger" id="ctx-delete"><i class="fas fa-trash-alt"></i> Delete Item</div>
+  </div>
+
+
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════
    PRODUCT CATALOG MODULE — Support Studio
-   Handles: item list, item detail, rich text editing,
-   comments + acknowledge, history, add item modal
+   v3: TreeView + Sub-Items + Edit Mode + Right-click Menu
+   Roles: SUPER_ADMIN + SUPER_USER = full manage rights
 ═══════════════════════════════════════════════════════════════════ */
 (function() {
   'use strict';
 
-  // ── Auth token ──────────────────────────────────────────────────
   function getToken() {
     try {
-      // Support Studio opens in new tab — try localStorage tokens
       const keys = ['mums_access_token','sb-access-token','supabase.auth.token'];
-      for (const k of keys) {
-        const v = localStorage.getItem(k);
-        if (v) return v;
-      }
-      // Try sessionStorage
+      for (const k of keys) { const v = localStorage.getItem(k); if (v) return v; }
       for (let i = 0; i < sessionStorage.length; i++) {
         const k = sessionStorage.key(i);
         if (k && (k.includes('token') || k.includes('auth'))) {
@@ -1414,7 +1535,6 @@
           if (v && v.length > 20) return v;
         }
       }
-      // Try reading from window.opener (MUMS main window)
       if (window.opener && window.opener.CloudAuth) {
         const t = window.opener.CloudAuth.accessToken();
         if (t) return t;
@@ -1427,25 +1547,18 @@
     const tok = getToken();
     const headers = { 'Content-Type': 'application/json' };
     if (tok) headers['Authorization'] = 'Bearer ' + tok;
-    const res = await fetch(url, { ...opts, headers: { ...headers, ...(opts && opts.headers || {}) } });
-    return res;
+    return fetch(url, { ...opts, headers: { ...headers, ...((opts && opts.headers) || {}) } });
   }
 
-  // ── State ────────────────────────────────────────────────────────
-  let state = {
-    items: [],
-    currentItem: null,
-    users: [],
-    currentUserId: null,
-    currentUserName: '',
-    isSA: false,
-    isAssigned: false,
-    quillSpecs: null,
-    quillGuide: null,
-    quillTs: null,
+  const state = {
+    items: [], currentItem: null, users: [],
+    currentUserId: null, currentUserName: '',
+    isSA: false, isSU: false, canManage: false,
+    isAssigned: false, editMode: false,
+    expandedNodes: new Set(), ctxTargetItem: null,
+    quillSpecs: null, quillGuide: null, quillTs: null,
   };
 
-  // ── Init ─────────────────────────────────────────────────────────
   async function init() {
     await loadCurrentUser();
     setupCatalogTab();
@@ -1456,98 +1569,156 @@
       const r = await apiFetch('/api/users/me');
       const d = await r.json();
       if (d.ok && d.profile) {
-        state.currentUserId = d.profile.user_id || d.profile.id;
+        state.currentUserId   = d.profile.user_id || d.profile.id;
         state.currentUserName = d.profile.name || d.profile.username || 'Me';
         const role = String(d.profile.role || '').toUpperCase().replace(/\s+/g,'_');
-        state.isSA = (role === 'SUPER_ADMIN');
+        state.isSA = role === 'SUPER_ADMIN';
+        state.isSU = role === 'SUPER_USER';
+        state.canManage = state.isSA || state.isSU;
       }
     } catch(_) {}
   }
 
   function setupCatalogTab() {
-    // Show Add button for SA
     const addBtn = document.getElementById('cat-add-btn');
-    if (addBtn && state.isSA) addBtn.classList.add('visible');
+    if (addBtn && state.canManage) addBtn.classList.add('visible');
 
-    // Expose init so tab switcher can call it
-    window._catInit = function() {
-      if (!state.items.length) loadItems();
-    };
+    window._catInit = function() { if (!state.items.length) loadItems(); };
 
-    // Search
     const searchEl = document.getElementById('cat-search');
-    if (searchEl) searchEl.addEventListener('input', () => renderItemList(searchEl.value));
+    if (searchEl) searchEl.addEventListener('input', () => renderTree(searchEl.value));
 
-    // Detail tabs
-    document.querySelectorAll('.cat-dtab').forEach(btn => {
-      btn.addEventListener('click', () => switchDetailTab(btn.dataset.dtab));
-    });
+    document.querySelectorAll('.cat-dtab').forEach(btn =>
+      btn.addEventListener('click', () => switchDetailTab(btn.dataset.dtab)));
 
-    // Save buttons
     document.getElementById('cat-save-specs-btn').addEventListener('click', saveSpecs);
-    document.getElementById('cat-save-guide-btn').addEventListener('click', () => saveRichField('user_guide', state.quillGuide, 'cat-guide-msg'));
-    document.getElementById('cat-save-ts-btn').addEventListener('click', () => saveRichField('troubleshooting', state.quillTs, 'cat-ts-msg'));
-
-    // Comments
+    document.getElementById('cat-save-guide-btn').addEventListener('click',
+      () => saveRichField('user_guide', state.quillGuide, 'cat-guide-msg'));
+    document.getElementById('cat-save-ts-btn').addEventListener('click',
+      () => saveRichField('troubleshooting', state.quillTs, 'cat-ts-msg'));
     document.getElementById('cat-post-comment-btn').addEventListener('click', postComment);
 
-    // Add modal
-    if (addBtn) addBtn.addEventListener('click', openAddModal);
-    document.getElementById('cat-modal-close-btn').addEventListener('click', closeAddModal);
+    const editBtn = document.getElementById('cat-edit-mode-btn');
+    if (editBtn) editBtn.addEventListener('click', toggleEditMode);
+
+    const delBtn = document.getElementById('cat-detail-delete-btn');
+    if (delBtn) delBtn.addEventListener('click', () => {
+      if (state.currentItem) deleteItemWithConfirm(state.currentItem);
+    });
+
+    const crumbBtn = document.getElementById('cdd-parent-crumb');
+    if (crumbBtn) crumbBtn.addEventListener('click', () => {
+      if (state.currentItem && state.currentItem.parent_id) {
+        const parent = state.items.find(i => i.id === state.currentItem.parent_id);
+        if (parent) selectItem(parent);
+      }
+    });
+
+    if (addBtn) addBtn.addEventListener('click', () => openAddModal());
+    document.getElementById('cat-modal-close-btn').addEventListener('click',  closeAddModal);
     document.getElementById('cat-modal-cancel-btn').addEventListener('click', closeAddModal);
-    document.getElementById('cat-modal-save-btn').addEventListener('click', createItem);
+    document.getElementById('cat-modal-save-btn').addEventListener('click',   createItem);
 
-    // Init Quill editors
+    document.getElementById('cat-sub-modal-close').addEventListener('click',  closeSubModal);
+    document.getElementById('cat-sub-modal-cancel').addEventListener('click', closeSubModal);
+    document.getElementById('cat-sub-modal-save').addEventListener('click',   createSubItem);
+
+    setupContextMenu();
     initEditors();
-
-    // Pre-load handled by window._catInit via tab switcher
   }
 
   function initEditors() {
-    const toolbarOpts = [
-      [{ header: [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline'],
-      [{ list: 'ordered' }, { list: 'bullet' }],
-      ['blockquote', 'code-block'],
-      ['clean']
+    const tb = [
+      [{ header:[1,2,3,false] }],
+      ['bold','italic','underline'],
+      [{ list:'ordered' },{ list:'bullet' }],
+      ['blockquote','code-block'],['clean']
     ];
+    state.quillSpecs = new Quill('#cat-specs-editor',{ theme:'snow', placeholder:'Enter basic specs…', modules:{ toolbar:tb } });
+    state.quillGuide = new Quill('#cat-guide-editor',{ theme:'snow', placeholder:'Write the user guide…', modules:{ toolbar:tb } });
+    state.quillTs    = new Quill('#cat-ts-editor',   { theme:'snow', placeholder:'Troubleshooting steps…', modules:{ toolbar:tb } });
+  }
 
-    state.quillSpecs = new Quill('#cat-specs-editor', {
-      theme: 'snow', placeholder: 'Enter basic specs and description…',
-      modules: { toolbar: toolbarOpts }
-    });
-    state.quillGuide = new Quill('#cat-guide-editor', {
-      theme: 'snow', placeholder: 'Write the user guide here…',
-      modules: { toolbar: toolbarOpts }
-    });
-    state.quillTs = new Quill('#cat-ts-editor', {
-      theme: 'snow', placeholder: 'Write troubleshooting steps here…',
-      modules: { toolbar: toolbarOpts }
-    });
+  /* ── Edit Mode ─────────────────────────────────────────────── */
+  function toggleEditMode() {
+    const canEdit = state.canManage || state.isAssigned;
+    if (!canEdit) return;
+    state.editMode = !state.editMode;
+    applyEditMode();
+  }
+
+  function applyEditMode() {
+    const btn   = document.getElementById('cat-edit-mode-btn');
+    const icon  = document.getElementById('cat-edit-mode-icon');
+    const label = document.getElementById('cat-edit-mode-label');
+    const canEdit = state.canManage || state.isAssigned;
+    if (!canEdit) {
+      if (btn) btn.style.display = 'none';
+      setEditorsReadonly(true);
+      return;
+    }
+    if (btn) {
+      btn.style.display = '';
+      btn.classList.toggle('editing', state.editMode);
+      if (icon)  icon.className  = state.editMode ? 'fas fa-lock-open' : 'fas fa-lock';
+      if (label) label.textContent = state.editMode ? 'Editing' : 'Edit Mode';
+    }
+    setEditorsReadonly(!state.editMode);
+    const delBtn = document.getElementById('cat-detail-delete-btn');
+    if (delBtn) delBtn.classList.toggle('visible', state.canManage);
   }
 
   function setEditorsReadonly(readonly) {
-    [state.quillSpecs, state.quillGuide, state.quillTs].forEach(q => {
-      if (q) q.enable(!readonly);
-    });
-    document.querySelectorAll('.cat-editor-wrap').forEach(el => {
-      el.classList.toggle('cat-readonly', readonly);
-    });
+    [state.quillSpecs, state.quillGuide, state.quillTs].forEach(q => { if (q) q.enable(!readonly); });
+    document.querySelectorAll('.cat-editor-wrap').forEach(el => el.classList.toggle('cat-readonly', readonly));
     ['cat-specs-save-row','cat-guide-save-row','cat-ts-save-row'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = readonly ? 'none' : 'flex';
     });
-    // Assign dropdown — SA only
-    const assignWrap = document.getElementById('cdf-assign-wrap');
-    if (assignWrap) assignWrap.style.display = state.isSA ? '' : 'none';
-    // Specs fields
+    const aw = document.getElementById('cdf-assign-wrap');
+    if (aw) aw.style.display = state.canManage ? '' : 'none';
     ['cdf-name','cdf-category','cdf-brand','cdf-part_number','cdf-compatible_units','cdf-status'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) { el.readOnly = readonly; if (el.tagName === 'SELECT') el.disabled = readonly; }
+      if (!el) return;
+      if (el.tagName === 'SELECT') el.disabled = readonly;
+      else el.readOnly = readonly;
     });
   }
 
-  // ── Load items ───────────────────────────────────────────────────
+  /* ── Context Menu ──────────────────────────────────────────── */
+  function setupContextMenu() {
+    const menu = document.getElementById('cat-ctx-menu');
+    if (!menu) return;
+    document.addEventListener('click', () => closeCtxMenu());
+    document.addEventListener('contextmenu', e => {
+      const row = e.target.closest('.cat-item-row');
+      if (!row) return closeCtxMenu();
+      e.preventDefault();
+      const item = state.items.find(i => i.id === row.dataset.id);
+      if (!item) return;
+      state.ctxTargetItem = item;
+      const lbl = document.getElementById('cat-ctx-item-label');
+      if (lbl) lbl.textContent = item.item_code + ' — ' + item.name;
+      document.getElementById('ctx-add-sub').style.display = state.canManage ? '' : 'none';
+      document.getElementById('ctx-delete').style.display  = state.canManage ? '' : 'none';
+      const sep = menu.querySelector('.cat-ctx-sep');
+      if (sep) sep.style.display = state.canManage ? '' : 'none';
+      const x = Math.min(e.clientX, window.innerWidth  - 210);
+      const y = Math.min(e.clientY, window.innerHeight - 160);
+      menu.style.left = x + 'px';
+      menu.style.top  = y + 'px';
+      menu.classList.add('open');
+    });
+    document.getElementById('ctx-view').addEventListener('click',    () => { if (state.ctxTargetItem) selectItem(state.ctxTargetItem); closeCtxMenu(); });
+    document.getElementById('ctx-add-sub').addEventListener('click', () => { if (state.ctxTargetItem) openSubModal(state.ctxTargetItem); closeCtxMenu(); });
+    document.getElementById('ctx-delete').addEventListener('click',  () => { if (state.ctxTargetItem) deleteItemWithConfirm(state.ctxTargetItem); closeCtxMenu(); });
+  }
+  function closeCtxMenu() {
+    const m = document.getElementById('cat-ctx-menu');
+    if (m) m.classList.remove('open');
+  }
+
+  /* ── Load items ────────────────────────────────────────────── */
   async function loadItems() {
     const list = document.getElementById('cat-list');
     if (list) list.innerHTML = '<div class="cat-panel-empty"><i class="fas fa-spinner fa-spin"></i> Loading…</div>';
@@ -1556,101 +1727,147 @@
       const d = await r.json();
       if (!d.ok) throw new Error(d.message || 'Failed to load');
       state.items = d.items || [];
-      renderItemList('');
+      if (d.role) {
+        state.isSA = d.role.isSA; state.isSU = d.role.isSU; state.canManage = d.role.canManage;
+        const addBtn = document.getElementById('cat-add-btn');
+        if (addBtn) addBtn.classList.toggle('visible', state.canManage);
+      }
+      renderTree('');
     } catch(e) {
       if (list) list.innerHTML = '<div class="cat-panel-empty" style="color:#f85149;">⚠ ' + esc(String(e.message)) + '</div>';
     }
   }
 
-  function renderItemList(query) {
+  /* ── Tree Render ───────────────────────────────────────────── */
+  function renderTree(query) {
     const list = document.getElementById('cat-list');
     if (!list) return;
     const q = String(query || '').toLowerCase().trim();
-    const filtered = q
-      ? state.items.filter(i => i.item_code.toLowerCase().includes(q) || i.name.toLowerCase().includes(q) || (i.category||'').toLowerCase().includes(q))
-      : state.items;
-
-    if (!filtered.length) {
-      list.innerHTML = '<div class="cat-panel-empty">No items found.</div>';
+    if (q) {
+      const filtered = state.items.filter(i =>
+        i.item_code.toLowerCase().includes(q) ||
+        i.name.toLowerCase().includes(q) ||
+        (i.category||'').toLowerCase().includes(q));
+      list.innerHTML = filtered.length
+        ? filtered.map(i => renderItemRow(i, false, false, false)).join('')
+        : '<div class="cat-panel-empty">No results.</div>';
       return;
     }
+    const roots    = state.items.filter(i => !i.parent_id);
+    const childMap = {};
+    state.items.forEach(i => {
+      if (i.parent_id) {
+        if (!childMap[i.parent_id]) childMap[i.parent_id] = [];
+        childMap[i.parent_id].push(i);
+      }
+    });
+    if (!roots.length) { list.innerHTML = '<div class="cat-panel-empty">No items yet.</div>'; return; }
+    let html = '';
+    roots.forEach(root => {
+      const children = childMap[root.id] || [];
+      const hasKids  = children.length > 0;
+      const expanded = state.expandedNodes.has(root.id);
+      html += '<div class="cat-tree-node" data-nodeid="' + esc(root.id) + '">';
+      html += renderItemRow(root, false, hasKids, expanded);
+      if (hasKids && expanded) {
+        html += '<div class="cat-subtree">';
+        children.forEach(child => { html += renderItemRow(child, true, false, false); });
+        html += '</div>';
+      }
+      html += '</div>';
+    });
+    list.innerHTML = html;
+    list.querySelectorAll('.cat-chevron:not(.leaf)').forEach(ch => {
+      ch.addEventListener('click', e => {
+        e.stopPropagation();
+        const nid = ch.dataset.nodeid;
+        if (state.expandedNodes.has(nid)) state.expandedNodes.delete(nid);
+        else state.expandedNodes.add(nid);
+        renderTree(document.getElementById('cat-search').value);
+        if (state.currentItem) {
+          const r = list.querySelector('[data-id="' + esc(state.currentItem.id) + '"]');
+          if (r) r.classList.add('active');
+        }
+      });
+    });
+  }
 
-    list.innerHTML = filtered.map(item => {
-      const ini = item.assigned_to_name ? item.assigned_to_name.slice(0,2).toUpperCase() : '—';
-      const isActive = state.currentItem && state.currentItem.id === item.id;
-      const assigned = !!item.assigned_to;
-      return `<div class="cat-item-row${isActive?' active':''}" data-id="${esc(item.id)}" onclick="window._catSelectItem('${esc(item.id)}')">
-        <span class="cat-item-code">${esc(item.item_code)}</span>
-        <span class="cat-item-name">${esc(item.name)}</span>
-        <span class="cat-item-avatar${assigned?'':' unassigned'}" title="${esc(item.assigned_to_name||'Unassigned')}">${esc(ini)}</span>
-      </div>`;
-    }).join('');
+  function renderItemRow(item, isChild, hasKids, expanded) {
+    const isActive = state.currentItem && state.currentItem.id === item.id;
+    const ini      = item.assigned_to_name ? item.assigned_to_name.slice(0,2).toUpperCase() : '—';
+    const assigned = !!item.assigned_to;
+    const chevCls  = hasKids ? ('cat-chevron' + (expanded ? ' open' : '')) : 'cat-chevron leaf';
+    return '<div class="cat-item-row' + (isActive?' active':'') + (isChild?' is-child':'') + '"' +
+      ' data-id="' + esc(item.id) + '"' +
+      ' onclick="window._catSelectItem('' + esc(item.id) + '')"' +
+      ' title="' + esc(item.item_code) + ' — ' + esc(item.name) + '">' +
+      '<span class="' + esc(chevCls) + '" data-nodeid="' + esc(item.id) + '"><i class="fas fa-chevron-right"></i></span>' +
+      '<span class="cat-item-code">' + esc(item.item_code) + '</span>' +
+      '<span class="cat-item-name">'  + esc(item.name)      + '</span>' +
+      '<span class="cat-item-avatar' + (assigned?'':' unassigned') + '" title="' + esc(item.assigned_to_name||'Unassigned') + '">' + esc(ini) + '</span>' +
+      '</div>';
   }
 
   window._catSelectItem = function(id) {
     const item = state.items.find(i => i.id === id);
     if (!item) return;
+    if (item.parent_id) state.expandedNodes.add(item.parent_id);
     selectItem(item);
   };
 
-  // ── Select item ──────────────────────────────────────────────────
+  /* ── Select item ───────────────────────────────────────────── */
   async function selectItem(item) {
     state.currentItem = item;
-    state.isAssigned = item.assigned_to && String(item.assigned_to) === String(state.currentUserId);
-    const canEdit = state.isSA || state.isAssigned;
-
-    // Update active row
-    document.querySelectorAll('.cat-item-row').forEach(r => {
-      r.classList.toggle('active', r.dataset.id === item.id);
-    });
-
-    // Show detail view
+    state.isAssigned  = item.assigned_to && String(item.assigned_to) === String(state.currentUserId);
+    state.editMode    = false;
+    document.querySelectorAll('.cat-item-row').forEach(r =>
+      r.classList.toggle('active', r.dataset.id === item.id));
     document.getElementById('cat-detail-empty').style.display = 'none';
     const view = document.getElementById('cat-detail-view');
     view.style.display = 'flex';
 
-    // Fill header
-    document.getElementById('cdd-code').textContent = item.item_code;
-    document.getElementById('cdd-name').textContent = item.name;
-    const statusEl = document.getElementById('cdd-status');
-    statusEl.textContent = item.status || 'Active';
-    statusEl.className = 'cat-status-badge ' + (item.status === 'Active' ? 'cat-status-active' : 'cat-status-disc');
-    document.getElementById('cdd-category').textContent = item.category || '—';
-    document.getElementById('cdd-brand').textContent = item.brand || '—';
-    document.getElementById('cdd-part').textContent = item.part_number || '—';
-    document.getElementById('cdd-assigned').textContent = item.assigned_to_name || 'Unassigned';
-
-    // Fill specs form
-    document.getElementById('cdf-code').value = item.item_code;
-    document.getElementById('cdf-name').value = item.name;
-    document.getElementById('cdf-category').value = item.category || 'Controller';
-    document.getElementById('cdf-brand').value = item.brand || '';
-    document.getElementById('cdf-part_number').value = item.part_number || '';
-    document.getElementById('cdf-compatible_units').value = item.compatible_units || '';
-    document.getElementById('cdf-status').value = item.status || 'Active';
-
-    // Set editor content
-    if (state.quillSpecs) state.quillSpecs.root.innerHTML = item.specs || '';
-    if (state.quillGuide) state.quillGuide.root.innerHTML = item.user_guide || '';
-    if (state.quillTs)    state.quillTs.root.innerHTML = item.troubleshooting || '';
-
-    // Load assign dropdown if SA
-    if (state.isSA) {
-      await loadUsersIntoSelect('cdf-assigned_to', item.assigned_to);
+    const crumb = document.getElementById('cdd-parent-crumb');
+    const crumbLabel = document.getElementById('cdd-parent-label');
+    if (item.parent_id) {
+      const parent = state.items.find(i => i.id === item.parent_id);
+      if (crumb && crumbLabel && parent) {
+        crumbLabel.textContent = parent.item_code + ' — ' + parent.name;
+        crumb.classList.add('visible');
+      }
+    } else {
+      if (crumb) crumb.classList.remove('visible');
     }
 
-    // Set readonly based on permissions
-    setEditorsReadonly(!canEdit);
+    document.getElementById('cdd-code').textContent     = item.item_code;
+    document.getElementById('cdd-name').textContent     = item.name;
+    const statusEl = document.getElementById('cdd-status');
+    statusEl.textContent = item.status || 'Active';
+    statusEl.className   = 'cat-status-badge ' + (item.status === 'Active' ? 'cat-status-active' : 'cat-status-disc');
+    document.getElementById('cdd-category').textContent = item.category  || '—';
+    document.getElementById('cdd-brand').textContent    = item.brand     || '—';
+    document.getElementById('cdd-part').textContent     = item.part_number || '—';
+    document.getElementById('cdd-assigned').textContent = item.assigned_to_name || 'Unassigned';
 
-    // Switch to specs tab
+    document.getElementById('cdf-code').value             = item.item_code;
+    document.getElementById('cdf-name').value             = item.name;
+    document.getElementById('cdf-category').value         = item.category || 'Controller';
+    document.getElementById('cdf-brand').value            = item.brand    || '';
+    document.getElementById('cdf-part_number').value      = item.part_number || '';
+    document.getElementById('cdf-compatible_units').value = item.compatible_units || '';
+    document.getElementById('cdf-status').value           = item.status   || 'Active';
+
+    if (state.quillSpecs) state.quillSpecs.root.innerHTML = item.specs         || '';
+    if (state.quillGuide) state.quillGuide.root.innerHTML = item.user_guide    || '';
+    if (state.quillTs)    state.quillTs.root.innerHTML    = item.troubleshooting || '';
+
+    if (state.canManage) await loadUsersIntoSelect('cdf-assigned_to', item.assigned_to);
+
+    applyEditMode();
     switchDetailTab('specs');
-
-    // Load comments
     loadComments(item.id);
     loadHistory(item.id);
   }
 
-  // ── Detail tab switching ─────────────────────────────────────────
   function switchDetailTab(tab) {
     document.querySelectorAll('.cat-dtab').forEach(b => b.classList.toggle('active', b.dataset.dtab === tab));
     document.querySelectorAll('.cat-dpanel').forEach(p => p.classList.toggle('active', p.id === 'cdp-' + tab));
@@ -1658,7 +1875,7 @@
     if (tab === 'history'  && state.currentItem) loadHistory(state.currentItem.id);
   }
 
-  // ── Save specs ───────────────────────────────────────────────────
+  /* ── Save specs ────────────────────────────────────────────── */
   async function saveSpecs() {
     if (!state.currentItem) return;
     const btn = document.getElementById('cat-save-specs-btn');
@@ -1667,70 +1884,82 @@
     try {
       const payload = {
         id: state.currentItem.id,
-        name: document.getElementById('cdf-name').value.trim(),
-        category: document.getElementById('cdf-category').value,
-        brand: document.getElementById('cdf-brand').value.trim(),
-        part_number: document.getElementById('cdf-part_number').value.trim(),
+        name:             document.getElementById('cdf-name').value.trim(),
+        category:         document.getElementById('cdf-category').value,
+        brand:            document.getElementById('cdf-brand').value.trim(),
+        part_number:      document.getElementById('cdf-part_number').value.trim(),
         compatible_units: document.getElementById('cdf-compatible_units').value.trim(),
-        status: document.getElementById('cdf-status').value,
-        specs: state.quillSpecs ? state.quillSpecs.root.innerHTML : '',
+        status:           document.getElementById('cdf-status').value,
+        specs:            state.quillSpecs ? state.quillSpecs.root.innerHTML : '',
       };
-      // Assign — SA only
-      if (state.isSA) {
+      if (state.canManage) {
         const sel = document.getElementById('cdf-assigned_to');
         if (sel) {
-          payload.assigned_to = sel.value || null;
-          const opt = sel.options[sel.selectedIndex];
-          payload.assigned_to_name = sel.value ? (opt ? opt.text : '') : '';
+          payload.assigned_to      = sel.value || null;
+          payload.assigned_to_name = sel.value ? (sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '') : '';
         }
       }
-      const r = await apiFetch('/api/catalog/items', { method: 'PATCH', body: JSON.stringify(payload) });
+      const r = await apiFetch('/api/catalog/items', { method:'PATCH', body:JSON.stringify(payload) });
       const d = await r.json();
       if (!d.ok) throw new Error(d.message || 'Save failed');
-      // Update local state
       const idx = state.items.findIndex(i => i.id === state.currentItem.id);
       if (idx > -1) { state.items[idx] = { ...state.items[idx], ...payload }; state.currentItem = state.items[idx]; }
-      renderItemList(document.getElementById('cat-search').value);
-      // Update header
-      document.getElementById('cdd-name').textContent = payload.name;
+      renderTree(document.getElementById('cat-search').value);
+      document.getElementById('cdd-name').textContent     = payload.name;
       document.getElementById('cdd-category').textContent = payload.category;
-      document.getElementById('cdd-brand').textContent = payload.brand || '—';
-      document.getElementById('cdd-part').textContent = payload.part_number || '—';
-      const statusEl = document.getElementById('cdd-status');
-      statusEl.textContent = payload.status;
-      statusEl.className = 'cat-status-badge ' + (payload.status === 'Active' ? 'cat-status-active' : 'cat-status-disc');
+      document.getElementById('cdd-brand').textContent    = payload.brand || '—';
+      document.getElementById('cdd-part').textContent     = payload.part_number || '—';
+      const se = document.getElementById('cdd-status');
+      se.textContent = payload.status;
+      se.className   = 'cat-status-badge ' + (payload.status==='Active' ? 'cat-status-active' : 'cat-status-disc');
       showMsg(msg, '✓ Saved!', true);
-    } catch(e) {
-      showMsg(msg, '✗ ' + e.message, false);
-    } finally {
-      btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
-    }
+    } catch(e) { showMsg(msg, '✗ ' + e.message, false); }
+    finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Changes'; }
   }
 
   async function saveRichField(field, quill, msgId) {
     if (!state.currentItem || !quill) return;
-    const btn = document.getElementById('cat-save-' + (field === 'user_guide' ? 'guide' : 'ts') + '-btn');
-    const msg = document.getElementById(msgId);
+    const btnId = field === 'user_guide' ? 'cat-save-guide-btn' : 'cat-save-ts-btn';
+    const btn   = document.getElementById(btnId);
+    const msg   = document.getElementById(msgId);
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     try {
       const payload = { id: state.currentItem.id, [field]: quill.root.innerHTML };
-      const r = await apiFetch('/api/catalog/items', { method: 'PATCH', body: JSON.stringify(payload) });
+      const r = await apiFetch('/api/catalog/items', { method:'PATCH', body:JSON.stringify(payload) });
       const d = await r.json();
       if (!d.ok) throw new Error(d.message || 'Save failed');
       const idx = state.items.findIndex(i => i.id === state.currentItem.id);
       if (idx > -1) { state.items[idx][field] = payload[field]; state.currentItem[field] = payload[field]; }
       showMsg(msg, '✓ Saved!', true);
-    } catch(e) {
-      showMsg(msg, '✗ ' + e.message, false);
-    } finally {
+    } catch(e) { showMsg(msg, '✗ ' + e.message, false); }
+    finally {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-save"></i> Save ' + (field === 'user_guide' ? 'User Guide' : 'Troubleshooting Guide');
+        btn.innerHTML = '<i class="fas fa-save"></i> Save ' + (field==='user_guide' ? 'User Guide' : 'Troubleshooting Guide');
       }
     }
   }
 
-  // ── Comments ─────────────────────────────────────────────────────
+  /* ── Delete item ───────────────────────────────────────────── */
+  async function deleteItemWithConfirm(item) {
+    if (!state.canManage) return;
+    const children = state.items.filter(i => i.parent_id === item.id);
+    const warn = children.length ? '\n\nWarning: This will also delete ' + children.length + ' sub-item(s).' : '';
+    if (!confirm('Delete "' + item.item_code + ' — ' + item.name + '"?' + warn + '\n\nThis cannot be undone.')) return;
+    try {
+      const r = await apiFetch('/api/catalog/items', { method:'DELETE', body:JSON.stringify({ id: item.id }) });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.message || 'Delete failed');
+      if (state.currentItem && (state.currentItem.id === item.id || state.currentItem.parent_id === item.id)) {
+        state.currentItem = null;
+        document.getElementById('cat-detail-empty').style.display = '';
+        document.getElementById('cat-detail-view').style.display  = 'none';
+      }
+      await loadItems();
+    } catch(e) { alert('Delete failed: ' + e.message); }
+  }
+
+  /* ── Comments ──────────────────────────────────────────────── */
   async function loadComments(itemId) {
     const list = document.getElementById('cat-comment-list');
     if (!list) return;
@@ -1740,122 +1969,95 @@
       const d = await r.json();
       if (!d.ok) throw new Error('Failed');
       const comments = d.comments || [];
-      // Update badge
-      const badge = document.getElementById('cat-comment-badge');
-      const unacked = comments.filter(c => !c.is_acknowledged).length;
+      const badge    = document.getElementById('cat-comment-badge');
+      const unacked  = comments.filter(c => !c.is_acknowledged).length;
       if (badge) { badge.textContent = unacked; badge.style.display = unacked > 0 ? '' : 'none'; }
-      if (!comments.length) { list.innerHTML = '<div class="cat-panel-empty">No comments yet. Be the first to contribute!</div>'; return; }
+      if (!comments.length) { list.innerHTML = '<div class="cat-panel-empty">No comments yet.</div>'; return; }
       list.innerHTML = comments.map(c => renderComment(c)).join('');
-      // Bind ack buttons
-      list.querySelectorAll('[data-ack-id]').forEach(btn => {
-        btn.addEventListener('click', () => acknowledgeComment(btn.dataset.ackId));
-      });
-    } catch(_) {
-      list.innerHTML = '<div class="cat-panel-empty">Failed to load comments.</div>';
-    }
+      list.querySelectorAll('[data-ack-id]').forEach(btn =>
+        btn.addEventListener('click', () => acknowledgeComment(btn.dataset.ackId)));
+    } catch(_) { list.innerHTML = '<div class="cat-panel-empty">Failed to load comments.</div>'; }
   }
 
   function renderComment(c) {
-    const ini = String(c.user_name || '?').slice(0,2).toUpperCase();
-    const dt = new Date(c.created_at);
-    const timeStr = dt.toLocaleDateString('en-PH', { month:'short', day:'numeric' }) + ' ' +
-                    dt.toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit' });
-    const canAck = (state.isSA || state.isAssigned) && !c.is_acknowledged;
+    const ini     = String(c.user_name||'?').slice(0,2).toUpperCase();
+    const dt      = new Date(c.created_at);
+    const timeStr = dt.toLocaleDateString('en-PH',{ month:'short', day:'numeric' }) + ' ' +
+                    dt.toLocaleTimeString('en-PH',{ hour:'2-digit', minute:'2-digit' });
+    const canAck  = (state.canManage || state.isAssigned) && !c.is_acknowledged;
     const ackHtml = c.is_acknowledged
-      ? `<span class="cat-ack-badge"><i class="fas fa-check-circle"></i> Acknowledged by ${esc(c.acknowledged_name || '')} · Updated</span>`
-      : (canAck ? `<button class="cat-btn-ack" data-ack-id="${esc(c.id)}"><i class="fas fa-check"></i> Acknowledge & Mark Updated</button>` : '');
-
-    return `<div class="cat-comment-card${c.is_acknowledged?' acknowledged':''}" id="cc-${esc(c.id)}">
-      <div class="cat-comment-head">
-        <div class="cat-comment-avatar">${esc(ini)}</div>
-        <span class="cat-comment-author">${esc(c.user_name)}</span>
-        <span class="cat-comment-time">${esc(timeStr)}</span>
-      </div>
-      <div class="cat-comment-body">${esc(c.comment)}</div>
-      <div class="cat-comment-footer">${ackHtml}</div>
-    </div>`;
+      ? '<span class="cat-ack-badge"><i class="fas fa-check-circle"></i> Acknowledged by ' + esc(c.acknowledged_name||'') + ' &middot; Updated</span>'
+      : (canAck ? '<button class="cat-btn-ack" data-ack-id="' + esc(c.id) + '"><i class="fas fa-check"></i> Acknowledge &amp; Mark Updated</button>' : '');
+    return '<div class="cat-comment-card' + (c.is_acknowledged?' acknowledged':'') + '" id="cc-' + esc(c.id) + '">' +
+      '<div class="cat-comment-head">' +
+        '<div class="cat-comment-avatar">' + esc(ini) + '</div>' +
+        '<span class="cat-comment-author">' + esc(c.user_name) + '</span>' +
+        '<span class="cat-comment-time">'   + esc(timeStr) + '</span>' +
+      '</div>' +
+      '<div class="cat-comment-body">' + esc(c.comment) + '</div>' +
+      '<div class="cat-comment-footer">' + ackHtml + '</div>' +
+      '</div>';
   }
 
   async function postComment() {
-    const input = document.getElementById('cat-comment-input');
+    const input   = document.getElementById('cat-comment-input');
     const comment = String(input && input.value || '').trim();
     if (!comment || !state.currentItem) return;
     const btn = document.getElementById('cat-post-comment-btn');
     btn.disabled = true; btn.textContent = 'Posting…';
     try {
-      const r = await apiFetch('/api/catalog/comments', {
-        method: 'POST',
-        body: JSON.stringify({ item_id: state.currentItem.id, comment })
-      });
+      const r = await apiFetch('/api/catalog/comments',{ method:'POST', body:JSON.stringify({ item_id: state.currentItem.id, comment }) });
       const d = await r.json();
       if (!d.ok) throw new Error(d.message || 'Failed');
       input.value = '';
       await loadComments(state.currentItem.id);
-    } catch(e) {
-      alert('Failed to post comment: ' + e.message);
-    } finally {
-      btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Post';
-    }
+    } catch(e) { alert('Failed to post comment: ' + e.message); }
+    finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-paper-plane"></i> Post'; }
   }
 
   async function acknowledgeComment(commentId) {
     try {
-      const r = await apiFetch('/api/catalog/comments', {
-        method: 'PATCH',
-        body: JSON.stringify({ id: commentId })
-      });
+      const r = await apiFetch('/api/catalog/comments',{ method:'PATCH', body:JSON.stringify({ id: commentId }) });
       const d = await r.json();
       if (!d.ok) throw new Error(d.message || 'Failed');
       if (state.currentItem) await loadComments(state.currentItem.id);
-    } catch(e) {
-      alert('Failed to acknowledge: ' + e.message);
-    }
+    } catch(e) { alert('Failed to acknowledge: ' + e.message); }
   }
 
-  // ── History ───────────────────────────────────────────────────────
+  /* ── History ───────────────────────────────────────────────── */
   async function loadHistory(itemId) {
     const list = document.getElementById('cat-history-list');
     if (!list) return;
+    list.innerHTML = '<div class="cat-panel-empty"><i class="fas fa-spinner fa-spin"></i></div>';
     try {
-      const r = await apiFetch('/api/catalog/items');
-      // We'll load history via a dedicated call when we have it
-      // For now show from the response
-      list.innerHTML = '<div class="cat-panel-empty">Edit history loads here.</div>';
-      // Load actual history
       const hr = await apiFetch('/api/catalog/history?item_id=' + itemId);
-      if (hr.ok) {
-        const hd = await hr.json();
-        if (hd.ok && hd.history && hd.history.length) {
-          list.innerHTML = hd.history.map(h => {
-            const dt = new Date(h.edited_at);
-            const timeStr = dt.toLocaleDateString('en-PH', { month:'short', day:'numeric', year:'numeric' }) + ' ' +
-                            dt.toLocaleTimeString('en-PH', { hour:'2-digit', minute:'2-digit' });
-            return `<div class="cat-history-row">
-              <span class="cat-history-time">${esc(timeStr)}</span>
-              <span class="cat-history-who">${esc(h.edited_by_name)}</span>
-              <span class="cat-history-field">${esc(h.field_changed)}</span>
-              <span class="cat-history-val">${esc(String(h.new_value || '').slice(0, 80))}</span>
-            </div>`;
-          }).join('');
-        }
-      }
-    } catch(_) {}
+      const hd = await hr.json();
+      if (hd.ok && hd.history && hd.history.length) {
+        list.innerHTML = hd.history.map(h => {
+          const dt      = new Date(h.edited_at);
+          const timeStr = dt.toLocaleDateString('en-PH',{ month:'short', day:'numeric', year:'numeric' }) + ' ' +
+                          dt.toLocaleTimeString('en-PH',{ hour:'2-digit', minute:'2-digit' });
+          return '<div class="cat-history-row">' +
+            '<span class="cat-history-time">'  + esc(timeStr)                           + '</span>' +
+            '<span class="cat-history-who">'   + esc(h.edited_by_name)                  + '</span>' +
+            '<span class="cat-history-field">' + esc(h.field_changed)                   + '</span>' +
+            '<span class="cat-history-val">'   + esc(String(h.new_value||'').slice(0,80)) + '</span>' +
+            '</div>';
+        }).join('');
+      } else { list.innerHTML = '<div class="cat-panel-empty">No edit history yet.</div>'; }
+    } catch(_) { list.innerHTML = '<div class="cat-panel-empty">Could not load history.</div>'; }
   }
 
-  // ── Add Item Modal ────────────────────────────────────────────────
+  /* ── Add Root Item Modal ───────────────────────────────────── */
   async function openAddModal() {
+    if (!state.canManage) return;
     await loadUsersIntoSelect('cmi-assigned_to', null);
-    document.getElementById('cmi-code').value = '';
-    document.getElementById('cmi-name').value = '';
-    document.getElementById('cmi-brand').value = '';
-    document.getElementById('cat-modal-msg').className = 'cat-save-msg';
-    document.getElementById('cat-modal-msg').textContent = '';
+    ['cmi-code','cmi-name','cmi-brand'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+    const msgEl = document.getElementById('cat-modal-msg');
+    if (msgEl) { msgEl.className = 'cat-save-msg'; msgEl.textContent = ''; }
     document.getElementById('cat-add-modal').classList.add('open');
   }
-
-  function closeAddModal() {
-    document.getElementById('cat-add-modal').classList.remove('open');
-  }
+  function closeAddModal() { document.getElementById('cat-add-modal').classList.remove('open'); }
 
   async function createItem() {
     const code = document.getElementById('cmi-code').value.trim().toUpperCase();
@@ -1866,66 +2068,100 @@
     btn.disabled = true; btn.textContent = 'Creating…';
     try {
       const sel = document.getElementById('cmi-assigned_to');
-      const assignedId = sel && sel.value ? sel.value : null;
-      const assignedName = sel && sel.value ? (sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '') : '';
-      const payload = {
+      const r = await apiFetch('/api/catalog/items', { method:'POST', body:JSON.stringify({
         item_code: code, name,
-        category: document.getElementById('cmi-category').value,
-        brand: document.getElementById('cmi-brand').value.trim(),
-        assigned_to: assignedId, assigned_to_name: assignedName,
-      };
-      const r = await apiFetch('/api/catalog/items', { method: 'POST', body: JSON.stringify(payload) });
+        category:         document.getElementById('cmi-category').value,
+        brand:            document.getElementById('cmi-brand').value.trim(),
+        assigned_to:      sel && sel.value ? sel.value : null,
+        assigned_to_name: sel && sel.value ? (sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '') : '',
+        parent_id: null,
+      })});
       const d = await r.json();
       if (!d.ok) throw new Error(d.message || d.error || 'Create failed');
-      await loadItems();
-      closeAddModal();
-      // Select the new item
+      await loadItems(); closeAddModal();
       const newItem = state.items.find(i => i.item_code === code);
       if (newItem) selectItem(newItem);
-    } catch(e) {
-      showMsg(msg, '✗ ' + e.message, false);
-    } finally {
-      btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus"></i> Create Item';
-    }
+    } catch(e) { showMsg(msg, '✗ ' + e.message, false); }
+    finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-plus"></i> Create Item'; }
   }
 
-  // ── Users dropdown ────────────────────────────────────────────────
+  /* ── Add Sub-Item Modal ────────────────────────────────────── */
+  async function openSubModal(parentItem) {
+    if (!state.canManage || !parentItem) return;
+    await loadUsersIntoSelect('csmi-assigned_to', null);
+    const lbl = document.getElementById('cat-sub-parent-label');
+    if (lbl) lbl.textContent = parentItem.item_code + ' — ' + parentItem.name;
+    document.getElementById('csmi-code').value  = parentItem.item_code + '-';
+    document.getElementById('csmi-name').value  = '';
+    document.getElementById('csmi-brand').value = parentItem.brand || '';
+    const cat = document.getElementById('csmi-category');
+    if (cat) cat.value = parentItem.category || 'Controller';
+    const msgEl = document.getElementById('cat-sub-modal-msg');
+    if (msgEl) { msgEl.className='cat-save-msg'; msgEl.textContent=''; }
+    document.getElementById('cat-sub-modal').dataset.parentId = parentItem.id;
+    document.getElementById('cat-sub-modal').classList.add('open');
+  }
+  function closeSubModal() { document.getElementById('cat-sub-modal').classList.remove('open'); }
+
+  async function createSubItem() {
+    const code     = document.getElementById('csmi-code').value.trim().toUpperCase();
+    const name     = document.getElementById('csmi-name').value.trim();
+    const parentId = document.getElementById('cat-sub-modal').dataset.parentId;
+    const msg      = document.getElementById('cat-sub-modal-msg');
+    if (!code || !name) { showMsg(msg, '✗ Code and name required', false); return; }
+    if (!parentId)      { showMsg(msg, '✗ No parent item', false); return; }
+    const btn = document.getElementById('cat-sub-modal-save');
+    btn.disabled = true; btn.textContent = 'Adding…';
+    try {
+      const sel = document.getElementById('csmi-assigned_to');
+      const r = await apiFetch('/api/catalog/items', { method:'POST', body:JSON.stringify({
+        item_code: code, name,
+        category:         document.getElementById('csmi-category').value,
+        brand:            document.getElementById('csmi-brand').value.trim(),
+        assigned_to:      sel && sel.value ? sel.value : null,
+        assigned_to_name: sel && sel.value ? (sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '') : '',
+        parent_id: parentId,
+      })});
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.message || d.error || 'Create failed');
+      state.expandedNodes.add(parentId);
+      await loadItems(); closeSubModal();
+      const newItem = state.items.find(i => i.item_code === code);
+      if (newItem) selectItem(newItem);
+    } catch(e) { showMsg(msg, '✗ ' + e.message, false); }
+    finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-code-branch"></i> Add Sub-Item'; }
+  }
+
+  /* ── Users dropdown ────────────────────────────────────────── */
   async function loadUsersIntoSelect(selectId, currentValue) {
     if (state.users.length === 0) {
       try {
         const r = await apiFetch('/api/users/list');
         const d = await r.json();
-        if (d.ok && Array.isArray(d.users)) {
-          state.users = d.users.filter(u => u.role !== 'MEMBER' || true); // all users
-        }
+        if (d.ok && Array.isArray(d.users)) state.users = d.users;
       } catch(_) {}
     }
     const sel = document.getElementById(selectId);
     if (!sel) return;
     sel.innerHTML = '<option value="">— Unassigned —</option>' +
       state.users.map(u =>
-        `<option value="${esc(u.id || u.user_id)}" ${String(u.id || u.user_id) === String(currentValue || '') ? 'selected' : ''}>${esc(u.name || u.username)}</option>`
+        '<option value="' + esc(u.id||u.user_id) + '"' + (String(u.id||u.user_id)===String(currentValue||'')?'selected':'') + '>' + esc(u.name||u.username) + '</option>'
       ).join('');
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────
+  /* ── Helpers ───────────────────────────────────────────────── */
   function esc(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
-
   function showMsg(el, text, ok) {
     if (!el) return;
     el.textContent = text;
-    el.className = 'cat-save-msg ' + (ok ? 'ok' : 'err');
-    setTimeout(() => { if (el) { el.textContent = ''; el.className = 'cat-save-msg'; } }, 3500);
+    el.className   = 'cat-save-msg ' + (ok ? 'ok' : 'err');
+    setTimeout(() => { if (el) { el.textContent=''; el.className='cat-save-msg'; } }, 3500);
   }
 
-  // ── Boot ──────────────────────────────────────────────────────────
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    setTimeout(init, 200);
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else setTimeout(init, 200);
 
 })();
 </script>

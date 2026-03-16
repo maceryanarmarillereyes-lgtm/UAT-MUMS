@@ -1,8 +1,8 @@
 // server/routes/catalog/items.js
-// GET    /api/catalog/items          — list all items
-// POST   /api/catalog/items          — create item (SUPER_ADMIN)
-// PATCH  /api/catalog/items          — update item (assigned user + SUPER_ADMIN)
-// DELETE /api/catalog/items          — delete item (SUPER_ADMIN)
+// GET    /api/catalog/items          — list all items (all auth users)
+// POST   /api/catalog/items          — create item (SUPER_ADMIN | SUPER_USER)
+// PATCH  /api/catalog/items          — update item (assigned user + SA/SU)
+// DELETE /api/catalog/items          — delete item (SUPER_ADMIN | SUPER_USER)
 
 const { getUserFromJwt, getProfileForUserId, serviceSelect, serviceInsert, serviceUpdate, serviceDelete } = require('../../lib/supabase');
 
@@ -12,9 +12,13 @@ function sendJson(res, code, body) {
   res.end(JSON.stringify(body));
 }
 
-function isSuperAdmin(profile) {
-  return String(profile && profile.role || '').trim().toUpperCase().replace(/\s+/g,'_') === 'SUPER_ADMIN';
+function normaliseRole(profile) {
+  return String(profile && profile.role || '').trim().toUpperCase().replace(/\s+/g, '_');
 }
+
+function isSuperAdmin(profile) { return normaliseRole(profile) === 'SUPER_ADMIN'; }
+function isSuperUser(profile)  { return normaliseRole(profile) === 'SUPER_USER'; }
+function canManage(profile)    { return isSuperAdmin(profile) || isSuperUser(profile); }
 
 async function parseBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -34,21 +38,23 @@ module.exports = async (req, res) => {
     const user = await getUserFromJwt(jwt);
     if (!user) return sendJson(res, 401, { ok: false, error: 'unauthorized' });
     const profile = await getProfileForUserId(user.id);
-    const isSA = isSuperAdmin(profile);
+    const isSA  = isSuperAdmin(profile);
+    const isSU  = isSuperUser(profile);
+    const mgr   = canManage(profile);
     const method = String(req.method || 'GET').toUpperCase();
 
     // ── GET — list all items ──────────────────────────────────────────────────
     if (method === 'GET') {
       const out = await serviceSelect('support_catalog',
-        'select=id,item_code,name,category,brand,part_number,specs,user_guide,troubleshooting,compatible_units,status,assigned_to,assigned_to_name,created_at,updated_at&order=item_code.asc'
+        'select=id,item_code,name,category,brand,part_number,specs,user_guide,troubleshooting,compatible_units,status,parent_id,assigned_to,assigned_to_name,created_at,updated_at&order=item_code.asc'
       );
       if (!out.ok) return sendJson(res, 500, { ok: false, error: 'db_error' });
-      return sendJson(res, 200, { ok: true, items: out.json || [] });
+      return sendJson(res, 200, { ok: true, items: out.json || [], role: { isSA, isSU, canManage: mgr } });
     }
 
     // ── POST — create item ────────────────────────────────────────────────────
     if (method === 'POST') {
-      if (!isSA) return sendJson(res, 403, { ok: false, error: 'forbidden', message: 'Super Admin only.' });
+      if (!mgr) return sendJson(res, 403, { ok: false, error: 'forbidden', message: 'Super Admin or Super User only.' });
       let body;
       try { body = await parseBody(req); } catch(_) { return sendJson(res, 400, { ok: false, error: 'invalid_json' }); }
 
@@ -65,6 +71,7 @@ module.exports = async (req, res) => {
         status:           String(body.status || 'Active').trim(),
         assigned_to:      body.assigned_to || null,
         assigned_to_name: String(body.assigned_to_name || '').trim(),
+        parent_id:        body.parent_id || null,
         updated_at:       new Date().toISOString(),
       };
       if (!row.item_code || !row.name) return sendJson(res, 400, { ok: false, error: 'missing_fields', message: 'item_code and name are required.' });
@@ -82,19 +89,17 @@ module.exports = async (req, res) => {
       const itemId = String(body.id || '').trim();
       if (!itemId) return sendJson(res, 400, { ok: false, error: 'missing_id' });
 
-      // Fetch current item to check permissions
       const cur = await serviceSelect('support_catalog', `select=id,assigned_to,item_code&id=eq.${itemId}&limit=1`);
       if (!cur.ok || !cur.json || !cur.json[0]) return sendJson(res, 404, { ok: false, error: 'not_found' });
       const item = cur.json[0];
 
       const isAssigned = item.assigned_to && String(item.assigned_to) === String(user.id);
-      if (!isSA && !isAssigned) return sendJson(res, 403, { ok: false, error: 'forbidden', message: 'Only assigned user or Super Admin can edit.' });
+      if (!mgr && !isAssigned) return sendJson(res, 403, { ok: false, error: 'forbidden', message: 'Only assigned user, Super Admin, or Super User can edit.' });
 
-      const EDITABLE = ['name','category','brand','part_number','specs','user_guide','troubleshooting','compatible_units','status','assigned_to','assigned_to_name'];
+      const EDITABLE = ['name','category','brand','part_number','specs','user_guide','troubleshooting','compatible_units','status','parent_id','assigned_to','assigned_to_name'];
       const patch = { updated_at: new Date().toISOString() };
       const historyRows = [];
 
-      // Build patch + history
       const curFull = await serviceSelect('support_catalog', `select=*&id=eq.${itemId}&limit=1`);
       const prev = curFull.ok && curFull.json && curFull.json[0] ? curFull.json[0] : {};
 
@@ -105,13 +110,13 @@ module.exports = async (req, res) => {
           if (newVal !== oldVal) {
             patch[field] = body[field];
             historyRows.push({
-              item_id: itemId,
-              edited_by: user.id,
+              item_id:        itemId,
+              edited_by:      user.id,
               edited_by_name: profile.name || profile.username || 'Unknown',
-              field_changed: field,
-              old_value: oldVal,
-              new_value: newVal || '',
-              edited_at: new Date().toISOString(),
+              field_changed:  field,
+              old_value:      oldVal,
+              new_value:      newVal || '',
+              edited_at:      new Date().toISOString(),
             });
           }
         }
@@ -128,9 +133,9 @@ module.exports = async (req, res) => {
       return sendJson(res, 200, { ok: true, item: fresh.ok && fresh.json[0] ? fresh.json[0] : patch });
     }
 
-    // ── DELETE — delete item ──────────────────────────────────────────────────
+    // ── DELETE — delete item (cascades sub-items via DB FK) ───────────────────
     if (method === 'DELETE') {
-      if (!isSA) return sendJson(res, 403, { ok: false, error: 'forbidden', message: 'Super Admin only.' });
+      if (!mgr) return sendJson(res, 403, { ok: false, error: 'forbidden', message: 'Super Admin or Super User only.' });
       let body;
       try { body = await parseBody(req); } catch(_) { return sendJson(res, 400, { ok: false, error: 'invalid_json' }); }
       const itemId = String(body.id || '').trim();
