@@ -1409,7 +1409,8 @@
     <style>
       @keyframes ciPanelIn { from { opacity:0; } to { opacity:1; } }
       @keyframes ciCardIn  { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
-      .ci-np-card { animation: ciCardIn .2s ease both; }
+      .ci-np-card { animation: ciCardIn .2s ease both; border:1px solid rgba(255,255,255,.08) !important; transition:border-color .18s; }
+      .ci-np-card:hover { border-color: rgba(88,166,255,.35) !important; }
       #ci-notes-panel ::-webkit-scrollbar { width:5px; }
       #ci-notes-panel ::-webkit-scrollbar-thumb { background:rgba(255,255,255,.12); border-radius:99px; }
     </style>
@@ -2452,7 +2453,7 @@
     ].filter(function(f){ return f[1]; });
 
     return '<div class="ci-np-card" style="background:rgba(13,17,23,.9);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px 20px;transition:border-color .18s;cursor:default;" ' +
-      'onmouseenter="this.style.borderColor='rgba(88,166,255,.3)'" onmouseleave="this.style.borderColor='rgba(255,255,255,.08)'" data-npidx="' + idx + '">' +
+      'data-npidx="' + idx + '">' +
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;">' +
         '<div>' +
           (hasCaller ? '<div style="font-size:14px;font-weight:800;color:#e6edf3;">' + escHtml(n.callerName || '(no name)') + (n.ticket ? '<span style="font-size:11px;font-weight:600;color:var(--ss-muted);margin-left:8px;">#' + escHtml(n.ticket) + '</span>' : '') + '</div>' : '') +
