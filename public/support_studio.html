@@ -1790,7 +1790,7 @@
     const chevCls  = hasKids ? ('cat-chevron' + (expanded ? ' open' : '')) : 'cat-chevron leaf';
     return '<div class="cat-item-row' + (isActive?' active':'') + (isChild?' is-child':'') + '"' +
       ' data-id="' + esc(item.id) + '"' +
-      ' onclick="window._catSelectItem(\\'' + esc(item.id) + '\\')"' +
+      ' onclick="window._catSelectItem(this.dataset.id)"' +
       ' title="' + esc(item.item_code) + ' — ' + esc(item.name) + '">' +
       '<span class="' + esc(chevCls) + '" data-nodeid="' + esc(item.id) + '"><i class="fas fa-chevron-right"></i></span>' +
       '<span class="cat-item-code">' + esc(item.item_code) + '</span>' +
