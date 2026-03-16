@@ -1343,15 +1343,6 @@
     <!-- ── PERSISTENT RIGHT SIDEBAR ──────────────────────────── -->
     <aside class="ss-sidebar right" id="ss-right-sidebar">
 
-      <!-- Agent Panel — always visible -->
-      <div class="ss-panel" id="right-agent-panel">
-        <div class="ss-panel-title"><i class="fas fa-user-shield"></i> Agent Panel</div>
-        <div class="ss-field-group"><div class="ss-field-label">Assigned Agent</div><div class="ss-field-skel"></div></div>
-        <div class="ss-field-group"><div class="ss-field-label">Case Priority</div><div class="ss-field-skel"></div></div>
-        <div class="ss-field-group"><div class="ss-field-label">Notes</div><div class="ss-field-skel tall"></div></div>
-        <div class="ss-btn-row"><button class="ss-action-btn">Escalate</button><button class="ss-action-btn">Resolve</button></div>
-      </div>
-
       <!-- Call Information — always visible -->
       <div class="ss-panel grow" id="right-call-info">
         <div class="ss-panel-title"><i class="fas fa-phone-alt"></i> Call Information</div>
@@ -1799,7 +1790,7 @@
     const chevCls  = hasKids ? ('cat-chevron' + (expanded ? ' open' : '')) : 'cat-chevron leaf';
     return '<div class="cat-item-row' + (isActive?' active':'') + (isChild?' is-child':'') + '"' +
       ' data-id="' + esc(item.id) + '"' +
-      ' onclick="window._catSelectItem('' + esc(item.id) + '')"' +
+      ' onclick="window._catSelectItem(\\'' + esc(item.id) + '\\')"' +
       ' title="' + esc(item.item_code) + ' — ' + esc(item.name) + '">' +
       '<span class="' + esc(chevCls) + '" data-nodeid="' + esc(item.id) + '"><i class="fas fa-chevron-right"></i></span>' +
       '<span class="cat-item-code">' + esc(item.item_code) + '</span>' +
