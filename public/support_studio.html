@@ -2068,7 +2068,13 @@
         parent_id: null,
       })});
       const d = await r.json();
-      if (!d.ok) throw new Error(d.message || d.error || 'Create failed');
+      if (!d.ok) {
+        if (r.status === 409 || d.error === 'duplicate_code') {
+          showMsg(msg, '✗ Item code "' + code + '" already exists — use a unique code', false);
+          return;
+        }
+        throw new Error(d.message || d.error || 'Create failed');
+      }
       await loadItems(); closeAddModal();
       const newItem = state.items.find(i => i.item_code === code);
       if (newItem) selectItem(newItem);
@@ -2099,28 +2105,55 @@
     const name     = document.getElementById('csmi-name').value.trim();
     const parentId = document.getElementById('cat-sub-modal').dataset.parentId;
     const msg      = document.getElementById('cat-sub-modal-msg');
-    if (!code || !name) { showMsg(msg, '✗ Code and name required', false); return; }
-    if (!parentId)      { showMsg(msg, '✗ No parent item', false); return; }
+
+    // Validate: code must not be empty or just a dash-terminated prefix
+    if (!code || !name) { showMsg(msg, '✗ Code and name are required', false); return; }
+    if (code.endsWith('-') || code === '') { showMsg(msg, '✗ Add a suffix after the dash (e.g. CTR-001-A)', false); return; }
+    // Validate code has actual content after the last dash (not just trailing dash)
+    const codeParts = code.split('-');
+    if (codeParts[codeParts.length - 1] === '') { showMsg(msg, '✗ Incomplete code — add a series identifier after the dash', false); return; }
+    if (!parentId) { showMsg(msg, '✗ No parent item selected', false); return; }
+
+    // Check for duplicate in local state first (instant feedback before API call)
+    if (state.items.some(i => i.item_code === code)) {
+      showMsg(msg, '✗ Item code "' + code + '" already exists — use a unique code', false);
+      return;
+    }
+
     const btn = document.getElementById('cat-sub-modal-save');
-    btn.disabled = true; btn.textContent = 'Adding…';
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding…';
     try {
       const sel = document.getElementById('csmi-assigned_to');
       const r = await apiFetch('/api/catalog/items', { method:'POST', body:JSON.stringify({
-        item_code: code, name,
+        item_code:        code,
+        name:             name,
         category:         document.getElementById('csmi-category').value,
         brand:            document.getElementById('csmi-brand').value.trim(),
         assigned_to:      sel && sel.value ? sel.value : null,
         assigned_to_name: sel && sel.value ? (sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '') : '',
-        parent_id: parentId,
+        parent_id:        parentId,
       })});
       const d = await r.json();
-      if (!d.ok) throw new Error(d.message || d.error || 'Create failed');
+      if (!d.ok) {
+        // Friendly message for duplicate code (409)
+        if (r.status === 409 || d.error === 'duplicate_code') {
+          showMsg(msg, '✗ Item code "' + code + '" already exists — use a unique code', false);
+          return;
+        }
+        throw new Error(d.message || d.error || 'Create failed');
+      }
       state.expandedNodes.add(parentId);
-      await loadItems(); closeSubModal();
+      await loadItems();
+      closeSubModal();
       const newItem = state.items.find(i => i.item_code === code);
       if (newItem) selectItem(newItem);
-    } catch(e) { showMsg(msg, '✗ ' + e.message, false); }
-    finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-code-branch"></i> Add Sub-Item'; }
+    } catch(e) {
+      showMsg(msg, '✗ ' + e.message, false);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-code-branch"></i> Add Sub-Item';
+    }
   }
 
   /* ── Users dropdown ────────────────────────────────────────── */

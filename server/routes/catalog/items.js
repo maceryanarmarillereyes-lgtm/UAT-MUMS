@@ -77,7 +77,17 @@ module.exports = async (req, res) => {
       if (!row.item_code || !row.name) return sendJson(res, 400, { ok: false, error: 'missing_fields', message: 'item_code and name are required.' });
 
       const out = await serviceInsert('support_catalog', [row]);
-      if (!out.ok) return sendJson(res, out.status || 500, { ok: false, error: 'create_failed', details: out.json });
+      if (!out.ok) {
+        // Detect unique constraint violation (Supabase/PostgREST returns 409 or code 23505)
+        const details = out.json || {};
+        const isConflict = out.status === 409 ||
+          (details.code === '23505') ||
+          (JSON.stringify(details).toLowerCase().includes('unique') || JSON.stringify(details).toLowerCase().includes('duplicate'));
+        if (isConflict) {
+          return sendJson(res, 409, { ok: false, error: 'duplicate_code', message: 'Item code "' + row.item_code + '" already exists. Use a unique code.' });
+        }
+        return sendJson(res, out.status || 500, { ok: false, error: 'create_failed', message: 'Failed to create item.', details: out.json });
+      }
       return sendJson(res, 200, { ok: true, item: Array.isArray(out.json) ? out.json[0] : out.json });
     }
 
