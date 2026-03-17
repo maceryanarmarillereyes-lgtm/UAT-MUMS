@@ -4241,9 +4241,14 @@ async function boot(){
         if(dp.length < 3 || tp.length < 2) return 0;
         const y = dp[0], m = dp[1], da = dp[2];
         const hh = tp[0], mm = tp[1];
-        if(!y || !m || !da && da !== 0) return 0;
+        if(!y || !m || (!da && da !== 0)) return 0;
         if([y,m,da,hh,mm].some(x=>Number.isNaN(x))) return 0;
-        return Date.UTC(y, m-1, da, hh-8, mm, 0, 0);
+        // FIX[EPOCH-BUG]: Reject obviously invalid years (before 2020 or after 2099).
+        if(y < 2020 || y > 2099) return 0;
+        const result = Date.UTC(y, m-1, da, hh-8, mm, 0, 0);
+        // Guard: parsed result must be a valid post-2020 timestamp.
+        if(!Number.isFinite(result) || result <= Date.UTC(2020,0,1)) return 0;
+        return result;
       }
 
       function bindMailboxTimeModal(){
@@ -4289,16 +4294,22 @@ async function boot(){
           setAt: Number(draft.setAt)||0,
           scope: (String(draft.scope||'sa_only') === 'global') ? 'global' : 'sa_only',
         };
-        if(!draft.ms) draft.ms = Date.now();
+        // FIX[EPOCH-BUG]: Bind-time guard — treat ms=0/epoch as unset
+        if(!draft.ms || draft.ms <= Date.UTC(2020,0,1)) draft.ms = Date.now();
         if(!draft.freeze && !draft.setAt) draft.setAt = Date.now();
+
+        // FIX[EPOCH-BUG]: Min valid ms = year 2020. Any ms before this is treated as unset.
+        const MIN_VALID_OVERRIDE_MS = Date.UTC(2020, 0, 1);
+        function safeDraftMs(ms){
+          const n = Number(ms)||0;
+          return (n > MIN_VALID_OVERRIDE_MS) ? n : Date.now();
+        }
 
         function effectiveMs(){
           if(!draft.enabled) return Date.now();
-          if(!draft.ms) return Date.now();
+          if(!draft.ms || draft.ms <= MIN_VALID_OVERRIDE_MS) return Date.now();
           if(draft.freeze) return draft.ms;
           // FIX[BUG#3b]: Use draft.setAt as anchor for running clock.
-          // If setAt=0 (not yet set), treat as 'started now' so elapsed = 0 on first tick.
-          // Number(0)||Date.now() incorrectly makes elapsed≈0 every tick, appearing frozen.
           const anchor = (Number(draft.setAt) > 0) ? Number(draft.setAt) : Date.now();
           return draft.ms + Math.max(0, Date.now() - anchor);
         }
@@ -4311,7 +4322,7 @@ async function boot(){
           }
           if(enabledEl) enabledEl.checked = !!draft.enabled;
           if(freezeEl) freezeEl.checked = !!draft.freeze;
-          if(inputEl) inputEl.value = fmtManilaLocal(draft.ms);
+          if(inputEl) inputEl.value = fmtManilaLocal(safeDraftMs(draft.ms));
           if(scopeEl) scopeEl.value = (String(draft.scope||'sa_only') === 'global') ? 'global' : 'sa_only';
 
           const on = !!draft.enabled;
@@ -4355,7 +4366,9 @@ async function boot(){
             setAt: Number(o.setAt)||0,
             scope: (String(o.scope||'sa_only') === 'global') ? 'global' : 'sa_only',
           };
-          if(!draft.ms) draft.ms = Date.now();
+          // FIX[EPOCH-BUG]: Guarantee draft.ms is always a valid (post-2020) timestamp.
+          // Store may return ms:0 (epoch) when no override has been set or after a reset.
+          if(!draft.ms || draft.ms <= MIN_VALID_OVERRIDE_MS) draft.ms = Date.now();
           if(!draft.freeze && !draft.setAt) draft.setAt = Date.now();
           render();
           startClock();
@@ -4382,7 +4395,9 @@ async function boot(){
         if(inputEl){
           inputEl.onchange = ()=>{
             const ms = parseManilaLocal(inputEl.value);
-            if(ms){
+            // FIX[EPOCH-BUG]: Only accept parsed ms if it's a real post-2020 timestamp.
+            // parseManilaLocal returns 0 for empty/invalid input — must not write 0 into draft.
+            if(ms && ms > MIN_VALID_OVERRIDE_MS){
               draft.ms = ms;
               if(draft.enabled && !draft.freeze) draft.setAt = Date.now();
             }
@@ -4409,7 +4424,8 @@ async function boot(){
         modal.querySelectorAll('[data-mbshift]').forEach(btn=>{
           btn.onclick = ()=>{
             const delta = Number(btn.getAttribute('data-mbshift')||0);
-            draft.ms = Number(draft.ms)||Date.now();
+            // FIX[EPOCH-BUG]: If draft.ms is epoch/invalid, start from now before shifting.
+            draft.ms = (Number(draft.ms) > MIN_VALID_OVERRIDE_MS) ? Number(draft.ms) : Date.now();
             draft.ms += delta;
             if(draft.enabled && !draft.freeze) draft.setAt = Date.now();
             render();
@@ -4426,10 +4442,13 @@ async function boot(){
                 if(window.UI && UI.toast) UI.toast('Mailbox time override removed. System Manila time is now active.', 'success');
               }catch(_){ }
               try{ draft = Store.getMailboxTimeOverride ? Store.getMailboxTimeOverride() : draft; }catch(_){ }
+              // FIX[EPOCH-BUG]: After disabling, Store returns ms:0. Reset to now for clean input display.
+              if(!draft.ms || draft.ms <= MIN_VALID_OVERRIDE_MS) draft.ms = Date.now();
               render();
               return;
             }
-            if(!draft.ms){
+            // FIX[EPOCH-BUG]: Reject epoch/zero ms even if draft guard somehow missed it.
+            if(!draft.ms || draft.ms <= MIN_VALID_OVERRIDE_MS){
               if(errEl) errEl.textContent = 'Please select a valid Manila date & time.';
               return;
             }
@@ -4449,9 +4468,10 @@ async function boot(){
           resetBtn.onclick = ()=>{
             if(Store.disableMailboxTimeOverride) Store.disableMailboxTimeOverride({ propagateGlobal:true });
             else Store.saveMailboxTimeOverride({ enabled:false, ms:0, freeze:true, setAt:0, scope:'sa_only' });
-            draft = Store.getMailboxTimeOverride();
+            draft = Store.getMailboxTimeOverride ? Store.getMailboxTimeOverride() : {};
             try{ if(window.UI && UI.toast) UI.toast('Mailbox time override removed. System Manila time is now active.', 'success'); }catch(_){ }
-            if(!draft.ms) draft.ms = Date.now();
+            // FIX[EPOCH-BUG]: Ensure draft.ms is never epoch after reset.
+            if(!draft.ms || draft.ms <= MIN_VALID_OVERRIDE_MS) draft.ms = Date.now();
             render();
           };
         }

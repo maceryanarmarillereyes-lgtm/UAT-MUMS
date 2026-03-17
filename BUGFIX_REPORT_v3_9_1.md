@@ -100,3 +100,48 @@ Fix: Adaptive backoff timer — 5s when `mailbox_time_override_cloud.enabled ===
    - Close modal via X button AND via navigating away — reopen, confirm clock still ticks correctly (no double-speed)
    - Check browser console — zero errors on modal open/close cycle
    - Check Network tab — polling interval is 30s when override disabled, 5s when active
+
+---
+
+# BUGFIX ADDENDUM — v3.9.2 Mailbox Override Epoch + Save Button
+
+Generated: 2026-03-17 (follow-up from user testing)
+
+## Root Cause of 01/01/1970 Date Bug
+
+`Store.getMailboxTimeOverride()` returns `{ ms:0 }` when no override is saved or after a reset.
+Multiple code paths in `bindMailboxTimeModal()` read from Store and wrote `ms:0` into `draft`
+without checking if the value was a valid timestamp. `fmtManilaLocal(0)` = Manila epoch = 
+**01/01/1970 08:00 AM** (UTC+8 offset applied to Unix epoch).
+
+**All 8 entry points where ms=0 could enter draft have been patched with:**
+`MIN_VALID_OVERRIDE_MS = Date.UTC(2020,0,1)` — any `ms` ≤ this value is treated as unset
+and replaced with `Date.now()`.
+
+## Files Changed (same 3 files, additive fixes)
+- `public/js/app.js` — 8 additional epoch guards
+
+## New Fixes Applied
+
+### parseManilaLocal() — year range + epoch result guard
+- Added `y < 2020 || y > 2099` year validity check
+- Added result validation: returns 0 if parsed UTC is ≤ 2020-01-01
+
+### safeDraftMs() helper function
+- New utility: `safeDraftMs(ms)` → returns `ms` if valid post-2020, else `Date.now()`
+- Used in `render()` → `inputEl.value` and `effectiveMs()` preview clock
+
+### All draft.ms write paths hardened
+1. `bindMailboxTimeModal()` bind-time initialization
+2. `open()` re-read from Store  
+3. `inputEl.onchange` (user types a date)
+4. `data-mbshift` buttons (-1h, -15m, +15m, +1h)
+5. `saveBtn` disabled-path post-reset re-read
+6. `saveBtn` enabled-path validation check
+7. `resetBtn` post-reset re-read
+8. `render()` → `fmtManilaLocal()` input value
+
+### Save button now works correctly:
+- With override OFF (enabled=false): saves disabled state → toast → input shows current time ✅
+- With override ON + valid ms: saves payload → toast → override active ✅
+- With override ON + epoch ms (impossible after guards): shows validation error ✅
