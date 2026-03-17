@@ -2271,7 +2271,12 @@ Store.startMailboxOverrideSync = function(opts){
       const def = { enabled:false, ms:0, freeze:true, setAt:0, scope:'global' };
       if(!o || typeof o !== 'object') return def;
       const out = Object.assign({}, def, o);
-      out.scope = (String(out.scope||'global').toLowerCase() === 'superadmin') ? 'superadmin' : 'global';
+      // FIX[BUG#1]: Server DB uses scope='superadmin' as its non-global key name.
+      // Client canonical value for any cloud override is 'global'.
+      // Mapping 'superadmin' -> 'global' ensures getMailboxTimeOverride's
+      // c.scope === 'global' precedence check works for all cloud-synced records.
+      const rawScope = String(out.scope||'global').toLowerCase();
+      out.scope = (rawScope === 'global' || rawScope === 'superadmin') ? 'global' : 'global';
       out.enabled = !!out.enabled;
       out.freeze = (out.freeze !== false);
       out.ms = Number(out.ms);
@@ -2338,10 +2343,31 @@ Store.startMailboxOverrideSync = function(opts){
 
     S.poll = poll;
 
+    // FIX[BUG#5]: Adaptive polling — fast when override is active (5s), slow when idle (30s).
+    // Prevents unnecessary API calls when no override is configured.
+    const getAdaptiveInterval = () => {
+      try {
+        const stored = localStorage.getItem(KEYS.mailbox_time_override_cloud);
+        const parsed = stored ? JSON.parse(stored) : null;
+        return (parsed && parsed.enabled) ? 5000 : 30000;
+      } catch(_) { return 30000; }
+    };
+
+    const rescheduleTimer = () => {
+      try {
+        if(S.timer) { clearInterval(S.timer); S.timer = null; }
+        const interval = getAdaptiveInterval();
+        S.timer = setInterval(() => {
+          try { rescheduleTimer(); } catch(_) {}
+          poll('interval');
+        }, interval);
+      } catch(_) {}
+    };
+
     // Start timer once
     if(!S.timer){
       poll('start');
-      S.timer = setInterval(()=>{ poll('interval'); }, 5000);
+      rescheduleTimer();
     }
 
     // Ensure we retry once auth/session is ready.

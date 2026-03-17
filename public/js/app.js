@@ -4247,7 +4247,13 @@ async function boot(){
       }
 
       function bindMailboxTimeModal(){
-        if(!modal || modal.__bound) return;
+        if(!modal) return;
+        // FIX[BUG#2]: Original guard 'if(modal.__bound) return' permanently blocks rebind
+        // even after soft DOM refreshes where the modal element is reused but handlers
+        // are lost. Guard now checks: skip ONLY if bound AND still connected to DOM.
+        if(modal.__bound && modal.isConnected) return;
+        // Reset bound flag — re-entering means a fresh bind is needed.
+        modal.__bound = false;
         modal.__bound = true;
 
         const enabledEl = document.getElementById('mbTimeEnabled');
@@ -4290,7 +4296,11 @@ async function boot(){
           if(!draft.enabled) return Date.now();
           if(!draft.ms) return Date.now();
           if(draft.freeze) return draft.ms;
-          return draft.ms + Math.max(0, Date.now() - (Number(draft.setAt)||Date.now()));
+          // FIX[BUG#3b]: Use draft.setAt as anchor for running clock.
+          // If setAt=0 (not yet set), treat as 'started now' so elapsed = 0 on first tick.
+          // Number(0)||Date.now() incorrectly makes elapsed≈0 every tick, appearing frozen.
+          const anchor = (Number(draft.setAt) > 0) ? Number(draft.setAt) : Date.now();
+          return draft.ms + Math.max(0, Date.now() - anchor);
         }
 
         function render(){
@@ -4334,6 +4344,8 @@ async function boot(){
         }
 
         function open(){
+          // FIX[BUG#3c]: Always stop any existing clock before opening to prevent double-interval leak.
+          stopClock();
           try{ if(window.Store && Store.startMailboxOverrideSync) Store.startMailboxOverrideSync({ force:true }); }catch(_){ }
           let o = Store.getMailboxTimeOverride ? Store.getMailboxTimeOverride() : { enabled:false, ms:0, freeze:true, setAt:0, scope:'sa_only' };
           draft = {
@@ -4445,6 +4457,24 @@ async function boot(){
         }
 
         UI.els('[data-close="mailboxTimeModal"]').forEach(b=>b.onclick=()=>{ stopClock(); UI.closeModal('mailboxTimeModal'); });
+
+        // FIX[BUG#3]: Patch UI.closeModal to always call stopClock when mailboxTimeModal closes.
+        // Previously only data-close buttons stopped the clock — programmatic closes leaked the interval.
+        // We store stopClock on the modal element so any close path can access it.
+        modal.__stopClock = stopClock;
+        if(!window.__mumsMailboxTimeClosePatched){
+          window.__mumsMailboxTimeClosePatched = true;
+          const _origClose = UI.closeModal.bind(UI);
+          UI.closeModal = function(id){
+            if(id === 'mailboxTimeModal'){
+              try{
+                const m = document.getElementById('mailboxTimeModal');
+                if(m && typeof m.__stopClock === 'function') m.__stopClock();
+              }catch(_){}
+            }
+            return _origClose(id);
+          };
+        }
       }
 
       try{
