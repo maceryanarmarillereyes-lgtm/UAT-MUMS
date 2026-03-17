@@ -578,7 +578,14 @@ function _mbxReadJwt(){
             if(e <= s) e += 1440;
             s += ref.offset;
             e += ref.offset;
-            if(!(s < bEnd && bStart < e)) continue;
+            // BUCKET MANAGER DEDUP FIX: Use block START TIME to assign each manager to
+            // exactly ONE bucket — the bucket where their Mailbox Manager window begins.
+            // The old overlap check (s < bEnd && bStart < e) caused managers to appear
+            // in MULTIPLE buckets when their block spanned a bucket boundary.
+            // e.g. Jayson has MM block 01:00–04:00 → overlaps bucket2(12:40–3:20) AND
+            // bucket3(3:20–6:00), making him appear in BOTH. With start-time check,
+            // he only appears in bucket2 where his block starts (s=1500 ∈ [1480,1640)).
+            if(!(s >= bStart && s < bEnd)) continue;
 
             const roleId = String(b.role || b.schedule || '').toLowerCase().trim();
             const sc     = Config && Config.scheduleById
@@ -616,8 +623,11 @@ function _mbxReadJwt(){
         if(isMgr) matched.push(String(u.name || u.username || '—'));
       }
 
+      // ONE MANAGER PER BUCKET rule: only show the single scheduled Mailbox Manager.
+      // If multiple people have overlapping MM blocks in the same bucket,
+      // take the first unique name only (earliest in the sorted roster).
       const unique = [...new Set(matched.filter(Boolean))];
-      return unique.length > 0 ? unique.join(' & ') : '—';
+      return unique.length > 0 ? unique[0] : '—';
     }catch(e){ return '—'; }
   }
 
@@ -660,6 +670,11 @@ function _mbxReadJwt(){
         if (bS < shiftStartMin) { bS += 1440; bE += 1440; }
 
         const mgrNames = [];
+        // ONE MANAGER PER BUCKET: track earliest block-start per candidate so we
+        // can pick the single manager whose window begins first in this bucket.
+        let bestMgrName = null;
+        let bestMgrStart = Infinity;
+
         for (const row of teamScheduleBlocks) {
           const rDow = Number(row.dayIndex);
           // CROSS-SHIFT CONTAMINATION FIX: For overnight shifts, ONLY read same-day blocks.
@@ -690,7 +705,10 @@ function _mbxReadJwt(){
             if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
             if (e <= s) e += 1440;
             s += offset; e += offset;
-            if (!(s < bE && bS < e)) continue;  // no overlap
+            // BUCKET MANAGER DEDUP FIX: Match by block START TIME within the bucket window,
+            // not by any overlap. This ensures each Mailbox Manager appears in exactly
+            // ONE bucket (where their block starts), eliminating cross-bucket duplicates.
+            if (!(s >= bS && s < bE)) continue;
             matched = true;
             break;
           }
@@ -706,16 +724,27 @@ function _mbxReadJwt(){
           const userId = String(row.userId || row.user_id || '');
           const uRec = nameMap.get(userId);
           const name = uRec ? String(uRec.name || uRec.username || '').trim() : '';
-          // Only add real names, not raw UUIDs
-          if (name && !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(name)) {
-            mgrNames.push(name);
+          if (!name || /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(name)) continue;
+
+          // ONE MANAGER PER BUCKET: track the candidate whose MM block starts
+          // earliest within this bucket window — they are the designated manager.
+          // Compute the adjusted start time (same logic as offsetCandidates above).
+          let candidateStart = Infinity;
+          for (const offset of offsetCandidates) {
+            let cs = _mbxParseHM(String(row.start || ''));
+            if (!Number.isFinite(cs)) continue;
+            cs += offset;
+            if (cs >= bS && cs < bE && cs < candidateStart) candidateStart = cs;
+          }
+          if (candidateStart < bestMgrStart) {
+            bestMgrStart = candidateStart;
+            bestMgrName  = name;
           }
         }
 
-        const uniq = [...new Set(mgrNames.filter(Boolean))];
-        // Only write if we found names (don't overwrite an existing valid cache with empty)
-        if (uniq.length) {
-          table.meta.bucketManagers[bkt.id] = uniq.join(' & ');
+        // Write exactly ONE manager name per bucket (or '—' if none found).
+        if (bestMgrName) {
+          table.meta.bucketManagers[bkt.id] = bestMgrName;
         } else if (!table.meta.bucketManagers[bkt.id]) {
           table.meta.bucketManagers[bkt.id] = '—';
         }
@@ -975,6 +1004,13 @@ function _mbxReadJwt(){
     }
 
     let table = Store && Store.getMailboxTable ? Store.getMailboxTable(shiftKey) : null;
+    // SCHEMA VERSION GUARD: if cached table is from an older schema version, discard it.
+    // This auto-clears stale localStorage entries after any deploy that changes
+    // bucketManagers computation logic — no manual cache flush needed by users.
+    const CURRENT_SCHEMA_VER = 2;
+    if(table && (!table.meta || (table.meta.schemaVer||0) < CURRENT_SCHEMA_VER)){
+      table = null; // force rebuild with new logic
+    }
     if(!table){
       const Config = window.Config;
       const teamObj = (Config && Config.teamById) ? Config.teamById(team.id) : team;
@@ -1009,6 +1045,7 @@ function _mbxReadJwt(){
 
       table = {
         meta: {
+          schemaVer: 2,   // SCHEMA VERSION: bump this whenever bucketManagers logic changes.
           shiftKey,
           teamId: team.id,
           teamLabel: team.label || team.id,
@@ -1025,7 +1062,12 @@ function _mbxReadJwt(){
       if(Store && Store.saveMailboxTable) Store.saveMailboxTable(shiftKey, table);
     }else{
       if(!table.meta) table.meta = {};
-      if(!table.meta.bucketManagers) table.meta.bucketManagers = {};
+      // STALE CACHE FIX: Always reset bucketManagers on every table reuse.
+      // Preserving old values caused stale "Name1 & Name2" strings to persist
+      // across renders even after the logic was fixed, because the precompute
+      // function only writes NEW values but never clears old ones.
+      table.meta.bucketManagers = {};
+      table.meta.schemaVer = 2; // stamp schema version on existing tables too
       
       // BOSS THUNTER: Force sync buckets from Team Config on reload
       const Config = window.Config;
