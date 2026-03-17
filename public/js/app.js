@@ -4460,6 +4460,10 @@ async function boot(){
               const scopeLbl = (String(draft.scope||'sa_only') === 'global') ? 'Global' : 'Super Admin';
               if(window.UI && UI.toast) UI.toast(`Mailbox time override applied (${scopeLbl} scope).`, 'success');
             }catch(_){ }
+            // OVERRIDE REALTIME FIX: Force-dispatch so mailbox page re-renders immediately
+            // without requiring a page refresh — covers same-tab save for both global & sa_only.
+            try{ window.dispatchEvent(new CustomEvent('mums:store', { detail:{ key:'mailbox_override_cloud', source:'local', reason:'save' } })); }catch(_){}
+            try{ window.dispatchEvent(new CustomEvent('mums:store', { detail:{ key:'mailbox_time_override', source:'local', reason:'save' } })); }catch(_){}
             render();
           };
         }
@@ -4472,6 +4476,9 @@ async function boot(){
             try{ if(window.UI && UI.toast) UI.toast('Mailbox time override removed. System Manila time is now active.', 'success'); }catch(_){ }
             // FIX[EPOCH-BUG]: Ensure draft.ms is never epoch after reset.
             if(!draft.ms || draft.ms <= MIN_VALID_OVERRIDE_MS) draft.ms = Date.now();
+            // OVERRIDE REALTIME FIX: Force-dispatch so mailbox page removes banner immediately.
+            try{ window.dispatchEvent(new CustomEvent('mums:store', { detail:{ key:'mailbox_override_cloud', source:'local', reason:'reset' } })); }catch(_){}
+            try{ window.dispatchEvent(new CustomEvent('mums:store', { detail:{ key:'mailbox_time_override', source:'local', reason:'reset' } })); }catch(_){}
             render();
           };
         }

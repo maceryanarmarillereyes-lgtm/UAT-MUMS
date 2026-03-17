@@ -3460,6 +3460,27 @@ function _mbxReadJwt(){
       const isFullscreen = window.__mbxUiState.isFullscreen || false;
       const condFmtOn    = window.__mbxUiState.condFormatEnabled !== false;
 
+      // OVERRIDE BANNER: Compute override state for banner display.
+      // Uses UI.mailboxTimeInfo() which reads cloud localStorage — always fresh.
+      const _overrideInfo = (UI && UI.mailboxTimeInfo) ? UI.mailboxTimeInfo() : null;
+      const _overrideActive = !!(_overrideInfo && _overrideInfo.overrideEnabled);
+      const _overrideFreeze = _overrideActive ? (_overrideInfo.freeze !== false) : true;
+      const _overrideEffMs  = _overrideActive ? (Number(_overrideInfo.effectiveMs)||0) : 0;
+      const _overrideInitTime = (() => {
+        if (!_overrideActive || !_overrideEffMs) return '--:--:--';
+        try {
+          const p = UI.manilaParts(new Date(_overrideEffMs));
+          return `${String(p.hh).padStart(2,'0')}:${String(p.mm).padStart(2,'0')}:${String(p.ss).padStart(2,'0')}`;
+        } catch(_) { return '--:--:--'; }
+      })();
+      const _overrideBaseDate = (() => {
+        if (!_overrideActive || !_overrideEffMs) return '';
+        try {
+          const p = UI.manilaParts(new Date(_overrideInfo.baseMs || _overrideEffMs));
+          return p.isoDate + ' (Asia/Manila)';
+        } catch(_) { return ''; }
+      })();
+
       root.innerHTML = `
         <div class="mbx-shell${isFullscreen ? ' is-fullscreen' : ''}">
           <div class="mbx-header-bar">
@@ -3526,6 +3547,14 @@ function _mbxReadJwt(){
             </div>
           </div>
 
+          ${_overrideActive ? `
+          <div class="mbx-override-banner" style="display:flex;align-items:center;gap:10px;padding:10px 16px;margin:0 0 2px 0;background:rgba(245,158,11,0.10);border:1.5px solid rgba(245,158,11,0.40);border-radius:10px;flex-wrap:wrap;">
+            <span class="override-label" style="flex-shrink:0;">⏱ GLOBAL TIME OVERRIDE ACTIVE</span>
+            <span class="mbx-override-clock" data-override-clock="1" style="font-variant-numeric:tabular-nums;font-family:'Courier New',monospace;font-size:20px;font-weight:800;color:#f59e0b;letter-spacing:0.05em;flex-shrink:0;">${_overrideInitTime}</span>
+            <span style="font-size:11px;color:var(--text-muted,#94a3b8);flex-shrink:0;">${_overrideBaseDate}</span>
+            <span style="font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,0.18);color:#f59e0b;font-weight:700;flex-shrink:0;">${_overrideFreeze ? '❄ FROZEN' : '▶ RUNNING'}</span>
+          </div>
+          ` : ''}
 
           <div class="mbx-counter-wrap">
             ${renderTable(table, activeBucketId, totals, canAssign)}
@@ -3695,6 +3724,16 @@ function _mbxReadJwt(){
           node.textContent = (UI && UI.formatDuration) ? UI.formatDuration(sec) : `${sec}s`;
         });
 
+        // OVERRIDE CLOCK TICK: Update the override time display every second without full re-render.
+        root.querySelectorAll('[data-override-clock="1"]').forEach(node=>{
+          try{
+            const oi = (window.UI && UI.mailboxTimeInfo) ? UI.mailboxTimeInfo() : null;
+            if(!oi || !oi.overrideEnabled){ node.textContent = '--:--:--'; return; }
+            const p = UI.manilaParts(new Date(oi.effectiveMs));
+            node.textContent = `${String(p.hh).padStart(2,'0')}:${String(p.mm).padStart(2,'0')}:${String(p.ss).padStart(2,'0')}`;
+          }catch(_){}
+        });
+
         root.querySelectorAll('[data-assign-at]').forEach(node=>{
           const at = Number(node.getAttribute('data-assign-at'))||0;
           if(!at) return;
@@ -3826,11 +3865,22 @@ function _mbxReadJwt(){
     // and the 8-second polling fallback — all paths now update the matrix icon without refresh.
     window.addEventListener('mums:store', (e) => {
       try {
-        if (e && e.detail && e.detail.key === 'mums_mailbox_tables') {
+        const k = e && e.detail && e.detail.key;
+        if (k === 'mums_mailbox_tables') {
           _patchConfirmedCells();
           // Schedule full re-render to keep counter table and matrix counts in sync.
           // debounced at 100ms so rapid events don't cause thrashing.
           scheduleRender('store-mailbox-update');
+        }
+        // OVERRIDE FIX: Re-render immediately when global mailbox override is saved/cleared.
+        // This covers: same-tab Save, cross-tab localStorage events, Supabase Realtime push.
+        if (
+          k === 'mailbox_override_cloud' ||
+          k === 'mailbox_time_override_cloud' ||
+          k === 'mailbox_time_override' ||
+          k === 'mums_mailbox_time_override_cloud'
+        ) {
+          scheduleRender('override-change');
         }
       } catch (_) {}
     });

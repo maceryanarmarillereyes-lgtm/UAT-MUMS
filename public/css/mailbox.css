@@ -59,3 +59,34 @@
 /* Soft modal entrance (best effort) */
 .modal .panel{transform:translateY(4px);transition:transform .18s ease}
 .modal.open .panel{transform:translateY(0)}
+
+/* ── GLOBAL MAILBOX TIME OVERRIDE BANNER ───────────────────────────────────
+   Realtime banner shown at top of Mailbox Control Center when a global
+   override is active. Uses existing .override-label pill from above.
+   DO NOT remove — required by the override realtime fix.
+   ──────────────────────────────────────────────────────────────────────── */
+.mbx-override-banner{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 16px;
+  margin:0 0 2px 0;
+  background:rgba(245,158,11,0.10);
+  border:1.5px solid rgba(245,158,11,0.40);
+  border-radius:10px;
+  flex-wrap:wrap;
+  animation:mbxOverridePulse 2.4s ease-in-out infinite;
+}
+@keyframes mbxOverridePulse{
+  0%,100%{ border-color:rgba(245,158,11,0.40); box-shadow:0 0 0 0 rgba(245,158,11,0.0); }
+  50%    { border-color:rgba(245,158,11,0.75); box-shadow:0 0 8px 2px rgba(245,158,11,0.18); }
+}
+.mbx-override-clock{
+  font-variant-numeric:tabular-nums;
+  font-family:'Courier New',Courier,monospace;
+  font-size:20px;
+  font-weight:800;
+  color:#f59e0b;
+  letter-spacing:0.05em;
+  flex-shrink:0;
+}
