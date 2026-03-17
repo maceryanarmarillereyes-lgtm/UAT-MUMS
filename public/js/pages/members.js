@@ -400,6 +400,42 @@ function syncTaskSelection(taskId, opts){
   const weekInp = document.getElementById('weekSelect');
   if(weekInp && weekInp.value !== weekStartISO) weekInp.value = weekStartISO;
 
+  // NIGHT SHIFT TAB NOTE: For overnight shifts (e.g. 22:00–06:00), the selected tab
+  // date covers the FULL shift window spanning two calendar days.
+  // E.g. [Wed Mar 18] tab = 10:00 PM Wed + 12:00 AM–6:00 AM Thu.
+  // Show an inline hint so Team Leads know blocks assigned here apply to both calendar days.
+  try{
+    const noteId = 'mbx-nightshift-tab-note';
+    let noteEl = document.getElementById(noteId);
+    const team = Config.teamById ? Config.teamById(selectedTeamId) : null;
+    const isOvernight = team && (() => {
+      const ts = UI.parseHM ? UI.parseHM(team.dutyStart||'00:00') : 0;
+      const te = UI.parseHM ? UI.parseHM(team.dutyEnd  ||'00:00') : 0;
+      return te <= ts;
+    })();
+    if(isOvernight && team){
+      const selIso  = isoForDay(selectedDay);
+      const nextIso = UI.addDaysISO(selIso, 1);
+      const selDD   = Number(String(selIso ||'').slice(8,10)) || 0;
+      const nextDD  = Number(String(nextIso||'').slice(8,10)) || 0;
+      const selMon  = String(selIso||'').slice(5,7);
+      const nextMon = String(nextIso||'').slice(5,7);
+      const noteHtml = `<div id="${noteId}" style="display:flex;align-items:center;gap:6px;padding:4px 10px;margin:4px 0 0 0;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.35);border-radius:8px;font-size:11px;color:#f59e0b;font-weight:600;flex-wrap:wrap;">
+        <span>🌙 Night Shift spans 2 calendar days —</span>
+        <span>Blocks assigned on <b>[${selDD}/${selMon}]</b> cover <b>${team.dutyStart||'22:00'} (${selDD}/${selMon})</b> → <b>${team.dutyEnd||'06:00'} (${nextDD}/${nextMon})</b></span>
+        <span style="opacity:0.75;">Assign all your night shift blocks here including post-midnight hours (e.g. 02:00–06:00).</span>
+      </div>`;
+      if(!noteEl){
+        const container = tabs.parentNode;
+        if(container){ container.insertAdjacentHTML('afterend', noteHtml); }
+      } else {
+        noteEl.outerHTML = noteHtml;
+      }
+    } else {
+      if(noteEl) noteEl.remove();
+    }
+  }catch(_){}
+
   renderWeekWarning();
 }
 
@@ -2630,7 +2666,25 @@ container.innerHTML = `
     const blocks = Store.getUserDayBlocks(member.id, selectedDay);
 
     title.textContent = `Scheduling: ${member.name||member.username}`;
-    sub.textContent = `${Config.teamById(member.teamId).label} • ${UI.DAYS[selectedDay]} • Shift ${team.teamStart}–${team.teamEnd}`;
+    // NIGHT SHIFT FIX: For overnight teams, show that the selected day tab covers 2 calendar days
+    const _isOvernightTeam = (() => {
+      try{
+        const ts = UI.parseHM(team.dutyStart||'00:00');
+        const te = UI.parseHM(team.dutyEnd  ||'00:00');
+        return te <= ts;
+      }catch(_){ return false; }
+    })();
+    if(_isOvernightTeam){
+      const _selIso  = isoForDay(selectedDay);
+      const _nextIso = UI.addDaysISO(_selIso, 1);
+      const _selDD   = Number(String(_selIso ||'').slice(8,10)) || 0;
+      const _nextDD  = Number(String(_nextIso||'').slice(8,10)) || 0;
+      const _selMon  = String(_selIso||'').slice(5,7);
+      const _nextMon = String(_nextIso||'').slice(5,7);
+      sub.textContent = `${Config.teamById(member.teamId).label} • ${UI.DAYS[selectedDay]} ${_selDD}/${_selMon} → ${_nextDD}/${_nextMon} • Shift ${team.teamStart}–${team.teamEnd} (spans 2 calendar days — assign all blocks here)`;
+    } else {
+      sub.textContent = `${Config.teamById(member.teamId).label} • ${UI.DAYS[selectedDay]} • Shift ${team.teamStart}–${team.teamEnd}`;
+    }
 
     function rowHtml(b, idx){
       const options = Object.keys(Config.SCHEDULES).map(k=>{

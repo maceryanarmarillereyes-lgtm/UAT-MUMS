@@ -214,6 +214,21 @@ function _mbxDutyLabelForUser(user, nowParts){
     const todayBlocks = Store.getUserDayBlocks ? (Store.getUserDayBlocks(user.id, dow) || []) : [];
     const prevBlocks = Store.getUserDayBlocks ? (Store.getUserDayBlocks(user.id, prevDow) || []) : [];
 
+    // NIGHT SHIFT FIX: Detect if we are in the post-midnight window of an overnight shift.
+    // e.g. Night Shift 22:00-06:00. At 02:00 AM Thursday, prevDow=Wednesday.
+    // Blocks "02:00-06:00" assigned on the Wed tab do NOT wrap midnight (e>s),
+    // so the old overnight-spill check (e<=s && nowMin<e) MISSES them.
+    // We also need to check: prevBlocks where s <= nowMin < e AND s < nightDutyEnd.
+    let nightShiftDutyEndMin = -1;
+    try{
+      const teams = (Config && Array.isArray(Config.TEAMS)) ? Config.TEAMS : [];
+      for(const t of teams){
+        const ts = (UI.parseHM ? UI.parseHM(t.dutyStart||'00:00') : 0);
+        const te = (UI.parseHM ? UI.parseHM(t.dutyEnd  ||'00:00') : 0);
+        if(te <= ts && nowMin < te){ nightShiftDutyEndMin = te; break; }
+      }
+    }catch(_){}
+
     const rolePriority = (role)=>{
       const key = String(role||'').toLowerCase();
       if(key === 'mailbox_manager') return 100;
@@ -236,12 +251,21 @@ function _mbxDutyLabelForUser(user, nowParts){
       if(_mbxBlockHit(nowMin, s, e)) activeRoles.push(String(b.role||''));
     }
 
-    // Overnight spill from the previous day (e.g. 22:00-02:00)
+    // Overnight spill from the previous day (e.g. 22:00-02:00) AND
+    // NIGHT SHIFT FIX: straight post-midnight blocks on the previous day
+    // that do NOT wrap (e.g. 02:00-06:00 assigned on the night-shift start day).
     for(const b of prevBlocks){
       const s = (UI && UI.parseHM) ? UI.parseHM(b.start) : _mbxParseHM(b.start);
       const e = (UI && UI.parseHM) ? UI.parseHM(b.end) : _mbxParseHM(b.end);
       if(!Number.isFinite(s) || !Number.isFinite(e)) continue;
-      if(e <= s && nowMin < e) activeRoles.push(String(b.role||''));
+      // Classic overnight spill: block wraps midnight (e<=s) and nowMin is before end
+      if(e <= s && nowMin < e){ activeRoles.push(String(b.role||'')); continue; }
+      // Night shift post-midnight continuation: block is straight (e>s) but lives in
+      // the post-midnight window of an overnight shift on the previous day's tab.
+      // Only applies when we detected an active overnight shift above.
+      if(nightShiftDutyEndMin >= 0 && s <= nowMin && nowMin < e && e <= nightShiftDutyEndMin){
+        activeRoles.push(String(b.role||''));
+      }
     }
 
     if(activeRoles.length){
@@ -303,6 +327,20 @@ function _mbxGetBlockTiming(userId, nowParts){
     const todayBlocks = (Store.getUserDayBlocks ? Store.getUserDayBlocks(userId, dow)    : []) || [];
     const prevBlocks  = (Store.getUserDayBlocks ? Store.getUserDayBlocks(userId, prevDow) : []) || [];
 
+    // NIGHT SHIFT FIX: detect if we are in the post-midnight window of an overnight shift.
+    // Straight blocks (e.g. 02:00-06:00) stored on the night-shift start day (prevDow)
+    // do NOT wrap midnight, so the classic overnight check (e<=s) misses them entirely.
+    let nightShiftDutyEndMin = -1;
+    try{
+      const Config = window.Config;
+      const teams = (Config && Array.isArray(Config.TEAMS)) ? Config.TEAMS : [];
+      for(const t of teams){
+        const ts = (UI.parseHM ? UI.parseHM(t.dutyStart||'00:00') : 0);
+        const te = (UI.parseHM ? UI.parseHM(t.dutyEnd  ||'00:00') : 0);
+        if(te <= ts && nowMin < te){ nightShiftDutyEndMin = te; break; }
+      }
+    }catch(_){}
+
     const rolePriority = (role)=>{
       const k = String(role||'').toLowerCase();
       if(k === 'mailbox_manager') return 100;
@@ -314,14 +352,19 @@ function _mbxGetBlockTiming(userId, nowParts){
     let best = null;
     let bestPriority = -1;
 
-    const checkBlock = (b, overnight) => {
+    // mode: 'today' | 'overnight' | 'nightcont'
+    const checkBlock = (b, mode) => {
       const s = _mbxParseHM(b.start);
       const e = _mbxParseHM(b.end);
       if(!Number.isFinite(s) || !Number.isFinite(e)) return;
       let hit = false;
-      if(overnight){
-        // previous-day block spilling into today
+      if(mode === 'overnight'){
+        // classic: previous-day block wraps midnight, we're before its end
         hit = (e <= s) && nowMin < e;
+      } else if(mode === 'nightcont'){
+        // NIGHT SHIFT FIX: straight post-midnight block on the shift-start day
+        // e.g. 02:00-06:00 assigned on Wed tab, active on Thu 02:00-06:00
+        hit = (e > s) && (s <= nowMin) && (nowMin < e) && (e <= nightShiftDutyEndMin);
       } else {
         hit = _mbxBlockHit(nowMin, s, e);
       }
@@ -330,9 +373,9 @@ function _mbxGetBlockTiming(userId, nowParts){
       if(pri <= bestPriority) return;
       bestPriority = pri;
 
-      // Compute block duration in minutes
+      // Block duration
       let dur;
-      if(overnight){
+      if(mode === 'overnight'){
         dur = ((24*60) - s) + e;
       } else {
         dur = (e > s) ? (e - s) : ((24*60) - s + e);
@@ -341,14 +384,12 @@ function _mbxGetBlockTiming(userId, nowParts){
 
       // Elapsed since block started
       let elapsed;
-      if(overnight){
-        // block started on previous day
+      if(mode === 'overnight'){
         elapsed = nowMin + ((24*60) - s);
       } else {
         if(e > s){
           elapsed = nowMin - s;
         } else {
-          // wraps midnight - started on same day
           elapsed = (nowMin >= s) ? (nowMin - s) : (nowMin + (24*60) - s);
         }
       }
@@ -358,14 +399,17 @@ function _mbxGetBlockTiming(userId, nowParts){
         blockDurMin: dur,
         elapsedMin: elapsed,
         remainingMin: Math.max(0, dur - elapsed),
-        pct: Math.max(0, Math.min(1, (dur - elapsed) / dur)), // fraction REMAINING
+        pct: Math.max(0, Math.min(1, (dur - elapsed) / dur)),
         blockStartMin: s,
         blockEndMin: e
       };
     };
 
-    for(const b of todayBlocks) checkBlock(b, false);
-    for(const b of prevBlocks)  checkBlock(b, true);
+    for(const b of todayBlocks) checkBlock(b, 'today');
+    for(const b of prevBlocks){
+      checkBlock(b, 'overnight');
+      if(nightShiftDutyEndMin >= 0) checkBlock(b, 'nightcont');
+    }
 
     return best; // null = no active block
   }catch(_){ return null; }
@@ -438,6 +482,7 @@ function _mbxReadJwt(){
       const Config = window.Config;
 
       const shiftStartMin = _mbxParseHM(table?.meta?.dutyStart || '00:00');
+      const shiftEndMin   = _mbxParseHM(table?.meta?.dutyEnd   || '00:00');
       const shiftKey      = String(table?.meta?.shiftKey||'');
       const shiftDatePart = (shiftKey.split('|')[1] || '').split('T')[0];
       let shiftDow = 0;
@@ -446,6 +491,17 @@ function _mbxReadJwt(){
       } catch (_){
         shiftDow = UI && UI.manilaNowDate ? new Date(UI.manilaNowDate()).getDay() : new Date().getDay();
       }
+
+      // NIGHT SHIFT FIX: Detect overnight (wrapping) shifts — e.g. 22:00-06:00.
+      // For these shifts, a Team Lead assigns blocks for the FULL shift under a
+      // single day tab in the Members page (e.g. [Wed] covers both 22:00-midnight
+      // AND 00:00-06:00 of the following calendar day). The post-midnight portion
+      // (00:00–dutyEnd) is stored on dayIndex=shiftDow with raw times like "02:00".
+      // Without the extra dayRef below, those blocks land at offset=0 → minutes
+      // 0–360, which is BEFORE the shift window 1320–1800 and are never matched.
+      // Adding {dow:shiftDow, offset:1440} re-positions them correctly inside the
+      // shift window so the manager/duty labels resolve correctly.
+      const isOvernightShift = shiftEndMin <= shiftStartMin;
 
       let bStart = Number(bucket.startMin)||0;
       let bEnd   = Number(bucket.endMin)||0;
@@ -473,10 +529,22 @@ function _mbxReadJwt(){
         const uid = String(u.id || '');
         if(!uid) continue;
 
-        const dayRefs = [
-          { dow: shiftDow,           offset:    0 },
-          { dow: (shiftDow + 1) % 7, offset: 1440 }
-        ];
+        // NIGHT SHIFT FIX: For overnight shifts, include a 3rd dayRef that reads
+        // same-day (shiftDow) blocks with a +1440 offset. This catches post-midnight
+        // blocks (e.g. 02:00-06:00) stored on the shift-start day in the Members page.
+        // dayRef[0]: same-day  offset=0    → catches 22:00–23:59 portion
+        // dayRef[1]: next-day  offset=1440 → catches blocks stored on the next calendar day
+        // dayRef[2]: same-day  offset=1440 → catches 00:00–dutyEnd stored on shift-start day
+        const dayRefs = isOvernightShift
+          ? [
+              { dow: shiftDow,           offset:    0 },
+              { dow: (shiftDow + 1) % 7, offset: 1440 },
+              { dow: shiftDow,           offset: 1440 }  // post-midnight on same day
+            ]
+          : [
+              { dow: shiftDow,           offset:    0 },
+              { dow: (shiftDow + 1) % 7, offset: 1440 }
+            ];
 
         for(const ref of dayRefs){
           const blocks = Store && Store.getUserDayBlocks
@@ -560,6 +628,9 @@ function _mbxReadJwt(){
       }
 
       const shiftStartMin = _mbxParseHM(table.meta.dutyStart || '00:00');
+      const shiftEndMin   = _mbxParseHM(table.meta.dutyEnd   || '00:00');
+      // NIGHT SHIFT FIX: detect overnight shift (e.g. 22:00–06:00)
+      const isOvernightShift = shiftEndMin <= shiftStartMin;
 
       for (const bkt of table.buckets) {
         let bS = Number(bkt.startMin) || 0;
@@ -574,14 +645,31 @@ function _mbxReadJwt(){
           const isSameDow = (rDow === shiftDow);
           const isNextDay = (rDow === (shiftDow + 1) % 7);
           if (!isSameDow && !isNextDay) continue;
-          const offset = isNextDay ? 1440 : 0;
 
-          let s = _mbxParseHM(String(row.start || ''));
-          let e = _mbxParseHM(String(row.end || ''));
-          if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
-          if (e <= s) e += 1440;
-          s += offset; e += offset;
-          if (!(s < bE && bS < e)) continue;  // no overlap
+          // NIGHT SHIFT FIX: For overnight shifts, blocks stored on the shift-start
+          // day with times in the post-midnight range (00:00–dutyEnd) must be evaluated
+          // with offset+1440 so they land inside the shift window correctly.
+          // Example: block "02:00–06:00" on dayIndex=shiftDow (Wed) with offset=0
+          // resolves to minutes 120–360, which is before the shift window 1320–1800.
+          // With offset=1440 it becomes 1560–1800, which correctly overlaps.
+          // We try BOTH offsets for same-day rows in overnight shifts; the overlap
+          // check (s < bE && bS < e) naturally filters out non-matching combos.
+          const offsetCandidates = (isSameDow && isOvernightShift)
+            ? [0, 1440]   // try both: pre-midnight AND post-midnight portions
+            : [isNextDay ? 1440 : 0];
+
+          let matched = false;
+          for (const offset of offsetCandidates) {
+            let s = _mbxParseHM(String(row.start || ''));
+            let e = _mbxParseHM(String(row.end || ''));
+            if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
+            if (e <= s) e += 1440;
+            s += offset; e += offset;
+            if (!(s < bE && bS < e)) continue;  // no overlap
+            matched = true;
+            break;
+          }
+          if (!matched) continue;
 
           const roleStr = String(row.schedule || row.role || '').toLowerCase().trim();
           const sc = window.Config && Config.scheduleById ? Config.scheduleById(row.schedule || row.role) : null;
