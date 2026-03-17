@@ -1850,17 +1850,25 @@
             return t2 || '';
           }catch(_){ return ''; }
         };
-        const sendToCloud = (token)=>{
+        const sendToCloud = async (token)=>{
           if(!token) return false;
-          fetch('/api/mailbox_override/set', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(payload)
-          }).catch(() => {});
-          return true;
+          try{
+            const res = await fetch('/api/mailbox_override/set', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify(payload)
+            });
+            if(!res.ok) return false;
+            const raw = await res.text();
+            let json = null;
+            try{ json = raw ? JSON.parse(raw) : null; }catch(_){ json = null; }
+            return !!(json && json.ok);
+          }catch(_){
+            return false;
+          }
         };
         const queuePending = ()=>{
           try{ window.__mumsMailboxOverridePending = payload; }catch(_){ }
@@ -1872,22 +1880,40 @@
                   const pending = window.__mumsMailboxOverridePending;
                   if(!pending) return;
                   const t = getToken();
-                  if(sendToCloud(t)) window.__mumsMailboxOverridePending = null;
+                  sendToCloud(t).then((ok)=>{ if(ok) window.__mumsMailboxOverridePending = null; });
                 }catch(_){ }
               });
             }
           }catch(_){ }
         };
+        const refreshAndRetry = ()=>{
+          try{
+            if(window.CloudAuth && CloudAuth.ensureFreshSession){
+              CloudAuth.ensureFreshSession({ tryRefresh:true, clearOnFail:false, leewaySec: 60 })
+                .then(async ()=>{
+                  try{
+                    const fresh = getToken();
+                    const ok = await sendToCloud(fresh);
+                    if(ok) window.__mumsMailboxOverridePending = null;
+                  }catch(_){ }
+                });
+            }
+          }catch(_){ }
+        };
         if (window.CloudAuth && CloudAuth.isEnabled && CloudAuth.isEnabled()) {
           const token = getToken();
-          if(!sendToCloud(token)){
+          if(!token){
             queuePending();
-            try{
-              if(window.CloudAuth && CloudAuth.ensureFreshSession){
-                CloudAuth.ensureFreshSession({ tryRefresh:true, clearOnFail:false, leewaySec: 60 })
-                  .then(()=>{ try{ const fresh = getToken(); if(sendToCloud(fresh)) window.__mumsMailboxOverridePending = null; }catch(_){ } });
+            refreshAndRetry();
+          }else{
+            sendToCloud(token).then((ok)=>{
+              if(ok){
+                try{ window.__mumsMailboxOverridePending = null; }catch(_){ }
+                return;
               }
-            }catch(_){ }
+              queuePending();
+              refreshAndRetry();
+            });
           }
         } else {
           queuePending();
