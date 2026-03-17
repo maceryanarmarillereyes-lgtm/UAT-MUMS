@@ -774,6 +774,23 @@ function _mbxReadJwt(){
   // even in sloppy mode), which caused render() to crash for MEMBER-role users and
   // prevented _bootRosterSync from ever running.
   let _schedSyncPending = false;
+  let _periodicSyncTimer = null; // periodic schedule re-sync timer
+
+  // REALTIME ROSTER RESYNC: Forces a fresh schedule block fetch for the active duty team.
+  // Called when Supabase pushes schedule/config updates so ALL roles (including MEMBERs)
+  // see the same data without a page refresh.
+  function _mbxForceResync(reason){
+    try{
+      const duty = getDuty();
+      const tid = String(duty && duty.current && duty.current.id ? duty.current.id : '');
+      if(!tid) return;
+      // Clear all guards so _mbxSyncTeamScheduleBlocks will actually re-fetch
+      delete _scheduleReady[tid];
+      delete _syncInFlight[tid];
+      _schedSyncPending = false;
+      _mbxSyncTeamScheduleBlocks(tid).catch(()=>{});
+    }catch(_){}
+  }
 
   async function _mbxSyncTeamScheduleBlocks(teamId) {
     if (!teamId) return;
@@ -931,6 +948,19 @@ function _mbxReadJwt(){
 
       scheduleRender('roster-sync-complete');
 
+      // REALTIME ALL-USER FIX: After re-syncing roster+blocks, push the current mailbox
+      // table to cloud (mums_mailbox_tables). This triggers Supabase realtime delivery
+      // to ALL connected clients so every user's page updates without a manual refresh.
+      try{
+        if(window.Store && Store.getMailboxState && Store.getMailboxTable && Store.saveMailboxTable){
+          const curKey = Store.getMailboxState().currentKey;
+          if(curKey){
+            const t = Store.getMailboxTable(curKey);
+            if(t) Store.saveMailboxTable(curKey, t); // triggers write → Realtime push
+          }
+        }
+      }catch(_){}
+
     } catch (_) {
       // Silently degrade
     } finally {
@@ -1027,16 +1057,28 @@ function _mbxReadJwt(){
         buckets = _mbxBuildDefaultBuckets(teamObj || team);
       }
       const nowParts = (UI && UI.mailboxNowParts ? UI.mailboxNowParts() : (UI && UI.manilaNow ? UI.manilaNow() : null));
-      const members = (Store && Store.getUsers ? Store.getUsers() : [])
+
+      // REALTIME ALL-USER FIX: Build the member list from BOTH Store.getUsers() (admin path)
+      // AND _rosterByTeam cache (populated by _mbxSyncTeamScheduleBlocks API fetch).
+      // Store.getUsers() is empty for MEMBER-role users (restricted payload) → without the
+      // roster cache fallback, MEMBERs would see an empty table on first render.
+      const fromStore = (Store && Store.getUsers ? Store.getUsers() : [])
         .filter(u=>u && u.teamId===team.id && (!u.status || u.status==='active'))
-        .map(u=>({
-          id: u.id,
-          name: u.name||u.username||'—',
-          username: u.username||'',
-          role: u.role||'',
-          roleLabel: _mbxRoleLabel(u.role||''),
-          dutyLabel: _mbxDutyLabelForUser(u, nowParts)
-        }))
+        .map(u=>({ id:u.id, name:u.name||u.username||'—', username:u.username||'',
+                   role:u.role||'', roleLabel:_mbxRoleLabel(u.role||''),
+                   dutyLabel:_mbxDutyLabelForUser(u, nowParts) }));
+
+      const fromRoster = (_rosterByTeam[team.id] || [])
+        .map(u=>({ id:String(u.id), name:u.name||'—', username:u.username||'',
+                   role:u.role||'', roleLabel:_mbxRoleLabel(u.role||''),
+                   dutyLabel:_mbxDutyLabelForUser({id:String(u.id),teamId:team.id}, nowParts) }));
+
+      // Merge, dedup by id (Store entry preferred when present — has richer data)
+      const memberMap = new Map();
+      for(const u of fromRoster) if(u.id) memberMap.set(u.id, u);
+      for(const u of fromStore)  if(u.id) memberMap.set(u.id, u);
+
+      const members = [...memberMap.values()]
         .sort((a,b)=>{
           const ak=_mbxMemberSortKey(a), bk=_mbxMemberSortKey(b);
           if(ak.w!==bk.w) return ak.w-bk.w;
@@ -3905,11 +3947,22 @@ function _mbxReadJwt(){
       if(!root || !isMailboxRouteActive()) return;
       refreshMemberDutyPills(root);
     }, 1000);
+
+    // REALTIME ROSTER FIX: Periodic 60-second schedule re-sync.
+    // Keeps roster + block assignments fresh for ALL roles (MEMBER, TEAM_LEAD, SUPER_ADMIN).
+    // Without this, MEMBERs see stale duty labels / manager names if they keep the page open.
+    clearInterval(_periodicSyncTimer);
+    _periodicSyncTimer = setInterval(()=>{
+      if(!root || !isMailboxRouteActive()) return;
+      _mbxForceResync('periodic-60s');
+    }, 60000);
   }
 
   function stopRealtimeTimers(){
     clearInterval(_timerInterval);
     clearInterval(_dutyPillInterval);
+    clearInterval(_periodicSyncTimer);
+    _periodicSyncTimer = null;
     // Remove singleton tooltip on nav-away
     const tt = document.getElementById('mbx-row-tooltip');
     if (tt) { tt.classList.remove('visible'); }
@@ -3922,6 +3975,18 @@ function _mbxReadJwt(){
   function mount(){
     render();
     startRealtimeTimers();
+
+    // REALTIME ALL-USER FIX: Immediately sync schedule blocks on mount for ALL roles.
+    // This ensures MEMBERs (who have restricted Store.getUsers()) get full roster data
+    // within seconds of opening the Mailbox page, without waiting for the first render cycle.
+    try{
+      const duty = getDuty();
+      const bootTid = duty && duty.current && duty.current.id ? String(duty.current.id) : '';
+      if(bootTid && !_scheduleReady[bootTid]){
+        _schedSyncPending = true;
+        _mbxSyncTeamScheduleBlocks(bootTid).catch(()=>{});
+      }
+    }catch(_){}
 
     if(window.CloudSocket && window.CloudSocket.on){
       window.CloudSocket.on('mailbox:update', ()=>scheduleRender('socket-update'));
@@ -4021,14 +4086,67 @@ function _mbxReadJwt(){
     window.addEventListener('mums:store', (e) => {
       try {
         const k = e && e.detail && e.detail.key;
+        const src = e && e.detail && e.detail.source;
         if (k === 'mums_mailbox_tables') {
           _patchConfirmedCells();
-          // Schedule full re-render to keep counter table and matrix counts in sync.
-          // debounced at 100ms so rapid events don't cause thrashing.
+
+          // CASE MATRIX ALL-USER FIX: When a remote mailbox_tables push arrives
+          // (source='realtime' or 'storage' = cross-tab), augment the received table's
+          // member list from the local _rosterByTeam cache BEFORE rendering.
+          // This ensures MEMBERs see the full team in the Case Assignment Matrix
+          // even when the pushed table was built by a SA with a different getUsers() scope.
+          if(src === 'realtime' || src === 'storage'){
+            try{
+              const Store = window.Store;
+              const UI    = window.UI;
+              if(Store && Store.getMailboxState && Store.getMailboxTable && Store.saveMailboxTable){
+                const curKey = Store.getMailboxState().currentKey;
+                if(curKey){
+                  const t = Store.getMailboxTable(curKey);
+                  if(t && t.meta){
+                    const tid = String(t.meta.teamId || '');
+                    const rosterList = (tid && _rosterByTeam && _rosterByTeam[tid]) ? _rosterByTeam[tid] : [];
+                    if(rosterList.length){
+                      const nowP = UI && UI.mailboxNowParts ? UI.mailboxNowParts() : null;
+                      const existIds = new Set((t.members || []).map(m => m && String(m.id)));
+                      let added = false;
+                      for(const tm of rosterList){
+                        if(!tm || !tm.id || existIds.has(String(tm.id))) continue;
+                        existIds.add(String(tm.id));
+                        t.members = t.members || [];
+                        t.members.push({
+                          id:        String(tm.id),
+                          name:      String(tm.name || tm.username || tm.id),
+                          username:  String(tm.username || tm.name || tm.id),
+                          role:      String(tm.role || 'MEMBER'),
+                          roleLabel: _mbxRoleLabel(tm.role || ''),
+                          dutyLabel: _mbxDutyLabelForUser({id:String(tm.id),teamId:tid}, nowP)
+                        });
+                        added = true;
+                      }
+                      // Sort and re-save silently (no new cloud push, just local augment)
+                      if(added){
+                        t.members.sort((a,b)=>{
+                          const ak=_mbxMemberSortKey(a),bk=_mbxMemberSortKey(b);
+                          if(ak.w!==bk.w) return ak.w-bk.w;
+                          return ak.name.localeCompare(bk.name);
+                        });
+                        Store.saveMailboxTable(curKey, t, {silent:true});
+                      }
+                    }
+                    // If roster is empty (first load), trigger a fetch to populate it
+                    if(!rosterList.length && tid){
+                      _mbxForceResync('remote-table-no-roster');
+                    }
+                  }
+                }
+              }
+            }catch(_){}
+          }
+
           scheduleRender('store-mailbox-update');
         }
         // OVERRIDE FIX: Re-render immediately when global mailbox override is saved/cleared.
-        // This covers: same-tab Save, cross-tab localStorage events, Supabase Realtime push.
         if (
           k === 'mailbox_override_cloud' ||
           k === 'mailbox_time_override_cloud' ||
@@ -4036,6 +4154,34 @@ function _mbxReadJwt(){
           k === 'mums_mailbox_time_override_cloud'
         ) {
           scheduleRender('override-change');
+        }
+        // REALTIME ALL-USER FIX: When schedule blocks, snapshots, or team config change
+        // (pushed by Supabase to ALL connected clients), force a fresh API re-sync so
+        // EVERY role — MEMBER, TEAM_LEAD, SUPER_ADMIN — sees the updated duty labels,
+        // manager names, and roster without needing a page refresh.
+        // Covers: Team Lead updates schedule on Members page → all open Mailbox tabs refresh.
+        if (
+          k === 'mums_schedule_blocks'    ||
+          k === 'mums_schedule_snapshots' ||
+          k === 'ums_weekly_schedules'    ||
+          k === 'mums_team_config'        ||
+          k === 'mums_schedule_lock_state'
+        ) {
+          _mbxForceResync(k);
+          scheduleRender('schedule-update');
+        }
+        // REALTIME SHIFT CHANGE FIX: When mailbox state changes (shift rotated),
+        // re-sync the new duty team's roster immediately so member list is up to date.
+        if (k === 'mums_mailbox_state') {
+          _mbxForceResync('shift-state-change');
+          scheduleRender('shift-state-change');
+        }
+        // CASE MATRIX ALL-USER FIX: ums_cases is synced to all clients via Supabase realtime.
+        // When any case is confirmed/updated/deleted, trigger an in-place patch + re-render
+        // so all open Mailbox tabs reflect the new acknowledgment state immediately.
+        if (k === 'ums_cases') {
+          _patchConfirmedCells();
+          scheduleRender('cases-update');
         }
       } catch (_) {}
     });

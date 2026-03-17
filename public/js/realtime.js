@@ -113,6 +113,9 @@
   const MEMBER_PUSH_KEYS = new Set([
     'mums_attendance',
     'mums_mailbox_state',
+    'mums_mailbox_tables',  // REALTIME FIX: MEMBERs must push mailbox table updates
+                             // so ALL connected users (other MEMBERs, TL, SA) see
+                             // assignment changes without a refresh.
     'ums_cases',
     'ums_schedule_notifs',
     'mums_schedule_notifs'
