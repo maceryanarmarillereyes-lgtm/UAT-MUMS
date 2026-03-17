@@ -244,11 +244,20 @@ function _mbxDutyLabelForUser(user, nowParts){
 
     const activeRoles = [];
 
-    for(const b of todayBlocks){
-      const s = (UI && UI.parseHM) ? UI.parseHM(b.start) : _mbxParseHM(b.start);
-      const e = (UI && UI.parseHM) ? UI.parseHM(b.end) : _mbxParseHM(b.end);
-      if(!Number.isFinite(s) || !Number.isFinite(e)) continue;
-      if(_mbxBlockHit(nowMin, s, e)) activeRoles.push(String(b.role||''));
+    // CROSS-SHIFT CONTAMINATION FIX:
+    // When nightShiftDutyEndMin >= 0, we are in the post-midnight window of an overnight shift
+    // (e.g. 00:00-06:00 on Wednesday while Tuesday night shift is still active).
+    // todayBlocks = Wednesday blocks → these belong to the NEXT night shift (10PM Wed → 6AM Thu).
+    // Processing them with _mbxBlockHit would falsely match blocks like "04:00-05:00" stored
+    // on Wed for the upcoming shift, causing duplicate Mailbox Manager labels.
+    // When in post-midnight: skip todayBlocks entirely — prevBlocks (Tue) is the correct source.
+    if(nightShiftDutyEndMin < 0){
+      for(const b of todayBlocks){
+        const s = (UI && UI.parseHM) ? UI.parseHM(b.start) : _mbxParseHM(b.start);
+        const e = (UI && UI.parseHM) ? UI.parseHM(b.end) : _mbxParseHM(b.end);
+        if(!Number.isFinite(s) || !Number.isFinite(e)) continue;
+        if(_mbxBlockHit(nowMin, s, e)) activeRoles.push(String(b.role||''));
+      }
     }
 
     // Overnight spill from the previous day (e.g. 22:00-02:00) AND
@@ -405,7 +414,14 @@ function _mbxGetBlockTiming(userId, nowParts){
       };
     };
 
-    for(const b of todayBlocks) checkBlock(b, 'today');
+    // CROSS-SHIFT CONTAMINATION FIX:
+    // When in post-midnight of overnight shift (nightShiftDutyEndMin >= 0),
+    // todayBlocks = new calendar day's blocks (next night shift, not yet started).
+    // Processing them would cause false hits for upcoming shift blocks like "04:00-05:00".
+    // Skip todayBlocks; prevBlocks (shift-start day) is the correct source.
+    if(nightShiftDutyEndMin < 0){
+      for(const b of todayBlocks) checkBlock(b, 'today');
+    }
     for(const b of prevBlocks){
       checkBlock(b, 'overnight');
       if(nightShiftDutyEndMin >= 0) checkBlock(b, 'nightcont');
@@ -532,14 +548,19 @@ function _mbxReadJwt(){
         // NIGHT SHIFT FIX: For overnight shifts, include a 3rd dayRef that reads
         // same-day (shiftDow) blocks with a +1440 offset. This catches post-midnight
         // blocks (e.g. 02:00-06:00) stored on the shift-start day in the Members page.
-        // dayRef[0]: same-day  offset=0    → catches 22:00–23:59 portion
-        // dayRef[1]: next-day  offset=1440 → catches blocks stored on the next calendar day
-        // dayRef[2]: same-day  offset=1440 → catches 00:00–dutyEnd stored on shift-start day
+        // dayRef[0]: same-day offset=0    → catches 22:00–23:59 pre-midnight portion
+        // dayRef[1]: same-day offset=1440 → catches 00:00–dutyEnd post-midnight portion
+        //
+        // CROSS-SHIFT CONTAMINATION FIX: For overnight shifts we intentionally do NOT
+        // read next-calendar-day blocks. Each night shift stores its FULL block set
+        // (both pre and post-midnight) on the shift-start day tab in the Members page.
+        // Reading the next day's blocks (which belong to the FOLLOWING night shift)
+        // caused duplicate Mailbox Manager labels when both shifts had manager blocks
+        // in the 04:00-06:00 range (e.g. Tue night + Wed blocks both matched).
         const dayRefs = isOvernightShift
           ? [
-              { dow: shiftDow,           offset:    0 },
-              { dow: (shiftDow + 1) % 7, offset: 1440 },
-              { dow: shiftDow,           offset: 1440 }  // post-midnight on same day
+              { dow: shiftDow, offset:    0 },  // pre-midnight  (22:00–23:59) on shift-start day
+              { dow: shiftDow, offset: 1440 }   // post-midnight (00:00–06:00) on shift-start day
             ]
           : [
               { dow: shiftDow,           offset:    0 },
@@ -641,21 +662,25 @@ function _mbxReadJwt(){
         const mgrNames = [];
         for (const row of teamScheduleBlocks) {
           const rDow = Number(row.dayIndex);
-          // Check same day OR next calendar day (for overnight shifts)
+          // CROSS-SHIFT CONTAMINATION FIX: For overnight shifts, ONLY read same-day blocks.
+          // Each night shift stores its full block set (pre AND post-midnight) on the
+          // shift-start day tab. Next-day blocks belong to the FOLLOWING night shift.
+          // Allowing isNextDay for overnight shifts caused next-shift's manager blocks
+          // (e.g. Wed 04:00-05:00 Mailbox Manager) to bleed into the current Tue night shift.
           const isSameDow = (rDow === shiftDow);
           const isNextDay = (rDow === (shiftDow + 1) % 7);
-          if (!isSameDow && !isNextDay) continue;
+          if(isOvernightShift){
+            if(!isSameDow) continue;  // skip next-day rows — they belong to the next shift
+          } else {
+            if(!isSameDow && !isNextDay) continue;
+          }
 
-          // NIGHT SHIFT FIX: For overnight shifts, blocks stored on the shift-start
-          // day with times in the post-midnight range (00:00–dutyEnd) must be evaluated
-          // with offset+1440 so they land inside the shift window correctly.
-          // Example: block "02:00–06:00" on dayIndex=shiftDow (Wed) with offset=0
-          // resolves to minutes 120–360, which is before the shift window 1320–1800.
-          // With offset=1440 it becomes 1560–1800, which correctly overlaps.
-          // We try BOTH offsets for same-day rows in overnight shifts; the overlap
-          // check (s < bE && bS < e) naturally filters out non-matching combos.
-          const offsetCandidates = (isSameDow && isOvernightShift)
-            ? [0, 1440]   // try both: pre-midnight AND post-midnight portions
+          // For overnight shifts: try both offsets on the same-day blocks.
+          //   offset=0    → pre-midnight portion (22:00-23:59, maps to 1320-1439)
+          //   offset=1440 → post-midnight portion (00:00-06:00, maps to 1440-1800)
+          // For day shifts: offset=1440 only when row is from next calendar day.
+          const offsetCandidates = isOvernightShift
+            ? [0, 1440]
             : [isNextDay ? 1440 : 0];
 
           let matched = false;
