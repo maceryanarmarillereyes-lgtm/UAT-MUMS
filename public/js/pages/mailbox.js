@@ -674,6 +674,9 @@ function _mbxReadJwt(){
         // can pick the single manager whose window begins first in this bucket.
         let bestMgrName = null;
         let bestMgrStart = Infinity;
+        // FIX-COLTIME: Also track the raw HH:MM strings of the winning block
+        let bestMgrBlockStart = '';
+        let bestMgrBlockEnd   = '';
 
         for (const row of teamScheduleBlocks) {
           const rDow = Number(row.dayIndex);
@@ -737,16 +740,30 @@ function _mbxReadJwt(){
             if (cs >= bS && cs < bE && cs < candidateStart) candidateStart = cs;
           }
           if (candidateStart < bestMgrStart) {
-            bestMgrStart = candidateStart;
-            bestMgrName  = name;
+            bestMgrStart      = candidateStart;
+            bestMgrName       = name;
+            // FIX-COLTIME: Save the raw HH:MM times of this winning block
+            bestMgrBlockStart = String(row.start || '');
+            bestMgrBlockEnd   = String(row.end   || '');
           }
         }
 
         // Write exactly ONE manager name per bucket (or '—' if none found).
+        // FIX-COLTIME: Also store the manager's actual block start/end times so
+        // the column header can show their real scheduled window instead of the
+        // fixed bucket split (e.g. "10:00 PM – 1:00 AM" not "10:00 PM – 12:40 AM").
         if (bestMgrName) {
           table.meta.bucketManagers[bkt.id] = bestMgrName;
+          // Store raw block times for the winning manager (used by renderTable header)
+          if (!table.meta.bucketManagerTimes) table.meta.bucketManagerTimes = {};
+          table.meta.bucketManagerTimes[bkt.id] = {
+            blockStart: bestMgrBlockStart,
+            blockEnd:   bestMgrBlockEnd,
+          };
         } else if (!table.meta.bucketManagers[bkt.id]) {
           table.meta.bucketManagers[bkt.id] = '—';
+          if (!table.meta.bucketManagerTimes) table.meta.bucketManagerTimes = {};
+          table.meta.bucketManagerTimes[bkt.id] = null;
         }
       }
     } catch (_) {}
@@ -1128,6 +1145,8 @@ function _mbxReadJwt(){
       // across renders even after the logic was fixed, because the precompute
       // function only writes NEW values but never clears old ones.
       table.meta.bucketManagers = {};
+      // FIX-COLTIME: Also clear the block-time cache whenever managers are reset
+      table.meta.bucketManagerTimes = {};
       table.meta.schemaVer = 3; // stamp schema version on existing tables too
       
       // BOSS THUNTER: Force sync buckets from Team Config on reload
@@ -2440,7 +2459,10 @@ function _mbxReadJwt(){
         if(scheduled && scheduled !== '—') return scheduled;
         const persisted = String((table && table.meta && table.meta.bucketManagers && table.meta.bucketManagers[b.id]) || '').trim();
         return persisted || '—';
-      })()
+      })(),
+      // FIX-COLTIME: Carry actual manager block start/end times for column header display.
+      // Falls back to null when times haven't been computed yet (pre-sync state).
+      blockTimes: (table && table.meta && table.meta.bucketManagerTimes && table.meta.bucketManagerTimes[b.id]) || null,
     }));
 
     // ── Member rows ───────────────────────────────────────────────────────────
@@ -2512,7 +2534,7 @@ function _mbxReadJwt(){
     }).join('');
 
     // ── Table header: Mgr labels FIXED with CSS class ─────────────────────────
-    const mgrHeaders = bucketManagers.map(({ bucket: b, name }) => {
+    const mgrHeaders = bucketManagers.map(({ bucket: b, name, blockTimes }) => {
       const isAct    = activeBucketId && b.id === activeBucketId;
       const cls      = isAct ? 'active-head-col' : '';
       const hasMgr   = name && name !== '—';
@@ -2525,8 +2547,25 @@ function _mbxReadJwt(){
                      : isSyncing         ? 'mbx-mgr-label syncing'
                      :                     'mbx-mgr-label empty';
       const timeCls  = isAct ? 'mbx-th-time is-active' : 'mbx-th-time';
+
+      // FIX-COLTIME: Show the manager's ACTUAL scheduled block time window in the
+      // column header, not the fixed equal-thirds bucket split.
+      // e.g. Jayson has MM block 22:00-01:00 → header shows "10:00 PM - 1:00 AM"
+      //      instead of the bucket boundary "10:00 PM - 12:40 AM".
+      // Falls back to bucket label when block times haven't been precomputed yet.
+      let timeLabel = _mbxBucketLabel(b);
+      if (hasMgr && blockTimes && blockTimes.blockStart && blockTimes.blockEnd) {
+        try {
+          const bs = _mbxParseHM(String(blockTimes.blockStart));
+          const be = _mbxParseHM(String(blockTimes.blockEnd));
+          if (Number.isFinite(bs) && Number.isFinite(be)) {
+            timeLabel = _mbxFmt12(bs) + ' - ' + _mbxFmt12(be);
+          }
+        } catch (_) { /* keep bucket label on any parse error */ }
+      }
+
       return `<th class="${cls}" style="min-width:160px; text-align:center;">
-        <span class="${timeCls}">${esc(_mbxBucketLabel(b))}</span>
+        <span class="${timeCls}">${esc(timeLabel)}</span>
         <div class="${labelCls}" title="Block manager: ${esc(hasMgr ? name : (isSyncing ? 'Loading…' : 'None assigned'))}">${esc(display)}</div>
       </th>`;
     }).join('');
@@ -2599,9 +2638,22 @@ function _mbxReadJwt(){
       const bucketRows = (table.buckets||[]).map(b=>{
         const c = Number(totals?.colTotals?.[b.id])||0;
         const isActive = String(b.id) === String(activeBucketId||'');
+        // FIX-COLTIME: Use manager's actual block time if available, else bucket split label
+        let anaTimeLabel = _mbxBucketLabel(b);
+        try {
+          const bTimes = table.meta && table.meta.bucketManagerTimes && table.meta.bucketManagerTimes[b.id];
+          const bMgr   = table.meta && table.meta.bucketManagers && table.meta.bucketManagers[b.id];
+          if (bTimes && bTimes.blockStart && bTimes.blockEnd && bMgr && bMgr !== '—') {
+            const bs = _mbxParseHM(String(bTimes.blockStart));
+            const be = _mbxParseHM(String(bTimes.blockEnd));
+            if (Number.isFinite(bs) && Number.isFinite(be)) {
+              anaTimeLabel = _mbxFmt12(bs) + ' - ' + _mbxFmt12(be);
+            }
+          }
+        } catch (_) {}
         return `<div class="mbx-ana-row">
           <div style="font-weight:600; color:${isActive ? '#38bdf8' : '#94a3b8'}; font-size:12px;">
-             ${esc(_mbxBucketLabel(b))} ${isActive?' <span style="background:rgba(56,189,248,0.2); color:#7dd3fc; padding:2px 6px; border-radius:4px; font-size:9px; margin-left:6px;">ACTIVE</span>':''}
+             ${esc(anaTimeLabel)} ${isActive?' <span style="background:rgba(56,189,248,0.2); color:#7dd3fc; padding:2px 6px; border-radius:4px; font-size:9px; margin-left:6px;">ACTIVE</span>':''}
           </div>
           <div class="mbx-ana-badge" style="background:rgba(255,255,255,0.05); color:#e2e8f0;">${c}</div>
         </div>`;

@@ -635,6 +635,7 @@
     teamId: '',
     retryCount: 0,
     retryTimer: null,
+    _lastFetchAt: 0,  // FIX-LOOP: tracks last fetch timestamp for rate-limit guard
   };
 
   // Resolve the current user's teamId from every available source (most-reliable first)
@@ -1288,10 +1289,11 @@
     }
 
     const members = getTeamMembers();
-    // If cache is empty but loading hasn't started, trigger it
-    if (!members.length && !_tmState.loading && !_tmState.loaded) {
-      refreshTeamMembers();
-    }
+    // FIX-LOOP: Never call refreshTeamMembers() from inside render()/renderTeamView().
+    // Doing so creates an infinite loop:
+    //   render → renderTeamView → refreshTeamMembers → render (finally) → renderTeamView → ...
+    // Team data loading is triggered only from: initial mount, store events, retry timers.
+    // The spinner state is shown via _tmState.loading — no need to re-trigger from here.
     const cols = hours;
     const colLabels = Array.from({ length: cols }, (_, i) => hm(shift.startMin + i * 60));
     const hourPx = 120;
@@ -1696,12 +1698,17 @@
 
   // ── Team Members Loader ─────────────────────────────────────────────────────
   async function refreshTeamMembers() {
-    // BUG FIX: Use _isMounted() — document.contains(root) is always true for #main
+    // FIX-LOOP-GUARD: Use _isMounted() — document.contains(root) is always true for #main
     if (!_isMounted()) {
       clearTimeout(_tmState.retryTimer);
       return;
     }
     if (_tmState.loading) return;
+    // FIX-LOOP-GUARD: Rate-limit consecutive calls (min 2s between fetches).
+    // Prevents rapid re-entry from retry timers or store events during network failures.
+    const _now = Date.now();
+    if (_tmState._lastFetchAt && (_now - _tmState._lastFetchAt) < 2000) return;
+    _tmState._lastFetchAt = _now;
 
     const liveUser = (window.Auth && Auth.getUser) ? Auth.getUser() : me;
     const uid = String((liveUser && liveUser.id) || (me && me.id) || '').trim();
@@ -1841,14 +1848,23 @@
             if (!_isMounted()) return;
             if (viewMode === 'team') refreshTeamMembers();
           }, delay);
+        } else {
+          // FIX-LOOP: After max retries with no members, mark loaded=true so
+          // renderTeamView no longer attempts to trigger refreshTeamMembers.
+          _tmState.loaded = true;
         }
       }
 
       render();
     } catch (_) {
+      // Swallow fetch errors — retry timer will re-attempt after backoff delay
     } finally {
       _tmState.loading = false;
-      render();
+      // FIX-LOOP: Do NOT call render() here. This was the re-entry point that
+      // restarted the infinite loop after every failed/empty fetch:
+      //   finally(loading=false) → render() → renderTeamView → refreshTeamMembers() → ...
+      // Successful paths already called render() inside the try block above.
+      // Retry paths use setTimeout so they're deferred, not synchronous re-entry.
     }
   }
 
@@ -1885,6 +1901,8 @@
     root._cleanup = function() {
       try { clearTimeout(_tmState.retryTimer); _tmState.retryTimer = null; } catch(_) {}
       try { clearInterval(tickTimer); tickTimer = null; } catch(_) {}
+      // FIX-LOOP: Reset rate-limit timestamp on cleanup so fresh mount can fetch immediately
+      try { _tmState._lastFetchAt = 0; } catch(_) {}
       // Remove store listener to prevent re-renders after navigation
       try {
         if (storeListener) {
