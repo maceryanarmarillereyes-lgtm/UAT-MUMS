@@ -3290,7 +3290,7 @@ function notifyPastWeekLocked(){
           })();
 
           const styleAttr = `left:${st.left}%;width:${st.width}%;${segCssVars}`;
-          const lockedIcon = b.locked ? `<span class="seg-lock" aria-label="Locked" title="Locked"><span class="lock-ic" aria-hidden="true"></span></span>` : '';
+          const lockedIcon = ''; // PREMIUM LOCKED: no icon inside blocks — lock state shown via row amber glow (.locked-below)
           const timeLabels = buildSegTimeLabels(team, b.start, b.end);
           const roleLabel = blockLabel(role);
 
@@ -3350,7 +3350,7 @@ function notifyPastWeekLocked(){
               ${timelineBgHtml}
               ${segs}
               ${isInactive ? `<div class="timeline-overlay">${UI.esc(inactiveText)}</div>`:''}
-              ${dayLockedForGrid ? `<div class="locked-below" aria-label="Locked day" title="Locked"><span class="lock-ic" aria-hidden="true"></span></div>`:''}
+              ${dayLockedForGrid ? `<div class="locked-below" aria-label="Locked day" title="Day is locked — Unlock to edit"></div>`:''}
             </div>
           </div>
           <div class="member-actions">

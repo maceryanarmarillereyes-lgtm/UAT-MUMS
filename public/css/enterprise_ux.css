@@ -3497,22 +3497,11 @@ body:not(.members-fullscreen-active) .members-enterprise-grid{
   box-shadow: 0 0 0 4px rgba(59,130,246,0.14);
 }
 .seg .handle{ position:absolute; inset:0; }
-.seg-lock{
-  position:absolute;
-  top:6px;
-  right:6px;
-  color: rgba(244,244,245,0.85);
-  opacity:0.9;
-}
-.lock-ic{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  width:14px;
-  height:14px;
-  color: rgba(244,244,245,0.85);
-}
-.lock-ic::before{ content:'🔒'; font-size:12px; line-height:1; }
+/* PREMIUM LOCKED: lock icon hidden from individual blocks.
+   Locked state is now expressed at the row timeline level via .locked-below amber glow. */
+.seg-lock{ display: none; }
+.lock-ic{ display: none; }
+.lock-ic::before{ content: none; }
 
 .seg.role-mailbox_manager{ --seg-raw:#2563eb; }
 .seg.role-call_onqueue{ --seg-raw:#7c3aed; }
