@@ -1879,6 +1879,14 @@
     }
 
 
+    // STALE NAV GUARD: If app.js navigated away while we were awaiting
+    // fetchGlobalQbSettings() or refreshProfileFromCloud(), root is no longer
+    // connected to the document. Setting innerHTML on a detached root still
+    // works, but subsequent root.querySelector() calls return elements that
+    // are not in the DOM — addEventListener/onclick throw or silently fail,
+    // leaving a blank page. Bail out early if root is detached.
+    if (!root.isConnected) return;
+
     root.innerHTML = `
       <div class="qb-page-shell" id="qbPageShell">
 
@@ -3440,6 +3448,11 @@
       return loadQuickbaseData({ applyFilters: true });
     }
 
+    // STALE NAV GUARD: Re-check after all async setup is complete.
+    // Covers the case where navigation happened during state initialization.
+    if (!root.isConnected) return;
+
+    try {
     root.querySelector('#qbOpenSettingsBtn').onclick = openSettings;
     root.querySelector('#qbCloseSettingsBtn').onclick = closeSettings;
     root.querySelector('#qbCancelSettingsBtn').onclick = closeSettings;
@@ -4279,6 +4292,22 @@
       } else {
         freshBadge.style.display = '';
         cacheBadge.style.display = 'none';
+      }
+    }
+    } catch(pageInitErr) {
+      // Surface async errors that would otherwise leave a blank page silently.
+      // This catches querySelector failures when elements are missing from the
+      // shell HTML and any other unexpected init errors.
+      if (root.isConnected) {
+        root.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:40px;text-align:center;">
+          <div>
+            <div style="font-size:17px;font-weight:700;color:rgba(255,80,80,0.9);margin-bottom:8px;">My Quickbase failed to load</div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.5);max-width:400px;line-height:1.6;">
+              ${String(pageInitErr && (pageInitErr.message || pageInitErr) || 'Unknown error')}
+              <br><br>Try refreshing the page. If this persists, contact your Super Admin.
+            </div>
+          </div>
+        </div>`;
       }
     }
   };
