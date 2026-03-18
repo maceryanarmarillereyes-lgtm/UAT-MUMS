@@ -5,8 +5,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Login | MUMS</title><link rel="stylesheet" href="./css/styles.css?v=p1-516" />
   <link rel="stylesheet" href="./css/enterprise_ux.css?v=p1-516" />
+  <!-- PERF-FIX-02a: Pre-warm DNS for all external dependencies -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Supabase — DNS prefetch (project URL not known at build time; warms resolver) -->
+  <link rel="dns-prefetch" href="https://supabase.co">
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+  <!-- PERF-FIX-02b: Prefetch the landing page while user is typing credentials.
+       Browser downloads index.html in background — post-login load feels instant. -->
+  <link rel="prefetch" href="./index.html">
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>

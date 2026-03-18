@@ -5286,6 +5286,22 @@ async function boot(){
       try{ renderUserCard(Auth.getUser()||user); }catch(e){}
     });
 
+    // PERF-FIX-08: Register beforeunload cleanup for all persistent timers and realtime channels.
+    // Prevents interval accumulation across browser tab restores + reduces Supabase channel leaks.
+    if(!window.__mumsBeforeUnloadBound){
+      window.__mumsBeforeUnloadBound = true;
+      window.addEventListener('beforeunload', ()=>{
+        try{ if(window.__mumsOnlineBarTimer){ clearInterval(window.__mumsOnlineBarTimer); window.__mumsOnlineBarTimer = null; } }catch(_){}
+        try{ if(window.__mumsClockTimer){ clearInterval(window.__mumsClockTimer); window.__mumsClockTimer = null; } }catch(_){}
+        try{ if(window.__mumsGmtOverviewTimer){ clearInterval(window.__mumsGmtOverviewTimer); window.__mumsGmtOverviewTimer = null; } }catch(_){}
+        // Realtime channel cleanup — prevents ghost subscriptions after tab sleep/restore
+        try{
+          if(window.Realtime && typeof Realtime.destroy === 'function') Realtime.destroy();
+          else if(window.__supabase && typeof window.__supabase.removeAllChannels === 'function') window.__supabase.removeAllChannels();
+        }catch(_){}
+      }, { once: false, passive: true });
+    }
+
   } 
 
   window.App = { boot };
