@@ -2026,6 +2026,8 @@ container.innerHTML = `
       // Mailbox Manager task can only start FROM this time onward.
       // Empty = use team shift start as default.
       mailboxManagerTimeStart: '',
+      // Array of member IDs included in auto-assign. Empty = ALL members included.
+      enabledMembers: [],
     };
   }
 
@@ -2039,21 +2041,22 @@ container.innerHTML = `
     const existing = document.getElementById('autoSettingsModal');
     if(existing) existing.remove();
 
-    // Permissions:
-    // - SUPER_ADMIN / ADMIN can edit coverage parameters for any team
-    // - TEAM_LEAD can edit only their own team (other teams appear disabled)
     const canEditAllTeams = !!(isSuper || isAdmin);
-
     let activeTeamId = String(initialTeamId || selectedTeamId || (me && me.teamId) || '').trim();
-    if(!activeTeamId) activeTeamId = (Config.TEAMS && Config.TEAMS[0] ? Config.TEAMS[0].id : 'A');
+    if(!activeTeamId) activeTeamId = (Config.TEAMS && Config.TEAMS[0] ? Config.TEAMS[0].id : '');
+
+    let activeTab = 'schedule'; // 'schedule' | 'members'
 
     const modal = document.createElement('div');
     modal.className = 'modal confirm-modal';
     modal.id = 'autoSettingsModal';
+    modal.style.cssText = '';
 
-    const buildPanel = (teamId)=>{
+    const buildPanel = (teamId, tab)=>{
       const team = Config.teamById(teamId);
       const s = getAutoSettingsForTeam(team.id);
+      const canEditThisTeam = canEditAllTeams || (me && me.teamId===team.id);
+      const teamNote = canEditThisTeam ? '' : ' <span style="opacity:.5;">(read-only)</span>';
 
       const teamOpts = (Config.TEAMS||[]).map(t=>{
         const disabled = (!canEditAllTeams && t.id !== (me && me.teamId)) ? 'disabled' : '';
@@ -2061,127 +2064,243 @@ container.innerHTML = `
         return `<option value="${UI.esc(t.id)}" ${sel} ${disabled}>${UI.esc(t.label)}</option>`;
       }).join('');
 
-      const canEditThisTeam = canEditAllTeams || (me && me.teamId===team.id);
-      const teamNote = canEditThisTeam ? '' : ' (read-only)';
+      // Get team members for the members tab
+      const teamMembers = (Store.getUsers ? Store.getUsers() : [])
+        .filter(u=>u && String(u.teamId||'').toLowerCase()===String(teamId||'').toLowerCase() && u.role===Config.ROLES.MEMBER)
+        .sort((a,b)=>String(a.name||a.username).localeCompare(String(b.name||b.username)));
+
+      const enabledSet = new Set(Array.isArray(s.enabledMembers) && s.enabledMembers.length ? s.enabledMembers : teamMembers.map(u=>u.id));
+      const allEnabled = enabledSet.size === teamMembers.length || !s.enabledMembers || !s.enabledMembers.length;
+
+      const membersHtml = teamMembers.length === 0
+        ? `<div style="padding:24px;text-align:center;color:rgba(255,255,255,0.4);font-size:13px;">No members found for ${UI.esc(team.label)}</div>`
+        : `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(255,255,255,0.05);border-radius:8px;margin-bottom:8px;">
+            <span style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:.06em;">
+              ${enabledSet.size} of ${teamMembers.length} members enabled
+            </span>
+            <div style="display:flex;gap:8px;">
+              <button type="button" id="asSelectAll" class="btn" style="padding:4px 10px;font-size:12px;">Select All</button>
+              <button type="button" id="asSelectNone" class="btn" style="padding:4px 10px;font-size:12px;">Deselect All</button>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;padding:4px 2px;" id="asMemberList">
+            ${teamMembers.map(u=>{
+              const checked = enabledSet.has(u.id) ? 'checked' : '';
+              const initials = String(u.name||u.username||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+              return `<label style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;cursor:pointer;border:1px solid rgba(255,255,255,${checked?'.15':'.06'});background:rgba(255,255,255,${checked?'.07':'.02'});transition:all .15s;" class="as-member-row" data-uid="${UI.esc(u.id)}">
+                <input type="checkbox" class="as-member-chk" value="${UI.esc(u.id)}" ${checked} style="width:16px;height:16px;accent-color:#f59e0b;cursor:pointer;flex-shrink:0;" />
+                <div style="width:34px;height:34px;border-radius:50%;background:rgba(245,158,11,0.25);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#f59e0b;flex-shrink:0;">${UI.esc(initials)}</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:14px;font-weight:600;color:rgba(255,255,255,.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${UI.esc(u.name||u.username)}</div>
+                  <div style="font-size:11px;color:rgba(255,255,255,.4);">${UI.esc(u.username||'')} · MEMBER</div>
+                </div>
+                <div style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;${checked?'background:rgba(16,185,129,.18);color:#34d399;':'background:rgba(255,255,255,.06);color:rgba(255,255,255,.3);'}">${checked?'✓ Enabled':'Excluded'}</div>
+              </label>`;
+            }).join('')}
+          </div>`;
 
       return `
-      <div class="panel">
-        <div class="head">
+      <div class="panel" style="width:min(680px,96vw);max-height:90vh;display:flex;flex-direction:column;">
+        <div class="head" style="flex-shrink:0;">
           <div>
-            <div class="announce-title">Auto Schedule Settings</div>
-            <div class="small">Configure criteria for: <b>${UI.esc(team.label)}</b>${teamNote}</div>
+            <div class="announce-title" style="font-size:16px;">⚙ Auto Schedule Settings</div>
+            <div class="small" style="margin-top:2px;">Team: <b>${UI.esc(team.label)}</b>${teamNote}</div>
           </div>
-          <button class="btn ghost" type="button" id="asClose">✕</button>
+          <button class="btn ghost" type="button" id="asClose" style="font-size:18px;padding:4px 10px;">✕</button>
         </div>
 
-        <div class="body grid gap-3">
-          <div class="grid2">
-            <div>
-              <label class="small">Team</label>
-              <select class="input" id="asTeam">${teamOpts}</select>
-            </div>
-            <div>
-              <label class="small">Call Available minimum active per hour</label>
-              <input class="input" id="asCallMin" type="number" min="1" max="10" value="${s.callMinPerHour}" />
-            </div>
+        <!-- TEAM SELECTOR -->
+        <div style="padding:10px 20px 0;flex-shrink:0;border-bottom:1px solid rgba(255,255,255,.08);">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <label class="small" style="white-space:nowrap;opacity:.7;">Team</label>
+            <select class="input" id="asTeam" style="flex:1;max-width:220px;">${teamOpts}</select>
           </div>
-
-          <div class="grid2">
-            <div>
-              <label class="small">Mailbox segment hours (minimum)</label>
-              <input class="input" id="asMailboxHours" type="number" min="1" max="9" value="${s.mailboxSegmentHours}" />
-            </div>
-            <div>
-              <label class="small">Back Office max hours per member (per day)</label>
-              <input class="input" id="asBackMax" type="number" min="0" max="9" value="${s.backOfficeMaxHoursPerMember}" />
-            </div>
-          </div>
-
-          <div class="grid2">
-            <div>
-              <label class="small">🕐 Mailbox Manager earliest start time</label>
-              <input class="input" id="asMailboxMgrStart" type="time" value="${s.mailboxManagerTimeStart||''}" />
-              <div class="small muted" style="margin-top:4px;">Leave blank = shift start. Auto-assign won't place Mailbox Manager blocks before this time.</div>
-            </div>
-            <div class="small muted self-end" style="padding-bottom:4px;">
-              Applies to <b>Auto Assign</b> only. Manually-placed blocks are not affected.
-            </div>
-          </div>
-
-          <div class="grid2">
-            <div>
-              <label class="small">Lunch window start</label>
-              <input class="input" id="asLunchStart" type="time" value="${s.lunchStart}" />
-            </div>
-            <div>
-              <label class="small">Lunch window end</label>
-              <input class="input" id="asLunchEnd" type="time" value="${s.lunchEnd}" />
-            </div>
-          </div>
-
-          <div class="grid2">
-            <div>
-              <label class="small">Lunch max overlap (members at same time)</label>
-              <input class="input" id="asLunchOverlap" type="number" min="1" max="5" value="${s.lunchOverlapMax}" />
-            </div>
-            <div class="small muted self-end">
-              <div><b>1-hour grid only</b> (no minutes). Drag/paint assigns whole hours.</div>
-              <div>Coverage is evaluated per-hour grid.</div>
-            </div>
-          </div>
-
-          <div class="row justify-end gap-3 mt-2">
-            <button class="btn" type="button" id="asCancel">Cancel</button>
-            <button class="btn primary" type="button" id="asSave" ${canEditThisTeam?'':'disabled'}>Save Settings</button>
+          <!-- TABS -->
+          <div style="display:flex;gap:0;">
+            <button type="button" id="asTabSchedule" class="as-tab${tab==='schedule'?' as-tab-active':''}" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${tab==='schedule'?'#f59e0b':'transparent'};color:${tab==='schedule'?'#f59e0b':'rgba(255,255,255,.5)'};">⚙ Schedule Rules</button>
+            <button type="button" id="asTabMembers" class="as-tab${tab==='members'?' as-tab-active':''}" style="padding:8px 20px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-bottom:2px solid ${tab==='members'?'#f59e0b':'transparent'};color:${tab==='members'?'#f59e0b':'rgba(255,255,255,.5)'};">👥 Members <span style="padding:1px 7px;border-radius:999px;background:rgba(245,158,11,.2);font-size:11px;margin-left:4px;">${enabledSet.size}/${teamMembers.length}</span></button>
           </div>
         </div>
-      </div>
-      `;
+
+        <!-- TAB CONTENT -->
+        <div class="body" style="flex:1;overflow-y:auto;padding:20px;">
+
+          <!-- SCHEDULE RULES TAB -->
+          <div id="asTabPaneSchedule" style="display:${tab==='schedule'?'block':'none'};">
+            <div class="grid2" style="gap:14px;">
+              <div>
+                <label class="small">Mailbox segment hours (min)</label>
+                <input class="input" id="asMailboxHours" type="number" min="1" max="9" value="${s.mailboxSegmentHours}" />
+              </div>
+              <div>
+                <label class="small">Call Available min active per hour</label>
+                <input class="input" id="asCallMin" type="number" min="1" max="10" value="${s.callMinPerHour}" />
+              </div>
+            </div>
+
+            <div class="grid2" style="gap:14px;margin-top:14px;">
+              <div>
+                <label class="small">Back Office max hrs/member/day</label>
+                <input class="input" id="asBackMax" type="number" min="0" max="9" value="${s.backOfficeMaxHoursPerMember}" />
+              </div>
+              <div>
+                <label class="small">🕐 Mailbox Manager earliest start</label>
+                <input class="input" id="asMailboxMgrStart" type="time" value="${s.mailboxManagerTimeStart||''}" />
+                <div class="small muted" style="margin-top:4px;font-size:11px;">Leave blank = shift start. Auto-assign won't schedule MM before this time.</div>
+              </div>
+            </div>
+
+            <div class="grid2" style="gap:14px;margin-top:14px;">
+              <div>
+                <label class="small">Lunch window start</label>
+                <input class="input" id="asLunchStart" type="time" value="${s.lunchStart}" />
+              </div>
+              <div>
+                <label class="small">Lunch window end</label>
+                <input class="input" id="asLunchEnd" type="time" value="${s.lunchEnd}" />
+              </div>
+            </div>
+
+            <div class="grid2" style="gap:14px;margin-top:14px;">
+              <div>
+                <label class="small">Lunch max overlap (members at same time)</label>
+                <input class="input" id="asLunchOverlap" type="number" min="1" max="5" value="${s.lunchOverlapMax}" />
+              </div>
+              <div class="small muted self-end" style="padding-bottom:4px;font-size:11px;">
+                <b>1-hour grid only.</b> Drag/paint assigns whole hours.<br>Coverage evaluated per-hour grid.
+              </div>
+            </div>
+          </div>
+
+          <!-- MEMBERS TAB -->
+          <div id="asTabPaneMembers" style="display:${tab==='members'?'block':'none'};">
+            <div class="small muted" style="margin-bottom:12px;font-size:12px;line-height:1.5;padding:10px 14px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;">
+              ✅ <b>Enabled members</b> will receive auto-assigned task blocks when you click <b>Auto Assign</b>.<br>
+              ❌ <b>Excluded members</b> are skipped — their schedule won't be touched.
+            </div>
+            ${membersHtml}
+          </div>
+
+        </div>
+
+        <!-- FOOTER -->
+        <div class="row justify-end gap-3" style="padding:14px 20px;border-top:1px solid rgba(255,255,255,.08);flex-shrink:0;">
+          <button class="btn" type="button" id="asCancel">Cancel</button>
+          <button class="btn primary" type="button" id="asSave" ${canEditThisTeam?'':'disabled'} style="min-width:130px;">💾 Save Settings</button>
+        </div>
+      </div>`;
     };
 
-    modal.innerHTML = buildPanel(activeTeamId);
+    modal.innerHTML = buildPanel(activeTeamId, activeTab);
     document.body.appendChild(modal);
 
     const close = ()=>{ modal.classList.remove('open'); modal.remove(); };
-    const bind = ()=>{
-      const btnClose = modal.querySelector('#asClose');
-      const btnCancel = modal.querySelector('#asCancel');
-      if(btnClose) btnClose.onclick = close;
-      if(btnCancel) btnCancel.onclick = close;
 
+    const bind = ()=>{
+      modal.querySelector('#asClose').onclick = close;
+      modal.querySelector('#asCancel').onclick = close;
+
+      // Team switch
       const teamSel = modal.querySelector('#asTeam');
-      if(teamSel){
-        teamSel.onchange = ()=>{
-          activeTeamId = String(teamSel.value||'').trim() || activeTeamId;
-          modal.innerHTML = buildPanel(activeTeamId);
-          bind();
-        };
+      if(teamSel) teamSel.onchange = ()=>{
+        activeTeamId = String(teamSel.value||'').trim() || activeTeamId;
+        modal.innerHTML = buildPanel(activeTeamId, activeTab);
+        bind();
+      };
+
+      // Tab switching
+      const tabScheduleBtn = modal.querySelector('#asTabSchedule');
+      const tabMembersBtn  = modal.querySelector('#asTabMembers');
+      if(tabScheduleBtn) tabScheduleBtn.onclick = ()=>{
+        if(activeTab==='schedule') return;
+        activeTab = 'schedule';
+        modal.innerHTML = buildPanel(activeTeamId, activeTab);
+        bind();
+      };
+      if(tabMembersBtn) tabMembersBtn.onclick = ()=>{
+        if(activeTab==='members') return;
+        activeTab = 'members';
+        modal.innerHTML = buildPanel(activeTeamId, activeTab);
+        bind();
+      };
+
+      // Select All / Deselect All
+      const selAllBtn  = modal.querySelector('#asSelectAll');
+      const selNoneBtn = modal.querySelector('#asSelectNone');
+      if(selAllBtn) selAllBtn.onclick = ()=>{
+        modal.querySelectorAll('.as-member-chk').forEach(c=>{ c.checked=true; });
+        _refreshMemberRows();
+      };
+      if(selNoneBtn) selNoneBtn.onclick = ()=>{
+        modal.querySelectorAll('.as-member-chk').forEach(c=>{ c.checked=false; });
+        _refreshMemberRows();
+      };
+
+      // Live row style refresh on checkbox change
+      modal.querySelectorAll('.as-member-chk').forEach(chk=>{
+        chk.onchange = ()=>_refreshMemberRows();
+      });
+
+      function _refreshMemberRows(){
+        modal.querySelectorAll('.as-member-row').forEach(row=>{
+          const chk = row.querySelector('.as-member-chk');
+          const checked = chk && chk.checked;
+          row.style.borderColor = `rgba(255,255,255,${checked?'.15':'.06'})`;
+          row.style.background  = `rgba(255,255,255,${checked?'.07':'.02'})`;
+          const badge = row.querySelector('div:last-child');
+          if(badge){
+            badge.style.background = checked?'rgba(16,185,129,.18)':'rgba(255,255,255,.06)';
+            badge.style.color      = checked?'#34d399':'rgba(255,255,255,.3)';
+            badge.textContent      = checked?'✓ Enabled':'Excluded';
+          }
+        });
+        // Update tab member count badge
+        const memberBadge = modal.querySelector('#asTabMembers span');
+        if(memberBadge){
+          const total   = modal.querySelectorAll('.as-member-chk').length;
+          const enabled = modal.querySelectorAll('.as-member-chk:checked').length;
+          memberBadge.textContent = `${enabled}/${total}`;
+        }
       }
 
+      // Save
       const btnSave = modal.querySelector('#asSave');
       if(btnSave) btnSave.onclick = ()=>{
         const team = Config.teamById(activeTeamId);
         const canEditThisTeam = canEditAllTeams || (me && me.teamId===team.id);
-        if(!canEditThisTeam){
-          alert('You do not have permission to edit Coverage Meter parameters for this team.');
-          return;
+        if(!canEditThisTeam){ alert('You do not have permission to edit settings for this team.'); return; }
+
+        // Collect enabled member IDs from the Members tab
+        // (checked = enabled, unchecked = excluded from auto-assign)
+        const allChks = modal.querySelectorAll('.as-member-chk');
+        let enabledMembers = [];
+        if(allChks.length){
+          enabledMembers = Array.from(allChks).filter(c=>c.checked).map(c=>c.value);
+        } else {
+          // Members tab was never rendered — keep existing setting
+          const existing = getAutoSettingsForTeam(team.id);
+          enabledMembers = existing.enabledMembers || [];
         }
+
         const settings = {
-          mailboxSegmentHours: Math.max(1, Number(modal.querySelector('#asMailboxHours').value||3)),
+          mailboxSegmentHours: Math.max(1, Number((modal.querySelector('#asMailboxHours')||{}).value||3)),
           mailboxSingle: true,
-          callMinPerHour: Math.max(1, Number(modal.querySelector('#asCallMin').value||2)),
-          lunchStart: String(modal.querySelector('#asLunchStart').value||'10:00'),
-          lunchEnd: String(modal.querySelector('#asLunchEnd').value||'13:00'),
-          lunchOverlapMax: Math.max(1, Number(modal.querySelector('#asLunchOverlap').value||2)),
+          callMinPerHour: Math.max(1, Number((modal.querySelector('#asCallMin')||{}).value||2)),
+          lunchStart: String((modal.querySelector('#asLunchStart')||{}).value||'10:00'),
+          lunchEnd: String((modal.querySelector('#asLunchEnd')||{}).value||'13:00'),
+          lunchOverlapMax: Math.max(1, Number((modal.querySelector('#asLunchOverlap')||{}).value||2)),
           lunchDurationMin: 60,
-          backOfficeMaxHoursPerMember: Math.max(0, Number(modal.querySelector('#asBackMax').value||2)),
-          mailboxManagerTimeStart: String((modal.querySelector('#asMailboxMgrStart') && modal.querySelector('#asMailboxMgrStart').value)||'').trim(),
+          backOfficeMaxHoursPerMember: Math.max(0, Number((modal.querySelector('#asBackMax')||{}).value||2)),
+          mailboxManagerTimeStart: String((modal.querySelector('#asMailboxMgrStart')||{}).value||'').trim(),
+          enabledMembers,
         };
         if(Store.setTeamAutoSettings) Store.setTeamAutoSettings(team.id, settings);
         const actor = Auth.getUser();
         if(actor) Store.addLog({ ts: Date.now(), teamId: team.id, actorId: actor.id, actorName: actor.name||actor.username, action: 'AUTO_SETTINGS', targetId: team.id, targetName: team.label, msg: `${actor.name||actor.username} updated auto-schedule settings for ${team.label}`, detail: JSON.stringify(settings) });
         close();
-        alert('Auto schedule settings saved.');
+        if(window.UI && UI.toast) UI.toast(`Auto schedule settings saved for ${team.label}.`, 'success');
+        else alert('Auto schedule settings saved.');
       };
     };
 
@@ -2417,13 +2536,18 @@ container.innerHTML = `
     autoBtn.onclick = ()=>{
       // Direct apply is supported, but we encourage preview
       const team = Config.teamById(selectedTeamId);
-      const members = getMembersForView(selectedTeamId).filter(u=>u.role===Config.ROLES.MEMBER);
-      if(members.length < 2){ alert('Auto scheduling needs at least 2 members in the team.'); return; }
+      const allMembers = getMembersForView(selectedTeamId).filter(u=>u.role===Config.ROLES.MEMBER);
+      if(allMembers.length < 2){ alert('Auto scheduling needs at least 2 members in the team.'); return; }
       const lock = getTeamLock(team.id);
       if(lock && lock.lockedDays && [1,2,3,4,5].some(d=>lock.lockedDays[String(d)])){
         alert('This week is locked. Unlock first to apply again.');
         return;
       }
+      // ENABLED MEMBERS FILTER: only include members checked in Auto Schedule Settings
+      const s = getAutoSettingsForTeam(team.id);
+      const enabledIds = Array.isArray(s.enabledMembers) && s.enabledMembers.length ? new Set(s.enabledMembers) : null;
+      const members = enabledIds ? allMembers.filter(u=>enabledIds.has(u.id)) : allMembers;
+      if(members.length < 1){ alert('No enabled members found. Go to Auto Settings → Members tab and enable at least one member.'); return; }
       const plans = computeAutoPlans(team, members);
       renderPreviewModal(team, members, plans);
     };
