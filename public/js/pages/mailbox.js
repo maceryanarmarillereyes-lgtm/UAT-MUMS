@@ -782,7 +782,15 @@ function _mbxReadJwt(){
   function _mbxForceResync(reason){
     try{
       const duty = getDuty();
-      const tid = String(duty && duty.current && duty.current.id ? duty.current.id : '');
+      let tid = String(duty && duty.current && duty.current.id ? duty.current.id : '');
+      // Fallback: read the active shiftKey from mailbox state and extract team id
+      if(!tid){
+        try{
+          const st = window.Store && Store.getMailboxState ? Store.getMailboxState() : {};
+          const sk = String(st.currentKey || '');
+          if(sk) tid = sk.split('|')[0]; // shiftKey = "teamId|date"
+        }catch(_){}
+      }
       if(!tid) return;
       // Clear all guards so _mbxSyncTeamScheduleBlocks will actually re-fetch
       delete _scheduleReady[tid];
@@ -805,12 +813,19 @@ function _mbxReadJwt(){
       const jwt = _mbxReadJwt();
       if (!jwt) return;
 
-      // Always send hintTeamId so server resolves team even when DB team_id is NULL
+      // Always send hintTeamId so server resolves team even when DB team_id is NULL.
       const meTeamId = String(me.teamId || me.team_id || '').trim();
       const hintParam = meTeamId ? `&hintTeamId=${encodeURIComponent(meTeamId)}` : '';
 
+      // ROSTER FIX: Always send resolveTeamId = the active duty team we want members for.
+      // Without this, SUPER_ADMIN (teamId='developer') fetches Developer Access members only
+      // instead of the actual shift team (Morning/Mid/Night). The resolveTeamId param tells
+      // the server to return members and schedule blocks for the specified team regardless
+      // of the requesting user's own team assignment.
+      const resolveParam = teamId ? `&resolveTeamId=${encodeURIComponent(teamId)}` : '';
+
       const res = await fetch(
-        `/api/member/${encodeURIComponent(uid)}/schedule?includeTeam=1${hintParam}`,
+        `/api/member/${encodeURIComponent(uid)}/schedule?includeTeam=1${hintParam}${resolveParam}`,
         { headers: { Authorization: `Bearer ${jwt}` }, cache: 'no-store' }
       );
       if (!res.ok) return;
@@ -831,7 +846,7 @@ function _mbxReadJwt(){
           status:   'active'
         }));
       const fromStore = (window.Store && Store.getUsers ? Store.getUsers() : [])
-        .filter(u => u && u.id && (String(u.teamId || '') === apiTeamId))
+        .filter(u => u && u.id && (String(u.teamId || '').trim().toLowerCase() === String(apiTeamId).toLowerCase()))
         .map(u => ({ id: String(u.id), name: String(u.name || u.username || u.id),
                      username: String(u.username || u.name || u.id),
                      role: String(u.role || 'MEMBER'), teamId: apiTeamId, status: 'active' }));
@@ -889,8 +904,10 @@ function _mbxReadJwt(){
         } catch (_) {}
       };
 
-      // Apply for own team's table
-      if (apiTeamId && tsb.length) {
+      // ROSTER FIX: Always apply roster to the table, even when tsb is empty.
+      // Previously guarded by tsb.length — if the shift had no schedule blocks today
+      // (e.g. Sunday or fresh setup), the table.members was never patched with full roster.
+      if (apiTeamId) {
         applyToTable(apiTeamId, [...merged.values()], tsb);
       }
 
@@ -1037,7 +1054,7 @@ function _mbxReadJwt(){
     // SCHEMA VERSION GUARD: if cached table is from an older schema version, discard it.
     // This auto-clears stale localStorage entries after any deploy that changes
     // bucketManagers computation logic — no manual cache flush needed by users.
-    const CURRENT_SCHEMA_VER = 2;
+    const CURRENT_SCHEMA_VER = 3;
     if(table && (!table.meta || (table.meta.schemaVer||0) < CURRENT_SCHEMA_VER)){
       table = null; // force rebuild with new logic
     }
@@ -1062,13 +1079,14 @@ function _mbxReadJwt(){
       // AND _rosterByTeam cache (populated by _mbxSyncTeamScheduleBlocks API fetch).
       // Store.getUsers() is empty for MEMBER-role users (restricted payload) → without the
       // roster cache fallback, MEMBERs would see an empty table on first render.
+      const _tid = String(team.id || '').trim().toLowerCase();
       const fromStore = (Store && Store.getUsers ? Store.getUsers() : [])
-        .filter(u=>u && u.teamId===team.id && (!u.status || u.status==='active'))
+        .filter(u=>u && String(u.teamId||'').trim().toLowerCase()===_tid && (!u.status || u.status==='active'))
         .map(u=>({ id:u.id, name:u.name||u.username||'—', username:u.username||'',
                    role:u.role||'', roleLabel:_mbxRoleLabel(u.role||''),
                    dutyLabel:_mbxDutyLabelForUser(u, nowParts) }));
 
-      const fromRoster = (_rosterByTeam[team.id] || [])
+      const fromRoster = (_rosterByTeam[team.id] || _rosterByTeam[_tid] || [])
         .map(u=>({ id:String(u.id), name:u.name||'—', username:u.username||'',
                    role:u.role||'', roleLabel:_mbxRoleLabel(u.role||''),
                    dutyLabel:_mbxDutyLabelForUser({id:String(u.id),teamId:team.id}, nowParts) }));
@@ -1087,7 +1105,7 @@ function _mbxReadJwt(){
 
       table = {
         meta: {
-          schemaVer: 2,   // SCHEMA VERSION: bump this whenever bucketManagers logic changes.
+          schemaVer: 3,   // SCHEMA VERSION: bump this whenever bucketManagers logic changes.
           shiftKey,
           teamId: team.id,
           teamLabel: team.label || team.id,
@@ -1109,7 +1127,7 @@ function _mbxReadJwt(){
       // across renders even after the logic was fixed, because the precompute
       // function only writes NEW values but never clears old ones.
       table.meta.bucketManagers = {};
-      table.meta.schemaVer = 2; // stamp schema version on existing tables too
+      table.meta.schemaVer = 3; // stamp schema version on existing tables too
       
       // BOSS THUNTER: Force sync buckets from Team Config on reload
       const Config = window.Config;
@@ -1127,8 +1145,9 @@ function _mbxReadJwt(){
       }
 
       const nowParts = (UI && UI.mailboxNowParts ? UI.mailboxNowParts() : (UI && UI.manilaNow ? UI.manilaNow() : null));
+      const _eTid = String(team.id || '').trim().toLowerCase();
       const teamUsers = (Store && Store.getUsers ? Store.getUsers() : [])
-        .filter(u=>u && u.teamId===team.id && (!u.status || u.status==='active'))
+        .filter(u=>u && String(u.teamId||'').trim().toLowerCase()===_eTid && (!u.status || u.status==='active'))
         .map(u=>({
           id: u.id,
           name: u.name||u.username||'—',
@@ -3979,12 +3998,24 @@ function _mbxReadJwt(){
     // REALTIME ALL-USER FIX: Immediately sync schedule blocks on mount for ALL roles.
     // This ensures MEMBERs (who have restricted Store.getUsers()) get full roster data
     // within seconds of opening the Mailbox page, without waiting for the first render cycle.
+    // ROSTER FIX: Also prefetch ALL shift teams (morning/mid/night) so when the shift
+    // rotates, the incoming team's roster is already cached — no lag, no empty member list.
     try{
       const duty = getDuty();
       const bootTid = duty && duty.current && duty.current.id ? String(duty.current.id) : '';
       if(bootTid && !_scheduleReady[bootTid]){
         _schedSyncPending = true;
         _mbxSyncTeamScheduleBlocks(bootTid).catch(()=>{});
+      }
+      // Prefetch other shift teams in background (staggered to avoid request storms)
+      const Config = window.Config;
+      const allTeams = (Config && Array.isArray(Config.TEAMS)) ? Config.TEAMS : [];
+      let delay = 2000;
+      for(const t of allTeams){
+        const tid = String(t.id || '');
+        if(!tid || tid === bootTid || _scheduleReady[tid]) continue;
+        ((teamId, ms)=>{ setTimeout(()=>{ _mbxSyncTeamScheduleBlocks(teamId).catch(()=>{}); }, ms); })(tid, delay);
+        delay += 2000; // stagger each team fetch by 2s
       }
     }catch(_){}
 
