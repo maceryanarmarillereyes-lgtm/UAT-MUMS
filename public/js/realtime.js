@@ -585,9 +585,11 @@ function applyRemoteKey(key, value){
 
 
             // Integrity reconciliation: keep status green, but periodically pull
-            // to protect against missed events.
+            // PERF OPT: Reconcile interval increased from 15s → 45s.
+            // Supabase Realtime is the primary real-time channel; this poll is only
+            // a safety net for missed events. 45s is sufficient without hammering the API.
             try {
-              const intervalMs = Math.max(5000, Number(env.SYNC_RECONCILE_MS || 15000));
+              const intervalMs = Math.max(15000, Number(env.SYNC_RECONCILE_MS || 45000));
               if (reconcileTimer) clearInterval(reconcileTimer);
               reconcileTimer = setInterval(()=>{
                 if (cloudMode !== 'realtime') return;
@@ -738,6 +740,20 @@ function applyRemoteKey(key, value){
         op = 'merge'; // safe for list keys
       } else if (typeof value === 'object') {
         op = 'merge';
+
+        // CLEAR BUG FIX: Schedule block keys must use op='set' (replace) not 'merge'.
+        // With op='merge', a server-side mergeObjects shallow-merges old user entries
+        // back on top of cleared entries — causing deleted blocks to resurrect.
+        // Setting op='set' makes the pushed value authoritative: the server stores it
+        // exactly as-is without mixing in stale data from other clients.
+        // _ts is embedded so the server can resolve multi-tab race conditions (last-write-wins).
+        if (key === 'mums_schedule_blocks' || key === 'mums_schedule_snapshots' || key === 'ums_weekly_schedules') {
+          op = 'set';
+          // Stamp the push time so the server can reject older pushes from stale tabs.
+          if (value && typeof value === 'object' && !Array.isArray(value)) {
+            value = Object.assign({}, value, { _ts: Date.now() });
+          }
+        }
 
         // RESURRECTION FIX: For mums_mailbox_tables, compute which assignment IDs
         // were present in the previous push but are absent in the current push.

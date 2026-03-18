@@ -874,7 +874,8 @@ function _mbxReadJwt(){
           const curKey = Store.getMailboxState().currentKey;
           if (!curKey) return;
           const t = Store.getMailboxTable(curKey);
-          if (!t || String(t.meta && t.meta.teamId || '') !== targetTid) return;
+          // Case-insensitive compare — ensures 'Morning' === 'morning' never silently skips
+          if (!t || String(t.meta && t.meta.teamId || '').toLowerCase() !== String(targetTid).toLowerCase()) return;
 
           // Build comprehensive nameMap for precompute
           const nm = new Map();
@@ -3666,7 +3667,9 @@ function _mbxReadJwt(){
 
       ensureEnterpriseMailboxStyles();
 
-      // BOSS THUNTER: Auto-trigger roster sync for MEMBER-role users on first render
+      // BOSS THUNTER: Auto-trigger roster sync for MEMBER-role users on first render.
+      // OVERRIDE FIX: Also re-sync when active team changes due to time override
+      // (e.g. override switches from Morning to Mid Shift — Mid roster may not be cached).
       const teamId = String(table?.meta?.teamId || '');
       if (teamId && !_schedSyncPending && !(_scheduleReady && _scheduleReady[teamId])) {
         _schedSyncPending = true;
@@ -3967,14 +3970,15 @@ function _mbxReadJwt(){
       refreshMemberDutyPills(root);
     }, 1000);
 
-    // REALTIME ROSTER FIX: Periodic 60-second schedule re-sync.
-    // Keeps roster + block assignments fresh for ALL roles (MEMBER, TEAM_LEAD, SUPER_ADMIN).
-    // Without this, MEMBERs see stale duty labels / manager names if they keep the page open.
+    // PERF OPT: Periodic schedule re-sync increased from 60s → 90s.
+    // The 60s interval was causing noticeable API load per active tab.
+    // Supabase Realtime + mums:store listeners handle instant updates;
+    // this poll is a fallback for missed events only.
     clearInterval(_periodicSyncTimer);
     _periodicSyncTimer = setInterval(()=>{
       if(!root || !isMailboxRouteActive()) return;
-      _mbxForceResync('periodic-60s');
-    }, 60000);
+      _mbxForceResync('periodic-90s');
+    }, 90000);
   }
 
   function stopRealtimeTimers(){

@@ -201,6 +201,17 @@ window.Pages.members = function(root){
 
   let selectedDay = getManilaDayIndex();
 
+  // PERF OPT: Debounce renderAll to prevent thrashing when multiple store events
+  // fire in rapid succession (e.g. Supabase realtime + local write simultaneously).
+  let _membersRenderPending = false;
+  let _membersRenderTimer = null;
+  function scheduleRenderAll(reason){
+    if(_membersRenderPending) return;
+    _membersRenderPending = true;
+    clearTimeout(_membersRenderTimer);
+    _membersRenderTimer = setTimeout(()=>{ try{ renderAll(); }catch(_e){} _membersRenderPending = false; }, 80);
+  }
+
   // Week scope selector (Manila week starting Monday)
   // Manila week starting Monday, derived from Manila *calendar* date
   const _todayISO = UI.manilaTodayISO();
@@ -2012,6 +2023,9 @@ container.innerHTML = `
       lunchOverlapMax: 2,
       lunchDurationMin: 60,
       backOfficeMaxHoursPerMember: 2,
+      // Mailbox Manager task can only start FROM this time onward.
+      // Empty = use team shift start as default.
+      mailboxManagerTimeStart: '',
     };
   }
 
@@ -2085,6 +2099,17 @@ container.innerHTML = `
 
           <div class="grid2">
             <div>
+              <label class="small">🕐 Mailbox Manager earliest start time</label>
+              <input class="input" id="asMailboxMgrStart" type="time" value="${s.mailboxManagerTimeStart||''}" />
+              <div class="small muted" style="margin-top:4px;">Leave blank = shift start. Auto-assign won't place Mailbox Manager blocks before this time.</div>
+            </div>
+            <div class="small muted self-end" style="padding-bottom:4px;">
+              Applies to <b>Auto Assign</b> only. Manually-placed blocks are not affected.
+            </div>
+          </div>
+
+          <div class="grid2">
+            <div>
               <label class="small">Lunch window start</label>
               <input class="input" id="asLunchStart" type="time" value="${s.lunchStart}" />
             </div>
@@ -2150,6 +2175,7 @@ container.innerHTML = `
           lunchOverlapMax: Math.max(1, Number(modal.querySelector('#asLunchOverlap').value||2)),
           lunchDurationMin: 60,
           backOfficeMaxHoursPerMember: Math.max(0, Number(modal.querySelector('#asBackMax').value||2)),
+          mailboxManagerTimeStart: String((modal.querySelector('#asMailboxMgrStart') && modal.querySelector('#asMailboxMgrStart').value)||'').trim(),
         };
         if(Store.setTeamAutoSettings) Store.setTeamAutoSettings(team.id, settings);
         const actor = Auth.getUser();
@@ -2440,10 +2466,24 @@ container.innerHTML = `
       mins[u.id] = { mailbox:0, call:0, back:0, lunch:0 };
     });
 
-    // 1) Mailbox coverage: one member at a time, start of shift, segments of mailboxSegmentHours
+    // 1) Mailbox coverage: one member at a time, segments of mailboxSegmentHours.
+    //    MAILBOX MANAGER TIME START: If s.mailboxManagerTimeStart is set, auto-assign
+    //    will not place any Mailbox Manager blocks before that time.
+    //    Slots before that offset get filled later by call/back-office logic.
+    //    If unset, starts from slot 0 (shift start) as before.
     const segMin = Math.max(step, Math.round((Number(s.mailboxSegmentHours||3)*60)/step)*step);
     const segSlots = Math.max(1, segMin/step);
-    let cur = 0;
+
+    // Compute the earliest slot index allowed for Mailbox Manager blocks.
+    let mgrEarliestSlot = 0;
+    if(s.mailboxManagerTimeStart && String(s.mailboxManagerTimeStart).trim()){
+      try{
+        const off = UI.offsetFromShiftStart(team, String(s.mailboxManagerTimeStart).trim());
+        mgrEarliestSlot = Math.max(0, Math.floor(off / step));
+      }catch(_){ mgrEarliestSlot = 0; }
+    }
+
+    let cur = mgrEarliestSlot; // start mailbox segments from the earliest allowed slot
     let segIdx = 0;
     while(cur < slots){
       const end = Math.min(slots, cur + segSlots);

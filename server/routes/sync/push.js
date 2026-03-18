@@ -222,9 +222,10 @@ module.exports = async (req, res) => {
       return res.end(JSON.stringify({ ok: false, error: 'Forbidden (member write restricted)' }));
     }
 
-    // Fetch current doc (for merge)
+    // Fetch current doc (for merge OR timestamp conflict check)
     let current = null;
-    if (op === 'merge') {
+    const isScheduleKey = (key === 'mums_schedule_blocks' || key === 'mums_schedule_snapshots' || key === 'ums_weekly_schedules');
+    if (op === 'merge' || (op === 'set' && isScheduleKey)) {
       const cur = await serviceSelect('mums_documents', `select=key,value&key=eq.${encodeURIComponent(key)}&limit=1`);
       if (cur.ok && Array.isArray(cur.json) && cur.json[0]) current = cur.json[0].value;
     }
@@ -237,6 +238,17 @@ module.exports = async (req, res) => {
         nextValue = mergeArrays(current, incomingValue, removedIds);
       } else if (isObject(current) || isObject(incomingValue)) {
         nextValue = mergeObjects(current, incomingValue);
+      }
+    } else if (op === 'set' && isScheduleKey) {
+      // CLEAR BUG FIX: Timestamp conflict resolution for schedule block keys.
+      // If the existing document in the DB has a _ts newer than this incoming push,
+      // reject the push — prevents stale tabs from resurrecting cleared blocks.
+      const incomingTs = Number((incomingValue && incomingValue._ts) || 0);
+      const currentTs  = Number((current && current._ts) || 0);
+      if (currentTs > incomingTs && incomingTs > 0) {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({ ok: true, stale: true, reason: 'older_ts' }));
       }
     }
 

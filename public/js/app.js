@@ -4322,7 +4322,13 @@ async function boot(){
           }
           if(enabledEl) enabledEl.checked = !!draft.enabled;
           if(freezeEl) freezeEl.checked = !!draft.freeze;
-          if(inputEl) inputEl.value = fmtManilaLocal(safeDraftMs(draft.ms));
+          // INPUT OVERWRITE FIX: Only write back to inputEl if the user is NOT
+          // actively editing it. Overwriting while user is picking a time resets
+          // the picker back to the old value mid-selection.
+          // __userEditing is set by onfocus/onblur on inputEl for reliable detection.
+          if(inputEl && !inputEl.__userEditing && document.activeElement !== inputEl){
+            inputEl.value = fmtManilaLocal(safeDraftMs(draft.ms));
+          }
           if(scopeEl) scopeEl.value = (String(draft.scope||'sa_only') === 'global') ? 'global' : 'sa_only';
 
           const on = !!draft.enabled;
@@ -4393,10 +4399,32 @@ async function boot(){
           };
         }
         if(inputEl){
-          inputEl.onchange = ()=>{
+          // INPUT EVENT FIX: datetime-local fires 'input' on every scroll/keypress
+          // but 'change' only on blur. We need both so draft.ms updates immediately
+          // when user scrolls the hour/minute column in the picker.
+          const _onInputChange = ()=>{
             const ms = parseManilaLocal(inputEl.value);
             // FIX[EPOCH-BUG]: Only accept parsed ms if it's a real post-2020 timestamp.
             // parseManilaLocal returns 0 for empty/invalid input — must not write 0 into draft.
+            if(ms && ms > MIN_VALID_OVERRIDE_MS){
+              draft.ms = ms;
+              if(draft.enabled && !draft.freeze) draft.setAt = Date.now();
+            }
+            // Don't call render() from inside input event — it will overwrite the picker
+          };
+          inputEl.onchange = ()=>{
+            _onInputChange();
+            render(); // safe on change (picker has committed)
+          };
+          inputEl.oninput = _onInputChange; // update draft silently, no render()
+          // FOCUS PROTECTION: While the picker is open, completely block render()
+          // from overwriting inputEl.value — the 1-second clock ticker calls render()
+          // every second which fights with the user's active picker selection.
+          inputEl.onfocus = ()=>{ inputEl.__userEditing = true; };
+          inputEl.onblur  = ()=>{
+            inputEl.__userEditing = false;
+            // Commit whatever value is in the picker on blur
+            const ms = parseManilaLocal(inputEl.value);
             if(ms && ms > MIN_VALID_OVERRIDE_MS){
               draft.ms = ms;
               if(draft.enabled && !draft.freeze) draft.setAt = Date.now();
@@ -4448,6 +4476,17 @@ async function boot(){
               return;
             }
             // FIX[EPOCH-BUG]: Reject epoch/zero ms even if draft guard somehow missed it.
+            // SAVE INPUT FIX: Also try reading inputEl.value directly — if the picker scrolled
+            // but 'change'/'input' didn't fire (browser-specific), draft.ms may be stale.
+            // Reading the input value at Save time is the last-resort authoritative source.
+            if(!draft.ms || draft.ms <= MIN_VALID_OVERRIDE_MS){
+              try{
+                if(inputEl && inputEl.value){
+                  const fromInput = parseManilaLocal(inputEl.value);
+                  if(fromInput && fromInput > MIN_VALID_OVERRIDE_MS) draft.ms = fromInput;
+                }
+              }catch(_){}
+            }
             if(!draft.ms || draft.ms <= MIN_VALID_OVERRIDE_MS){
               if(errEl) errEl.textContent = 'Please select a valid Manila date & time.';
               return;
