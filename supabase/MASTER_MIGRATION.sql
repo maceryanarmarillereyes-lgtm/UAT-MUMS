@@ -199,11 +199,29 @@ alter table public.mums_profiles add column if not exists avatar_url text;
 alter table public.mums_profiles add column if not exists team_override boolean not null default false;
 
 -- email / citext (20260128 deduplicate)
-alter table public.mums_profiles add column if not exists email extensions.citext;
+-- FIX v3.9.26: Try extensions.citext first, fall back to plain text if extension
+-- is not in extensions schema (varies by Supabase instance/region).
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'mums_profiles' and column_name = 'email'
+  ) then
+    begin
+      alter table public.mums_profiles add column email extensions.citext;
+    exception when others then
+      begin
+        alter table public.mums_profiles add column email citext;
+      exception when others then
+        alter table public.mums_profiles add column email text;
+      end;
+    end;
+  end if;
+end $$;
 
 -- Backfill email from auth.users
 update public.mums_profiles p
-set email = lower(trim(u.email))::extensions.citext
+set email = lower(trim(u.email))
 from auth.users u
 where u.id = p.user_id and u.email is not null;
 
@@ -800,4 +818,36 @@ notify pgrst, 'reload schema';
 --   mums_presence: set UNLOGGED (WAL writes eliminated)
 --   mums_documents: REPLICA IDENTITY set to DEFAULT
 --   mums_sync_log: REPLICA IDENTITY set to DEFAULT
+-- =============================================================================
+-- =============================================================================
+-- SECTION 17: SUPERADMIN BOOTSTRAP PROFILE
+-- =============================================================================
+-- Pre-insert the supermace profile so the Auth trigger can link it on first login.
+-- After running this: go to Authentication → Users → Add User →
+--   Email: supermace@mums.local | Password: (your choice) | Auto Confirm: ON
+-- The trigger will auto-link the auth user to this profile row.
+-- =============================================================================
+insert into public.mums_profiles (
+  user_id, username, name, role, team_id, duty, email
+) values (
+  gen_random_uuid(),
+  'supermace',
+  'supermace',
+  'SUPER_ADMIN',
+  null,
+  '',
+  'supermace@mums.local'
+) on conflict (username) do update set
+  role  = 'SUPER_ADMIN',
+  team_id = null,
+  email = 'supermace@mums.local';
+
+notify pgrst, 'reload schema';
+
+-- =============================================================================
+-- ALL DONE.
+-- NEXT STEP: Authentication → Users → Add user
+--   Email:    supermace@mums.local
+--   Password: (choose your own)
+--   Check:    "Auto Confirm User"
 -- =============================================================================
