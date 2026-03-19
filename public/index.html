@@ -307,6 +307,45 @@
 
         </div>
 
+        <!-- ── SECTION: DISPLAY ──────────────────────────────────── -->
+        <div class="stngs-section-label">Display</div>
+        <div class="stngs-row">
+
+          <!-- ── Brightness Control Tile ─── -->
+          <div class="stngs-tile stngs-tile-brightness" id="brightnessTile" role="group" aria-label="Brightness">
+            <div class="stngs-tile-icon stngs-icon-brightness">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            </div>
+            <div class="stngs-tile-content stngs-brightness-content">
+              <div class="stngs-tile-name">Brightness</div>
+              <div class="stngs-tile-desc">Adjust interface brightness for your environment</div>
+              <div class="stngs-brightness-ctrl" id="brightnessCtrl">
+                <div class="stngs-brightness-row">
+                  <span class="stngs-brightness-ico stngs-brightness-ico--dim">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/></svg>
+                  </span>
+                  <input type="range" id="brightnessSlider" class="stngs-brightness-slider"
+                    min="40" max="130" step="1" value="100"
+                    aria-label="Brightness level" />
+                  <span class="stngs-brightness-ico stngs-brightness-ico--bright">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                  </span>
+                  <span class="stngs-brightness-val" id="brightnessVal">100%</span>
+                </div>
+                <label class="stngs-barvis-row stngs-brightness-default-row" style="margin-top:6px">
+                  <span class="stngs-barvis-label" style="font-size:11px;opacity:.75">Use default brightness (100%)</span>
+                  <span class="stngs-barvis-spacer"></span>
+                  <span class="stngs-toggle-wrap" aria-hidden="true">
+                    <input type="checkbox" id="brightnessUseDefault" class="stngs-barvis-chk" />
+                    <span class="stngs-toggle-track"><span class="stngs-toggle-thumb"></span></span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
         <!-- ── SECTION: ADMIN (conditionally visible) ─────────────── -->
         <div class="stngs-section-label stngs-admin-section" id="stngsAdminLabel" style="display:none">Admin Controls</div>
         <div class="stngs-row stngs-admin-section" id="stngsAdminRow" style="display:none">

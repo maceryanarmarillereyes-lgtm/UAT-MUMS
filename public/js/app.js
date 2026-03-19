@@ -3808,6 +3808,105 @@ function updateClocksPreviewTimes(){
     } catch (_) {}
   }
 
+  // ── BRIGHTNESS CONTROL ────────────────────────────────────────────────────────
+  (function initBrightnessSystem() {
+    const LS_KEY = 'mums_brightness_v1';
+    const DEFAULT_VAL = 100;
+    const APP_EL_ID = 'app'; // root app element to apply filter on
+
+    function clamp(v) { return Math.max(40, Math.min(130, Number(v) || DEFAULT_VAL)); }
+
+    function getStoredBrightness() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+        return {
+          value: clamp(raw.value ?? DEFAULT_VAL),
+          useDefault: raw.useDefault === true
+        };
+      } catch(_) { return { value: DEFAULT_VAL, useDefault: false }; }
+    }
+
+    function saveBrightness(value, useDefault) {
+      try { localStorage.setItem(LS_KEY, JSON.stringify({ value, useDefault })); } catch(_) {}
+    }
+
+    function applyBrightness(value, useDefault) {
+      const app = document.getElementById(APP_EL_ID) || document.body;
+      const effective = useDefault ? DEFAULT_VAL : clamp(value);
+      // Set CSS variable and data attribute for selector hook
+      document.documentElement.style.setProperty('--mums-brightness', effective / 100);
+      app.setAttribute('data-brightness', String(effective));
+      // Apply filter proportionally to ALL UI elements via root element
+      if (effective === DEFAULT_VAL) {
+        app.style.filter = '';
+      } else {
+        app.style.filter = `brightness(${effective / 100})`;
+      }
+    }
+
+    function updateSliderTrack(slider) {
+      try {
+        const min = Number(slider.min || 40);
+        const max = Number(slider.max || 130);
+        const val = Number(slider.value || DEFAULT_VAL);
+        const pct = ((val - min) / (max - min) * 100).toFixed(1) + '%';
+        slider.style.setProperty('--sval', pct);
+      } catch(_) {}
+    }
+
+    // Apply on page load (before settings modal is ever opened)
+    const stored = getStoredBrightness();
+    applyBrightness(stored.value, stored.useDefault);
+
+    // Expose for settings modal
+    window.initBrightnessControl = function() {
+      try {
+        const slider    = document.getElementById('brightnessSlider');
+        const valLabel  = document.getElementById('brightnessVal');
+        const useDefChk = document.getElementById('brightnessUseDefault');
+        if (!slider || !valLabel || !useDefChk) return;
+
+        const cur = getStoredBrightness();
+
+        // Init state
+        slider.value    = cur.value;
+        useDefChk.checked = cur.useDefault;
+        slider.disabled = cur.useDefault;
+        valLabel.textContent = cur.useDefault ? '100%' : cur.value + '%';
+        updateSliderTrack(slider);
+
+        // Guard: bind only once per element
+        if (slider.__brightBound) return;
+        slider.__brightBound = true;
+
+        slider.addEventListener('input', () => {
+          if (useDefChk.checked) return;
+          const v = clamp(slider.value);
+          valLabel.textContent = v + '%';
+          updateSliderTrack(slider);
+          applyBrightness(v, false);
+          saveBrightness(v, false);
+        });
+
+        useDefChk.addEventListener('change', () => {
+          const isDefault = useDefChk.checked;
+          slider.disabled = isDefault;
+          if (isDefault) {
+            valLabel.textContent = '100%';
+            applyBrightness(DEFAULT_VAL, true);
+            saveBrightness(Number(slider.value), true);
+          } else {
+            const v = clamp(slider.value);
+            valLabel.textContent = v + '%';
+            applyBrightness(v, false);
+            saveBrightness(v, false);
+          }
+          updateSliderTrack(slider);
+        });
+      } catch(_) {}
+    };
+  })();
+
   // ── NAV KEYBOARD ─────────────────────────────────────────────────────────────
   function bindNavKeyboard() {
     try {
@@ -4140,6 +4239,8 @@ async function boot(){
         // Sync bar visibility checkboxes to current state each time modal opens
         try{ bindBarVisibilityControls(); }catch(_){}
         try{ _syncBarVisibilityCheckboxes(); }catch(_){}
+        // Sync brightness control
+        try{ initBrightnessControl(); }catch(_){}
       };
     }
     const openSoundBtn = document.getElementById('openSoundBtn');

@@ -10447,3 +10447,103 @@ body.density-compact .main.card.pad {
   font-weight: 600;
   letter-spacing: .02em;
 }
+
+
+/* ── Brightness Control (Settings Modal) ────────────────────────────────── */
+.stngs-tile-brightness {
+  min-height: 110px;
+  align-items: flex-start;
+}
+.stngs-brightness-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+.stngs-brightness-ctrl {
+  margin-top: 10px;
+  width: 100%;
+}
+.stngs-brightness-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.stngs-brightness-ico {
+  display: flex;
+  align-items: center;
+  opacity: .45;
+  flex-shrink: 0;
+}
+.stngs-brightness-ico--bright { opacity: .9; }
+.stngs-brightness-val {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  min-width: 36px;
+  text-align: right;
+  opacity: .8;
+  flex-shrink: 0;
+}
+/* Premium slider */
+.stngs-brightness-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 4px;
+  border-radius: 99px;
+  background: linear-gradient(
+    to right,
+    var(--accent, #4f8ef7) 0%,
+    var(--accent, #4f8ef7) var(--sval, 52.6%),
+    rgba(255,255,255,.12) var(--sval, 52.6%),
+    rgba(255,255,255,.12) 100%
+  );
+  outline: none;
+  cursor: pointer;
+  transition: background .1s;
+}
+.stngs-brightness-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.35), 0 0 0 2px rgba(79,142,247,.3);
+  cursor: pointer;
+  transition: box-shadow .15s, transform .1s;
+}
+.stngs-brightness-slider::-webkit-slider-thumb:hover {
+  box-shadow: 0 1px 6px rgba(0,0,0,.45), 0 0 0 3px rgba(79,142,247,.45);
+  transform: scale(1.12);
+}
+.stngs-brightness-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,.35), 0 0 0 2px rgba(79,142,247,.3);
+  cursor: pointer;
+}
+.stngs-brightness-default-row {
+  padding: 6px 0 0;
+  border-top: 1px solid rgba(255,255,255,.06);
+  margin-top: 8px !important;
+}
+/* When "use default" is checked → dim the slider */
+.stngs-brightness-slider:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+.stngs-brightness-slider:disabled::-webkit-slider-thumb {
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Global brightness filter applied to app shell ──────────────────────── */
+#app[data-brightness]:not([data-brightness="100"]) {
+  filter: brightness(var(--mums-brightness, 1));
+}
