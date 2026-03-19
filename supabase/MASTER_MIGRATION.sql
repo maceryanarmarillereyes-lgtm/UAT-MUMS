@@ -388,6 +388,19 @@ create table if not exists public.task_items (
 create index if not exists task_items_distribution_id_idx on public.task_items (distribution_id);
 create index if not exists task_items_assigned_to_idx     on public.task_items (assigned_to);
 
+-- RLS for task tables
+alter table public.task_distributions enable row level security;
+drop policy if exists "task_distributions_read"  on public.task_distributions;
+drop policy if exists "task_distributions_write" on public.task_distributions;
+create policy "task_distributions_read"  on public.task_distributions for select to authenticated using (true);
+create policy "task_distributions_write" on public.task_distributions for all to service_role using (true) with check (true);
+
+alter table public.task_items enable row level security;
+drop policy if exists "task_items_read"  on public.task_items;
+drop policy if exists "task_items_write" on public.task_items;
+create policy "task_items_read"  on public.task_items for select to authenticated using (true);
+create policy "task_items_write" on public.task_items for all to service_role using (true) with check (true);
+
 drop view if exists public.view_team_workload_matrix;
 create view public.view_team_workload_matrix
 with (security_invoker = true)
@@ -667,6 +680,17 @@ begin
     raise notice 'mums_presence: already UNLOGGED or does not exist, skipping';
   end if;
 end $$;
+
+-- RLS for mums_presence (read-only for authenticated, writes via service role only)
+alter table public.mums_presence enable row level security;
+drop policy if exists "presence_read" on public.mums_presence;
+create policy "presence_read" on public.mums_presence for select to authenticated using (true);
+
+-- RLS for mums_sync_log (SUPER_ADMIN read only, writes via service role)
+alter table public.mums_sync_log enable row level security;
+drop policy if exists "sync_log_read_superadmin" on public.mums_sync_log;
+create policy "sync_log_read_superadmin" on public.mums_sync_log
+  for select to authenticated using (public.mums_is_super_admin(auth.uid()));
 
 -- FIX 2: mums_documents REPLICA IDENTITY DEFAULT (smaller WAL per sync UPSERT)
 do $$
