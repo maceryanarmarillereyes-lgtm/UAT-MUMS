@@ -376,7 +376,7 @@ async function login(usernameOrEmail, password){
   const canonicalEmail = id.includes('@') ? id : `${id}@${domain}`;
 
   async function passwordGrant(email){
-    const r = await fetch('/api/auth/password_login', {
+    const r = await apiFetch('/auth/v1/token?grant_type=password', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ email, password: pw })
