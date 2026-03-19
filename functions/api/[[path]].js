@@ -64,6 +64,7 @@ async function getRoutes(env) {
     'settings/global_theme': unwrapCjs(await import('../../server/routes/settings/global_theme.js')),
     'settings/global-theme': unwrapCjs(await import('../../server/routes/settings/global_theme.js')),
     'settings/login_mode': unwrapCjs(await import('../../server/routes/settings/login_mode.js')),
+    'auth/password_login': unwrapCjs(await import('../../server/routes/auth/password_login.js')),
     'settings/global_quickbase': unwrapCjs(await import('../../server/routes/settings/global_quickbase.js')),
     'settings/global_calendar': unwrapCjs(await import('../../server/routes/settings/global_calendar.js')),
     'calendar/records': unwrapCjs(await import('../../server/routes/calendar/records.js')),
