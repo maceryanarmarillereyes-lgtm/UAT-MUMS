@@ -64,12 +64,31 @@ module.exports = async (req, res) => {
       filter = `&user_id=eq.${encodeURIComponent(user.id)}`;
     }
 
-    let select = 'user_id,username,name,email,role,team_id,team_override,duty,avatar_url,qb_name,created_at,updated_at';
-    let out = await serviceSelect('mums_profiles', `select=${select}${filter}&order=name.asc`);
-    // Back-compat: if mums_profiles.email doesn't exist yet, retry without it.
-    if (!out.ok && isMissingColumn(out, 'email')) {
-      select = 'user_id,username,name,role,team_id,team_override,duty,avatar_url,created_at,updated_at';
-      out = await serviceSelect('mums_profiles', `select=${select}${filter}&order=name.asc`);
+    // FIX v3.9.26: Progressive column fallback — try full select first,
+    // then gracefully degrade for missing optional columns on fresh/older schemas.
+    // Prevents 400 errors when optional columns (qb_name, avatar_url, email) don't exist yet.
+    const selectVariants = [
+      'user_id,username,name,email,role,team_id,team_override,duty,avatar_url,qb_name,created_at,updated_at',
+      'user_id,username,name,email,role,team_id,team_override,duty,avatar_url,created_at,updated_at',
+      'user_id,username,name,email,role,team_id,team_override,duty,created_at,updated_at',
+      'user_id,username,name,role,team_id,team_override,duty,created_at,updated_at',
+      'user_id,username,name,role,team_id,duty,created_at,updated_at',
+    ];
+
+    let select = selectVariants[0];
+    let out = null;
+    for (const s of selectVariants) {
+      select = s;
+      out = await serviceSelect('mums_profiles', `select=${s}${filter}&order=name.asc`);
+      if (out.ok) break;
+      // Only retry on 400 with a missing-column message; stop on auth/network errors
+      const isColErr = (out.status === 400) && (
+        isMissingColumn(out, 'qb_name') ||
+        isMissingColumn(out, 'avatar_url') ||
+        isMissingColumn(out, 'email') ||
+        isMissingColumn(out, 'team_override')
+      );
+      if (!isColErr) break;
     }
 
     if (!out.ok) {
