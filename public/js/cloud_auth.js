@@ -68,6 +68,9 @@
     try{ return (window.EnvRuntime && EnvRuntime.env) ? EnvRuntime.env() : (window.MUMS_ENV || {}); }catch(_){ return (window.MUMS_ENV || {}); }
   }
 
+  // FIX v3.9.24: 10s AbortController timeout added.
+  // Without this, 502/CORS from a new/throttled Supabase project hangs fetch
+  // indefinitely causing login button to be stuck for 1-2 minutes with no feedback.
   function apiFetch(path, opts){
     const e = env();
     const base = String(e.SUPABASE_URL || '').replace(/\/$/, '');
@@ -80,7 +83,12 @@
       'apikey': anon,
       'Authorization': `Bearer ${anon}`
     }, (o.headers||{}));
-    return fetch(url, o);
+
+    // 10s timeout — prevents login hanging on 502/CORS/throttled Supabase.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    o.signal = controller.signal;
+    return fetch(url, o).finally(() => clearTimeout(timer));
   }
 
   function readSession(){
@@ -375,18 +383,44 @@ async function login(usernameOrEmail, password){
   // Accept either full email or username.
   const canonicalEmail = id.includes('@') ? id : `${id}@${domain}`;
 
-  async function passwordGrant(email){
-    const r = await apiFetch('/auth/v1/token?grant_type=password', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ email, password: pw })
-    });
+  // FIX v3.9.24: 502/abort handling + stale-session clear before retry.
+  // Old behaviour: 502 returned CORS error (no headers) → fetch threw → hung.
+  // New behaviour: catch abort/CORS → clear stored session → single retry after 2s.
+  async function passwordGrant(email, attempt){
+    attempt = attempt || 1;
+    let r;
+    try {
+      r = await apiFetch('/auth/v1/token?grant_type=password', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email, password: pw })
+      });
+    } catch(fetchErr) {
+      // AbortError (10s timeout) or CORS/network failure
+      const isAbort = fetchErr && fetchErr.name === 'AbortError';
+      if (attempt < 2) {
+        // Clear any stale session that might be causing the 502 loop, then retry once
+        try { clearRefreshTimer(); clearSession(); } catch(_) {}
+        await new Promise(res => setTimeout(res, 2000));
+        return passwordGrant(email, 2);
+      }
+      return { ok:false, message: isAbort ? 'Login timed out. Supabase may be starting up — please try again in 30 seconds.' : 'Network error. Please check your connection and try again.', status: 0 };
+    }
 
     const bodyText = await r.text().catch(()=> '');
     let data = null;
     try{ data = bodyText ? JSON.parse(bodyText) : null; }catch(_){ data = null; }
 
     if(!r.ok){
+      // 502 = Supabase temporarily unavailable (new project warming up or throttled)
+      if (r.status === 502 || r.status === 503) {
+        try { clearRefreshTimer(); clearSession(); } catch(_) {}
+        if (attempt < 2) {
+          await new Promise(res => setTimeout(res, 2000));
+          return passwordGrant(email, 2);
+        }
+        return { ok:false, message: 'Supabase is temporarily unavailable (502). Please wait 30 seconds and try again.', status: r.status };
+      }
       const msg = (data && (data.error_description || data.msg || data.message || data.error)) ? (data.error_description || data.msg || data.message || data.error) : bodyText;
       return { ok:false, message: String(msg || 'Login failed.'), status:r.status, data };
     }
@@ -564,6 +598,8 @@ async function login(usernameOrEmail, password){
 try {
   const s = readSession();
   if (s && s.access_token) {
+    // FIX v3.9.24: On 502/network error at boot, clear stale session immediately.
+    // Stale sessions from old Supabase project cause a refresh loop → CORS spam.
     ensureFreshSession({ tryRefresh:true, clearOnFail:false, leewaySec: 60 })
       .then(function(res){
         try {
@@ -572,16 +608,18 @@ try {
           const ss = readSession();
           if (ss && ss.access_token) scheduleRefresh(ss);
         } catch (_) {}
-        // If refresh is impossible, stop spam and let the app redirect cleanly.
         try {
-          if (res && !res.ok && (res.status === 'expired' || res.status === 'invalid_token')) {
+          if (res && !res.ok && (res.status === 'expired' || res.status === 'invalid_token' || res.status === 'refresh_failed' || res.status === 'invalid')) {
             clearRefreshTimer();
             clearSession();
             window.dispatchEvent(new CustomEvent('mums:auth_invalid', { detail: { reason: res.status, trigger: 'boot' } }));
           }
         } catch (_) {}
       })
-      .catch(function(){});
+      .catch(function(){
+        // Network error at boot (502/CORS) — clear session to stop retry loops
+        try { clearRefreshTimer(); clearSession(); } catch(_) {}
+      });
   }
 } catch (_) {}
 })();

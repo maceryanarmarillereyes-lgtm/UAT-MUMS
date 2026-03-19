@@ -306,6 +306,7 @@
       // exhausted (Supabase returns 500/503 with "Database error" or similar).
       // Strategy: attempt login up to 3 times with exponential backoff before
       // showing a final error. Does NOT change auth logic — same Auth.login() call.
+      // FIX v3.9.24: Added 502/abort/CORS patterns from Supabase new-project warmup errors
       function _isTransientError(msg) {
         if (!msg) return false;
         const m = String(msg).toLowerCase();
@@ -320,7 +321,12 @@
           m.includes('fetch failed') ||
           m.includes('networkerror') ||
           m.includes('failed to fetch') ||
-          m.includes('timeout')
+          m.includes('timeout') ||
+          m.includes('502') ||
+          m.includes('bad gateway') ||
+          m.includes('timed out') ||
+          m.includes('aborted') ||
+          m.includes('cors')
         );
       }
 
