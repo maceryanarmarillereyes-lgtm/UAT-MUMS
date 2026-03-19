@@ -312,12 +312,25 @@
             }
             item.tries = Number(item.tries||0) + 1;
             item.lastError = 'http_' + String(out ? out.status : 'unknown');
-            q[k] = item;
+            // FIX v3.9.25: Drop items after 10 failed attempts to prevent infinite retry loops
+            // that cause ERR_INSUFFICIENT_RESOURCES browser exhaustion.
+            if (item.tries >= 10) {
+              try{ if(window.Store && Store.addLog) Store.addLog({ action: 'SYNC_QUEUE_DROP_MAX_TRIES', detail: String(item.key||k) }); }catch(_){}
+              delete q[k];
+            } else {
+              q[k] = item;
+            }
           }
         } catch (e) {
           item.tries = Number(item.tries||0) + 1;
           item.lastError = String(e && e.message ? e.message : e);
-          q[k] = item;
+          // FIX v3.9.25: Drop after 10 tries to prevent browser resource exhaustion
+          if (item.tries >= 10) {
+            try{ if(window.Store && Store.addLog) Store.addLog({ action: 'SYNC_QUEUE_DROP_MAX_TRIES', detail: String(item.key||k) }); }catch(_){}
+            delete q[k];
+          } else {
+            q[k] = item;
+          }
         }
       }
 
@@ -453,6 +466,8 @@ function applyRemoteKey(key, value){
   function ensureOfflinePull(){
     try{
       if(offlinePullTimer) return;
+      // FIX v3.9.25: Increased from 8s to 45s — 8s caused ERR_INSUFFICIENT_RESOURCES
+      // when API was failing (each failed pull consumed a TCP connection slot).
       offlinePullTimer = setInterval(()=>{
         try{
           if (cloudMode === 'realtime') return;
@@ -460,7 +475,7 @@ function applyRemoteKey(key, value){
           if (!(CloudAuth.accessToken && CloudAuth.accessToken())) return;
           pullOnce();
         }catch(_){ }
-      }, 8000);
+      }, 45000);
     }catch(_){ }
   }
 
@@ -728,6 +743,9 @@ function applyRemoteKey(key, value){
 
     // Debounce per key
     if (pushTimers.has(key)) clearTimeout(pushTimers.get(key));
+    // FIX v3.9.25: Exponential backoff on push — prevents ERR_INSUFFICIENT_RESOURCES
+    const _pushTries = (function(){ try{ const _q=loadQueue(); return _q && _q[key] ? Number((_q[key]||{}).tries||0) : 0; }catch(_r){ return 0; } })();
+    const _pushDelay = Math.min(30000, 300 * Math.pow(2, Math.min(_pushTries, 6)));
     pushTimers.set(key, setTimeout(()=>{
       pushTimers.delete(key);
       const prev = lastLocalByKey.get(key);
