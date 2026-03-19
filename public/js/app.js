@@ -3923,6 +3923,24 @@ async function boot(){
     }catch(e){}
 
 
+    // FIX-ENV-WAIT: Wait for /api/env to resolve before Auth.requireUser().
+    // On fast devices / defer execution, boot() runs within ~50ms of DOMContentLoaded,
+    // but /api/env is an async fetch that can take 200-600ms on cold starts.
+    // Without this wait, ensureFreshSession() calls apiFetch() with an empty SUPABASE_URL,
+    // throws "Supabase env missing", hits the catch block in requireUser → hardFail()
+    // → user is redirected back to /login.html → stuck-on-login loop on fresh devices.
+    // Max wait: 4 seconds (matches login.html guard). After timeout, proceed anyway —
+    // local-mode fallback handles offline scenarios.
+    try {
+      const envReady = window.__MUMS_ENV_READY || (window.EnvRuntime && EnvRuntime.ready && EnvRuntime.ready());
+      if (envReady && typeof envReady.then === 'function') {
+        await Promise.race([
+          envReady,
+          new Promise(function(resolve){ setTimeout(resolve, 4000); })
+        ]);
+      }
+    } catch(_) {}
+
     const user = await Auth.requireUser();
     if(!user) return;
 

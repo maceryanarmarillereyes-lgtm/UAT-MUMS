@@ -284,6 +284,23 @@
       const login = $("login").value.trim();
       const pass = $("password").value;
       if(!login || !pass) return showErr("Please enter username/email and password.");
+
+      // FIX-ENV-WAIT: Wait for /api/env to resolve before calling Auth.login().
+      // On fresh devices or with browser autofill, the login button can be clicked
+      // before env_runtime.js has received the Supabase URL/key from /api/env.
+      // Without this guard, apiFetch() throws "Supabase env missing" and login fails
+      // silently — the user sees "User not found" or stays stuck on the login page.
+      // Max wait: 4 seconds. After timeout, attempt login anyway (local fallback path).
+      try {
+        const envReady = window.__MUMS_ENV_READY || (window.EnvRuntime && EnvRuntime.ready && EnvRuntime.ready());
+        if (envReady && typeof envReady.then === 'function') {
+          await Promise.race([
+            envReady,
+            new Promise(function(resolve){ setTimeout(resolve, 4000); })
+          ]);
+        }
+      } catch(_) {}
+
       const res = await Auth.login(login, pass);
       if(!res.ok) return showErr(res.message || 'Login failed.');
       try{ _persistSavedDetails(); }catch(e){}
