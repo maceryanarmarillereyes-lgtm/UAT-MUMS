@@ -98,6 +98,7 @@ async function getRoutes(env) {
     'tasks/members': unwrapCjs(await import('../../server/routes/tasks/members.js')),
     'tasks/monitoring': unwrapCjs(await import('../../server/routes/tasks/monitoring.js')),
     'tasks/reassign_pending': unwrapCjs(await import('../../server/routes/tasks/reassign_pending.js')),
+    'tasks/distribution_export': unwrapCjs(await import('../../server/routes/tasks/distribution_export.js')),
 
     'quickbase/monitoring': unwrapCjs(await import('../../server/routes/quickbase/monitoring.js')),
     'quickbase/assigned_to_names': unwrapCjs(await import('../../server/routes/quickbase/assigned_to_names.js')),

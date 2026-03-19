@@ -1144,6 +1144,15 @@ execute function public.mums_link_auth_user_to_profile();
 
 
 -- ===========================================================================
+-- 2026-03-19: Disk IO Optimization (WAL reduction for Supabase Free Plan)
+-- Run: supabase/migrations/20260319_01_disk_io_optimization.sql
+-- ===========================================================================
+-- mums_presence SET UNLOGGED (no WAL for presence writes - no Realtime sub)
+-- mums_documents REPLICA IDENTITY DEFAULT (smaller WAL per UPSERT)
+-- mums_sync_log + heartbeat auto-cleanup triggers
+
+
+-- ===========================================================================
 -- END: Reload PostgREST schema cache
 -- ===========================================================================
 NOTIFY pgrst, 'reload schema';

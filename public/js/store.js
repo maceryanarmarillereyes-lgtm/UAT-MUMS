@@ -2343,14 +2343,18 @@ Store.startMailboxOverrideSync = function(opts){
 
     S.poll = poll;
 
-    // FIX[BUG#5]: Adaptive polling — fast when override is active (5s), slow when idle (30s).
-    // Prevents unnecessary API calls when no override is configured.
+    // FIX[BUG#5 + DISK-IO-OPT]: Adaptive polling — fast when override is active, slow when idle.
+    // Now respects MAILBOX_OVERRIDE_POLL_MS from /api/env (operator-configurable).
+    // Defaults: 10s active, 60s idle (was 5s/30s — new idle is 2x slower for Free plan IO savings).
     const getAdaptiveInterval = () => {
       try {
+        const envPoll = window.MUMS_ENV && Number(window.MUMS_ENV.MAILBOX_OVERRIDE_POLL_MS);
+        const activeMs  = (envPoll && envPoll > 0) ? envPoll : 10000;
+        const idleMs    = Math.max(activeMs * 2, 60000); // idle = 2× active, min 60s
         const stored = localStorage.getItem(KEYS.mailbox_time_override_cloud);
         const parsed = stored ? JSON.parse(stored) : null;
-        return (parsed && parsed.enabled) ? 5000 : 30000;
-      } catch(_) { return 30000; }
+        return (parsed && parsed.enabled) ? activeMs : idleMs;
+      } catch(_) { return 60000; }
     };
 
     const rescheduleTimer = () => {

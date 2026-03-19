@@ -30,7 +30,9 @@ function normalizeTeamId(v) {
 
 function envFromProcess() {
   return {
-    PRESENCE_TTL_SECONDS: Number(process.env.PRESENCE_TTL_SECONDS || 25)
+    // FIX: Default was 25s — caused users to vanish after one missed HB at 45s interval.
+    // Must match PRESENCE_TTL_SECONDS in api/env.js (360s = 6min = 3 missed HBs).
+    PRESENCE_TTL_SECONDS: Number(process.env.PRESENCE_TTL_SECONDS || 360)
   };
 }
 
@@ -64,7 +66,7 @@ try {
 } catch (_) {}
 
     const env = envFromProcess();
-    const ttl = Number.isFinite(env.PRESENCE_TTL_SECONDS) ? env.PRESENCE_TTL_SECONDS : 25;
+    const ttl = Number.isFinite(env.PRESENCE_TTL_SECONDS) ? env.PRESENCE_TTL_SECONDS : 360;
     const cutoff = new Date(Date.now() - ttl * 1000).toISOString();
 
     // Lean payload — omit 'route' field (not used by online bar renderer)

@@ -301,8 +301,69 @@
         }
       } catch(_) {}
 
-      const res = await Auth.login(login, pass);
-      if(!res.ok) return showErr(res.message || 'Login failed.');
+      // ── DISK IO / OVERLOAD RETRY GUARD ────────────────────────────────────────
+      // Supabase Nano plan can throttle auth operations when Disk IO budget is
+      // exhausted (Supabase returns 500/503 with "Database error" or similar).
+      // Strategy: attempt login up to 3 times with exponential backoff before
+      // showing a final error. Does NOT change auth logic — same Auth.login() call.
+      function _isTransientError(msg) {
+        if (!msg) return false;
+        const m = String(msg).toLowerCase();
+        return (
+          m.includes('database error') ||
+          m.includes('unexpected_failure') ||
+          m.includes('unexpected failure') ||
+          m.includes('service unavailable') ||
+          m.includes('temporarily unavailable') ||
+          m.includes('too many requests') ||
+          m.includes('rate limit') ||
+          m.includes('fetch failed') ||
+          m.includes('networkerror') ||
+          m.includes('failed to fetch') ||
+          m.includes('timeout')
+        );
+      }
+
+      const MAX_RETRIES = 2;
+      const RETRY_DELAY_MS = [2500, 5000]; // backoff: 2.5s, then 5s
+      let res = null;
+
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        if (attempt > 0) {
+          const delayMs = RETRY_DELAY_MS[attempt - 1] || 5000;
+          showErr(`⏳ Supabase is under load. Retrying in ${Math.round(delayMs/1000)}s… (attempt ${attempt}/${MAX_RETRIES})`);
+          await new Promise(function(resolve){ setTimeout(resolve, delayMs); });
+          hideErr();
+        }
+
+        try {
+          res = await Auth.login(login, pass);
+        } catch(e) {
+          res = { ok: false, message: (e && e.message) ? e.message : 'Login exception.' };
+        }
+
+        // Success → break and proceed
+        if (res && res.ok) break;
+
+        // Credential error (wrong password/email) → no point retrying
+        const errMsg = (res && res.message) ? String(res.message) : '';
+        if (!_isTransientError(errMsg)) break;
+
+        // Transient error → retry (unless this was the last attempt)
+        if (attempt < MAX_RETRIES) continue;
+      }
+
+      if (!res || !res.ok) {
+        // Improve error message for Supabase infrastructure overload
+        const rawMsg = (res && res.message) ? String(res.message) : 'Login failed.';
+        let displayMsg = rawMsg;
+        if (_isTransientError(rawMsg)) {
+          displayMsg = '⚠️ Supabase is currently overloaded (Disk IO limit reached). '
+            + 'This resets daily. Please wait a few minutes and try again, or contact your admin.';
+        }
+        return showErr(displayMsg);
+      }
+
       try{ _persistSavedDetails(); }catch(e){}
       // Use replace() to avoid a slow back navigation and slightly reduce perceived latency.
       try{
