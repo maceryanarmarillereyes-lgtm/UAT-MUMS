@@ -81,14 +81,9 @@ module.exports = async (req, res) => {
       select = s;
       out = await serviceSelect('mums_profiles', `select=${s}${filter}&order=name.asc`);
       if (out.ok) break;
-      // Only retry on 400 with a missing-column message; stop on auth/network errors
-      const isColErr = (out.status === 400) && (
-        isMissingColumn(out, 'qb_name') ||
-        isMissingColumn(out, 'avatar_url') ||
-        isMissingColumn(out, 'email') ||
-        isMissingColumn(out, 'team_override')
-      );
-      if (!isColErr) break;
+      // Retry on any 400 (missing column, type mismatch, etc.) 
+      // Stop on 401/403/500 or network errors — those are not schema issues.
+      if (out.status !== 400) break;
     }
 
     if (!out.ok) {

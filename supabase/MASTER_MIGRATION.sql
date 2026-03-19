@@ -252,19 +252,27 @@ alter table public.mums_profiles
   add constraint mums_profiles_email_unique unique (email);
 
 -- QuickBase columns (20260226, 20260228, 20260302, 20260303, 20260312)
-alter table public.mums_profiles
-  add column if not exists qb_token             text,
-  add column if not exists qb_realm             text,
-  add column if not exists qb_table_id          text,
-  add column if not exists qb_qid               text,
-  add column if not exists qb_report_link        text,
-  add column if not exists quickbase_config      jsonb,
-  add column if not exists quickbase_settings    jsonb,
-  add column if not exists qb_custom_columns     text[],
-  add column if not exists qb_custom_filters     jsonb,
-  add column if not exists qb_filter_match       text,
-  add column if not exists qb_dashboard_counters jsonb,
-  add column if not exists qb_name               text not null default '';
+-- FIX v3.9.27: Each column in its own statement to prevent one failure stopping all
+alter table public.mums_profiles add column if not exists qb_token             text;
+alter table public.mums_profiles add column if not exists qb_realm             text;
+alter table public.mums_profiles add column if not exists qb_table_id          text;
+alter table public.mums_profiles add column if not exists qb_qid               text;
+alter table public.mums_profiles add column if not exists qb_report_link       text;
+alter table public.mums_profiles add column if not exists quickbase_config      jsonb;
+alter table public.mums_profiles add column if not exists quickbase_settings    jsonb;
+alter table public.mums_profiles add column if not exists qb_custom_columns     text[];
+alter table public.mums_profiles add column if not exists qb_custom_filters     jsonb;
+alter table public.mums_profiles add column if not exists qb_filter_match       text;
+alter table public.mums_profiles add column if not exists qb_dashboard_counters jsonb;
+-- qb_name: critical for users/list and users/create routes
+do $$ begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='mums_profiles' and column_name='qb_name'
+  ) then
+    alter table public.mums_profiles add column qb_name text not null default '';
+  end if;
+end $$;
 
 -- theme_preference (20260223)
 alter table public.mums_profiles

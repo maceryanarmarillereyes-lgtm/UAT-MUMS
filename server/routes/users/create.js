@@ -316,6 +316,27 @@ module.exports = async (req, res) => {
         ins = await serviceInsert('mums_profiles', [retryRow]);
       }
 
+      // FIX v3.9.27: retry without qb_name if column missing (fresh DB schemas)
+      if (!ins.ok && isMissingColumn(ins.json, 'mums_profiles', 'qb_name')) {
+        const retryRow2 = { ...profileRow };
+        delete retryRow2.qb_name;
+        delete retryRow2.email; // also drop email since we may not have email support
+        ins = await serviceInsert('mums_profiles', [retryRow2]);
+      }
+
+      // Final fallback: minimum required fields only
+      if (!ins.ok && ins.status === 400) {
+        const minRow = {
+          user_id: profileRow.user_id,
+          username: profileRow.username,
+          name: profileRow.name,
+          role: profileRow.role,
+          team_id: profileRow.team_id,
+          duty: profileRow.duty || ''
+        };
+        ins = await serviceInsert('mums_profiles', [minRow]);
+      }
+
       if (!ins.ok) {
         return sendJson(res, ins.status || 500, { ok: false, error: 'profile_create_failed', details: ins.json || ins.text });
       }
