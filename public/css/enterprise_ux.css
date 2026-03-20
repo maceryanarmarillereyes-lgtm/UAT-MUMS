@@ -6888,6 +6888,17 @@ div.stngs-tile:hover { transform: none; }
   position: relative;
   user-select: text;
 }
+/* Columns that are force-clamped (case notes, descriptions, long text) */
+.qb-data-table td.qb-col-clamped {
+  max-width: 260px;
+  min-width: 140px;
+  width: 220px;
+}
+/* Prevent any single column from dominating the table width */
+.qb-data-table th,
+.qb-data-table td {
+  max-width: 320px;
+}
 /* Row expand on hover removed v3.9.28 — hover uses tooltip dialog instead */
 /* .qb-cell-clamp:hover { -webkit-line-clamp: unset; max-height: none; overflow: visible; } */
 .qb-cell-text { display: block; }

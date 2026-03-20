@@ -665,20 +665,36 @@
       // FIX: cellStyle must go on each <td> individually — tr-level color is overridden by td CSS specificity
       const tdStyle = rowCf.cellStyle ? ` style="${rowCf.cellStyle}"` : '';
 
+      // Columns that are always force-clamped regardless of text length
+      // (long-text columns that would otherwise blow out the table layout)
+      const _CLAMP_COLS = new Set(['case notes','notes','latest update on the case','latest update',
+        'last comment','update on the case','short description','description','concern','subject']);
+      // Columns that render a duration instead of raw value
+      const _DUR_COLS   = new Set(['last update days','last update','update days','age']);
+
       const cells = columns.map((c) => {
         const field = r && r.fields ? r.fields[String(c.id)] : null;
         const rawValue = field && field.value != null ? field.value : 'N/A';
         const normalizedLabel = String(c && c.label || '').trim().toLowerCase();
+
+        // Status badge
         if (normalizedLabel === 'case status' || normalizedLabel === 'status') {
           return `<td${tdStyle}>${renderStatusBadge(String(rawValue))}</td>`;
         }
-        const displayValue = (normalizedLabel === 'last update days' || normalizedLabel === 'age')
+        // Duration columns
+        const displayValue = _DUR_COLS.has(normalizedLabel)
           ? toDurationLabel(rawValue)
           : String(rawValue);
+
         const safeVal = esc(displayValue);
-        const rawStr = String(displayValue);
-        if (rawStr.length <= 60) return `<td${tdStyle}><span class="qb-cell-text">${safeVal}</span></td>`;
-        return `<td${tdStyle}><div class="qb-cell-clamp" data-full="${esc(rawStr)}"><span class="qb-cell-text">${safeVal}</span></div></td>`;
+        const rawStr  = String(displayValue);
+
+        // Force-clamp known long-text columns + any cell over 60 chars
+        const forceClamp = _CLAMP_COLS.has(normalizedLabel);
+        if (!forceClamp && rawStr.length <= 60) {
+          return `<td${tdStyle}><span class="qb-cell-text">${safeVal}</span></td>`;
+        }
+        return `<td class="qb-col-clamped"${tdStyle}><div class="qb-cell-clamp" data-full="${esc(rawStr)}"><span class="qb-cell-text">${safeVal}</span></div></td>`;
       }).join('');
 
       // Build the row data snapshot for the Case Detail Modal
@@ -3548,19 +3564,70 @@
       function _set(id, v)  { var el = document.getElementById(id); if (el) el.textContent = v; }
       function _html(id, h) { var el = document.getElementById(id); if (el) el.innerHTML  = h; }
 
+      // Known field key groups — used to identify and map fixed KPI slots
+      // Each group = an array of label keywords (lowercase, partial match)
+      var _KNOWN_GROUPS = {
+        desc:    ['short description','description','concern','subject','title'],
+        assign:  ['assigned to','assigned','agent'],
+        contact: ['contact','full name','customer name'],
+        endUser: ['end user','client','account','customer'],
+        type:    ['type','category'],
+        status:  ['case status','status'],
+        age:     ['age'],
+        lastUpd: ['last update days','last update','update days'],
+        latest:  ['latest update','last comment','latest','update on the case'],
+        notes:   ['case notes','notes'],
+      };
+
+      // Escape HTML for dynamic sections
+      function _esc(v) {
+        return String(v == null ? '' : v)
+          .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+      }
+
+      // Find colId that matches ANY of the keyword groups
+      function _matchGroup(snap, keys) {
+        if (!snap || !snap.columnMap) return null;
+        return Object.keys(snap.columnMap).find(function(id) {
+          var lbl = (snap.columnMap[id] || '').toLowerCase();
+          return keys.some(function(k) { return lbl.includes(k); });
+        }) || null;
+      }
+
       function _populate(snap) {
         if (!snap) return;
-        var caseId  = snap.recordId || '—';
-        var desc    = _field(snap, ['short description','description','concern','subject','title']) || '—';
-        var assign  = _field(snap, ['assigned to','assigned','agent'])         || '—';
-        var contact = _field(snap, ['contact','full name','customer name'])    || '—';
-        var endUser = _field(snap, ['end user','client','account','customer']) || '—';
-        var type    = _field(snap, ['type','category'])                        || '—';
-        var status  = _field(snap, ['case status','status'])                   || '—';
-        var age     = _field(snap, ['age']);
-        var lastUpd = _field(snap, ['last update days','last update','update days']);
-        var latest  = _field(snap, ['latest update','last comment','latest','update on the case']) || '—';
 
+        // ── Resolve all known field colIds ──────────────────────────────────
+        var knownColIds = new Set();
+        var resolved = {};
+        Object.keys(_KNOWN_GROUPS).forEach(function(key) {
+          var colId = _matchGroup(snap, _KNOWN_GROUPS[key]);
+          resolved[key] = colId;
+          if (colId) knownColIds.add(colId);
+        });
+
+        function _val(key) {
+          var colId = resolved[key];
+          if (!colId) return '';
+          var f = snap.fields[colId];
+          return f && f.value != null ? String(f.value) : '';
+        }
+
+        // ── Fixed fields ─────────────────────────────────────────────────────
+        var caseId  = snap.recordId || '—';
+        var desc    = _val('desc')    || '—';
+        var assign  = _val('assign')  || '—';
+        var contact = _val('contact') || '—';
+        var endUser = _val('endUser') || '—';
+        var type    = _val('type')    || '—';
+        var status  = _val('status')  || '—';
+        var age     = _val('age');
+        var lastUpd = _val('lastUpd');
+        var latest  = _val('latest')  || '—';
+        var notes   = _val('notes');
+
+        // ── Populate fixed DOM slots ─────────────────────────────────────────
         _set('qbcdRowBadge',  snap.rowNum || '—');
         _set('qbcdCaseId',    caseId);
         _set('qbcdDesc',      desc);
@@ -3578,12 +3645,49 @@
         _html('qbcdStatus2',  _badge(status));
         _set('qbcdLatest',    latest);
 
+        // ── Case Notes slot (dedicated) ───────────────────────────────────────
+        var notesBlock = document.getElementById('qbcdNotesBlock');
+        if (notes && notes !== 'N/A') {
+          _set('qbcdNotes', notes);
+          if (notesBlock) notesBlock.style.display = '';
+        } else {
+          if (notesBlock) notesBlock.style.display = 'none';
+        }
+
+        // ── DYNAMIC EXTRA FIELDS ──────────────────────────────────────────────
+        // Render any columns that are NOT in the known groups above
+        var extraContainer = document.getElementById('qbcdExtraFields');
+        if (extraContainer && snap.columnMap) {
+          var extraCols = Object.keys(snap.columnMap).filter(function(id) {
+            return !knownColIds.has(id);
+          });
+          if (extraCols.length) {
+            var extraHtml = extraCols.map(function(colId) {
+              var label = snap.columnMap[colId] || ('Field #' + colId);
+              var f     = snap.fields[colId];
+              var val   = (f && f.value != null) ? String(f.value) : '—';
+              if (!val || val === 'N/A') return '';
+              return '<div class="qbcd-kv">' +
+                '<span class="qbcd-kv-lbl">' + _esc(label) + '</span>' +
+                '<span class="qbcd-kv-val">' + _esc(val)   + '</span>' +
+              '</div>';
+            }).filter(Boolean).join('');
+            extraContainer.innerHTML = extraHtml || '';
+            var extraBlock = document.getElementById('qbcdExtraBlock');
+            if (extraBlock) extraBlock.style.display = extraHtml ? '' : 'none';
+          } else {
+            var extraBlock2 = document.getElementById('qbcdExtraBlock');
+            if (extraBlock2) extraBlock2.style.display = 'none';
+          }
+        }
+
+        // ── Nav position ─────────────────────────────────────────────────────
         var posEl   = document.getElementById('qbcdPos');
         var prevBtn = document.getElementById('qbcdPrevBtn');
         var nextBtn = document.getElementById('qbcdNextBtn');
-        if (posEl)   posEl.textContent    = (_idx + 1) + ' of ' + _snaps.length;
-        if (prevBtn) prevBtn.disabled     = _idx <= 0;
-        if (nextBtn) nextBtn.disabled     = _idx >= _snaps.length - 1;
+        if (posEl)   posEl.textContent = (_idx + 1) + ' of ' + _snaps.length;
+        if (prevBtn) prevBtn.disabled  = _idx <= 0;
+        if (nextBtn) nextBtn.disabled  = _idx >= _snaps.length - 1;
       }
 
       function _nav(dir) {

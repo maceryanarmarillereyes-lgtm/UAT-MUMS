@@ -1620,9 +1620,23 @@
             </div>
           </div>
         </div>
+        <!-- Case Notes block — shown only when Case Notes column is configured -->
+        <div class="qbcd-update-block qbcd-notes-block" id="qbcdNotesBlock" style="display:none;">
+          <div class="qbcd-update-label">
+            <span class="qbcd-update-dot" style="background:#a78bfa;box-shadow:0 0 7px #a78bfa;"></span>
+            Case Notes
+          </div>
+          <div class="qbcd-update-text" id="qbcdNotes">—</div>
+        </div>
+        <!-- Latest Update block -->
         <div class="qbcd-update-block">
           <div class="qbcd-update-label"><span class="qbcd-update-dot"></span>Latest Update on the Case</div>
           <div class="qbcd-update-text" id="qbcdLatest">—</div>
+        </div>
+        <!-- Dynamic extra fields — any column not in the known groups above -->
+        <div class="qbcd-detail-block qbcd-extra-block" id="qbcdExtraBlock" style="display:none;">
+          <div class="qbcd-block-title" style="color:rgba(148,163,184,.7);">Additional Fields</div>
+          <div class="qbcd-kv-list" id="qbcdExtraFields"></div>
         </div>
       </div>
       <div class="qbcd-footer">

@@ -11134,6 +11134,23 @@ body.density-compact .main.card.pad {
   color: #cbd5e1;
   border-left: 2px solid rgba(34,211,238,.2);
   padding-left: 12px;
+  max-height: 220px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.qbcd-update-text::-webkit-scrollbar { width: 3px; }
+.qbcd-update-text::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 99px; }
+
+/* Extra dynamic fields block */
+.qbcd-extra-block {
+  margin-top: 0;
+  border-color: rgba(148,163,184,.1) !important;
+}
+.qbcd-extra-block .qbcd-kv-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 /* Footer */
