@@ -5,7 +5,7 @@
    DO NOT modify any existing logic, layout, or structure in this file without
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
-const { sendJson, serviceSelect, serviceUpsert, serviceFetch } = require('./tasks/_common');
+const { sendJson, serviceSelect, serviceUpsert, serviceFetch, requireAuthedUser } = require('./tasks/_common');
 
 function normalizeUserId(raw) {
   return String(raw || '').trim();
@@ -36,7 +36,10 @@ function normalizeRow(row) {
 }
 
 async function listTabs(req, res) {
-  const userId = normalizeUserId(req?.query?.user_id);
+  // Auth check — only allow access to own tabs
+  const auth = await requireAuthedUser(req).catch(() => null);
+  if (!auth) return sendJson(res, 401, { ok: false, error: 'unauthorized' });
+  const userId = normalizeUserId(req?.query?.user_id || auth.authed.id);
   if (!userId) return sendJson(res, 400, { ok: false, error: 'missing_user_id' });
 
   const q = `select=user_id,tab_id,tab_name,settings_json,created_at,updated_at&user_id=eq.${encodeURIComponent(userId)}&order=updated_at.desc`;

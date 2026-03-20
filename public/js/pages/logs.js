@@ -138,11 +138,16 @@
     }
   });
 
-  // Auto-refresh on logs page
+  // Auto-refresh on logs page — with cleanup on navigate away
   try{
     renderSyncQueue();
-    setInterval(renderSyncQueue, 3000);
-    window.addEventListener('storage', (e)=>{ if(e && e.key==='mums_sync_queue_v1') renderSyncQueue(); });
+    const _logsTimer = setInterval(renderSyncQueue, 3000);
+    const _logsStorageHandler = (e)=>{ if(e && e.key==='mums_sync_queue_v1') renderSyncQueue(); };
+    window.addEventListener('storage', _logsStorageHandler);
+    root._cleanup = ()=>{
+      try{ clearInterval(_logsTimer); }catch(_){}
+      try{ window.removeEventListener('storage', _logsStorageHandler); }catch(_){}
+    };
   }catch(_){}
 
 

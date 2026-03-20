@@ -646,6 +646,21 @@
       Store.saveProfiles(all);
     },
 
+    // setProfileField — update a single field on the current user's local profile cache.
+    // Used by my_quickbase.js to update quickbase_settings after cloud save.
+    setProfileField(field, value){
+      try {
+        const user = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
+        if (!user || !user.id) return false;
+        const userId = String(user.id);
+        const all = Store.getProfiles();
+        all[userId] = all[userId] || { userId };
+        all[userId][String(field)] = value;
+        Store.saveProfiles(all);
+        return true;
+      } catch(_) { return false; }
+    },
+
     // World clocks (3 programmable digital clocks shown on bottom bar)
     // Saved per-user to prevent settings leaking across accounts on the same device/browser.
     // NOTE: Keys are normalized to match UI/components: hoursColor + minutesColor.
@@ -1662,6 +1677,18 @@
         ];
       }
     },
+    // getTeamTaskConfig — alias for getTeamConfig focused on task/call settings.
+    // Used by members.js for progress bar calculation (callRole, maxHours).
+    getTeamTaskConfig(teamId){
+      const cfg = Store.getTeamConfig(teamId);
+      return {
+        callRole: cfg.coverageTaskId || 'call_onqueue',
+        tasks: cfg.tasks || [],
+        coverageTaskId: cfg.coverageTaskId || 'call_onqueue',
+        teamId: teamId,
+      };
+    },
+
     getTeamConfig(teamId){
       const all = read(KEYS.team_config, {});
       const cfg = (all && all[teamId]) ? all[teamId] : {};

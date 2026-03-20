@@ -14,7 +14,7 @@ const CloudTasks = (() => {
   const parse = async (res) => {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, status: res.status, message: data.message || data.error || `Failed (${res.status})`, data };
-    return {ok: true, data, monitoring, reassignPending, exportDistribution };
+    return { ok: true, data };
   };
 
   const assigned = async () => parse(await fetch('/api/tasks/assigned', { headers: { ...authHeader() } }));
