@@ -4038,6 +4038,9 @@ function updateClocksPreviewTimes(){
               try{ if(window.__mumsLoadCalSettings) window.__mumsLoadCalSettings();
               else if(typeof loadCalSettings === 'function') loadCalSettings(); }catch(_){}
             },
+            pinsecurity: function(){
+              try{ if(window.__mumsRenderPinSettings) window.__mumsRenderPinSettings(); }catch(_){}
+            },
             loginmode: function(){
               // Load current login mode status from server
               try{ if(window.__mumsLoadLoginMode) window.__mumsLoadLoginMode(); }catch(_){}
@@ -4070,6 +4073,157 @@ function updateClocksPreviewTimes(){
       wire('openCalendarSettingsBtn', function(){ /* inline — no modal needed */ });
       wire('openGmtOverviewPageBtn', function(){ try{ if(window.App&&App.navigate) App.navigate('gmt_overview'); else{ try{ document.querySelector('[data-page="gmt_overview"]')&&document.querySelector('[data-page="gmt_overview"]').click(); }catch(_){} } }catch(e){} });
     }
+
+
+    // ── PIN SECURITY SETTINGS PANEL RENDERER ────────────────────────────────
+    window.__mumsRenderPinSettings = async function() {
+      var body = document.getElementById('pinSettingsPanelBody');
+      if (!body) return;
+
+      body.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted);font-size:12px">Loading…</div>';
+
+      try {
+        var tok = (window.CloudAuth && typeof CloudAuth.accessToken === 'function') ? CloudAuth.accessToken() : '';
+        var res = await fetch('/api/pin/policy', { headers: { 'Authorization': 'Bearer ' + tok } });
+        var data = await res.json().catch(function() { return {}; });
+        var p = (data.ok && data.policy) ? data.policy : { enabled:true, requireOnLogin:true, enforceOnFirstLogin:true, sessionExpiryHours:3, autoLogoutOnFailures:true, maxFailedAttempts:3 };
+
+        // Also get user count stats from Store
+        var allUsers = (window.Store && Store.getUsers) ? Store.getUsers() : [];
+        var pinSetCount = allUsers.filter(function(u) { return u && u.pin_hash; }).length;
+        var pendingCount = allUsers.filter(function(u) { return u && !u.pin_hash; }).length;
+
+        function tog(id, checked) {
+          return '<div class="tog-wrap" style="width:42px;height:23px;border-radius:99px;border:1px solid rgba(255,255,255,' + (checked?'.14':'.07') + ');background:rgba(' + (checked?'56,189,248,.2':'255,255,255,.04') + ');cursor:pointer;position:relative;transition:.25s;flex-shrink:0" id="' + id + '" data-on="' + (checked?'1':'0') + '" onclick="window.__mumsTogglePin(this)">' +
+            '<div style="position:absolute;top:3px;left:' + (checked?'20':'3') + 'px;width:15px;height:15px;border-radius:50%;background:' + (checked?'#38bdf8':'#475569') + ';transition:.25s;' + (checked?'box-shadow:0 0 10px rgba(56,189,248,.45)':'') + '"></div>' +
+            '</div>';
+        }
+        function statChip(num, label, color) {
+          return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px 16px">' +
+            '<div style="font-size:22px;font-weight:800;color:' + color + ';font-family:monospace;margin-bottom:4px">' + num + '</div>' +
+            '<div style="font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-family:monospace">' + label + '</div>' +
+            '</div>';
+        }
+        function row(id, name, desc, checked) {
+          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.03)">' +
+            '<div style="flex:1;margin-right:20px">' +
+              '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">' + name + '</div>' +
+              '<div style="font-size:11px;color:var(--muted);line-height:1.55">' + desc + '</div>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0">' +
+              '<span style="font-family:monospace;font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;letter-spacing:.05em;background:rgba(' + (checked?'16,185,129,.1':'255,255,255,.04') + ');border:1px solid rgba(' + (checked?'16,185,129,.2':'255,255,255,.1') + ');color:' + (checked?'#10b981':'var(--muted)') + '" id="ts_' + id + '">' + (checked?'ON':'OFF') + '</span>' +
+              tog('tog_' + id, checked) +
+            '</div>' +
+          '</div>';
+        }
+        function rbadge(label, color, bg, border) {
+          return '<span style="display:inline-flex;align-items:center;padding:2px 7px;border-radius:5px;font-size:9px;font-family:monospace;font-weight:700;background:' + bg + ';color:' + color + ';border:1px solid ' + border + ';margin-right:3px">' + label + '</span>';
+        }
+
+        body.innerHTML =
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">' +
+            statChip(pinSetCount, 'Users with PIN', '#38bdf8') +
+            statChip(pendingCount, 'Pending Setup', '#f59e0b') +
+            statChip(0, 'Failed Today', '#f43f5e') +
+          '</div>' +
+
+          '<div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:14px;overflow:hidden;margin-bottom:16px">' +
+            '<div style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.02)">' +
+              '<div style="width:34px;height:34px;border-radius:10px;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.18);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>' +
+              '<div><div style="font-size:13px;font-weight:700;color:var(--text)">PIN Authentication Policy</div><div style="font-size:10.5px;color:var(--muted);margin-top:1px">Core login security settings</div></div>' +
+            '</div>' +
+            '<div style="padding:0 18px">' +
+              row('enabled',             'Enable Security PIN System',            'Master switch. When off, no PIN is required for any user.',               p.enabled) +
+              row('requireOnLogin',      'Require PIN on Every Login',            'Users must enter their PIN at the start of each new session.',            p.requireOnLogin) +
+              row('enforceOnFirstLogin', 'Force PIN Setup on First Login',        'Block access until new users create their Security PIN.',                 p.enforceOnFirstLogin) +
+              row('sessionExpiry',       '3-Hour Session Expiry',                 'Sessions auto-expire after 3 hours. Users re-authenticate with PIN.',     p.sessionExpiryHours === 3) +
+              '<div style="padding:14px 0;border-bottom:0">' +
+                row('autoLogout',        'Auto-Logout on 3 Wrong PINs',           'Sign out after 3 consecutive failures. No lockout — user can log back in immediately.',  p.autoLogoutOnFailures) +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+
+          '<div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:14px;overflow:hidden;margin-bottom:20px">' +
+            '<div style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.02)">' +
+              '<div style="width:34px;height:34px;border-radius:10px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.18);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>' +
+              '<div><div style="font-size:13px;font-weight:700;color:var(--text)">PIN Reset Permissions</div><div style="font-size:10.5px;color:var(--muted);margin-top:1px">Role-based PIN management access</div></div>' +
+            '</div>' +
+            '<div style="padding:0 18px">' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.03)">' +
+                '<div style="flex:1;margin-right:20px"><div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">' + rbadge('Team Lead','#38bdf8','rgba(56,189,248,.1)','rgba(56,189,248,.2)') + 'Can Reset Member PINs</div><div style="font-size:11px;color:var(--muted);line-height:1.55">Team Leads can send reset requests for their team members.</div></div>' +
+                '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0"><span style="font-family:monospace;font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;letter-spacing:.05em;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);color:#10b981">ON</span>' +
+                '<div style="width:42px;height:23px;border-radius:99px;border:1px solid rgba(56,189,248,.14);background:rgba(56,189,248,.2);position:relative;opacity:.5;cursor:not-allowed"><div style="position:absolute;top:3px;left:20px;width:15px;height:15px;border-radius:50%;background:#38bdf8;box-shadow:0 0 10px rgba(56,189,248,.45)"></div></div>' +
+                '</div>' +
+              '</div>' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:0">' +
+                '<div style="flex:1;margin-right:20px"><div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px">' + rbadge('Super User','#6366f1','rgba(99,102,241,.1)','rgba(99,102,241,.2)') + rbadge('Super Admin','#10b981','rgba(16,185,129,.1)','rgba(16,185,129,.2)') + 'Full PIN Control</div><div style="font-size:11px;color:var(--muted);line-height:1.55">Can reset or force-clear any user&#39;s PIN via User Management.</div></div>' +
+                '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0"><span style="font-family:monospace;font-size:9px;font-weight:700;padding:3px 8px;border-radius:5px;letter-spacing:.05em;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2);color:#10b981">ON</span>' +
+                '<div style="width:42px;height:23px;border-radius:99px;border:1px solid rgba(56,189,248,.14);background:rgba(56,189,248,.2);position:relative;opacity:.5;cursor:not-allowed"><div style="position:absolute;top:3px;left:20px;width:15px;height:15px;border-radius:50%;background:#38bdf8;box-shadow:0 0 10px rgba(56,189,248,.45)"></div></div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+
+          '<div style="display:flex;justify-content:flex-end">' +
+            '<button id="pinSaveBtn" onclick="window.__mumsSavePinPolicy()" style="height:38px;padding:0 22px;border-radius:10px;border:none;background:linear-gradient(135deg,rgba(56,189,248,.85),rgba(56,189,248,.65));color:#06111e;font-size:12.5px;font-weight:700;cursor:pointer;transition:.15s;font-family:var(--font,sans-serif)">Save PIN Policy</button>' +
+          '</div>';
+
+        // Store current policy for save
+        window.__mumsPinCurrentPolicy = JSON.parse(JSON.stringify(p));
+
+      } catch(e) {
+        body.innerHTML = '<div style="color:var(--rose,#fb7185);padding:20px;font-size:12px">Failed to load PIN settings: ' + (e && e.message || e) + '</div>';
+      }
+    };
+
+    // Toggle handler
+    window.__mumsTogglePin = function(el) {
+      var isOn = el.getAttribute('data-on') === '1';
+      var newOn = !isOn;
+      el.setAttribute('data-on', newOn ? '1' : '0');
+      el.style.background = newOn ? 'rgba(56,189,248,.2)' : 'rgba(255,255,255,.04)';
+      el.style.borderColor = newOn ? 'rgba(56,189,248,.14)' : 'rgba(255,255,255,.07)';
+      var dot = el.querySelector('div');
+      if (dot) { dot.style.left = newOn ? '20px' : '3px'; dot.style.background = newOn ? '#38bdf8' : '#475569'; dot.style.boxShadow = newOn ? '0 0 10px rgba(56,189,248,.45)' : 'none'; }
+      var id = el.id.replace('tog_','');
+      var ts = document.getElementById('ts_' + id);
+      if (ts) { ts.textContent = newOn ? 'ON' : 'OFF'; ts.style.background = newOn?'rgba(16,185,129,.1)':'rgba(255,255,255,.04)'; ts.style.borderColor = newOn?'rgba(16,185,129,.2)':'rgba(255,255,255,.1)'; ts.style.color = newOn?'#10b981':'var(--muted)'; }
+      if (window.__mumsPinCurrentPolicy) {
+        var fieldMap = { enabled:'enabled', requireOnLogin:'requireOnLogin', enforceOnFirstLogin:'enforceOnFirstLogin', sessionExpiry:'sessionExpiryHours', autoLogout:'autoLogoutOnFailures' };
+        var field = fieldMap[id];
+        if (field) {
+          if (field === 'sessionExpiryHours') window.__mumsPinCurrentPolicy[field] = newOn ? 3 : 0;
+          else window.__mumsPinCurrentPolicy[field] = newOn;
+        }
+      }
+    };
+
+    // Save handler
+    window.__mumsSavePinPolicy = async function() {
+      var btn = document.getElementById('pinSaveBtn');
+      if (!btn) return;
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        var tok = (window.CloudAuth && typeof CloudAuth.accessToken === 'function') ? CloudAuth.accessToken() : '';
+        var res = await fetch('/api/pin/policy', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
+          body: JSON.stringify(window.__mumsPinCurrentPolicy || {})
+        });
+        var data = await res.json().catch(function() { return {}; });
+        if (data.ok) {
+          // Update PinController policy cache
+          if (window.PinController && typeof PinController.reloadPolicy === 'function') PinController.reloadPolicy();
+          try{ if(window.UI && UI.toast) UI.toast('PIN policy saved.', 'success'); }catch(_){}
+        } else {
+          try{ if(window.UI && UI.toast) UI.toast('Failed to save: ' + (data.message||'unknown error'), 'error'); }catch(_){}
+        }
+      } catch(e) {
+        try{ if(window.UI && UI.toast) UI.toast('Network error saving PIN policy.', 'error'); }catch(_){}
+      }
+      btn.disabled = false; btn.textContent = 'Save PIN Policy';
+    };
+    // ── END PIN SETTINGS RENDERER ────────────────────────────────────────────
 
     function _bindMsSearch() {
       var inp = document.getElementById('msSearchInput');
@@ -4362,6 +4516,16 @@ async function boot(){
 
     const user = await Auth.requireUser();
     if(!user) return;
+
+    // ── SECURITY PIN GATE ──────────────────────────────────────────────────
+    // Must pass PIN verification before the app renders.
+    // PinController.gate() checks policy → shows overlay if needed.
+    if (window.PinController && typeof PinController.gate === 'function') {
+      await new Promise((resolve) => {
+        PinController.gate(resolve);
+      });
+    }
+    // ── END PIN GATE ──────────────────────────────────────────────────────
 
     // Realtime Guard: initialize realtime only after auth has been resolved.
     try{

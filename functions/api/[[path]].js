@@ -103,7 +103,14 @@ async function getRoutes(env) {
     'quickbase/monitoring': unwrapCjs(await import('../../server/routes/quickbase/monitoring.js')),
     'quickbase/assigned_to_names': unwrapCjs(await import('../../server/routes/quickbase/assigned_to_names.js')),
     'quickbase_tabs': unwrapCjs(await import('../../server/routes/quickbase_tabs.js')),
-    'quickbase_tabs/upsert': unwrapCjs(await import('../../server/routes/quickbase_tabs.js'))
+    'quickbase_tabs/upsert': unwrapCjs(await import('../../server/routes/quickbase_tabs.js')),
+
+    // Security PIN routes
+    'pin/setup':   unwrapCjs(await import('../../server/routes/pin.js')),
+    'pin/verify':  unwrapCjs(await import('../../server/routes/pin.js')),
+    'pin/reset':   unwrapCjs(await import('../../server/routes/pin.js')),
+    'pin/policy':  unwrapCjs(await import('../../server/routes/pin.js')),
+    'pin/status':  unwrapCjs(await import('../../server/routes/pin.js'))
   };
 
   return ROUTES;

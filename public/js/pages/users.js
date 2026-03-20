@@ -199,6 +199,66 @@ function canCreateRole(actor, targetRole) {
               </div>
             </div>
             <!-- Schedule and Status removed from creation (managed in Profile > Scheduling) -->
+
+            <!-- ── SECURITY PIN BLOCK (edit mode only, TL/SU/SA) ── -->
+            <div id="u_pin_block" style="display:none;grid-column:span 2">
+              <div style="
+                background:linear-gradient(135deg,rgba(56,189,248,.04),rgba(99,102,241,.03));
+                border:1px solid rgba(56,189,248,.14);border-radius:14px;padding:16px 18px;
+              ">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary,#38bdf8)" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Security PIN
+                  </div>
+                  <div id="u_pin_status_badge" style="display:flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:9px;font-weight:700;font-family:monospace;letter-spacing:.04em;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.22);color:#10b981">
+                    <div style="width:6px;height:6px;border-radius:50%;background:#10b981;box-shadow:0 0 6px #10b981"></div>
+                    <span id="u_pin_status_text">CHECKING…</span>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+                  <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px 12px">
+                    <div style="font-size:9px;color:var(--muted);margin-bottom:3px;font-family:monospace;letter-spacing:.05em;text-transform:uppercase">PIN Set</div>
+                    <div id="u_pin_set_date" style="font-size:12px;font-weight:600;color:var(--text)">—</div>
+                  </div>
+                  <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px 12px">
+                    <div style="font-size:9px;color:var(--muted);margin-bottom:3px;font-family:monospace;letter-spacing:.05em;text-transform:uppercase">Last Used</div>
+                    <div id="u_pin_last_used" style="font-size:12px;font-weight:600;color:#10b981">—</div>
+                  </div>
+                  <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px 12px">
+                    <div style="font-size:9px;color:var(--muted);margin-bottom:3px;font-family:monospace;letter-spacing:.05em;text-transform:uppercase">Failed</div>
+                    <div id="u_pin_fail_count" style="font-size:12px;font-weight:600;color:#f59e0b">0</div>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                  <button id="u_pin_reset_btn" type="button" style="
+                    height:38px;border-radius:10px;font-size:11.5px;font-weight:700;cursor:pointer;
+                    display:flex;align-items:center;justify-content:center;gap:7px;transition:.15s;
+                    border:1px solid rgba(245,158,11,.25);background:rgba(245,158,11,.07);color:#f59e0b;
+                    font-family:var(--font,sans-serif);
+                  ">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    Send Reset Request
+                  </button>
+                  <button id="u_pin_clear_btn" type="button" style="
+                    height:38px;border-radius:10px;font-size:11.5px;font-weight:700;cursor:pointer;
+                    display:flex;align-items:center;justify-content:center;gap:7px;transition:.15s;
+                    border:1px solid rgba(244,63,94,.2);background:rgba(244,63,94,.06);color:#f43f5e;
+                    font-family:var(--font,sans-serif);
+                  ">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Force Clear PIN
+                  </button>
+                </div>
+                <div style="margin-top:9px;font-size:10px;color:var(--muted);line-height:1.6">
+                  Access: 
+                  <span style="display:inline-flex;align-items:center;padding:2px 7px;border-radius:5px;font-size:9px;font-family:monospace;font-weight:700;background:rgba(56,189,248,.1);color:#38bdf8;border:1px solid rgba(56,189,248,.2);margin-right:3px">Team Lead</span>
+                  <span style="display:inline-flex;align-items:center;padding:2px 7px;border-radius:5px;font-size:9px;font-family:monospace;font-weight:700;background:rgba(99,102,241,.1);color:#6366f1;border:1px solid rgba(99,102,241,.2);margin-right:3px">Super User</span>
+                  <span style="display:inline-flex;align-items:center;padding:2px 7px;border-radius:5px;font-size:9px;font-family:monospace;font-weight:700;background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.2);margin-right:3px">Super Admin</span>
+                  can reset or clear this user's PIN.
+                </div>
+              </div>
+            </div>
           </div>
           <div class="err" id="u_err"></div>
           <div class="row" style="justify-content:flex-end;margin-top:12px">
@@ -959,7 +1019,131 @@ function openUserModal(actor, user){
     }
   };
 
+  // ── PIN SECURITY BLOCK: show/hide and load status ──────────────────────
+  var pinBlock = document.getElementById('u_pin_block');
+  var _pinIsEdit = !!user;
+  var _pinActorRole = String(actor && actor.role || '').toUpperCase();
+  var canManagePins = _pinIsEdit && (_pinActorRole === 'SUPER_ADMIN' || _pinActorRole === 'SUPER_USER' || _pinActorRole === 'TEAM_LEAD');
+  if (pinBlock) {
+    pinBlock.style.display = canManagePins ? '' : 'none';
+    if (canManagePins && user && user.user_id) {
+      // Load PIN status for this user
+      _loadUserPinStatus(user.user_id, user.name);
+      // Wire Reset and Clear buttons
+      const resetBtn = document.getElementById('u_pin_reset_btn');
+      const clearBtn = document.getElementById('u_pin_clear_btn');
+      if (resetBtn) {
+        resetBtn.onclick = () => _resetUserPin(user.user_id, user.name, false);
+      }
+      if (clearBtn) {
+        clearBtn.onclick = () => _resetUserPin(user.user_id, user.name, true);
+      }
+    }
+  }
+  // ── END PIN BLOCK ─────────────────────────────────────────────────────
+
   UI.openModal('userModal');
+}
+
+// ── PIN helper: load status for a target user ──────────────────────────────
+async function _loadUserPinStatus(targetUserId, targetName) {
+  const badge = document.getElementById('u_pin_status_badge');
+  const statusText = document.getElementById('u_pin_status_text');
+  const setPill = document.getElementById('u_pin_set_date');
+  const lastUsed = document.getElementById('u_pin_last_used');
+  const failCount = document.getElementById('u_pin_fail_count');
+
+  try {
+    const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
+    const res = await fetch('/api/pin/status?target_user_id=' + encodeURIComponent(targetUserId), {
+      headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' }
+    });
+    const data = await res.json().catch(function() { return {}; });
+
+    // Use own status endpoint — admin reading another user requires a different approach
+    // Since we only have own-status endpoint, we read from the users list profile data
+    // which is already in Store — fall back to Store
+    const storeUsers = window.Store && Store.getUsers ? Store.getUsers() : [];
+    const targetProfile = storeUsers.find(function(u) {
+      return String(u && (u.user_id || u.id || '')) === String(targetUserId);
+    });
+
+    const pinSet = !!(targetProfile && targetProfile.pin_hash) || (data.ok && data.pinSet);
+    const pinSetAt = (targetProfile && targetProfile.pin_set_at) || (data.ok && data.pinSetAt) || null;
+    const pinLastUsed = (targetProfile && targetProfile.pin_last_used_at) || null;
+    const fails = (targetProfile && targetProfile.pin_fail_count) || 0;
+
+    if (badge && statusText) {
+      if (pinSet) {
+        badge.style.background = 'rgba(16,185,129,.1)';
+        badge.style.border = '1px solid rgba(16,185,129,.22)';
+        badge.style.color = '#10b981';
+        statusText.textContent = 'PIN ACTIVE';
+        var dot = badge.querySelector('div');
+        if (dot) { dot.style.background = '#10b981'; dot.style.boxShadow = '0 0 6px #10b981'; }
+      } else {
+        badge.style.background = 'rgba(244,63,94,.08)';
+        badge.style.border = '1px solid rgba(244,63,94,.2)';
+        badge.style.color = '#f43f5e';
+        statusText.textContent = 'NOT SET';
+        var dot2 = badge.querySelector('div');
+        if (dot2) { dot2.style.background = '#f43f5e'; dot2.style.boxShadow = 'none'; }
+      }
+    }
+    if (setPill) {
+      setPill.textContent = pinSetAt ? new Date(pinSetAt).toLocaleDateString() : (pinSet ? 'Set' : '—');
+    }
+    if (lastUsed) {
+      lastUsed.textContent = pinLastUsed ? new Date(pinLastUsed).toLocaleDateString() : '—';
+      lastUsed.style.color = pinLastUsed ? '#10b981' : 'var(--muted)';
+    }
+    if (failCount) {
+      failCount.textContent = String(fails || 0);
+      failCount.style.color = fails > 0 ? '#f43f5e' : '#f59e0b';
+    }
+  } catch(e) {
+    if (statusText) statusText.textContent = 'UNKNOWN';
+  }
+}
+
+// ── PIN helper: reset or clear a user's PIN ────────────────────────────────
+async function _resetUserPin(targetUserId, targetName, forceClear) {
+  const label = forceClear ? 'Force Clear' : 'Reset';
+  const confirmMsg = forceClear
+    ? ('Force clear PIN for ' + (targetName || 'this user') + '? They will be prompted to create a new PIN on next login.')
+    : ('Send PIN reset for ' + (targetName || 'this user') + '? Their current PIN will be cleared.');
+  if (!window.confirm(confirmMsg)) return;
+
+  const resetBtn = document.getElementById('u_pin_reset_btn');
+  const clearBtn = document.getElementById('u_pin_clear_btn');
+  var btn = forceClear ? clearBtn : resetBtn;
+  if (btn) { btn.disabled = true; btn.textContent = label + 'ing…'; }
+
+  try {
+    const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
+    const res = await fetch('/api/pin/reset', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: targetUserId })
+    });
+    const data = await res.json().catch(function() { return {}; });
+    if (data.ok) {
+      if (window.UI && UI.toast) UI.toast(data.message || 'PIN cleared successfully.', 'success');
+      // Refresh PIN status display
+      _loadUserPinStatus(targetUserId, targetName);
+    } else {
+      if (window.UI && UI.toast) UI.toast((data.message || 'Failed to reset PIN.'), 'error');
+    }
+  } catch(e) {
+    if (window.UI && UI.toast) UI.toast('Network error. Please try again.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = forceClear
+        ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Force Clear PIN'
+        : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Send Reset Request';
+    }
+  }
 }
 
   function openProfileModal(actor, user){
