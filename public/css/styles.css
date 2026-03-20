@@ -159,7 +159,7 @@ select:disabled{opacity:.65;color:var(--text)}
 .err{display:none;margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,91,110,.5);background:rgba(255,91,110,.12);color:#ffd7dc}
 
 /* App layout */
-.app{height:100%;max-height:100%;display:grid;grid-template-columns:244px 1fr 296px;grid-template-rows:auto 1fr;gap:1px;padding:0;padding-bottom:calc(var(--mums-dock-h) + var(--mums-onlinebar-h));overflow:hidden;contain:strict}
+.app{height:100%;max-height:100%;display:grid;grid-template-columns:244px 1fr 296px;grid-template-rows:auto 1fr;gap:1px;padding:0;padding-bottom:calc(var(--mums-dock-h) + var(--mums-onlinebar-h));overflow:hidden}
 @media(max-width:1100px){.app{grid-template-columns:240px 1fr;grid-template-rows:auto auto 1fr;}.right{grid-column:1/-1;grid-row:2}.main{grid-column:1/-1;grid-row:3}}
 .topbar{grid-column:1/-1;display:grid;grid-template-columns:248px 1fr auto;align-items:center;gap:8px}
 .topbar-center{display:flex;justify-content:center;align-items:center;min-width:0}
@@ -194,7 +194,8 @@ select:disabled{opacity:.65;color:var(--text)}
 .announce-title{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
 .announce-meta{display:none}
 
-.side,.right,.main{min-height:0;overflow:hidden}
+.side,.right,.main{min-height:0}
+.side,.right{overflow:hidden} /* clip sidebars at grid cell boundary */
 .side.card.pad{display:flex;flex-direction:column;gap:12px}
 /* Sidebar user container: keep it transparent so the profile card itself is the single background layer */
 .usercard{padding:0;border-radius:0;border:none;background:transparent;position:relative}
@@ -873,7 +874,7 @@ body[data-mode="light"] .sp-photo{background:rgba(15,23,42,.04)}
   .ms-actions-cell{justify-content:flex-start}
   .ms-check{justify-content:flex-start}
 }
-.main.card.pad{overflow:auto;overflow-x:hidden;contain:layout}
+.main.card.pad{overflow:auto;overflow-x:hidden}
 .right.card.pad{display:flex;flex-direction:column;gap:12px;overflow:auto}
 
 /* Keep logs at the bottom so nav can use available vertical space */
