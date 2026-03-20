@@ -806,6 +806,122 @@
     </div>
   </div>
 
+  <!-- ── QB CASE DETAIL MODAL ─────────────────────────────────────────── -->
+  <div class="modal" id="qbCaseDetailModal" aria-label="Case Detail" role="dialog" aria-modal="true">
+    <div class="panel qbcd-panel">
+      <!-- Shimmer accent bar -->
+      <div class="qbcd-accent-bar"></div>
+
+      <!-- Header -->
+      <div class="qbcd-header">
+        <div class="qbcd-header-left">
+          <div class="qbcd-row-badge" id="qbcdRowBadge">1</div>
+          <div class="qbcd-title-block">
+            <div class="qbcd-case-label">Case Detail View</div>
+            <div class="qbcd-case-id">CASE# <span id="qbcdCaseId">—</span></div>
+            <div class="qbcd-desc" id="qbcdDesc">—</div>
+          </div>
+        </div>
+        <button class="btn ghost qbcd-close-btn" type="button" id="qbcdCloseBtn" aria-label="Close">✕</button>
+      </div>
+
+      <!-- Status bar -->
+      <div class="qbcd-status-bar">
+        <span class="qbcd-status-label">Status:</span>
+        <span id="qbcdStatusBadge"></span>
+        <span class="qbcd-status-spacer"></span>
+        <span class="qbcd-meta" id="qbcdMeta"></span>
+      </div>
+
+      <!-- Body -->
+      <div class="body qbcd-body">
+        <!-- KPI row -->
+        <div class="qbcd-kpi-row">
+          <div class="qbcd-kpi qbcd-kpi-cyan">
+            <div class="qbcd-kpi-label">Case Age</div>
+            <div class="qbcd-kpi-value" id="qbcdKpiAge">—</div>
+            <div class="qbcd-kpi-sub">Open duration</div>
+          </div>
+          <div class="qbcd-kpi qbcd-kpi-amber">
+            <div class="qbcd-kpi-label">Last Updated</div>
+            <div class="qbcd-kpi-value" id="qbcdKpiLast">—</div>
+            <div class="qbcd-kpi-sub">Days since update</div>
+          </div>
+          <div class="qbcd-kpi qbcd-kpi-violet">
+            <div class="qbcd-kpi-label">Type</div>
+            <div class="qbcd-kpi-value qbcd-kpi-value-sm" id="qbcdKpiType">—</div>
+            <div class="qbcd-kpi-sub">Case category</div>
+          </div>
+          <div class="qbcd-kpi qbcd-kpi-emerald">
+            <div class="qbcd-kpi-label">End User</div>
+            <div class="qbcd-kpi-value qbcd-kpi-value-sm" id="qbcdKpiEndUser">—</div>
+            <div class="qbcd-kpi-sub">Client account</div>
+          </div>
+        </div>
+
+        <!-- Two-column detail -->
+        <div class="qbcd-detail-cols">
+          <div class="qbcd-detail-block qbcd-block-cyan">
+            <div class="qbcd-block-title">Case Assignment</div>
+            <div class="qbcd-kv-list">
+              <div class="qbcd-kv">
+                <span class="qbcd-kv-lbl">Assigned To</span>
+                <span class="qbcd-kv-val qbcd-kv-hi" id="qbcdAssigned">—</span>
+              </div>
+              <div class="qbcd-kv">
+                <span class="qbcd-kv-lbl">Contact — Full Name</span>
+                <span class="qbcd-kv-val" id="qbcdContact">—</span>
+              </div>
+              <div class="qbcd-kv">
+                <span class="qbcd-kv-lbl">End User / Client</span>
+                <span class="qbcd-kv-val" id="qbcdEndUser">—</span>
+              </div>
+            </div>
+          </div>
+          <div class="qbcd-detail-block qbcd-block-violet">
+            <div class="qbcd-block-title">Case Classification</div>
+            <div class="qbcd-kv-list">
+              <div class="qbcd-kv">
+                <span class="qbcd-kv-lbl">Case #</span>
+                <span class="qbcd-kv-val qbcd-kv-hi" id="qbcdCaseId2">—</span>
+              </div>
+              <div class="qbcd-kv">
+                <span class="qbcd-kv-lbl">Case Type</span>
+                <span class="qbcd-kv-val" id="qbcdType2">—</span>
+              </div>
+              <div class="qbcd-kv">
+                <span class="qbcd-kv-lbl">Case Status</span>
+                <span id="qbcdStatus2"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Latest Update block -->
+        <div class="qbcd-update-block">
+          <div class="qbcd-update-label">
+            <span class="qbcd-update-dot"></span>
+            Latest Update on the Case
+          </div>
+          <div class="qbcd-update-text" id="qbcdLatest">—</div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="qbcd-footer">
+        <div class="qbcd-nav-btns">
+          <button class="btn ghost qbcd-nav-btn" id="qbcdPrevBtn" type="button">← Prev</button>
+          <button class="btn ghost qbcd-nav-btn" id="qbcdNextBtn" type="button">Next →</button>
+        </div>
+        <span class="qbcd-pos" id="qbcdPos"></span>
+        <span style="flex:1"></span>
+        <button class="btn qbcd-action-btn" type="button" id="qbcdCopyBtn">Copy Case #</button>
+        <button class="btn ghost" type="button" id="qbcdCloseBtn2">Close</button>
+      </div>
+    </div>
+  </div>
+  <!-- ── END QB CASE DETAIL MODAL ──────────────────────────────────────── -->
+
   <script src="/js/env_runtime.js?v=p1-516"></script>
   <script src="/js/remote_patch.js?v=p1-516"></script>
   <script>

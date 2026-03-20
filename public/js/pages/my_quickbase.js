@@ -679,8 +679,17 @@
         return `<td${tdStyle}><div class="qb-cell-clamp" data-full="${esc(rawStr)}"><span class="qb-cell-text">${safeVal}</span></div></td>`;
       }).join('');
 
+      // Build the row data snapshot for the Case Detail Modal
+      const rowSnapshot = {
+        rowNum:      globalRowNum,
+        recordId:    recordId,
+        fields:      r && r.fields ? r.fields : {},
+        columnMap:   columns.reduce((acc, c) => { acc[String(c.id)] = String(c.label || c.id || ''); return acc; }, {}),
+      };
+      const snapshotAttr = esc(JSON.stringify(rowSnapshot));
+
       // FIX: Column order — # first, then Virtual Column, then user-defined columns
-      return `<tr${rowClassAttr}${rowStyleAttr}><td class="qb-row-num-cell"${tdStyle}><span class="qb-row-num-pill">${globalRowNum}</span></td>${vcCell}<td class="qb-case-id"${tdStyle}>${esc(recordId)}</td>${cells}</tr>`;
+      return `<tr${rowClassAttr}${rowStyleAttr}><td class="qb-row-num-cell"${tdStyle}><button type="button" class="qb-row-num-pill qb-row-detail-btn" data-qb-row-snapshot="${snapshotAttr}" title="View case details" aria-label="View case #${esc(recordId)}">${globalRowNum}</button></td>${vcCell}<td class="qb-case-id"${tdStyle}>${esc(recordId)}</td>${cells}</tr>`;
     }).join('');
 
     const vcThPrefix = vcEnabled ? vcHeader : '';
@@ -688,6 +697,24 @@
 
     // ── PREMIUM TOOLTIP SETUP ─────────────────────────────────────────────
     _setupQbTooltips(host);
+
+    // ── CASE DETAIL MODAL BINDING ─────────────────────────────────────────
+    // Collect all visible row snapshots for Prev/Next navigation
+    try {
+      const allSnaps = Array.from(host.querySelectorAll('.qb-row-detail-btn')).map(btn => {
+        try { return JSON.parse(btn.getAttribute('data-qb-row-snapshot') || 'null'); } catch(_){ return null; }
+      }).filter(Boolean);
+
+      host.querySelectorAll('.qb-row-detail-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          try {
+            const snap = JSON.parse(btn.getAttribute('data-qb-row-snapshot') || 'null');
+            if (snap) window._openQbCaseDetailModal(snap, allSnaps);
+          } catch(_) {}
+        });
+      });
+    } catch(_) {}
 
     // ── VIRTUAL COLUMN CHANGE HANDLER (PREMIUM) ───────────────────────────
     if (vcEnabled && typeof opts.onVirtualColumnChange === 'function') {
