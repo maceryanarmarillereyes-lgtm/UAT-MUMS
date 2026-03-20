@@ -3765,6 +3765,30 @@ function updateClocksPreviewTimes(){
       const quicklinksShow = localStorage.getItem(BAR_KEYS.quicklinks) !== '0';
       document.body.classList.toggle('online-bar-hidden',     !onlineShow);
       document.body.classList.toggle('quicklinks-bar-hidden', !quicklinksShow);
+
+      // ── CRITICAL FIX: Drive --mums-dock-h / --mums-onlinebar-h directly via JS ──
+      // CSS body-class overrides of :root custom properties are defeated by
+      // theme-specific :root re-declarations later in the stylesheet.
+      // Setting inline style on documentElement (the <html> element) has the
+      // highest possible specificity — no CSS rule can override it.
+      // This guarantees that grid row 3 collapses to 0px when bars are hidden,
+      // causing left sidebar, main content, and right sidebar to auto-expand.
+      const isMobile    = window.matchMedia('(max-width: 980px)').matches;
+      const DOCK_H_ON   = 86;                      // matches :root in styles.css
+      const ONLINE_H_ON = isMobile ? 40 : 44;      // matches :root / @media 980px
+
+      const dockH   = quicklinksShow ? DOCK_H_ON   : 0;
+      const onlineH = onlineShow     ? ONLINE_H_ON : 0;
+
+      document.documentElement.style.setProperty('--mums-dock-h',      dockH   + 'px');
+      document.documentElement.style.setProperty('--mums-onlinebar-h', onlineH + 'px');
+
+      // Sync the online bar's bottom anchor so it always sits flush
+      // directly above the quicklinks bar (or at viewport bottom when ql hidden).
+      try {
+        const onlineBar = document.querySelector('.online-users-bar');
+        if (onlineBar) onlineBar.style.bottom = (quicklinksShow ? dockH : 0) + 'px';
+      } catch (_) {}
     } catch (_) {}
   }
 
@@ -4016,9 +4040,10 @@ function updateClocksPreviewTimes(){
       try {
         var onlineChk = document.getElementById('toggleOnlineBar');
         var qlChk = document.getElementById('toggleQuickLinksBar');
-        var BAR_KEYS = { online: 'mums_bar_online_visible', quicklinks: 'mums_bar_quicklinks_visible' };
-        if (onlineChk) onlineChk.checked = localStorage.getItem(BAR_KEYS.online) !== '0';
-        if (qlChk) qlChk.checked = localStorage.getItem(BAR_KEYS.quicklinks) !== '0';
+        // FIX: was using wrong keys ('mums_bar_online_visible'/'mums_bar_quicklinks_visible').
+        // Must match outer BAR_KEYS: 'mums_bar_online' / 'mums_bar_quicklinks'
+        if (onlineChk) onlineChk.checked = localStorage.getItem('mums_bar_online')     !== '0';
+        if (qlChk) qlChk.checked         = localStorage.getItem('mums_bar_quicklinks') !== '0';
       } catch(_) {}
     }
 

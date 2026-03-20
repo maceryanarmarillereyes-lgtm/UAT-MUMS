@@ -9612,25 +9612,24 @@ body:not(.quicklinks-bar-hidden) .quicklinks-bar {
   transition: transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
 }
 
-/* ── Dynamic layout: CSS variables drive all bar-height-dependent spacing ── */
-/* CORRECT APPROACH: update --mums-dock-h and --mums-onlinebar-h via body classes.
-   The existing rule "/* .app bottom space is now row 3: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) */"
-   automatically recalculates — no direct padding-bottom overrides needed. */
+/* ── Dynamic layout: JS drives --mums-dock-h / --mums-onlinebar-h directly ── */
+/*
+   AUTHORITATIVE DRIVER: app.js → applyBarVisibility()
+   Sets document.documentElement.style.setProperty('--mums-dock-h', ...)
+   and document.documentElement.style.setProperty('--mums-onlinebar-h', ...).
+   Inline style on <html> wins all CSS specificity — no cascade conflict possible.
 
-/* Quicklinks bar hidden: zero out dock height variable.
-   Drives: /* .app bottom space is row 3 of the grid */ to shrink,
-   which expands the 1fr grid row → sidebars + main grow automatically. */
-body.quicklinks-bar-hidden {
-  --mums-dock-h: 0px;
-  transition: --mums-dock-h .28s cubic-bezier(.4,0,.2,1);
-}
-/* Online users bar hidden: zero out online bar height variable */
-body.online-bar-hidden {
-  --mums-onlinebar-h: 0px;
-  transition: --mums-onlinebar-h .28s cubic-bezier(.4,0,.2,1);
-}
+   quicklinks hidden → --mums-dock-h: 0px
+   online hidden     → --mums-onlinebar-h: 0px
+   .app grid row 3   = calc(0px + Xpx) or calc(0px + 0px) → collapses
+   .side / .main / .right auto-expand to fill the freed space.
 
-/* Online users bar: adjust bottom anchor when quicklinks bar is hidden */
+   CSS rules below are safety-net fallbacks only (fire if JS blocked / not yet run).
+*/
+body.quicklinks-bar-hidden { --mums-dock-h: 0px; }
+body.online-bar-hidden     { --mums-onlinebar-h: 0px; }
+
+/* Online users bar bottom anchor — CSS fallback; JS inline style wins at runtime */
 body.quicklinks-bar-hidden .online-users-bar {
   bottom: 0;
   transition: bottom .28s cubic-bezier(.4,0,.2,1), transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
@@ -9639,12 +9638,6 @@ body:not(.quicklinks-bar-hidden) .online-users-bar {
   bottom: var(--mums-dock-h);
   transition: bottom .28s cubic-bezier(.4,0,.2,1), transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
 }
-
-/* Sidebar + right panel already use overflow:hidden (established pattern in this codebase).
-   Grid item sizing is handled by align-self:stretch (the default) — do NOT set height:100%
-   on .side as this causes Chrome to resolve to grid-container height (see note at line ~5057).
-   The --mums-dock-h / --mums-onlinebar-h variables above correctly drive .app padding-bottom,
-   which in turn resizes the 1fr grid row — sidebars expand automatically. */
 
 
 /* ── PERMANENT FIX: Bottom bars must not overlap left/right sidebars ──────────
