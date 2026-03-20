@@ -3,7 +3,7 @@
    bcrypt is not available in Cloudflare Workers, so we use
    PBKDF2 via the Web Crypto API (available in both Node 18+ and CF Workers).
 */
-const { getUserFromJwt, getProfileForUserId, serviceUpdate, serviceSelect, serviceUpsert } = require('../../lib/supabase');
+const { getUserFromJwt, getProfileForUserId, serviceUpdate, serviceSelect, serviceUpsert } = require('../lib/supabase');
 
 function sendJson(res, code, body) {
   res.statusCode = code;
