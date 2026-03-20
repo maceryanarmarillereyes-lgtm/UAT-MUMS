@@ -761,9 +761,16 @@
   function _qbTooltipEnter(e) {
     const el = e.currentTarget;
     const full = el.getAttribute('data-full') || '';
-    if (!full) return;
+    // Don't show tooltip if content isn't clamped (short text fits in 3 lines)
+    if (!full || full.trim().length < 2) return;
+    // Only show tooltip if text is actually truncated
+    const clamped = el.scrollHeight > el.clientHeight + 4;
+    const hasLongContent = full.length > 80;
+    if (!clamped && !hasLongContent) return;
     const tip = _getTooltip();
-    tip.textContent = full;
+    // Use innerHTML with sanitized content to preserve newlines as <br>
+    tip.innerHTML = full.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/
+/g,'<br>');
     tip.classList.add('is-visible');
     _positionTooltip(tip, e);
   }
