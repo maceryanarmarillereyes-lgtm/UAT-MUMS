@@ -698,9 +698,11 @@
     // ── PREMIUM TOOLTIP SETUP ─────────────────────────────────────────────
     _setupQbTooltips(host);
 
-    // ── CASE DETAIL MODAL — Event delegation wired once at page init ──────────
-    // Click handling via a single delegated listener on #qbDataBody.
-    // See _initQbCaseDetailModal() IIFE below in page init section.
+    // ── CASE DETAIL MODAL — row-click handled via event delegation ─────────────
+    // The full controller (populate, open, close, nav, keyboard, backdrop) is
+    // initialised ONCE in _initQbCaseDetailModal() at page-init time (below).
+    // A single 'click' listener on #qbDataBody handles all .qb-row-detail-btn
+    // clicks — works across every renderRecords() call and SPA re-navigations.
 
     // ── VIRTUAL COLUMN CHANGE HANDLER (PREMIUM) ───────────────────────────
     if (vcEnabled && typeof opts.onVirtualColumnChange === 'function') {
@@ -3474,30 +3476,26 @@
     try {
     root.querySelector('#qbOpenSettingsBtn').onclick = openSettings;
 
-    // ── QB CASE DETAIL MODAL — Full init, wired once per page load ──────────
-    // Uses event delegation on #qbDataBody so ONE listener handles ALL row btn
-    // clicks across every renderRecords() call, including after tab switches.
-    // This replaces the old window.__qbcdInited approach which failed on SPA
-    // re-navigation because: the guard stayed true, the DOM was recreated, and
-    // per-render per-button addEventListener bindings silently misfired.
+    // ── QB CASE DETAIL MODAL CONTROLLER ──────────────────────────────────────
+    // Wired ONCE per page-load via a delegated 'click' listener on #qbDataBody.
+    // Survives every renderRecords() call without rebinding.
+    // Survives SPA re-navigation: window.Pages.my_quickbase() is called fresh,
+    // root.innerHTML is rebuilt, and this IIFE runs again capturing the new root.
+    // NO window-level flags (no __qbcdInited) — scope is entirely local.
     (function _initQbCaseDetailModal() {
-      // ── Mutable state (local to this page load, not on window) ──────────
       var _snaps = [];
       var _idx   = 0;
 
-      // ── Helper: fuzzy field lookup by label keywords ─────────────────────
       function _field(snap, keys) {
         if (!snap || !snap.fields || !snap.columnMap) return '';
         var colId = Object.keys(snap.columnMap).find(function(id) {
-          var lbl = (snap.columnMap[id] || '').toLowerCase();
-          return keys.some(function(k) { return lbl.includes(k); });
+          return keys.some(function(k) { return (snap.columnMap[id] || '').toLowerCase().includes(k); });
         });
         if (!colId) return '';
         var f = snap.fields[colId];
         return f && f.value != null ? String(f.value) : '';
       }
 
-      // ── Duration formatter ────────────────────────────────────────────────
       function _dur(val) {
         var n = Number(val);
         if (!isFinite(n) || n < 0) return String(val == null ? '' : val);
@@ -3506,67 +3504,64 @@
         return d + ' day' + (d === 1 ? '' : 's');
       }
 
-      // ── Status badge builder ──────────────────────────────────────────────
       function _badge(s) {
         var sl = (s || '').toLowerCase();
         var cls = 'qb-status-default';
-        if (sl.includes('investigating'))                               cls = 'qb-status-investigating';
-        else if (sl.includes('waiting'))                               cls = 'qb-status-waiting';
-        else if (sl.includes('initial'))                               cls = 'qb-status-initial';
-        else if (sl.includes('soft close') || sl.includes('soft-close')) cls = 'qb-status-soft-close';
+        if      (sl.includes('investigating'))                               cls = 'qb-status-investigating';
+        else if (sl.includes('waiting'))                                     cls = 'qb-status-waiting';
+        else if (sl.includes('initial'))                                     cls = 'qb-status-initial';
+        else if (sl.includes('soft close') || sl.includes('soft-close'))    cls = 'qb-status-soft-close';
         else if (sl.includes('response received') || sl.includes('for support')) cls = 'qb-status-response';
-        else if (sl.includes('closed') || sl.startsWith('c -'))        cls = 'qb-status-closed';
-        else if (sl.startsWith('s -'))                                 cls = 'qb-status-soft-close';
-        else if (sl.startsWith('o -'))                                 cls = 'qb-status-investigating';
+        else if (sl.includes('closed') || sl.startsWith('c -'))             cls = 'qb-status-closed';
+        else if (sl.startsWith('s -'))                                       cls = 'qb-status-soft-close';
+        else if (sl.startsWith('o -'))                                       cls = 'qb-status-investigating';
         var safe = String(s || '—').replace(/[&<>"']/g, function(c) {
-          return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+          return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
         });
         return '<span class="qb-status-badge ' + cls + '"><span class="qb-status-dot"></span>' + safe + '</span>';
       }
 
-      function _set(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
-      function _html(id, h)  { var el = document.getElementById(id); if (el) el.innerHTML  = h;   }
+      function _set(id, v)  { var el = document.getElementById(id); if (el) el.textContent = v; }
+      function _html(id, h) { var el = document.getElementById(id); if (el) el.innerHTML  = h; }
 
-      // ── Populate all modal fields from snapshot ───────────────────────────
       function _populate(snap) {
         if (!snap) return;
-        var caseId   = snap.recordId || '—';
-        var desc     = _field(snap, ['short description','description','concern','subject','title']) || '—';
-        var assigned = _field(snap, ['assigned to','assigned','agent']) || '—';
-        var contact  = _field(snap, ['contact','full name','customer name']) || '—';
-        var endUser  = _field(snap, ['end user','client','account','customer']) || '—';
-        var type     = _field(snap, ['type','category']) || '—';
-        var status   = _field(snap, ['case status','status']) || '—';
-        var age      = _field(snap, ['age']);
-        var lastUpd  = _field(snap, ['last update days','last update','update days']);
-        var latest   = _field(snap, ['latest update','last comment','latest','update on the case']) || '—';
+        var caseId  = snap.recordId || '—';
+        var desc    = _field(snap, ['short description','description','concern','subject','title']) || '—';
+        var assign  = _field(snap, ['assigned to','assigned','agent'])         || '—';
+        var contact = _field(snap, ['contact','full name','customer name'])    || '—';
+        var endUser = _field(snap, ['end user','client','account','customer']) || '—';
+        var type    = _field(snap, ['type','category'])                        || '—';
+        var status  = _field(snap, ['case status','status'])                   || '—';
+        var age     = _field(snap, ['age']);
+        var lastUpd = _field(snap, ['last update days','last update','update days']);
+        var latest  = _field(snap, ['latest update','last comment','latest','update on the case']) || '—';
 
-        _set('qbcdRowBadge',   snap.rowNum || '—');
-        _set('qbcdCaseId',     caseId);
-        _set('qbcdDesc',       desc);
+        _set('qbcdRowBadge',  snap.rowNum || '—');
+        _set('qbcdCaseId',    caseId);
+        _set('qbcdDesc',      desc);
         _html('qbcdStatusBadge', _badge(status));
-        _set('qbcdMeta',       'Row ' + snap.rowNum + ' · ' + endUser);
-        _set('qbcdKpiAge',     age     ? _dur(age)     : '—');
-        _set('qbcdKpiLast',    lastUpd ? _dur(lastUpd) : '—');
-        _set('qbcdKpiType',    type);
-        _set('qbcdKpiEndUser', endUser);
-        _set('qbcdAssigned',   assigned);
-        _set('qbcdContact',    contact);
-        _set('qbcdEndUser',    endUser);
-        _set('qbcdCaseId2',    caseId);
-        _set('qbcdType2',      type);
-        _html('qbcdStatus2',   _badge(status));
-        _set('qbcdLatest',     latest);
+        _set('qbcdMeta',      'Row ' + snap.rowNum + ' · ' + endUser);
+        _set('qbcdKpiAge',    age     ? _dur(age)     : '—');
+        _set('qbcdKpiLast',   lastUpd ? _dur(lastUpd) : '—');
+        _set('qbcdKpiType',   type);
+        _set('qbcdKpiEndUser',endUser);
+        _set('qbcdAssigned',  assign);
+        _set('qbcdContact',   contact);
+        _set('qbcdEndUser',   endUser);
+        _set('qbcdCaseId2',   caseId);
+        _set('qbcdType2',     type);
+        _html('qbcdStatus2',  _badge(status));
+        _set('qbcdLatest',    latest);
 
-        var posEl = document.getElementById('qbcdPos');
-        if (posEl) posEl.textContent = (_idx + 1) + ' of ' + _snaps.length;
+        var posEl   = document.getElementById('qbcdPos');
         var prevBtn = document.getElementById('qbcdPrevBtn');
         var nextBtn = document.getElementById('qbcdNextBtn');
-        if (prevBtn) prevBtn.disabled = _idx <= 0;
-        if (nextBtn) nextBtn.disabled = _idx >= _snaps.length - 1;
+        if (posEl)   posEl.textContent    = (_idx + 1) + ' of ' + _snaps.length;
+        if (prevBtn) prevBtn.disabled     = _idx <= 0;
+        if (nextBtn) nextBtn.disabled     = _idx >= _snaps.length - 1;
       }
 
-      // ── Navigate prev / next ─────────────────────────────────────────────
       function _nav(dir) {
         var next = _idx + dir;
         if (next < 0 || next >= _snaps.length) return;
@@ -3574,7 +3569,6 @@
         _populate(_snaps[_idx]);
       }
 
-      // ── Close modal ──────────────────────────────────────────────────────
       function _close() {
         var m = document.getElementById('qbCaseDetailModal');
         if (!m) return;
@@ -3583,106 +3577,88 @@
         } else {
           m.classList.remove('open');
           m.style.display = 'none';
-          try { if (!document.querySelector('.modal.open')) document.body.classList.remove('modal-open'); } catch(_e) {}
+          try { if (!document.querySelector('.modal.open')) document.body.classList.remove('modal-open'); } catch(e) {}
         }
       }
 
-      // ── Open modal ───────────────────────────────────────────────────────
       function _open(snap, allSnaps) {
         _snaps = Array.isArray(allSnaps) ? allSnaps : [snap];
         _idx   = _snaps.findIndex(function(s) { return s && s.rowNum === snap.rowNum; });
         if (_idx < 0) _idx = 0;
         _populate(snap);
         var m = document.getElementById('qbCaseDetailModal');
-        if (!m) {
-          console.warn('[QBCD] #qbCaseDetailModal not found in DOM');
-          return;
-        }
-        // Force-clear any inline display:none left by previous closeModal()
-        m.style.display = '';
-        m.removeAttribute('hidden');
+        if (!m) return;
+        m.style.display = ''; // clear any inline display:none from previous close
         if (window.UI && typeof UI.openModal === 'function') {
           UI.openModal('qbCaseDetailModal');
         } else {
           m.classList.add('open');
-          try { document.body.classList.add('modal-open'); } catch(_e) {}
+          try { document.body.classList.add('modal-open'); } catch(e) {}
         }
       }
 
-      // ── Wire modal's own close/nav/copy buttons ──────────────────────────
-      function _wireModalButtons() {
-        var modal = document.getElementById('qbCaseDetailModal');
-        if (!modal) return;
+      // Wire modal's own buttons (close, prev, next, copy, backdrop)
+      var _modal = document.getElementById('qbCaseDetailModal');
+      if (_modal) {
         [
           { id: 'qbcdCloseBtn',  fn: _close },
           { id: 'qbcdCloseBtn2', fn: _close },
           { id: 'qbcdPrevBtn',   fn: function() { _nav(-1); } },
-          { id: 'qbcdNextBtn',   fn: function() { _nav(1); } },
+          { id: 'qbcdNextBtn',   fn: function() { _nav(1);  } },
         ].forEach(function(item) {
           var el = document.getElementById(item.id);
-          if (el && !el._qbcdWired) { el._qbcdWired = true; el.addEventListener('click', item.fn); }
+          if (el) el.addEventListener('click', item.fn);
         });
-        var copyBtn = document.getElementById('qbcdCopyBtn');
-        if (copyBtn && !copyBtn._qbcdWired) {
-          copyBtn._qbcdWired = true;
-          copyBtn.addEventListener('click', function() {
-            try {
-              var id = (document.getElementById('qbcdCaseId') || {}).textContent || '';
-              if (!id || id === '—') return;
-              if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(id).then(function() {
-                  copyBtn.textContent = 'Copied!';
-                  setTimeout(function() { copyBtn.textContent = 'Copy Case #'; }, 1800);
-                }).catch(function() {});
-              }
-            } catch(_e) {}
+        var _copyBtn = document.getElementById('qbcdCopyBtn');
+        if (_copyBtn) {
+          _copyBtn.addEventListener('click', function() {
+            var id = (document.getElementById('qbcdCaseId') || {}).textContent || '';
+            if (!id || id === '—') return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(id).then(function() {
+                _copyBtn.textContent = 'Copied!';
+                setTimeout(function() { _copyBtn.textContent = 'Copy Case #'; }, 1800);
+              }).catch(function() {});
+            }
           });
         }
-        // Backdrop click closes
-        modal.addEventListener('mousedown', function(e) {
-          if (e.target === modal) _close();
+        // Backdrop click
+        _modal.addEventListener('mousedown', function(e) {
+          if (e.target === _modal) _close();
         });
       }
 
-      // ── Keyboard nav ─────────────────────────────────────────────────────
+      // Keyboard: Escape / ArrowLeft / ArrowRight
       document.addEventListener('keydown', function(e) {
         var m = document.getElementById('qbCaseDetailModal');
         if (!m || !m.classList.contains('open')) return;
-        if (e.key === 'Escape')          _close();
+        if      (e.key === 'Escape')     _close();
         else if (e.key === 'ArrowLeft')  _nav(-1);
         else if (e.key === 'ArrowRight') _nav(1);
       });
 
-      _wireModalButtons();
-
-      // ── EVENT DELEGATION on #qbDataBody ──────────────────────────────────
-      // Single listener on the static parent container. Handles all current
-      // and future .qb-row-detail-btn buttons regardless of how many times
-      // renderRecords() replaces innerHTML. No per-button binding needed.
-      var dataBody = root.querySelector('#qbDataBody');
-      if (dataBody) {
-        dataBody.addEventListener('click', function(e) {
-          var btn = e.target ? e.target.closest('.qb-row-detail-btn') : null;
+      // ── Single delegated listener on #qbDataBody ──────────────────────────
+      // Handles ALL .qb-row-detail-btn clicks regardless of re-renders.
+      var _dataBody = root.querySelector('#qbDataBody');
+      if (_dataBody) {
+        _dataBody.addEventListener('click', function(e) {
+          var btn = e.target && e.target.closest ? e.target.closest('.qb-row-detail-btn') : null;
           if (!btn) return;
           e.stopPropagation();
+          var snap = null;
+          try { snap = JSON.parse(btn.getAttribute('data-qb-row-snapshot') || 'null'); } catch(e) {}
+          if (!snap) return;
+          var allSnaps = [];
           try {
-            var snap = JSON.parse(btn.getAttribute('data-qb-row-snapshot') || 'null');
-            if (!snap) return;
-            // Collect all current snapshots from visible buttons for prev/next nav
-            var allSnaps = Array.from(dataBody.querySelectorAll('.qb-row-detail-btn'))
-              .map(function(b) { try { return JSON.parse(b.getAttribute('data-qb-row-snapshot') || 'null'); } catch(_e) { return null; } })
-              .filter(Boolean);
-            _open(snap, allSnaps);
-          } catch(_e) {
-            console.error('[QBCD] click handler error:', _e);
-          }
+            allSnaps = Array.from(_dataBody.querySelectorAll('.qb-row-detail-btn')).map(function(b) {
+              try { return JSON.parse(b.getAttribute('data-qb-row-snapshot') || 'null'); } catch(e) { return null; }
+            }).filter(Boolean);
+          } catch(e) {}
+          _open(snap, allSnaps);
         });
-      } else {
-        console.warn('[QBCD] #qbDataBody not found — delegation listener not attached');
       }
     })();
-    // ── END QB CASE DETAIL MODAL INIT ────────────────────────────────────────────────────────
-
+    // ── END _initQbCaseDetailModal ────────────────────────────────────────────
     root.querySelector('#qbCloseSettingsBtn').onclick = closeSettings;
     root.querySelector('#qbCancelSettingsBtn').onclick = closeSettings;
     root.querySelector('#qbSettingsModal').addEventListener('mousedown', (event) => {
