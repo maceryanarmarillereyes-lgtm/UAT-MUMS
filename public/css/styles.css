@@ -2569,13 +2569,7 @@ input:-webkit-autofill, textarea:-webkit-autofill, select:-webkit-autofill{
 /* Collapsed sidebar: pinned + auto-expand on hover (overlay) */
 body.sidebar-collapsed.sidebar-hoverable .side{width:72px}
 body.sidebar-collapsed.sidebar-hoverable .side:hover{width:280px; z-index:50; box-shadow: var(--shadow);}
-/* When hoverable sidebar expands, push bottom bars right to avoid overlap */
-body.sidebar-collapsed.sidebar-hoverable .side:hover ~ * .online-users-bar,
-body.sidebar-collapsed.sidebar-hoverable .side:hover ~ * .quicklinks-bar,
-body.sidebar-collapsed.sidebar-hoverable:has(.side:hover) .online-users-bar,
-body.sidebar-collapsed.sidebar-hoverable:has(.side:hover) .quicklinks-bar {
-  left: 280px !important;
-}
+/* Bars are full-width (left:0; right:0) — no push needed on hover expand */
 body.sidebar-collapsed.sidebar-hoverable .side:hover .usercard,
 body.sidebar-collapsed.sidebar-hoverable .side:hover .small,
 body.sidebar-collapsed.sidebar-hoverable .side:hover .side-logs{display:block}
@@ -2964,7 +2958,7 @@ body.attendance-locked #app{
 
 .online-users-bar{
   position:fixed;
-  left:var(--sidebar-left-w); right:var(--sidebar-right-w);
+  left:0; right:0;
   bottom: var(--mums-dock-h);
   z-index: 1999;
   padding: 6px 14px;
@@ -3041,7 +3035,7 @@ body.attendance-locked #app{
   display:block;
   padding: 10px 14px;
 }
-.quicklinks-bar{position:fixed;left:var(--sidebar-left-w);right:var(--sidebar-right-w);bottom:0;}
+.quicklinks-bar{position:fixed;left:0;right:0;bottom:0;}
 .quicklinks-bar{z-index:2000;}
 .quicklinks-bar{overflow:hidden;}
 .quicklinks-bar{align-items:stretch;}
@@ -9668,11 +9662,11 @@ body.rightbar-collapsed {
   --sidebar-right-w: 0px;
 }
 
-/* Apply offset to both fixed bottom bars */
+/* Apply offset to both fixed bottom bars — FULL WIDTH, edge to edge */
 .online-users-bar,
 .quicklinks-bar {
-  left: var(--sidebar-left-w) !important;
-  right: var(--sidebar-right-w) !important;
+  left: 0 !important;
+  right: 0 !important;
   transition:
     left .25s cubic-bezier(.4,0,.2,1),
     right .25s cubic-bezier(.4,0,.2,1),
