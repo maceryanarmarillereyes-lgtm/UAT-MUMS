@@ -769,8 +769,7 @@
     if (!clamped && !hasLongContent) return;
     const tip = _getTooltip();
     // Use innerHTML with sanitized content to preserve newlines as <br>
-    tip.innerHTML = full.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/
-/g,'<br>');
+    tip.innerHTML = full.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>').replace(/\r/g,'');
     tip.classList.add('is-visible');
     _positionTooltip(tip, e);
   }
