@@ -10898,14 +10898,11 @@ body.density-compact .main.card.pad {
   backdrop-filter: blur(8px) !important;
   -webkit-backdrop-filter: blur(8px) !important;
   z-index: 2147483100 !important;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .25s ease;
   box-sizing: border-box !important;
 }
+/* .open class set by UI.openModal() — display:none → flex, no opacity tricks */
 #qbCaseDetailModal.open {
   display: flex !important;
-  opacity: 1 !important;
   pointer-events: all !important;
 }
 
@@ -10925,15 +10922,14 @@ body.density-compact .main.card.pad {
     0 0 0 1px rgba(34,211,238,.05),
     0 40px 80px rgba(0,0,0,.7),
     0 0 60px rgba(34,211,238,.04) !important;
-  transform: translateY(14px) scale(.97);
-  opacity: 0;
-  transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .25s ease !important;
+  transform: translateY(18px) scale(.97);
+  transition: transform .28s cubic-bezier(.34,1.56,.64,1) !important;
   position: relative;
   z-index: 2147483101 !important;
 }
+/* Panel slides up when modal opens — transform only, no opacity */
 #qbCaseDetailModal.open .qbcd-panel {
   transform: translateY(0) scale(1) !important;
-  opacity: 1 !important;
 }
 
 /* Animated shimmer accent bar at top */

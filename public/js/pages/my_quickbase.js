@@ -698,11 +698,33 @@
     // ── PREMIUM TOOLTIP SETUP ─────────────────────────────────────────────
     _setupQbTooltips(host);
 
-    // ── CASE DETAIL MODAL — row-click handled via event delegation ─────────────
-    // The full controller (populate, open, close, nav, keyboard, backdrop) is
-    // initialised ONCE in _initQbCaseDetailModal() at page-init time (below).
-    // A single 'click' listener on #qbDataBody handles all .qb-row-detail-btn
-    // clicks — works across every renderRecords() call and SPA re-navigations.
+    // ── CASE DETAIL MODAL — Direct per-button onclick (primary) ─────────────────
+    // Belt+suspenders: bind onclick DIRECTLY on each button after innerHTML is set.
+    // This is the most reliable approach — no delegation, no bubbling, no closest().
+    // root._qbcdOpen is set by _initQbCaseDetailModal() in page-init (below).
+    // renderRecords runs AFTER that init, so root._qbcdOpen is always available.
+    (function _bindRowDetailBtns() {
+      try {
+        var allBtns = Array.from(host.querySelectorAll('.qb-row-detail-btn'));
+        var allSnaps = allBtns.map(function(b) {
+          try { return JSON.parse(b.getAttribute('data-qb-row-snapshot') || 'null'); }
+          catch(e) { return null; }
+        }).filter(Boolean);
+
+        allBtns.forEach(function(btn) {
+          var snap = null;
+          try { snap = JSON.parse(btn.getAttribute('data-qb-row-snapshot') || 'null'); }
+          catch(e) {}
+          if (!snap) return;
+          btn.onclick = function(e) {
+            e.stopPropagation();
+            if (typeof root._qbcdOpen === 'function') {
+              root._qbcdOpen(snap, allSnaps);
+            }
+          };
+        });
+      } catch(e) {}
+    })();
 
     // ── VIRTUAL COLUMN CHANGE HANDLER (PREMIUM) ───────────────────────────
     if (vcEnabled && typeof opts.onVirtualColumnChange === 'function') {
@@ -3587,8 +3609,12 @@
         if (_idx < 0) _idx = 0;
         _populate(snap);
         var m = document.getElementById('qbCaseDetailModal');
-        if (!m) return;
-        m.style.display = ''; // clear any inline display:none from previous close
+        if (!m) { console.warn('[QBCD] #qbCaseDetailModal missing from DOM'); return; }
+        // Always clear inline display:none left by UI.closeModal
+        m.style.display = '';
+        // Remove any conflicting inline opacity that bringToFront might not reset
+        m.style.opacity  = '';
+        m.style.visibility = '';
         if (window.UI && typeof UI.openModal === 'function') {
           UI.openModal('qbCaseDetailModal');
         } else {
@@ -3596,6 +3622,10 @@
           try { document.body.classList.add('modal-open'); } catch(e) {}
         }
       }
+
+      // Expose _open on root so renderRecords can call it directly (belt+suspenders)
+      // root is per-page-load (not window), so this resets cleanly on SPA re-navigation
+      root._qbcdOpen = _open;
 
       // Wire modal's own buttons (close, prev, next, copy, backdrop)
       var _modal = document.getElementById('qbCaseDetailModal');
