@@ -3947,10 +3947,17 @@ function updateClocksPreviewTimes(){
               try{ if(typeof bindSystemCheckModal === 'function') bindSystemCheckModal(_panelUser); }catch(_){}
             },
             globalqb: function(){
-              try{ if(typeof loadGqbSettings === 'function') loadGqbSettings(); }catch(_){}
+              // loadGqbSettings is scoped inside isSA block — access via window proxy
+              try{ if(window.__mumsLoadGqbSettings) window.__mumsLoadGqbSettings();
+              else if(typeof loadGqbSettings === 'function') loadGqbSettings(); }catch(_){}
             },
             calendar: function(){
-              try{ if(typeof loadCalSettings === 'function') loadCalSettings(); }catch(_){}
+              try{ if(window.__mumsLoadCalSettings) window.__mumsLoadCalSettings();
+              else if(typeof loadCalSettings === 'function') loadCalSettings(); }catch(_){}
+            },
+            loginmode: function(){
+              // Load current login mode status from server
+              try{ if(window.__mumsLoadLoginMode) window.__mumsLoadLoginMode(); }catch(_){}
             },
             data: function(){
               // Data health elements are already wired at boot; just sync health summary
@@ -5171,6 +5178,7 @@ async function boot(){
 
         document.querySelectorAll('[data-close="globalQbModal"]').forEach(b => b.onclick = () => { UI.closeModal('globalQbModal'); });
 
+        window.__mumsLoadGqbSettings = loadGqbSettings;
         if (openGqbBtn) openGqbBtn.onclick = async () => {
           await loadGqbSettings();
           gqbShowTab('report-config');
@@ -5273,6 +5281,7 @@ async function boot(){
 
         document.querySelectorAll('[data-close="calendarSettingsModal"]').forEach(b => b.onclick = () => { UI.closeModal('calendarSettingsModal'); });
 
+        window.__mumsLoadCalSettings = loadCalSettings;
         if (calOpenBtn) calOpenBtn.onclick = async () => {
           await loadCalSettings();
         };
@@ -5282,7 +5291,7 @@ async function boot(){
         // ── Login Mode Control (Super Admin only) ─────────────────────────────────
     try{
       if(isSA){
-        const lmCard    = document.getElementById('loginModeCard');
+        const lmCard    = document.getElementById('msp_loginmode') || document.getElementById('loginModeCard');
         const lmStatus  = document.getElementById('loginModeStatus');
         const lmSaveBtn = document.getElementById('saveLoginModeBtn');
         const lmSaveMsg = document.getElementById('loginModeSaveMsg');
@@ -5309,6 +5318,7 @@ async function boot(){
         const modeLabels = { both: 'Both (Microsoft + Password)', password: 'Password only', microsoft: 'Microsoft OAuth only' };
 
         // Load current setting from server
+        window.__mumsLoadLoginMode = window.__mumsLoadLoginMode || null;
         const loadLoginMode = async () => {
           if(lmStatus) lmStatus.textContent = 'Loading…';
           try{
@@ -5377,6 +5387,7 @@ async function boot(){
           const origOnClick = settingsBtn2.onclick;
           settingsBtn2.addEventListener('click', ()=>{ loadLoginMode(); });
         }
+        window.__mumsLoadLoginMode = loadLoginMode;
         loadLoginMode();
       }
     }catch(e){ console.error('[LoginMode]', e); }
