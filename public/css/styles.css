@@ -2558,6 +2558,13 @@ input:-webkit-autofill, textarea:-webkit-autofill, select:-webkit-autofill{
 /* Collapsed sidebar: pinned + auto-expand on hover (overlay) */
 body.sidebar-collapsed.sidebar-hoverable .side{width:72px}
 body.sidebar-collapsed.sidebar-hoverable .side:hover{width:280px; z-index:50; box-shadow: var(--shadow);}
+/* When hoverable sidebar expands, push bottom bars right to avoid overlap */
+body.sidebar-collapsed.sidebar-hoverable .side:hover ~ * .online-users-bar,
+body.sidebar-collapsed.sidebar-hoverable .side:hover ~ * .quicklinks-bar,
+body.sidebar-collapsed.sidebar-hoverable:has(.side:hover) .online-users-bar,
+body.sidebar-collapsed.sidebar-hoverable:has(.side:hover) .quicklinks-bar {
+  left: 280px !important;
+}
 body.sidebar-collapsed.sidebar-hoverable .side:hover .usercard,
 body.sidebar-collapsed.sidebar-hoverable .side:hover .small,
 body.sidebar-collapsed.sidebar-hoverable .side:hover .side-logs{display:block}
@@ -2777,6 +2784,11 @@ body[data-mode="dark"] .app-cursor .app-cursor-arrow{
 .app-cursor.is-text .app-cursor-ibar{display:block}
 
 body.sidebar-collapsed.rightbar-collapsed .app{grid-template-columns:72px 1fr 0px}
+/* Sidebar + rightbar both collapsed */
+body.sidebar-collapsed.rightbar-collapsed {
+  --sidebar-left-w: 72px;
+  --sidebar-right-w: 0px;
+}
 
 
 /* Ensure modal close buttons are always clickable */
@@ -2941,7 +2953,7 @@ body.attendance-locked #app{
 
 .online-users-bar{
   position:fixed;
-  left:0; right:0;
+  left:var(--sidebar-left-w); right:var(--sidebar-right-w);
   bottom: var(--mums-dock-h);
   z-index: 1999;
   padding: 6px 14px;
@@ -3018,7 +3030,7 @@ body.attendance-locked #app{
   display:block;
   padding: 10px 14px;
 }
-.quicklinks-bar{position:fixed;left:0;right:0;bottom:0;}
+.quicklinks-bar{position:fixed;left:var(--sidebar-left-w);right:var(--sidebar-right-w);bottom:0;}
 .quicklinks-bar{z-index:2000;}
 .quicklinks-bar{overflow:hidden;}
 .quicklinks-bar{align-items:stretch;}
@@ -9622,6 +9634,53 @@ body:not(.quicklinks-bar-hidden) .online-users-bar {
    on .side as this causes Chrome to resolve to grid-container height (see note at line ~5057).
    The --mums-dock-h / --mums-onlinebar-h variables above correctly drive .app padding-bottom,
    which in turn resizes the 1fr grid row — sidebars expand automatically. */
+
+
+/* ── PERMANENT FIX: Bottom bars must not overlap left/right sidebars ──────────
+   ROOT CAUSE: .online-users-bar and .quicklinks-bar use left:0;right:0 (full viewport width).
+   This causes them to visually overlap the left sidebar (244px) and right sidebar (296px).
+   FIX: Introduce CSS variables for sidebar widths, driven by body classes.
+   These vars are updated automatically when sidebars collapse/expand/hide.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --sidebar-left-w: 245px;  /* 244px left sidebar + 1px grid gap */
+  --sidebar-right-w: 297px; /* 296px right sidebar + 1px grid gap */
+}
+
+/* Sidebar collapsed: left becomes 72px + 1px gap */
+body.sidebar-collapsed {
+  --sidebar-left-w: 73px;
+}
+
+/* Rightbar collapsed/hidden: right becomes 0 */
+body.rightbar-collapsed {
+  --sidebar-right-w: 0px;
+}
+
+/* Apply offset to both fixed bottom bars */
+.online-users-bar,
+.quicklinks-bar {
+  left: var(--sidebar-left-w) !important;
+  right: var(--sidebar-right-w) !important;
+  transition:
+    left .25s cubic-bezier(.4,0,.2,1),
+    right .25s cubic-bezier(.4,0,.2,1),
+    bottom .28s cubic-bezier(.4,0,.2,1),
+    transform .28s cubic-bezier(.4,0,.2,1),
+    opacity .22s ease;
+}
+
+/* Clocks and quicklinks inner are positioned absolutely inside the bar.
+   Their left/right references are already relative to the bar — no extra offset needed. */
+
+/* ── Responsive: on narrow screens sidebars collapse, bars go full width ── */
+@media (max-width: 768px) {
+  :root {
+    --sidebar-left-w: 0px;
+    --sidebar-right-w: 0px;
+  }
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PREMIUM LAYOUT OPTIMIZATION v1 — Maximize content real estate
