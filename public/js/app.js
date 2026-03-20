@@ -3882,18 +3882,19 @@ function updateClocksPreviewTimes(){
           var panel = btn.dataset.panel;
           _msSelectPanel(panel);
           // Special: panels that open sub-modals
-          var subModal = {
-            profile: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('profileModal'); if(window.initProfileModal) initProfileModal(); }catch(_){} },
-            notifications: function(){ try{ UI.closeModal('settingsModal'); if(UI.bindSoundSettingsModal) UI.bindSoundSettingsModal(window.Auth&&Auth.getUser?Auth.getUser():null); UI.openModal('soundSettingsModal'); }catch(_){} },
-            theme: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('themeModal'); if(window.ThemeEngine) ThemeEngine.renderThemeGrid(); }catch(_){} },
-            cursor: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('cursorModal'); }catch(_){} },
-            sidebar: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('sidebarModal'); }catch(_){} },
-            links: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('linksModal'); if(window.App&&App.renderLinksGrid) App.renderLinksGrid(); }catch(_){} },
-            clocks: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('worldClocksModal'); }catch(_){} },
-            data: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('dataToolsModal'); }catch(_){} },
+          // Inline panel init — trigger JS that panels need after showing
+          var panelInits = {
+            theme: function(){ try{ if(window.ThemeEngine) ThemeEngine.renderThemeGrid(); }catch(_){} },
+            links: function(){ try{ if(window.App&&App.renderLinksGrid) App.renderLinksGrid(); }catch(_){} },
+            clocks: function(){ try{ if(window.initClocksGrid) initClocksGrid(); if(window.initClocksPreviewStrip) initClocksPreviewStrip(); }catch(_){} },
+            notifications: function(){ try{ if(UI.bindSoundSettingsModal) UI.bindSoundSettingsModal(window.Auth&&Auth.getUser?Auth.getUser():null); }catch(_){} },
+            mailboxtime: function(){ try{ if(window.bindMailboxTimeModal) bindMailboxTimeModal(); }catch(_){} },
+            systemcheck: function(){ try{ if(window.bindSystemCheckModal) bindSystemCheckModal(); }catch(_){} },
+            globalqb: function(){ try{ if(window.initGlobalQbModal) initGlobalQbModal(); }catch(_){} },
+            data: function(){ try{ if(window.bindDataHealthModal) bindDataHealthModal(); }catch(_){} },
           };
-          if (subModal[panel]) {
-            setTimeout(subModal[panel], 60);
+          if (panelInits[panel]) {
+            setTimeout(panelInits[panel], 60);
           }
         });
       });
@@ -3906,8 +3907,8 @@ function updateClocksPreviewTimes(){
       wire('openMailboxTimeBtn', function(){ try{ UI.openModal('mailboxTimeModal'); if(window.bindMailboxTimeModal) bindMailboxTimeModal(); }catch(_){} });
       wire('openSystemCheckBtn', function(){ try{ UI.openModal('systemCheckModal'); }catch(_){} });
       wire('openGlobalQbSettingsBtn', function(){ try{ UI.openModal('globalQbModal'); }catch(_){} });
-      wire('openCalendarSettingsBtn', function(){ try{ UI.closeModal('settingsModal'); UI.openModal('calendarSettingsModal'); }catch(_){} });
-      wire('openGmtOverviewPageBtn', function(){ try{ UI.closeModal('settingsModal'); if(window.App&&App.navigate) App.navigate('gmt_overview'); }catch(e){ try{ document.querySelector('[data-page="gmt_overview"]')&&document.querySelector('[data-page="gmt_overview"]').click(); }catch(_){} } });
+      wire('openCalendarSettingsBtn', function(){ /* inline — no modal needed */ });
+      wire('openGmtOverviewPageBtn', function(){ try{ if(window.App&&App.navigate) App.navigate('gmt_overview'); else{ try{ document.querySelector('[data-page="gmt_overview"]')&&document.querySelector('[data-page="gmt_overview"]').click(); }catch(_){} } }catch(e){} });
     }
 
     function _bindMsSearch() {
@@ -4396,65 +4397,36 @@ async function boot(){
     }
     const openSoundBtn = document.getElementById('openSoundBtn');
     if(openSoundBtn){
-      openSoundBtn.onclick = ()=>{
-        UI.closeModal('settingsModal');
-        try{ UI.bindSoundSettingsModal && UI.bindSoundSettingsModal(user); }catch(e){}
-        UI.openModal('soundSettingsModal');
-      };
+      openSoundBtn.onclick = ()=>{ try{ UI.bindSoundSettingsModal && UI.bindSoundSettingsModal(user); }catch(e){} };
     }
     const openProfileBtn = document.getElementById('openProfileBtn');
     if(openProfileBtn){
-      openProfileBtn.onclick = ()=>{
-        UI.closeModal('settingsModal');
-        openProfileModal(Auth.getUser()||user);
-      };
+      openProfileBtn.onclick = ()=>{ try{ openProfileModal(Auth.getUser()||user); }catch(_){} };
     }
 
     const openThemeBtn = document.getElementById('openThemeBtn');
     if(openThemeBtn){
-      openThemeBtn.onclick = ()=>{
-        UI.closeModal('settingsModal');
-        __themeEditMode = false; // Reset to normal view initially
-        renderThemeGrid();
-        UI.openModal('themeModal');
-      };
+      openThemeBtn.onclick = ()=>{ try{ __themeEditMode = false; renderThemeGrid(); }catch(_){} };
     }
 
     const openCursorBtn = document.getElementById('openCursorBtn');
     if(openCursorBtn){
-      openCursorBtn.onclick = ()=>{
-        UI.closeModal('settingsModal');
-        const sel = document.getElementById('cursorModeSelect');
-        if(sel) sel.value = (localStorage.getItem('mums_cursor_mode')||'custom');
-        UI.openModal('cursorSettingsModal');
-      };
+      openCursorBtn.onclick = ()=>{};
     }
 
     const openSidebarBtn = document.getElementById('openSidebarBtn');
     if(openSidebarBtn){
-      openSidebarBtn.onclick = ()=>{
-        UI.closeModal('settingsModal');
-        const sel = document.getElementById('sidebarDefaultSelect');
-        if(sel) sel.value = (localStorage.getItem('mums_sidebar_default')||'expanded');
-        UI.openModal('sidebarSettingsModal');
-      };
+      openSidebarBtn.onclick = ()=>{};
     }
 
     const openDataToolsBtn = document.getElementById('openDataToolsBtn');
     if(openDataToolsBtn){
-      openDataToolsBtn.onclick = ()=>{
-        UI.closeModal('settingsModal');
-        openDataToolsModal();
-      };
+      openDataToolsBtn.onclick = ()=>{ try{ if(window.bindDataHealthModal) bindDataHealthModal(); }catch(_){} };
     }
 
     const openLinksBtn = document.getElementById('openLinksBtn');
     if(openLinksBtn){
-      openLinksBtn.onclick = ()=>{
-        UI.closeModal('settingsModal');
-        renderLinksGrid();
-        UI.openModal('linksModal');
-      };
+      openLinksBtn.onclick = ()=>{ try{ if(window.App.renderLinksGrid) App.renderLinksGrid(); }catch(_){} };
     }
 
     try{
@@ -4843,9 +4815,7 @@ async function boot(){
             try{ UI.toast && UI.toast('Global mailbox override is not active.', 'warn'); }catch(_){ }
             return;
           }
-          UI.closeModal('settingsModal');
           try{ if(modal && typeof modal.__open === 'function') modal.__open(); }catch(_){ }
-          UI.openModal('mailboxTimeModal');
         };
       }
 
@@ -4853,21 +4823,12 @@ async function boot(){
 
     const openClocksBtn = document.getElementById('openClocksBtn');
     if(openClocksBtn){
-      openClocksBtn.onclick = ()=>{
-        UI.closeModal('settingsModal');
-        renderClocksGrid();
-        UI.openModal('clocksModal');
-        try{ renderClocksPreviewStrip(); }catch(e){}
-        try{ ensureGmtOverviewUI(); renderGmtOverview(); startGmtOverviewTicker(); }catch(e){}
-      };
+      openClocksBtn.onclick = ()=>{};
     }
 
     const openGmtOverviewPageBtn = document.getElementById('openGmtOverviewPageBtn');
     if(openGmtOverviewPageBtn){
-      openGmtOverviewPageBtn.onclick = ()=>{
-        UI.closeModal('settingsModal');
-        window.location.hash = '#gmt_overview';
-      };
+      openGmtOverviewPageBtn.onclick = ()=>{ window.location.hash = '#gmt_overview'; };
     }
 
     // Helper: show admin section header + row when any admin card is visible
@@ -4886,11 +4847,7 @@ async function boot(){
       if(sysCard && (isSA || isSU)){ sysCard.style.display = ''; _revealAdminSection(); }
       if(openSysBtn && (isSA || isSU)){
         bindSystemCheckModal(user);
-        openSysBtn.onclick = ()=>{
-          UI.closeModal('settingsModal');
-          UI.openModal('systemCheckModal');
-          try{ if(window.__mumsSystemCheck && typeof window.__mumsSystemCheck.reset === 'function') window.__mumsSystemCheck.reset(); }catch(_){ }
-        };
+        openSysBtn.onclick = ()=>{ try{ if(window.__mumsSystemCheck && typeof window.__mumsSystemCheck.reset === 'function') window.__mumsSystemCheck.reset(); }catch(_){ } };
       }
     }catch(_){ }
 
@@ -5147,8 +5104,6 @@ async function boot(){
         if (openGqbBtn) openGqbBtn.onclick = async () => {
           await loadGqbSettings();
           gqbShowTab('report-config');
-          UI.closeModal('settingsModal');
-          UI.openModal('globalQbModal');
           // Auto-fetch fields in background so columns are ready when user switches tab
           if (gqbState.realm && gqbState.tableId) setTimeout(() => fetchGqbFields(), 300);
         };
@@ -5250,8 +5205,6 @@ async function boot(){
 
         if (calOpenBtn) calOpenBtn.onclick = async () => {
           await loadCalSettings();
-          UI.closeModal('settingsModal');
-          UI.openModal('calendarSettingsModal');
         };
       }
     } catch (_) {}

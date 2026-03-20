@@ -220,6 +220,27 @@ Roles that see admin: `SUPER_ADMIN`, `SUPER_USER`, `ADMIN`
 
 ---
 
+## Inline Rule — CRITICAL
+
+**Settings NEVER closes when clicking nav items.** All setting details render inline in column 2.
+The Settings modal only closes when the user presses **X** or any button with `data-close="settingsModal"`.
+
+If a setting previously opened a sub-modal (e.g. `profileModal`, `themeModal`), the content is now
+embedded directly in the `ms-panel-body`. Do NOT call `UI.openModal()` or `UI.closeModal('settingsModal')`
+from any settings nav click or panel action button.
+
+The only allowed pattern for actions inside panels is:
+```js
+// ✅ CORRECT — no modal, no close
+openProfileBtn.onclick = () => { try { initProfileForm(); } catch(_) {} };
+
+// ❌ WRONG — never do this inside settings
+openProfileBtn.onclick = () => {
+  UI.closeModal('settingsModal'); // ← NEVER
+  UI.openModal('profileModal');   // ← NEVER
+};
+```
+
 ## DO NOT
 
 - Do NOT add `stngs-tile`, `stngs-row`, `stngs-panel` elements — those are deprecated
