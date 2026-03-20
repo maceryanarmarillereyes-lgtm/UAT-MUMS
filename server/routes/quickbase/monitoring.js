@@ -504,6 +504,14 @@ module.exports = async (req, res) => {
       });
     }
 
+    // ── GLOBAL BASE FILTERS ──────────────────────────────────────────────────
+    // globalQb.filterConfig is set by Super Admin in Global Settings → Filter Config.
+    // It acts as a hard server-side gate: applied to ALL users in global mode.
+    // This is where "Field #25 Is Not C – Resolved" must be enforced.
+    // These compile the same way as profile filters via buildProfileFilterClauses().
+    const globalFilterClauses = buildProfileFilterClauses(globalQb.filterConfig || []);
+    const globalFilterMatch   = normalizeFilterMatch(globalQb.filterMatch || 'ALL');
+
     const profileFilterClauses = buildProfileFilterClauses(profileQuickbaseConfig.customFilters || profileQuickbaseConfig.qb_custom_filters || profile.qb_custom_filters);
     const profileFilterMatch = normalizeFilterMatch(profileQuickbaseConfig.filterMatch || profileQuickbaseConfig.qb_filter_match || profile.qb_filter_match || profile.qb_custom_filter_match);
 
@@ -543,6 +551,17 @@ module.exports = async (req, res) => {
     // PRIVACY FILTER — global mode only (bypass exits early above via runQuickbaseReport)
     if (!bypassGlobal && userQbName && Number.isFinite(assignedToFieldId)) {
       conditions.push(`{${assignedToFieldId}.EX.'${encodeQuickbaseLiteral(userQbName)}'}`);
+    }
+
+    // 0. GLOBAL BASE FILTERS — Super Admin-configured rules that ALWAYS apply (global mode only).
+    // These are the filters set in Global Settings → Filter Config (e.g. "Case Status Is Not C – Resolved").
+    // Applied BEFORE any user/profile filters so they cannot be bypassed by tab settings.
+    if (!bypassGlobal && globalFilterClauses.length > 0) {
+      const globalClause = globalFilterClauses.length === 1
+        ? globalFilterClauses[0]
+        : `(${globalFilterClauses.join(` ${globalFilterMatch === 'ANY' ? 'OR' : 'AND'} `)})`;
+      conditions.push(globalClause);
+      console.log(`[QB Global Filter] Applied ${globalFilterClauses.length} global filter(s): ${globalClause}`);
     }
 
     // 1. Report Filters (from QB report metadata — global mode only)
