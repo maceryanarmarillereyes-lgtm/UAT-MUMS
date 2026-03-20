@@ -63,7 +63,7 @@
         const hintEl = UI.el('#sideLogsHint');
         const viewAllBtn = UI.el('#sideLogsViewAll');
 
-        if(viewAllBtn) viewAllBtn.onclick = ()=>{ window.location.hash = '#logs'; };
+        if(viewAllBtn) viewAllBtn.onclick = ()=>{ try{ (window.App && App.navigate) ? App.navigate('logs') : (window.location.href = '/logs'); }catch(_){ window.location.hash = '#logs'; } };
 
         if(!listEl || !hintEl) return;
 

@@ -159,7 +159,17 @@ select:disabled{opacity:.65;color:var(--text)}
 .err{display:none;margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,91,110,.5);background:rgba(255,91,110,.12);color:#ffd7dc}
 
 /* App layout */
-.app{height:100%;max-height:100%;display:grid;grid-template-columns:244px 1fr 296px;grid-template-rows:auto 1fr;gap:1px;padding:0;padding-bottom:calc(var(--mums-dock-h) + var(--mums-onlinebar-h));overflow:hidden}
+.app{height:100%;max-height:100%;display:grid;
+  grid-template-columns:244px 1fr 296px;
+  grid-template-rows:auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h));
+  gap:1px;padding:0;overflow:hidden}
+/* Row 1=topbar, Row 2=content (side/main/right), Row 3=reserved for fixed bottom bars.
+   Grid cells in row 2 are HARD-BOUNDED — they cannot extend into row 3. */
+/* Topbar: spans all 3 columns AND all rows makes no sense — topbar spans cols only row 1 */
+.app > .topbar{grid-row:1;grid-column:1/-1}
+.app > .side{grid-row:2}
+.app > .main{grid-row:2}
+.app > .right{grid-row:2}
 @media(max-width:1100px){.app{grid-template-columns:240px 1fr;grid-template-rows:auto auto 1fr;}.right{grid-column:1/-1;grid-row:2}.main{grid-column:1/-1;grid-row:3}}
 .topbar{grid-column:1/-1;display:grid;grid-template-columns:248px 1fr auto;align-items:center;gap:8px}
 .topbar-center{display:flex;justify-content:center;align-items:center;min-width:0}
@@ -295,7 +305,7 @@ body{
 @media (max-width:1100px) and (min-width: 769px){
   .app{
     grid-template-columns:248px 1fr 300px !important;
-    grid-template-rows:auto 1fr !important;
+    grid-template-rows:auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) !important;
   }
   .side{grid-column:1 !important;grid-row:2 !important;}
   .main{grid-column:2 !important;grid-row:2 !important;}
@@ -2721,7 +2731,7 @@ body[data-mode="dark"] .sidebar-toggle-overlay:hover{background:rgba(255,255,255
 body.rightbar-collapsed aside.right{display:none}
 
 /* When rightbar is collapsed, reclaim space */
-body.rightbar-collapsed .app{grid-template-columns:260px 1fr 0px}
+body.rightbar-collapsed .app{grid-template-columns:260px 1fr 0px;grid-template-rows:auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h))}
 
 /* Compact density */
 body.density-compact{--pad:12px}
@@ -2784,7 +2794,7 @@ body[data-mode="dark"] .app-cursor .app-cursor-arrow{
 }
 .app-cursor.is-text .app-cursor-ibar{display:block}
 
-body.sidebar-collapsed.rightbar-collapsed .app{grid-template-columns:72px 1fr 0px}
+body.sidebar-collapsed.rightbar-collapsed .app{grid-template-columns:72px 1fr 0px;grid-template-rows:auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h))}
 /* Sidebar + rightbar both collapsed */
 body.sidebar-collapsed.rightbar-collapsed {
   --sidebar-left-w: 72px;
@@ -3060,7 +3070,7 @@ body.attendance-locked #app{
 
 /* Ensure the app body never gets hidden behind the online bar + dock.
    Keep this tight so we don't waste vertical real estate. */
-.app{ padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)); transition: padding-bottom .28s cubic-bezier(.4,0,.2,1); }
+/* padding-bottom removed — bottom bar space is now row 3 of the grid */
 
 /* When a modal is open, prevent fixed overlays (dock + online bar) from intercepting clicks.
    This also avoids visual "overlap" when modals are positioned close to the bottom. */
@@ -5299,7 +5309,7 @@ body[data-theme="mums_light"] {
 
 /* ── 1. App shell ───────────────────────────────────────────────────────────── */
 body[data-theme="mums_light"] .app {
-  gap: 1px; padding: 0; padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)); background: #f6f7fb;
+  gap: 1px; padding: 0; grid-template-rows: auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h)); background: #f6f7fb;
 }
 
 /* ── 2. Topbar ──────────────────────────────────────────────────────────────── */
@@ -6086,7 +6096,7 @@ body[data-theme="ivory_executive"] {
 
 /* ── 1. App shell ───────────────────────────────────────────────────────────── */
 body[data-theme="ivory_executive"] .app {
-  gap: 1px; padding: 0; padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)); background: #f5f5f2;
+  gap: 1px; padding: 0; grid-template-rows: auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h)); background: #f5f5f2;
 }
 
 /* ── 2. Topbar ──────────────────────────────────────────────────────────────── */
@@ -7088,7 +7098,7 @@ body[data-theme="ivory_executive"] .up-sub { color: #8a8a9a !important; }
 
 /* ── 40. Mobile responsive tweaks ───────────────────────────────────────────── */
 @media (max-width: 900px) {
-  body[data-theme="ivory_executive"] .app { padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) !important; }
+  /* ivory_executive: bottom bar space is row 3 of the grid — no padding-bottom needed */
   body[data-theme="ivory_executive"] .topbar { padding: 0 12px !important; }
 }
 
@@ -9604,11 +9614,11 @@ body:not(.quicklinks-bar-hidden) .quicklinks-bar {
 
 /* ── Dynamic layout: CSS variables drive all bar-height-dependent spacing ── */
 /* CORRECT APPROACH: update --mums-dock-h and --mums-onlinebar-h via body classes.
-   The existing rule ".app{ padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h) + 18px) }"
+   The existing rule "/* .app bottom space is now row 3: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) */"
    automatically recalculates — no direct padding-bottom overrides needed. */
 
 /* Quicklinks bar hidden: zero out dock height variable.
-   Drives: .app { padding-bottom: calc(var(--mums-dock-h) + ...) } to shrink,
+   Drives: /* .app bottom space is row 3 of the grid */ to shrink,
    which expands the 1fr grid row → sidebars + main grow automatically. */
 body.quicklinks-bar-hidden {
   --mums-dock-h: 0px;
@@ -9739,7 +9749,7 @@ body.rightbar-collapsed {
 body.density-compact .app {
   gap: 1px !important;
   padding: 0 !important;
-  padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) !important;
+  grid-template-rows: auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) !important;
 }
 body.density-compact .card.pad {
   padding: 10px 12px !important;
@@ -9798,7 +9808,7 @@ body.density-compact .main.card.pad {
 body.density-compact .app {
   gap: 1px !important;
   padding: 0 !important;
-  padding-bottom: calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) !important;
+  grid-template-rows: auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) !important;
 }
 body.density-compact .card.pad {
   padding: 8px 10px !important;

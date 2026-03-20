@@ -2379,7 +2379,7 @@ function updateClocksPreviewTimes(){
     const viewAllBtn = UI.el('#sideLogsViewAll');
     if(!box) return;
 
-    const openLogs = ()=>{ window.location.hash = '#logs'; };
+    const openLogs = ()=>{ try{ navigateToPageId('logs'); }catch(_){ window.location.hash = '#logs'; } };
     if(viewAllBtn) viewAllBtn.onclick = openLogs;
 
     if(!list || !hint) return;
@@ -5608,7 +5608,7 @@ async function boot(){
 
   } 
 
-  window.App = { boot, renderLinksGrid };
+  window.App = { boot, renderLinksGrid, navigate: navigateToPageId };
   (function(){
     let started = false;
     function start(){
