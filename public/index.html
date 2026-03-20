@@ -135,312 +135,391 @@
   </div>
 
   <div class="modal" id="settingsModal">
-    <div class="panel stngs-panel">
+    <div class="panel ms-shell">
 
-      <!-- ── HEADER ──────────────────────────────────────────────────── -->
-      <div class="stngs-header">
-        <div class="stngs-header-left">
-          <div class="stngs-header-icon" aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          </div>
-          <div>
-            <div class="stngs-title">Settings</div>
-            <div class="stngs-subtitle">Customize your MUMS experience</div>
-          </div>
+      <!-- ═══ TOPBAR ═══════════════════════════════════════════════════════ -->
+      <div class="ms-topbar">
+        <div class="ms-topbar-left">
+          <div class="ms-topbar-dot"></div>
+          <span class="ms-topbar-title">Settings</span>
+          <span class="ms-topbar-tag">MUMS</span>
         </div>
-        <button class="stngs-close-btn" type="button" data-close="settingsModal" aria-label="Close settings">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+        <div class="ms-topbar-right">
+          <span class="ms-meta-chip" id="stngsUserChip"></span>
+          <button class="ms-xbtn" type="button" data-close="settingsModal" aria-label="Close settings">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
       </div>
 
-      <!-- ── BODY ───────────────────────────────────────────────────── -->
-      <div class="stngs-body">
+      <!-- ═══ BODY ══════════════════════════════════════════════════════════ -->
+      <div class="ms-body">
 
-        <!-- ── SECTION: PERSONAL ──────────────────────────────────── -->
-        <div class="stngs-section-label">Personal</div>
-        <div class="stngs-row">
+        <!-- ── LEFT NAV ─────────────────────────────────────────────────── -->
+        <nav class="ms-sidenav" id="msNav">
+          <div class="ms-search-bar">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="msSearchInput" class="ms-search-input" placeholder="Search settings…" autocomplete="off" />
+          </div>
+          <div class="ms-nav-scroll">
 
-          <button class="stngs-tile stngs-tile-featured" id="openProfileBtn" type="button">
-            <div class="stngs-tile-icon stngs-icon-profile">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-            </div>
-            <div class="stngs-tile-content">
-              <div class="stngs-tile-name">Profile</div>
-              <div class="stngs-tile-desc">Photo, display name &amp; account info</div>
-            </div>
-            <div class="stngs-tile-arrow">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </div>
-          </button>
+            <!-- Personal -->
+            <div class="ms-grp-label">Personal</div>
+            <button class="ms-nav-item" id="msNav_profile" data-panel="profile" type="button">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Profile</span><span class="ms-ni-sub">Name &amp; photo</span></span>
+            </button>
+            <button class="ms-nav-item" id="msNav_notifications" data-panel="notifications" type="button">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Notifications</span><span class="ms-ni-sub">Sound &amp; volume</span></span>
+            </button>
+            <button class="ms-nav-item" id="msNav_theme" data-panel="theme" type="button">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/><circle cx="12" cy="12" r="4"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Theme</span><span class="ms-ni-sub">Color &amp; appearance</span></span>
+            </button>
+            <button class="ms-nav-item" id="msNav_cursor" data-panel="cursor" type="button">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 4l7.5 18 3-7 7-3z"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Cursor</span><span class="ms-ni-sub">Pointer style</span></span>
+            </button>
 
-          <button class="stngs-tile" id="openSoundBtn" type="button">
-            <div class="stngs-tile-icon stngs-icon-sound">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-            </div>
-            <div class="stngs-tile-content">
-              <div class="stngs-tile-name">Notifications</div>
-              <div class="stngs-tile-desc">Sound type &amp; volume</div>
-            </div>
-            <div class="stngs-tile-arrow">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </div>
-          </button>
+            <!-- Workspace -->
+            <div class="ms-grp-label">Workspace</div>
+            <button class="ms-nav-item" id="msNav_sidebar" data-panel="sidebar" type="button">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Sidebar</span><span class="ms-ni-sub">Compact navigation</span></span>
+            </button>
+            <button class="ms-nav-item" id="msNav_links" data-panel="links" type="button">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Quick Links</span><span class="ms-ni-sub">Bottom bar shortcuts</span></span>
+            </button>
+            <button class="ms-nav-item" id="msNav_clocks" data-panel="clocks" type="button">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">World Clocks</span><span class="ms-ni-sub">GMT offsets</span></span>
+            </button>
+            <button class="ms-nav-item" id="msNav_data" data-panel="data" type="button">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Data Tools</span><span class="ms-ni-sub">Export &amp; import</span></span>
+            </button>
+            <button class="ms-nav-item" id="msNav_bottombars" data-panel="bottombars" type="button">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="2" y1="20" x2="22" y2="20"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Bottom Bars</span><span class="ms-ni-sub">Show / hide bars</span></span>
+            </button>
 
-          <button class="stngs-tile" id="openThemeBtn" type="button">
-            <div class="stngs-tile-icon stngs-icon-theme">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/><circle cx="12" cy="12" r="4"/></svg>
-            </div>
-            <div class="stngs-tile-content">
-              <div class="stngs-tile-name">Theme</div>
-              <div class="stngs-tile-desc">Color theme &amp; appearance</div>
-            </div>
-            <div class="stngs-tile-arrow">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </div>
-          </button>
+            <!-- Display -->
+            <div class="ms-grp-label">Display</div>
+            <button class="ms-nav-item" id="msNav_brightness" data-panel="brightness" type="button">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Brightness</span><span class="ms-ni-sub">Interface luminance</span></span>
+              <span class="ms-ni-kv" id="msBrightnessTag" style="display:none">100%</span>
+            </button>
 
-          <button class="stngs-tile" id="openCursorBtn" type="button">
-            <div class="stngs-tile-icon stngs-icon-cursor">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l7.5 18 3-7 7-3z"/></svg>
-            </div>
-            <div class="stngs-tile-content">
-              <div class="stngs-tile-name">Cursor</div>
-              <div class="stngs-tile-desc">Custom or system cursor</div>
-            </div>
-            <div class="stngs-tile-arrow">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </div>
-          </button>
+            <!-- Admin (conditionally shown) -->
+            <div class="ms-grp-label ms-admin-section" id="stngsAdminLabel" style="display:none">Admin Controls</div>
+            <button class="ms-nav-item ms-admin-section" id="msNav_mailboxtime" data-panel="mailboxtime" type="button" style="display:none">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 8 14"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Mailbox Time</span><span class="ms-ni-sub">Override Manila time</span></span>
+            </button>
+            <button class="ms-nav-item ms-admin-section" id="msNav_systemcheck" data-panel="systemcheck" type="button" style="display:none">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">System Check</span><span class="ms-ni-sub">Diagnostics &amp; fixes</span></span>
+            </button>
+            <button class="ms-nav-item ms-admin-section" id="msNav_globalqb" data-panel="globalqb" type="button" style="display:none">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Global Quickbase</span><span class="ms-ni-sub">Shared QB config</span></span>
+            </button>
+            <button class="ms-nav-item ms-admin-section" id="msNav_calendar" data-panel="calendar" type="button" style="display:none">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Calendar Settings</span><span class="ms-ni-sub">Manila QB calendar</span></span>
+            </button>
+            <button class="ms-nav-item ms-admin-section" id="msNav_loginmode" data-panel="loginmode" type="button" style="display:none">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Login Mode</span><span class="ms-ni-sub">Auth method control</span></span>
+            </button>
 
-        </div>
+          </div><!-- /ms-nav-scroll -->
+        </nav><!-- /ms-sidenav -->
 
-        <!-- ── SECTION: WORKSPACE ─────────────────────────────────── -->
-        <div class="stngs-section-label">Workspace</div>
-        <div class="stngs-row">
+        <!-- ── RIGHT PANEL ─────────────────────────────────────────────── -->
+        <div class="ms-content" id="msContent">
 
-          <button class="stngs-tile" id="openSidebarBtn" type="button">
-            <div class="stngs-tile-icon stngs-icon-sidebar">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
-            </div>
-            <div class="stngs-tile-content">
-              <div class="stngs-tile-name">Sidebar</div>
-              <div class="stngs-tile-desc">Compact navigation mode</div>
-            </div>
-            <div class="stngs-tile-arrow">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </div>
-          </button>
-
-          <button class="stngs-tile" id="openLinksBtn" type="button">
-            <div class="stngs-tile-icon stngs-icon-links">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            </div>
-            <div class="stngs-tile-content">
-              <div class="stngs-tile-name">Quick Links</div>
-              <div class="stngs-tile-desc">Up to 10 bottom bar shortcuts</div>
-            </div>
-            <div class="stngs-tile-arrow">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </div>
-          </button>
-
-          <button class="stngs-tile stngs-tile-dual" id="openClocksBtn" type="button">
-            <div class="stngs-tile-icon stngs-icon-clocks">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            </div>
-            <div class="stngs-tile-content">
-              <div class="stngs-tile-name">World Clocks</div>
-              <div class="stngs-tile-desc">GMT offsets &amp; region clocks</div>
-            </div>
-            <div class="stngs-tile-extra-action">
-              <button class="stngs-tile-chip" id="openGmtOverviewPageBtn" type="button" onclick="event.stopPropagation()">GMT Overview</button>
-            </div>
-          </button>
-
-          <button class="stngs-tile" id="openDataToolsBtn" type="button">
-            <div class="stngs-tile-icon stngs-icon-data">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-            </div>
-            <div class="stngs-tile-content">
-              <div class="stngs-tile-name">Data Tools</div>
-              <div class="stngs-tile-desc">Export, import &amp; validate storage</div>
-            </div>
-            <div class="stngs-tile-arrow">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </div>
-          </button>
-
-          <!-- ── Bottom Bars Visibility (available to all users) ───── -->
-          <div class="stngs-tile stngs-tile-bottombars" id="bottomBarsSettingsTile" role="group" aria-label="Bottom Bars Visibility">
-            <div class="stngs-tile-icon stngs-icon-bottombars">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="2" y1="20" x2="22" y2="20"/><line x1="2" y1="17" x2="22" y2="17"/></svg>
-            </div>
-            <div class="stngs-tile-content stngs-bottombars-content">
-              <div class="stngs-tile-name">Bottom Bars</div>
-              <div class="stngs-tile-desc">Show or hide the bars below for a larger view</div>
-              <div class="stngs-bottombars-toggles">
-                <label class="stngs-barvis-row" title="Online Users Bar">
-                  <span class="stngs-barvis-icon">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-                  </span>
-                  <span class="stngs-barvis-label">Online Users Bar</span>
-                  <span class="stngs-barvis-spacer"></span>
-                  <span class="stngs-toggle-wrap" aria-hidden="true">
-                    <input type="checkbox" id="toggleOnlineBar" class="stngs-barvis-chk" />
-                    <span class="stngs-toggle-track"><span class="stngs-toggle-thumb"></span></span>
-                  </span>
-                </label>
-                <label class="stngs-barvis-row" title="Quick Links Bar">
-                  <span class="stngs-barvis-icon">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                  </span>
-                  <span class="stngs-barvis-label">Quick Links Bar</span>
-                  <span class="stngs-barvis-spacer"></span>
-                  <span class="stngs-toggle-wrap" aria-hidden="true">
-                    <input type="checkbox" id="toggleQuickLinksBar" class="stngs-barvis-chk" />
-                    <span class="stngs-toggle-track"><span class="stngs-toggle-thumb"></span></span>
-                  </span>
-                </label>
+          <!-- PANEL: Welcome (default) -->
+          <div class="ms-panel" id="msp_welcome" data-panel="welcome">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon ms-hero-icon--default">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              </div>
+              <div class="ms-hero-text">
+                <div class="ms-hero-title">Select a setting</div>
+                <div class="ms-hero-desc">Choose an item from the left to configure your MUMS experience.</div>
               </div>
             </div>
           </div>
 
-        </div>
-
-        <!-- ── SECTION: DISPLAY ──────────────────────────────────── -->
-        <div class="stngs-section-label">Display</div>
-        <div class="stngs-row">
-
-          <!-- ── Brightness Control Tile ─── -->
-          <div class="stngs-tile stngs-tile-brightness" id="brightnessTile" role="group" aria-label="Brightness">
-            <div class="stngs-tile-icon stngs-icon-brightness">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <!-- PANEL: Profile -->
+          <div class="ms-panel" id="msp_profile" data-panel="profile" style="display:none">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Profile</div><div class="ms-hero-desc">Your photo, display name and account information.</div></div>
             </div>
-            <div class="stngs-tile-content stngs-brightness-content">
-              <div class="stngs-tile-name">Brightness</div>
-              <div class="stngs-tile-desc">Adjust interface brightness for your environment</div>
-              <div class="stngs-brightness-ctrl" id="brightnessCtrl">
-                <div class="stngs-brightness-row">
-                  <span class="stngs-brightness-ico stngs-brightness-ico--dim">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/></svg>
-                  </span>
-                  <input type="range" id="brightnessSlider" class="stngs-brightness-slider"
-                    min="40" max="130" step="1" value="100"
-                    aria-label="Brightness level" />
-                  <span class="stngs-brightness-ico stngs-brightness-ico--bright">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-                  </span>
-                  <span class="stngs-brightness-val" id="brightnessVal">100%</span>
+            <div class="ms-panel-body">
+              <button class="ms-action-btn" id="openProfileBtn" type="button">
+                <span>Edit Profile</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- PANEL: Notifications -->
+          <div class="ms-panel" id="msp_notifications" data-panel="notifications" style="display:none">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Notifications</div><div class="ms-hero-desc">Sound type and volume for system alerts.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <button class="ms-action-btn" id="openSoundBtn" type="button">
+                <span>Configure Sound</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- PANEL: Theme -->
+          <div class="ms-panel" id="msp_theme" data-panel="theme" style="display:none">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/><circle cx="12" cy="12" r="4"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Theme</div><div class="ms-hero-desc">Color theme and visual appearance of your workspace.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <button class="ms-action-btn" id="openThemeBtn" type="button">
+                <span>Choose Theme</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- PANEL: Cursor -->
+          <div class="ms-panel" id="msp_cursor" data-panel="cursor" style="display:none">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l7.5 18 3-7 7-3z"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Cursor</div><div class="ms-hero-desc">Custom or system cursor style preference.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <button class="ms-action-btn" id="openCursorBtn" type="button">
+                <span>Configure Cursor</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- PANEL: Sidebar -->
+          <div class="ms-panel" id="msp_sidebar" data-panel="sidebar" style="display:none">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Sidebar</div><div class="ms-hero-desc">Compact navigation mode and hover-expand behavior.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <button class="ms-action-btn" id="openSidebarBtn" type="button">
+                <span>Sidebar Settings</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- PANEL: Quick Links -->
+          <div class="ms-panel" id="msp_links" data-panel="links" style="display:none">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Quick Links</div><div class="ms-hero-desc">Up to 10 bottom bar shortcuts for fast access.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <button class="ms-action-btn" id="openLinksBtn" type="button">
+                <span>Edit Quick Links</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- PANEL: World Clocks -->
+          <div class="ms-panel" id="msp_clocks" data-panel="clocks" style="display:none">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">World Clocks</div><div class="ms-hero-desc">GMT offsets and region clock display.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <button class="ms-action-btn" id="openClocksBtn" type="button">
+                <span>Configure Clocks</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              <button class="ms-action-btn ms-action-btn--secondary" id="openGmtOverviewPageBtn" type="button">
+                <span>GMT Overview Page</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- PANEL: Data Tools -->
+          <div class="ms-panel" id="msp_data" data-panel="data" style="display:none">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Data Tools</div><div class="ms-hero-desc">Export, import and validate local storage.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <button class="ms-action-btn" id="openDataToolsBtn" type="button">
+                <span>Open Data Tools</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- PANEL: Bottom Bars -->
+          <div class="ms-panel" id="msp_bottombars" data-panel="bottombars" style="display:none">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="2" y1="20" x2="22" y2="20"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Bottom Bars</div><div class="ms-hero-desc">Show or hide the online users and quick links bars.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <div class="ms-ctrl-group">
+                <div class="ms-ctrl-group-label">Visibility</div>
+                <div class="ms-ctrl-row">
+                  <div class="ms-ctrl-label"><div class="ms-ctrl-name">Online Users Bar</div><div class="ms-ctrl-hint">Shows who is currently active</div></div>
+                  <div class="ms-ctrl-control"><label class="ms-toggle-wrap"><input type="checkbox" id="toggleOnlineBar" class="ms-toggle-input" /><span class="ms-toggle-track"><span class="ms-toggle-thumb"></span></span></label></div>
                 </div>
-                <label class="stngs-barvis-row stngs-brightness-default-row" style="margin-top:6px">
-                  <span class="stngs-barvis-label" style="font-size:11px;opacity:.75">Use default brightness (100%)</span>
-                  <span class="stngs-barvis-spacer"></span>
-                  <span class="stngs-toggle-wrap" aria-hidden="true">
-                    <input type="checkbox" id="brightnessUseDefault" class="stngs-barvis-chk" />
-                    <span class="stngs-toggle-track"><span class="stngs-toggle-thumb"></span></span>
-                  </span>
-                </label>
+                <div class="ms-ctrl-row">
+                  <div class="ms-ctrl-label"><div class="ms-ctrl-name">Quick Links Bar</div><div class="ms-ctrl-hint">Bottom row of shortcut circles</div></div>
+                  <div class="ms-ctrl-control"><label class="ms-toggle-wrap"><input type="checkbox" id="toggleQuickLinksBar" class="ms-toggle-input" /><span class="ms-toggle-track"><span class="ms-toggle-thumb"></span></span></label></div>
+                </div>
               </div>
             </div>
           </div>
 
-        </div>
-
-        <!-- ── SECTION: ADMIN (conditionally visible) ─────────────── -->
-        <div class="stngs-section-label stngs-admin-section" id="stngsAdminLabel" style="display:none">Admin Controls</div>
-        <div class="stngs-row stngs-admin-section" id="stngsAdminRow" style="display:none">
-
-          <div class="stngs-tile" id="timeOverrideCard" style="display:none" role="group">
-            <div class="stngs-tile-icon stngs-icon-time">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 8 14"/></svg>
+          <!-- PANEL: Brightness -->
+          <div class="ms-panel" id="msp_brightness" data-panel="brightness" style="display:none">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Brightness</div><div class="ms-hero-desc">Proportional brightness control — all UI elements scale together at a fixed ratio.</div></div>
             </div>
-            <div class="stngs-tile-content">
-              <div class="stngs-tile-name">Mailbox Time</div>
-              <div class="stngs-tile-desc">Override Manila time for testing</div>
-            </div>
-            <button class="stngs-tile-arrow stngs-tile-inner-btn" id="openMailboxTimeBtn" type="button" aria-label="Configure Mailbox Time">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          </div>
-
-          <div class="stngs-tile" id="systemCheckCard" style="display:none" role="group">
-            <div class="stngs-tile-icon stngs-icon-system">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H5m4 0h10m0-11v11m0 0h4M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 1 2-2v-5"/></svg>
-            </div>
-            <div class="stngs-tile-content">
-              <div class="stngs-tile-name">System Check</div>
-              <div class="stngs-tile-desc">Diagnostics &amp; auto-fixes</div>
-            </div>
-            <button class="stngs-tile-arrow stngs-tile-inner-btn" id="openSystemCheckBtn" type="button" aria-label="Run System Check">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          </div>
-
-          <!-- Global Quickbase Settings — Super Admin only -->
-          <div class="stngs-tile" id="globalQbSettingsCard" style="display:none" role="group">
-            <div class="stngs-tile-icon stngs-icon-qb">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
-            </div>
-            <div class="stngs-tile-content">
-              <div class="stngs-tile-name">Global Quickbase</div>
-              <div class="stngs-tile-desc">Shared report config for all users</div>
-            </div>
-            <button class="stngs-tile-arrow stngs-tile-inner-btn" id="openGlobalQbSettingsBtn" type="button" aria-label="Configure Global QB">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          </div>
-
-          <!-- Login Mode Control — Super Admin only -->
-          <!-- Calendar Settings — Super Admin only -->
-          <div class="stngs-tile" id="calendarSettingsCard" style="display:none" role="group">
-            <div class="stngs-tile-icon stngs-icon-calendar" style="background:linear-gradient(135deg,rgba(20,184,166,.25),rgba(6,182,212,.15));border-color:rgba(20,184,166,.3);">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2dd4bf" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            </div>
-            <div class="stngs-tile-content">
-              <div class="stngs-tile-name">Calendar Settings</div>
-              <div class="stngs-tile-desc">Manila vacation calendar QB config</div>
-            </div>
-            <button class="stngs-tile-arrow stngs-tile-inner-btn" id="openCalendarSettingsBtn" type="button" aria-label="Configure Calendar Settings">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          </div>
-
-          <div class="stngs-tile stngs-tile-login-mode" id="loginModeCard" style="display:none" role="group">
-            <div class="stngs-tile-icon stngs-icon-login">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            </div>
-            <div class="stngs-tile-content stngs-login-mode-content">
-              <div class="stngs-tile-name">Login Mode</div>
-              <div class="stngs-tile-desc" id="loginModeStatus">Loading…</div>
-              <div class="stngs-login-opts" id="loginModeOptions">
-                <label class="stngs-radio" id="loginModeOpt_both">
-                  <input type="radio" name="loginModeChoice" value="both" />
-                  <span class="stngs-radio-dot"></span>
-                  <span class="stngs-radio-label">Both <span class="stngs-radio-sub">Microsoft + Password</span></span>
-                </label>
-                <label class="stngs-radio" id="loginModeOpt_password">
-                  <input type="radio" name="loginModeChoice" value="password" />
-                  <span class="stngs-radio-dot"></span>
-                  <span class="stngs-radio-label">Password only <span class="stngs-radio-sub">No Microsoft button</span></span>
-                </label>
-                <label class="stngs-radio" id="loginModeOpt_microsoft">
-                  <input type="radio" name="loginModeChoice" value="microsoft" />
-                  <span class="stngs-radio-dot"></span>
-                  <span class="stngs-radio-label">Microsoft only <span class="stngs-radio-sub">OAuth, admins can still use password</span></span>
-                </label>
+            <div class="ms-panel-body">
+              <div class="ms-ctrl-group">
+                <div class="ms-ctrl-group-label">Level Control</div>
+                <div class="ms-ctrl-row">
+                  <div class="ms-ctrl-label">
+                    <div class="ms-ctrl-name">Brightness level</div>
+                    <div class="ms-ctrl-hint">Range 40% (dim) to 130% (boosted). Applies proportionally to all elements.</div>
+                  </div>
+                  <div class="ms-ctrl-control ms-ctrl-slider-wrap">
+                    <span class="ms-slider-dim"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/></svg></span>
+                    <input type="range" id="brightnessSlider" class="ms-slider" min="40" max="130" step="1" value="100" aria-label="Brightness level" />
+                    <span class="ms-slider-bright"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg></span>
+                    <span class="ms-slider-val" id="brightnessVal">100%</span>
+                  </div>
+                </div>
+                <div class="ms-ctrl-row">
+                  <div class="ms-ctrl-label">
+                    <div class="ms-ctrl-name">Use default brightness</div>
+                    <div class="ms-ctrl-hint">Reset to 100% and disable override. Device-specific setting.</div>
+                  </div>
+                  <div class="ms-ctrl-control"><label class="ms-toggle-wrap"><input type="checkbox" id="brightnessUseDefault" class="ms-toggle-input" /><span class="ms-toggle-track"><span class="ms-toggle-thumb"></span></span></label></div>
+                </div>
               </div>
-              <div class="stngs-login-save-row">
+              <div class="ms-status-bar" id="brightnessStatusBar">
+                <span class="ms-status-dot"></span>
+                <span class="ms-status-text">Brightness saved to this device only — <span id="brightnessStatusLabel">default (100%)</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- PANEL: Mailbox Time (Admin) -->
+          <div class="ms-panel ms-admin-section" id="msp_mailboxtime" data-panel="mailboxtime" style="display:none" id="timeOverrideCard">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon ms-hero-icon--admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 8 14"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Mailbox Time</div><div class="ms-hero-desc">Override Manila time for testing shift rotations.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <button class="ms-action-btn" id="openMailboxTimeBtn" type="button">
+                <span>Configure Override</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- PANEL: System Check (Admin) -->
+          <div class="ms-panel ms-admin-section" id="msp_systemcheck" data-panel="systemcheck" style="display:none" id="systemCheckCard">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon ms-hero-icon--admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">System Check</div><div class="ms-hero-desc">Diagnostics and automatic fixes.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <button class="ms-action-btn" id="openSystemCheckBtn" type="button">
+                <span>Run System Check</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- PANEL: Global QB (Admin) -->
+          <div class="ms-panel ms-admin-section" id="msp_globalqb" data-panel="globalqb" style="display:none" id="globalQbSettingsCard">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon ms-hero-icon--admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Global Quickbase</div><div class="ms-hero-desc">Shared QB report config for all users.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <button class="ms-action-btn" id="openGlobalQbSettingsBtn" type="button">
+                <span>Configure Global QB</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- PANEL: Calendar (Admin) -->
+          <div class="ms-panel ms-admin-section" id="msp_calendar" data-panel="calendar" style="display:none" id="calendarSettingsCard">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon ms-hero-icon--admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Calendar Settings</div><div class="ms-hero-desc">Manila vacation calendar QB configuration.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <button class="ms-action-btn" id="openCalendarSettingsBtn" type="button">
+                <span>Configure Calendar</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- PANEL: Login Mode (Admin) -->
+          <div class="ms-panel ms-admin-section" id="msp_loginmode" data-panel="loginmode" style="display:none" id="loginModeCard">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon ms-hero-icon--admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Login Mode</div><div class="ms-hero-desc" id="loginModeStatus">Loading…</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <div class="ms-ctrl-group">
+                <div class="ms-ctrl-group-label">Authentication Method</div>
+                <div class="stngs-login-opts" id="loginModeOptions">
+                  <label class="stngs-radio" id="loginModeOpt_both">
+                    <input type="radio" name="loginModeChoice" value="both" />
+                    <div><strong>Both</strong><span class="ms-ctrl-hint">Microsoft + Password</span></div>
+                  </label>
+                  <label class="stngs-radio" id="loginModeOpt_password">
+                    <input type="radio" name="loginModeChoice" value="password" />
+                    <div><strong>Password only</strong><span class="ms-ctrl-hint">No Microsoft button</span></div>
+                  </label>
+                  <label class="stngs-radio" id="loginModeOpt_microsoft">
+                    <input type="radio" name="loginModeChoice" value="microsoft" />
+                    <div><strong>Microsoft only</strong><span class="ms-ctrl-hint">OAuth — admins can still use password</span></div>
+                  </label>
+                </div>
+              </div>
+              <div class="ms-panel-actions">
                 <button class="btn primary" id="saveLoginModeBtn" type="button">Save</button>
                 <span id="loginModeSaveMsg" class="small" style="opacity:0;transition:opacity .4s"></span>
               </div>
             </div>
           </div>
 
-        </div>
+        </div><!-- /ms-content -->
+      </div><!-- /ms-body -->
+    </div><!-- /ms-shell -->
+  </div><!-- /settingsModal -->
 
-      </div><!-- /stngs-body -->
-    </div><!-- /stngs-panel -->
-  </div>
 
   <!-- Manila Calendar Settings Modal — Super Admin Only -->
   <div class="modal" id="calendarSettingsModal">

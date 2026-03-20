@@ -3808,6 +3808,161 @@ function updateClocksPreviewTimes(){
     } catch (_) {}
   }
 
+  // ── MAIN SETTINGS NAV (Mockup C — Two-column layout) ─────────────────────────
+  (function initMainSettingsSystem(){
+    var _msInited = false;
+
+    window.initMainSettings = function(user) {
+      // Update user chip
+      try {
+        var chip = document.getElementById('stngsUserChip');
+        if (chip && user) {
+          var u = window.Auth && Auth.getUser ? Auth.getUser() : user;
+          var name = (u && (u.username || u.name || u.email || '')).split('@')[0] || 'user';
+          var role = (u && u.role) || '';
+          chip.textContent = name + (role ? ' · ' + role : '');
+        }
+      } catch(_) {}
+
+      // Show admin items
+      try {
+        var isSA = user && (user.role === 'SUPER_ADMIN' || user.role === 'SUPER_USER' || user.role === 'ADMIN');
+        var adminEls = document.querySelectorAll('.ms-admin-section');
+        adminEls.forEach(function(el) {
+          el.style.display = isSA ? '' : 'none';
+        });
+        var adminLabel = document.getElementById('stngsAdminLabel');
+        if (adminLabel) adminLabel.style.display = isSA ? '' : 'none';
+        // Also show stngsAdminRow for legacy compat
+        var adminRow = document.getElementById('stngsAdminRow');
+        if (adminRow) adminRow.style.display = isSA ? '' : 'none';
+      } catch(_) {}
+
+      // Init nav if first open
+      if (!_msInited) {
+        _msInited = true;
+        _bindMsNav();
+        _bindMsSearch();
+        // Sync toggles
+        try{ bindBarVisibilityControls(); }catch(_){}
+        try{ _syncMsBarToggles(); }catch(_){}
+        try{ initBrightnessControl(); }catch(_){}
+      }
+
+      // Always sync brightness badge + toggles
+      try{ _syncMsBrightnessBadge(); }catch(_){}
+      try{ _syncMsBarToggles(); }catch(_){}
+
+      // Default panel if none active
+      try {
+        var anyActive = document.querySelector('.ms-nav-item.ms-active');
+        if (!anyActive) _msSelectPanel('welcome');
+      } catch(_) {}
+    };
+
+    function _msSelectPanel(panelId) {
+      try {
+        // Hide all panels
+        document.querySelectorAll('.ms-panel').forEach(function(p) { p.style.display = 'none'; });
+        // Show target
+        var target = document.getElementById('msp_' + panelId);
+        if (target) target.style.display = '';
+        // Update nav active state
+        document.querySelectorAll('.ms-nav-item').forEach(function(btn) {
+          btn.classList.toggle('ms-active', btn.dataset.panel === panelId);
+        });
+      } catch(_) {}
+    }
+
+    function _bindMsNav() {
+      document.querySelectorAll('.ms-nav-item[data-panel]').forEach(function(btn) {
+        if (btn.__msNavBound) return;
+        btn.__msNavBound = true;
+        btn.addEventListener('click', function() {
+          var panel = btn.dataset.panel;
+          _msSelectPanel(panel);
+          // Special: panels that open sub-modals
+          var subModal = {
+            profile: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('profileModal'); if(window.initProfileModal) initProfileModal(); }catch(_){} },
+            notifications: function(){ try{ UI.closeModal('settingsModal'); if(UI.bindSoundSettingsModal) UI.bindSoundSettingsModal(window.Auth&&Auth.getUser?Auth.getUser():null); UI.openModal('soundSettingsModal'); }catch(_){} },
+            theme: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('themeModal'); if(window.ThemeEngine) ThemeEngine.renderThemeGrid(); }catch(_){} },
+            cursor: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('cursorModal'); }catch(_){} },
+            sidebar: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('sidebarModal'); }catch(_){} },
+            links: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('linksModal'); if(window.App&&App.renderLinksGrid) App.renderLinksGrid(); }catch(_){} },
+            clocks: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('worldClocksModal'); }catch(_){} },
+            data: function(){ try{ UI.closeModal('settingsModal'); UI.openModal('dataToolsModal'); }catch(_){} },
+          };
+          if (subModal[panel]) {
+            setTimeout(subModal[panel], 60);
+          }
+        });
+      });
+
+      // Action buttons wired separately (they have their own IDs used by app.js)
+      function wire(id, fn) {
+        var el = document.getElementById(id);
+        if (el && !el.__msWired) { el.__msWired = true; el.addEventListener('click', fn); }
+      }
+      wire('openMailboxTimeBtn', function(){ try{ UI.openModal('mailboxTimeModal'); if(window.bindMailboxTimeModal) bindMailboxTimeModal(); }catch(_){} });
+      wire('openSystemCheckBtn', function(){ try{ UI.openModal('systemCheckModal'); }catch(_){} });
+      wire('openGlobalQbSettingsBtn', function(){ try{ UI.openModal('globalQbModal'); }catch(_){} });
+      wire('openCalendarSettingsBtn', function(){ try{ UI.closeModal('settingsModal'); UI.openModal('calendarSettingsModal'); }catch(_){} });
+      wire('openGmtOverviewPageBtn', function(){ try{ UI.closeModal('settingsModal'); if(window.App&&App.navigate) App.navigate('gmt_overview'); }catch(e){ try{ document.querySelector('[data-page="gmt_overview"]')&&document.querySelector('[data-page="gmt_overview"]').click(); }catch(_){} } });
+    }
+
+    function _bindMsSearch() {
+      var inp = document.getElementById('msSearchInput');
+      if (!inp || inp.__msBound) return;
+      inp.__msBound = true;
+      inp.addEventListener('input', function() {
+        var q = inp.value.toLowerCase().trim();
+        document.querySelectorAll('.ms-nav-item[data-panel]').forEach(function(btn) {
+          var name = (btn.querySelector('.ms-ni-name')||{}).textContent || '';
+          var sub  = (btn.querySelector('.ms-ni-sub')||{}).textContent  || '';
+          btn.style.display = (!q || (name+sub).toLowerCase().includes(q)) ? '' : 'none';
+        });
+        // Show/hide group labels based on whether any items below are visible
+        document.querySelectorAll('.ms-grp-label').forEach(function(lbl) {
+          var next = lbl.nextElementSibling;
+          var anyVisible = false;
+          while (next && !next.classList.contains('ms-grp-label')) {
+            if (next.style.display !== 'none') anyVisible = true;
+            next = next.nextElementSibling;
+          }
+          lbl.style.display = anyVisible ? '' : 'none';
+        });
+      });
+    }
+
+    function _syncMsBarToggles() {
+      try {
+        var onlineChk = document.getElementById('toggleOnlineBar');
+        var qlChk = document.getElementById('toggleQuickLinksBar');
+        var BAR_KEYS = { online: 'mums_bar_online_visible', quicklinks: 'mums_bar_quicklinks_visible' };
+        if (onlineChk) onlineChk.checked = localStorage.getItem(BAR_KEYS.online) !== '0';
+        if (qlChk) qlChk.checked = localStorage.getItem(BAR_KEYS.quicklinks) !== '0';
+      } catch(_) {}
+    }
+
+    function _syncMsBrightnessBadge() {
+      try {
+        var tag = document.getElementById('msBrightnessTag');
+        var raw = JSON.parse(localStorage.getItem('mums_brightness_v1') || '{}');
+        var val = raw.useDefault ? 100 : (Number(raw.value) || 100);
+        var label = document.getElementById('brightnessStatusLabel');
+        if (tag) {
+          if (!raw.useDefault && val !== 100) {
+            tag.textContent = val + '%';
+            tag.style.display = '';
+          } else {
+            tag.style.display = 'none';
+          }
+        }
+        if (label) label.textContent = raw.useDefault ? 'default (100%)' : val + '%';
+      } catch(_) {}
+    }
+  })();
+
   // ── BRIGHTNESS CONTROL ────────────────────────────────────────────────────────
   (function initBrightnessSystem() {
     const LS_KEY = 'mums_brightness_v1';
@@ -4236,11 +4391,7 @@ async function boot(){
     if(settingsBtn){
       settingsBtn.onclick = ()=>{
         UI.openModal('settingsModal');
-        // Sync bar visibility checkboxes to current state each time modal opens
-        try{ bindBarVisibilityControls(); }catch(_){}
-        try{ _syncBarVisibilityCheckboxes(); }catch(_){}
-        // Sync brightness control
-        try{ initBrightnessControl(); }catch(_){}
+        try{ initMainSettings(user); }catch(_){}
       };
     }
     const openSoundBtn = document.getElementById('openSoundBtn');
