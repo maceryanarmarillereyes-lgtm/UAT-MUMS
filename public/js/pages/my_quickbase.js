@@ -626,6 +626,8 @@
     const vcEnabled = !!(vcSettings && vcSettings.enabled && vcSettings.items && vcSettings.items.length);
     const vcHeader = vcEnabled ? `<th class="qb-vc-th" title="Virtual Column">⬡ ${esc(vcSettings.label || 'Status')}</th>` : '';
 
+    // Per-render snap store — buttons reference by index (no JSON parse needed)
+    const _qbRowSnaps = [];
     const body = visibleRows.map((r, rowIdx) => {
       const globalRowNum = rowStartIndex + rowIdx + 1;
       const recordId = String(r && r.qbRecordId || 'N/A');
@@ -680,16 +682,18 @@
       }).join('');
 
       // Build the row data snapshot for the Case Detail Modal
+      // Store snap in JS array — no JSON encode/decode (avoids silent parse failures)
       const rowSnapshot = {
-        rowNum:      globalRowNum,
-        recordId:    recordId,
-        fields:      r && r.fields ? r.fields : {},
-        columnMap:   columns.reduce((acc, c) => { acc[String(c.id)] = String(c.label || c.id || ''); return acc; }, {}),
+        rowNum:    globalRowNum,
+        recordId:  recordId,
+        fields:    r && r.fields ? r.fields : {},
+        columnMap: columns.reduce((acc, c) => { acc[String(c.id)] = String(c.label || c.id || ''); return acc; }, {}),
       };
-      const snapshotAttr = esc(JSON.stringify(rowSnapshot));
+      _qbRowSnaps.push(rowSnapshot);
+      const rowSnapIdx = _qbRowSnaps.length - 1;
 
       // FIX: Column order — # first, then Virtual Column, then user-defined columns
-      return `<tr${rowClassAttr}${rowStyleAttr}><td class="qb-row-num-cell"${tdStyle}><button type="button" class="qb-row-num-pill qb-row-detail-btn" data-qb-row-snapshot="${snapshotAttr}" title="View case details" aria-label="View case #${esc(recordId)}">${globalRowNum}</button></td>${vcCell}<td class="qb-case-id"${tdStyle}>${esc(recordId)}</td>${cells}</tr>`;
+      return `<tr${rowClassAttr}${rowStyleAttr}><td class="qb-row-num-cell"${tdStyle}><button type="button" class="qb-row-num-pill qb-row-detail-btn" data-qb-snap-idx="${rowSnapIdx}" title="View case details" aria-label="View case #${esc(recordId)}">${globalRowNum}</button></td>${vcCell}<td class="qb-case-id"${tdStyle}>${esc(recordId)}</td>${cells}</tr>`;
     }).join('');
 
     const vcThPrefix = vcEnabled ? vcHeader : '';
@@ -703,27 +707,25 @@
     // This is the most reliable approach — no delegation, no bubbling, no closest().
     // root._qbcdOpen is set by _initQbCaseDetailModal() in page-init (below).
     // renderRecords runs AFTER that init, so root._qbcdOpen is always available.
+    // ── CASE DETAIL: bind clicks using integer index (no JSON parse) ──────────
     (function _bindRowDetailBtns() {
-      try {
-        var allBtns = Array.from(host.querySelectorAll('.qb-row-detail-btn'));
-        var allSnaps = allBtns.map(function(b) {
-          try { return JSON.parse(b.getAttribute('data-qb-row-snapshot') || 'null'); }
-          catch(e) { return null; }
-        }).filter(Boolean);
-
-        allBtns.forEach(function(btn) {
-          var snap = null;
-          try { snap = JSON.parse(btn.getAttribute('data-qb-row-snapshot') || 'null'); }
-          catch(e) {}
-          if (!snap) return;
+      // Store snaps on host so delegation can also access them
+      host._qbRowSnaps = _qbRowSnaps;
+      var btns = host.querySelectorAll('.qb-row-detail-btn');
+      for (var bi = 0; bi < btns.length; bi++) {
+        (function(btn) {
+          var idx = parseInt(btn.getAttribute('data-qb-snap-idx'), 10);
+          if (isNaN(idx)) return;
           btn.onclick = function(e) {
             e.stopPropagation();
+            var snap = _qbRowSnaps[idx];
+            if (!snap) return;
             if (typeof root._qbcdOpen === 'function') {
-              root._qbcdOpen(snap, allSnaps);
+              root._qbcdOpen(snap, _qbRowSnaps);
             }
           };
-        });
-      } catch(e) {}
+        })(btns[bi]);
+      }
     })();
 
     // ── VIRTUAL COLUMN CHANGE HANDLER (PREMIUM) ───────────────────────────
@@ -3594,13 +3596,9 @@
       function _close() {
         var m = document.getElementById('qbCaseDetailModal');
         if (!m) return;
-        if (window.UI && typeof UI.closeModal === 'function') {
-          UI.closeModal('qbCaseDetailModal');
-        } else {
-          m.classList.remove('open');
-          m.style.display = 'none';
-          try { if (!document.querySelector('.modal.open')) document.body.classList.remove('modal-open'); } catch(e) {}
-        }
+        m.classList.remove('open');
+        m.removeAttribute('style');
+        try { if (!document.querySelector('.modal.open')) document.body.classList.remove('modal-open'); } catch(ee) {}
       }
 
       function _open(snap, allSnaps) {
@@ -3609,18 +3607,18 @@
         if (_idx < 0) _idx = 0;
         _populate(snap);
         var m = document.getElementById('qbCaseDetailModal');
-        if (!m) { console.warn('[QBCD] #qbCaseDetailModal missing from DOM'); return; }
-        // Always clear inline display:none left by UI.closeModal
-        m.style.display = '';
-        // Remove any conflicting inline opacity that bringToFront might not reset
-        m.style.opacity  = '';
-        m.style.visibility = '';
-        if (window.UI && typeof UI.openModal === 'function') {
-          UI.openModal('qbCaseDetailModal');
-        } else {
-          m.classList.add('open');
-          try { document.body.classList.add('modal-open'); } catch(e) {}
-        }
+        if (!m) { return; }
+        // Direct DOM manipulation — no dependency on UI.openModal
+        // Clear all inline styles that could block visibility
+        m.removeAttribute('style');
+        // Force display before adding open class
+        m.style.cssText = 'display:flex!important;position:fixed!important;inset:0!important;' +
+          'z-index:2147483647!important;align-items:center!important;justify-content:center!important;' +
+          'background:rgba(6,12,24,.88)!important;padding:16px!important;box-sizing:border-box!important;';
+        m.classList.add('open');
+        try { document.body.classList.add('modal-open'); } catch(ee) {}
+        // Re-append to body to escape any stacking context
+        if (m.parentElement !== document.body) document.body.appendChild(m);
       }
 
       // Expose _open on root so renderRecords can call it directly (belt+suspenders)
@@ -3672,19 +3670,21 @@
       var _dataBody = root.querySelector('#qbDataBody');
       if (_dataBody) {
         _dataBody.addEventListener('click', function(e) {
-          var btn = e.target && e.target.closest ? e.target.closest('.qb-row-detail-btn') : null;
+          // Walk up from click target to find .qb-row-detail-btn
+          var btn = null;
+          var t = e.target;
+          while (t && t !== _dataBody) {
+            if (t.classList && t.classList.contains('qb-row-detail-btn')) { btn = t; break; }
+            t = t.parentElement;
+          }
           if (!btn) return;
           e.stopPropagation();
-          var snap = null;
-          try { snap = JSON.parse(btn.getAttribute('data-qb-row-snapshot') || 'null'); } catch(e) {}
-          if (!snap) return;
-          var allSnaps = [];
-          try {
-            allSnaps = Array.from(_dataBody.querySelectorAll('.qb-row-detail-btn')).map(function(b) {
-              try { return JSON.parse(b.getAttribute('data-qb-row-snapshot') || 'null'); } catch(e) { return null; }
-            }).filter(Boolean);
-          } catch(e) {}
-          _open(snap, allSnaps);
+          // Use index-based lookup from host._qbRowSnaps (no JSON parse)
+          var host = _dataBody;
+          var snaps = host._qbRowSnaps || [];
+          var idx = parseInt(btn.getAttribute('data-qb-snap-idx'), 10);
+          if (isNaN(idx) || !snaps[idx]) return;
+          _open(snaps[idx], snaps);
         });
       }
     })();
