@@ -3853,10 +3853,11 @@ function updateClocksPreviewTimes(){
       try{ _syncMsBrightnessBadge(); }catch(_){}
       try{ _syncMsBarToggles(); }catch(_){}
 
-      // Default panel if none active
+      // Always open Profile panel on settings open + populate fields
       try {
-        var anyActive = document.querySelector('.ms-nav-item.ms-active');
-        if (!anyActive) _msSelectPanel('welcome');
+        _msSelectPanel('profile');
+        var _defaultUser = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
+        if (_defaultUser) setTimeout(function(){ try{ openProfileModal(_defaultUser); }catch(_){} }, 80);
       } catch(_) {}
     };
 
@@ -3883,15 +3884,84 @@ function updateClocksPreviewTimes(){
           _msSelectPanel(panel);
           // Special: panels that open sub-modals
           // Inline panel init — trigger JS that panels need after showing
+          var _panelUser = (window.Auth && Auth.getUser) ? Auth.getUser() : user;
           var panelInits = {
-            theme: function(){ try{ if(window.ThemeEngine) ThemeEngine.renderThemeGrid(); }catch(_){} },
-            links: function(){ try{ if(window.App&&App.renderLinksGrid) App.renderLinksGrid(); }catch(_){} },
-            clocks: function(){ try{ if(window.initClocksGrid) initClocksGrid(); if(window.initClocksPreviewStrip) initClocksPreviewStrip(); }catch(_){} },
-            notifications: function(){ try{ if(UI.bindSoundSettingsModal) UI.bindSoundSettingsModal(window.Auth&&Auth.getUser?Auth.getUser():null); }catch(_){} },
-            mailboxtime: function(){ try{ if(window.bindMailboxTimeModal) bindMailboxTimeModal(); }catch(_){} },
-            systemcheck: function(){ try{ if(window.bindSystemCheckModal) bindSystemCheckModal(); }catch(_){} },
-            globalqb: function(){ try{ if(window.initGlobalQbModal) initGlobalQbModal(); }catch(_){} },
-            data: function(){ try{ if(window.bindDataHealthModal) bindDataHealthModal(); }catch(_){} },
+            profile: function(){
+              try{ openProfileModal(_panelUser); }catch(_){}
+            },
+            theme: function(){
+              // renderThemeGrid is a scoped inner function accessible here
+              try{ renderThemeGrid(); }catch(_){}
+            },
+            links: function(){
+              // renderLinksGrid is scoped inner function — now also on window.App
+              try{ renderLinksGrid(); }catch(_){}
+            },
+            clocks: function(){
+              // renderClocksGrid + update preview strip
+              try{ renderClocksGrid(); }catch(_){}
+              try{ const strip = document.getElementById('clocksPreviewStrip');
+                if(strip && window.__mumsRenderClocksPreview) window.__mumsRenderClocksPreview();
+              }catch(_){}
+            },
+            notifications: function(){
+              // Sound settings are wired at boot; just sync the checkbox value
+              try{
+                const sndEn = document.getElementById('sndEnabled');
+                if(sndEn) sndEn.checked = (localStorage.getItem('mums_sound_enabled') !== '0');
+                const sndType = document.getElementById('sndType');
+                if(sndType) sndType.value = (localStorage.getItem('mums_sound_type')||'beep');
+                const sndVol = document.getElementById('sndVol');
+                if(sndVol) sndVol.value = (localStorage.getItem('mums_sound_vol')||'65');
+                if(UI.bindSoundSettingsModal) UI.bindSoundSettingsModal(_panelUser);
+              }catch(_){}
+            },
+            cursor: function(){
+              // Sync cursor dropdown to saved value
+              try{
+                const curSel = document.getElementById('cursorModeSelect');
+                if(curSel) curSel.value = (localStorage.getItem('mums_cursor_mode')||'custom');
+              }catch(_){}
+            },
+            sidebar: function(){
+              // Sync sidebar selects to saved values
+              try{
+                const den = document.getElementById('densitySelect');
+                if(den) den.value = (localStorage.getItem('mums_density')||'normal');
+                const sb = document.getElementById('sidebarDefaultSelect');
+                if(sb) sb.value = (localStorage.getItem('mums_sidebar_default')||'expanded');
+                const hov = document.getElementById('sidebarHoverExpandToggle');
+                if(hov) hov.checked = ((localStorage.getItem('mums_sidebar_hover')?? '1') === '1');
+              }catch(_){}
+            },
+            bottombars: function(){
+              try{ bindBarVisibilityControls(); _syncMsBarToggles(); }catch(_){}
+            },
+            brightness: function(){
+              try{ initBrightnessControl(); _syncMsBrightnessBadge(); }catch(_){}
+            },
+            mailboxtime: function(){
+              try{ if(typeof bindMailboxTimeModal === 'function') bindMailboxTimeModal(); }catch(_){}
+            },
+            systemcheck: function(){
+              try{ if(typeof bindSystemCheckModal === 'function') bindSystemCheckModal(_panelUser); }catch(_){}
+            },
+            globalqb: function(){
+              try{ if(typeof loadGqbSettings === 'function') loadGqbSettings(); }catch(_){}
+            },
+            calendar: function(){
+              try{ if(typeof loadCalSettings === 'function') loadCalSettings(); }catch(_){}
+            },
+            data: function(){
+              // Data health elements are already wired at boot; just sync health summary
+              try{
+                const sum = document.getElementById('storageHealthSummary');
+                if(sum && sum.textContent === '—') {
+                  const kb = Math.round(JSON.stringify(localStorage).length/1024);
+                  sum.textContent = kb + ' KB used across ' + localStorage.length + ' keys';
+                }
+              }catch(_){}
+            },
           };
           if (panelInits[panel]) {
             setTimeout(panelInits[panel], 60);
@@ -4401,7 +4471,7 @@ async function boot(){
     }
     const openProfileBtn = document.getElementById('openProfileBtn');
     if(openProfileBtn){
-      openProfileBtn.onclick = ()=>{ try{ openProfileModal(Auth.getUser()||user); }catch(_){} };
+      openProfileBtn.onclick = ()=>{ try{ _msSelectPanel('profile'); setTimeout(function(){ try{ openProfileModal(Auth.getUser()||user); }catch(_){} }, 60); }catch(_){} };
     }
 
     const openThemeBtn = document.getElementById('openThemeBtn');
@@ -4426,7 +4496,7 @@ async function boot(){
 
     const openLinksBtn = document.getElementById('openLinksBtn');
     if(openLinksBtn){
-      openLinksBtn.onclick = ()=>{ try{ if(window.App.renderLinksGrid) App.renderLinksGrid(); }catch(_){} };
+      openLinksBtn.onclick = ()=>{ try{ renderLinksGrid(); }catch(_){} };
     }
 
     try{
@@ -5527,7 +5597,7 @@ async function boot(){
 
   } 
 
-  window.App = { boot };
+  window.App = { boot, renderLinksGrid };
   (function(){
     let started = false;
     function start(){
