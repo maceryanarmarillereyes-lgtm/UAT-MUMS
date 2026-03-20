@@ -417,14 +417,33 @@ module.exports = async (req, res) => {
       'Short Description or New "Concern" That Is Not in The KB',
       'Case Status',
       'Assigned to',
+      'Contact - Full Name',
       'Last Update Days',
       'Age',
-      'Type'
+      'Type',
+      'Latest Update on the Case',
+      'Case Notes'
     ];
 
     const hasPersonalQuickbaseQuery = !!String(qid || '').trim();
-    const profileCustomColumns = normalizeProfileColumns(profileQuickbaseConfig.customColumns || profileQuickbaseConfig.qb_custom_columns || profile.qb_custom_columns);
-    const mappedProfileColumns = profileCustomColumns
+
+    // Column resolution priority (highest → lowest):
+    // 1. Active tab's customColumns (per-user, per-tab setting)
+    // 2. Global QB Settings customColumns (shared, set by Super Admin)
+    // 3. wantedLabels fallback (hardcoded defaults, now includes Case Notes etc.)
+    const profileCustomColumns = normalizeProfileColumns(
+      profileQuickbaseConfig.customColumns ||
+      profileQuickbaseConfig.qb_custom_columns ||
+      profile.qb_custom_columns
+    );
+    const globalCustomColumns = normalizeProfileColumns(globalQb.customColumns || []);
+
+    // Use tab-level columns first, then global-level, then wantedLabels
+    const activeCustomColumns = profileCustomColumns.length
+      ? profileCustomColumns
+      : globalCustomColumns;
+
+    const mappedProfileColumns = activeCustomColumns
       .map((id) => {
         const found = allAvailableFields.find((f) => Number(f.id) === Number(id));
         return found ? { id: Number(found.id), label: found.label } : null;
@@ -435,6 +454,7 @@ module.exports = async (req, res) => {
       .map((label) => ({ label, id: resolveFieldId(label) }))
       .filter((x) => Number.isFinite(x.id));
 
+    // mappedProfileColumns → global customColumns → wantedLabels
     const selectedFields = mappedProfileColumns.length ? mappedProfileColumns : wantedFieldSelection;
 
     if (!hasPersonalQuickbaseQuery && !selectedFields.length) {
@@ -679,7 +699,15 @@ module.exports = async (req, res) => {
           .map((f) => fieldsMetaById[String(f.id)] || { id: Number(f.id), label: String(f.label || '').trim() })
           .filter((f) => Number.isFinite(f.id) && String(f.label || '').trim());
 
-    const orderedEffectiveFields = sortFieldsByProfileOrder(effectiveFields, profileQuickbaseConfig.customColumns || profileQuickbaseConfig.qb_custom_columns || profile.qb_custom_columns);
+    // Order by: tab customColumns > global customColumns > profile fallback
+    const _columnOrderSource = (
+      profileQuickbaseConfig.customColumns ||
+      profileQuickbaseConfig.qb_custom_columns ||
+      profile.qb_custom_columns ||
+      globalQb.customColumns ||
+      []
+    );
+    const orderedEffectiveFields = sortFieldsByProfileOrder(effectiveFields, _columnOrderSource);
 
     const columns = (Array.isArray(out.records) && out.records.length)
       ? orderedEffectiveFields
