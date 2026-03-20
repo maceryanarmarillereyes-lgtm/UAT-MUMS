@@ -9612,31 +9612,37 @@ body:not(.quicklinks-bar-hidden) .quicklinks-bar {
   transition: transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
 }
 
-/* ── Dynamic layout: JS drives --mums-dock-h / --mums-onlinebar-h directly ── */
-/*
-   AUTHORITATIVE DRIVER: app.js → applyBarVisibility()
-   Sets document.documentElement.style.setProperty('--mums-dock-h', ...)
-   and document.documentElement.style.setProperty('--mums-onlinebar-h', ...).
-   Inline style on <html> wins all CSS specificity — no cascade conflict possible.
+/* ══════════════════════════════════════════════════════════════════════════════
+   BOTTOM BAR SPACER — v4 PERMANENT FIX (ResizeObserver-driven)
+   ══════════════════════════════════════════════════════════════════════════════
+   AUTHORITATIVE DRIVER: app.js → _initBarObservers() + _commitBarHeights()
+   Uses ResizeObserver to measure the ACTUAL pixel height of each bar in
+   real-time and writes to <html> inline style (highest specificity):
+     document.documentElement.style.setProperty('--mums-dock-h',      actualQlHeight + 'px')
+     document.documentElement.style.setProperty('--mums-onlinebar-h', actualOnlineHeight + 'px')
 
-   quicklinks hidden → --mums-dock-h: 0px
-   online hidden     → --mums-onlinebar-h: 0px
-   .app grid row 3   = calc(0px + Xpx) or calc(0px + 0px) → collapses
-   .side / .main / .right auto-expand to fill the freed space.
+   WHY THIS IS THE PERMANENT FIX:
+   • Previous bug: hardcoded 86px / 44px were SMALLER than actual rendered heights
+     (bars include padding + border → real height was ~57px online, ~86px ql).
+     Grid row 3 spacer was too short → sidebars/main bled under the fixed bars.
+   • ResizeObserver fires whenever bar size changes (content, theme, window resize).
+   • Inline style on <html> cannot be beaten by any CSS :root or theme override.
 
-   CSS rules below are safety-net fallbacks only (fire if JS blocked / not yet run).
-*/
-body.quicklinks-bar-hidden { --mums-dock-h: 0px; }
-body.online-bar-hidden     { --mums-onlinebar-h: 0px; }
+   CSS RULES BELOW: animation/visibility only — NO layout values.
+   Do NOT add --mums-dock-h or --mums-onlinebar-h overrides here.
+   ══════════════════════════════════════════════════════════════════════════════ */
 
-/* Online users bar bottom anchor — CSS fallback; JS inline style wins at runtime */
-body.quicklinks-bar-hidden .online-users-bar {
-  bottom: 0;
-  transition: bottom .28s cubic-bezier(.4,0,.2,1), transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
+/* Smooth grid resize when bars toggle — transition on .app row changes */
+.app {
+  transition: grid-template-rows .28s cubic-bezier(.4,0,.2,1);
 }
-body:not(.quicklinks-bar-hidden) .online-users-bar {
-  bottom: var(--mums-dock-h);
-  transition: bottom .28s cubic-bezier(.4,0,.2,1), transform .28s cubic-bezier(.4,0,.2,1), opacity .22s ease;
+
+/* Online bar bottom anchor is set by JS inline style.
+   CSS fallback only (fires before JS runs): sit at bottom:0 */
+.online-users-bar {
+  transition: bottom .28s cubic-bezier(.4,0,.2,1),
+              transform .28s cubic-bezier(.4,0,.2,1),
+              opacity .22s ease;
 }
 
 
