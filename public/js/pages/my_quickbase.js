@@ -699,13 +699,8 @@
     _setupQbTooltips(host);
 
     // ── CASE DETAIL MODAL — Event delegation wired once at page init ──────────
-    // Click handling via a single delegated listener on #qbDataBody set up
-    // in window.Pages.my_quickbase after root.innerHTML. No per-button binding
-    // needed here. (Removed __qbcdInited window-flag approach which caused
-    // stale closures on SPA navigation and silently failed on re-renders.)
-        });
-      });
-    } catch(_) {}
+    // Click handling via a single delegated listener on #qbDataBody.
+    // See _initQbCaseDetailModal() IIFE below in page init section.
 
     // ── VIRTUAL COLUMN CHANGE HANDLER (PREMIUM) ───────────────────────────
     if (vcEnabled && typeof opts.onVirtualColumnChange === 'function') {
