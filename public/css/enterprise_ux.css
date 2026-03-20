@@ -5551,11 +5551,15 @@ body.members-fullscreen-active .tooltip{
   pointer-events: none; /* spans use none; buttons (.qb-row-detail-btn) override below */
   user-select: none;
 }
-/* Row detail button: restore pointer-events so clicks register */
+/* Row detail button: restore pointer-events so clicks register.
+   !important overrides the .qb-row-num-pill pointer-events:none rule above
+   and ensures clicks always fire regardless of theme CSS specificity wars. */
 button.qb-row-num-pill,
 .qb-row-detail-btn {
-  pointer-events: auto;
-  cursor: pointer;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  position: relative;
+  z-index: 2;
 }
 .qb-data-table tbody tr:hover .qb-row-num-pill {
   background: rgba(80,110,220,0.15);
