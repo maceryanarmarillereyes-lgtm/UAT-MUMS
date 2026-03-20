@@ -161,7 +161,7 @@ select:disabled{opacity:.65;color:var(--text)}
 /* App layout */
 .app{height:100%;max-height:100%;display:grid;
   grid-template-columns:244px 1fr 296px;
-  grid-template-rows:auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h));
+  grid-template-rows:auto 1fr var(--mums-bar-spacer);
   gap:1px;padding:0;overflow:hidden}
 /* Row 1=topbar, Row 2=content (side/main/right), Row 3=reserved for fixed bottom bars.
    Grid cells in row 2 are HARD-BOUNDED — they cannot extend into row 3. */
@@ -305,7 +305,7 @@ body{
 @media (max-width:1100px) and (min-width: 769px){
   .app{
     grid-template-columns:248px 1fr 300px !important;
-    grid-template-rows:auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) !important;
+    grid-template-rows:auto 1fr var(--mums-bar-spacer) !important;
   }
   .side{grid-column:1 !important;grid-row:2 !important;}
   .main{grid-column:2 !important;grid-row:2 !important;}
@@ -2731,7 +2731,7 @@ body[data-mode="dark"] .sidebar-toggle-overlay:hover{background:rgba(255,255,255
 body.rightbar-collapsed aside.right{display:none}
 
 /* When rightbar is collapsed, reclaim space */
-body.rightbar-collapsed .app{grid-template-columns:260px 1fr 0px;grid-template-rows:auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h))}
+body.rightbar-collapsed .app{grid-template-columns:260px 1fr 0px;grid-template-rows:auto 1fr var(--mums-bar-spacer)}
 
 /* Compact density */
 body.density-compact{--pad:12px}
@@ -2794,7 +2794,7 @@ body[data-mode="dark"] .app-cursor .app-cursor-arrow{
 }
 .app-cursor.is-text .app-cursor-ibar{display:block}
 
-body.sidebar-collapsed.rightbar-collapsed .app{grid-template-columns:72px 1fr 0px;grid-template-rows:auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h))}
+body.sidebar-collapsed.rightbar-collapsed .app{grid-template-columns:72px 1fr 0px;grid-template-rows:auto 1fr var(--mums-bar-spacer)}
 /* Sidebar + rightbar both collapsed */
 body.sidebar-collapsed.rightbar-collapsed {
   --sidebar-left-w: 72px;
@@ -2959,7 +2959,7 @@ body.attendance-locked #app{
    - Quick links: lower center
    - Online users bar: above dock (4 sections incl. Developer Access)
 ================================ */
-:root{ --mums-dock-h: 86px; --mums-onlinebar-h: 44px; }
+:root{ --mums-dock-h: 86px; --mums-onlinebar-h: 44px; --mums-bar-spacer: 130px; }
 
 
 .online-users-bar{
@@ -5309,7 +5309,7 @@ body[data-theme="mums_light"] {
 
 /* ── 1. App shell ───────────────────────────────────────────────────────────── */
 body[data-theme="mums_light"] .app {
-  gap: 1px; padding: 0; grid-template-rows: auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h)); background: #f6f7fb;
+  gap: 1px; padding: 0; grid-template-rows: auto 1fr var(--mums-bar-spacer); background: #f6f7fb;
 }
 
 /* ── 2. Topbar ──────────────────────────────────────────────────────────────── */
@@ -6096,7 +6096,7 @@ body[data-theme="ivory_executive"] {
 
 /* ── 1. App shell ───────────────────────────────────────────────────────────── */
 body[data-theme="ivory_executive"] .app {
-  gap: 1px; padding: 0; grid-template-rows: auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h)); background: #f5f5f2;
+  gap: 1px; padding: 0; grid-template-rows: auto 1fr var(--mums-bar-spacer); background: #f5f5f2;
 }
 
 /* ── 2. Topbar ──────────────────────────────────────────────────────────────── */
@@ -9748,7 +9748,7 @@ body.rightbar-collapsed {
 body.density-compact .app {
   gap: 1px !important;
   padding: 0 !important;
-  grid-template-rows: auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) !important;
+  grid-template-rows: auto 1fr var(--mums-bar-spacer) !important;
 }
 body.density-compact .card.pad {
   padding: 10px 12px !important;
@@ -9807,7 +9807,7 @@ body.density-compact .main.card.pad {
 body.density-compact .app {
   gap: 1px !important;
   padding: 0 !important;
-  grid-template-rows: auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h)) !important;
+  grid-template-rows: auto 1fr var(--mums-bar-spacer) !important;
 }
 body.density-compact .card.pad {
   padding: 8px 10px !important;

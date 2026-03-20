@@ -3754,29 +3754,24 @@ function updateClocksPreviewTimes(){
   // ─ The bars themselves use transform:translateY(100%) for smooth slide-out.
 
   // ══════════════════════════════════════════════════════════════════════════
-  //  BOTTOM BARS VISIBILITY SYSTEM — v4 PERMANENT FIX
+  // ══════════════════════════════════════════════════════════════════════════
+  //  BOTTOM BARS VISIBILITY SYSTEM — v5 FINAL FIX
   //
-  //  ROOT CAUSE (confirmed): The previous approach used hardcoded CSS variable
-  //  values (--mums-dock-h: 86px, --mums-onlinebar-h: 44px) to reserve grid
-  //  row 3 space. But the ACTUAL rendered heights of the bars are larger because
-  //  they include padding, borders, and dynamic content. The spacer was always
-  //  smaller than the real bars → sidebars/main bled under the fixed bars.
+  //  BUG IN v4: Wrote measured heights back to --mums-dock-h/--mums-onlinebar-h.
+  //  Those SAME vars drive bar sizing:
+  //    .quicklinks-bar { height: var(--mums-dock-h) }
+  //    .onlinebar-sec  { min-height: var(--mums-onlinebar-h) }
+  //  Result: ResizeObserver measured bar → wrote to var → bar grew → RO fired
+  //  again → infinite loop → grid row 3 ballooned → row 2 collapsed → blank screen.
   //
-  //  PERMANENT FIX STRATEGY:
-  //  Use ResizeObserver to measure ACTUAL pixel heights of both fixed bars in
-  //  real-time and write them directly to CSS variables on <html> (inline style
-  //  = unbeatable specificity, beats all theme :root overrides).
+  //  PERMANENT FIX: New isolated variable --mums-bar-spacer.
+  //  • --mums-dock-h / --mums-onlinebar-h: UNTOUCHED — still drive bar sizing.
+  //  • --mums-bar-spacer: ONLY written by JS, ONLY used in grid-template-rows.
+  //  • Zero circular dependency. Zero feedback loop.
   //
-  //  LAYOUT MECHANISM:
-  //  .app grid-template-rows: auto 1fr calc(var(--mums-dock-h) + var(--mums-onlinebar-h))
-  //  Row 3 = exact sum of measured bar heights → row 2 (1fr) is always bounded.
-  //  .side, .main, .right are row 2 grid items — they NEVER enter row 3.
-  //  Fixed bars float over the row 3 space → zero overlap, zero blank gap.
-  //
-  //  WHEN BARS ARE HIDDEN:
-  //  transform: translateY(100%) slides bar off-screen.
-  //  We set its measured height → 0 (since it no longer occupies space).
-  //  Row 3 shrinks → sidebars expand to fill full available height.
+  //  .app grid-template-rows: auto  1fr  var(--mums-bar-spacer)
+  //    Row 3 = exact sum of measured bar heights → row 2 (1fr) always bounded.
+  //    Bars hidden → spacer = 0 → row 2 expands to fill full viewport height.
   // ══════════════════════════════════════════════════════════════════════════
 
   const BAR_KEYS = {
@@ -3784,92 +3779,78 @@ function updateClocksPreviewTimes(){
     quicklinks: 'mums_bar_quicklinks',
   };
 
-  // ── Internal state ───────────────────────────────────────────────────────
-  var _barHeights = { online: 0, quicklinks: 0 };
-  var _barObservers = { online: null, quicklinks: null };
-  var _barObserverRaf = null;
+  // Cached measured heights — set by ResizeObserver, read by _commitSpacer
+  var _measuredBarH = { online: 0, quicklinks: 0 };
+  var _barRO        = { online: null, quicklinks: null };
+  var _barRAF       = null;
 
-  // ── Core: write measured heights to HTML inline style (max specificity) ──
-  function _commitBarHeights() {
+  // Write ONLY to --mums-bar-spacer on <html> inline style.
+  // <html> inline style = highest CSS specificity, no :root override can beat it.
+  // --mums-bar-spacer is NOT used inside bars → zero circular dependency.
+  function _commitSpacer() {
     try {
       var onlineShow     = localStorage.getItem(BAR_KEYS.online)     !== '0';
       var quicklinksShow = localStorage.getItem(BAR_KEYS.quicklinks) !== '0';
-
-      // If bar is hidden, contribute 0 to the spacer.
-      var dockH   = quicklinksShow ? _barHeights.quicklinks : 0;
-      var onlineH = onlineShow     ? _barHeights.online     : 0;
-
-      // Write to <html> inline style — cannot be overridden by any CSS rule.
-      document.documentElement.style.setProperty('--mums-dock-h',      dockH   + 'px');
-      document.documentElement.style.setProperty('--mums-onlinebar-h', onlineH + 'px');
-
-      // Sync the online bar's bottom anchor so it sits exactly on top of the quicklinks bar.
-      var onlineBar = document.querySelector('.online-users-bar');
-      if (onlineBar) onlineBar.style.bottom = (quicklinksShow ? _barHeights.quicklinks : 0) + 'px';
+      var qlH     = quicklinksShow ? _measuredBarH.quicklinks : 0;
+      var onlineH = onlineShow     ? _measuredBarH.online     : 0;
+      document.documentElement.style.setProperty('--mums-bar-spacer', (qlH + onlineH) + 'px');
+      // Sync online bar's bottom so it floats directly above quicklinks bar
+      try {
+        var ob = document.getElementById('onlineUsersBar') || document.querySelector('.online-users-bar');
+        if (ob) ob.style.bottom = qlH + 'px';
+      } catch(_) {}
     } catch (_) {}
   }
 
-  // ── Measure a bar element and cache its height ───────────────────────────
-  function _measureBar(key, el) {
+  // Measure one bar's ACTUAL rendered height and cache it
+  function _measureOne(key, el) {
     if (!el) return;
     try {
-      var h = el.getBoundingClientRect().height || 0;
-      _barHeights[key] = Math.ceil(h); // ceil to avoid sub-pixel gaps
-      _commitBarHeights();
+      _measuredBarH[key] = Math.ceil(el.getBoundingClientRect().height || 0);
+      _commitSpacer();
     } catch (_) {}
   }
 
-  // ── Attach ResizeObserver to a bar element ───────────────────────────────
-  function _observeBar(key, el) {
+  // Attach ResizeObserver — fires whenever bar resizes (content/theme/window)
+  function _watchBar(key, el) {
     if (!el) return;
     try {
-      if (_barObservers[key]) { try { _barObservers[key].disconnect(); } catch(_){} }
-      if (typeof ResizeObserver === 'undefined') {
-        // Fallback for very old browsers: measure once on load
-        _measureBar(key, el);
-        return;
-      }
-      _barObservers[key] = new ResizeObserver(function() {
-        // Debounce via rAF to avoid thrashing during CSS transitions
-        if (_barObserverRaf) cancelAnimationFrame(_barObserverRaf);
-        _barObserverRaf = requestAnimationFrame(function() {
-          _measureBar(key, el);
+      if (_barRO[key]) { try { _barRO[key].disconnect(); } catch(_){} }
+      if (typeof ResizeObserver !== 'undefined') {
+        _barRO[key] = new ResizeObserver(function() {
+          if (_barRAF) cancelAnimationFrame(_barRAF);
+          _barRAF = requestAnimationFrame(function() { _measureOne(key, el); });
         });
-      });
-      _barObservers[key].observe(el);
-      _measureBar(key, el); // initial measurement
+        _barRO[key].observe(el);
+      }
+      _measureOne(key, el); // immediate measurement on attach
     } catch (_) {}
   }
 
-  // ── Start observing both bars ────────────────────────────────────────────
   function _initBarObservers() {
     try {
-      var qlBar     = document.getElementById('quickLinksBar')  || document.querySelector('.quicklinks-bar');
-      var onlineBar = document.getElementById('onlineUsersBar') || document.querySelector('.online-users-bar');
-      _observeBar('quicklinks', qlBar);
-      _observeBar('online',     onlineBar);
+      var ql = document.getElementById('quickLinksBar')  || document.querySelector('.quicklinks-bar');
+      var ob = document.getElementById('onlineUsersBar') || document.querySelector('.online-users-bar');
+      _watchBar('quicklinks', ql);
+      _watchBar('online',     ob);
     } catch (_) {}
   }
 
-  // ── Public: apply bar visibility (toggle classes + commit heights) ───────
   function applyBarVisibility() {
     try {
       var onlineShow     = localStorage.getItem(BAR_KEYS.online)     !== '0';
       var quicklinksShow = localStorage.getItem(BAR_KEYS.quicklinks) !== '0';
-
       document.body.classList.toggle('online-bar-hidden',     !onlineShow);
       document.body.classList.toggle('quicklinks-bar-hidden', !quicklinksShow);
-
-      // After class toggle, re-measure after transition completes (280ms).
-      // Also commit immediately so grid snaps without waiting.
-      _commitBarHeights();
+      _commitSpacer(); // immediate snap
+      // Re-measure after slide animation settles (280ms) for exact pixel fit
       setTimeout(function() {
         try {
-          var qlBar     = document.getElementById('quickLinksBar')  || document.querySelector('.quicklinks-bar');
-          var onlineBar = document.getElementById('onlineUsersBar') || document.querySelector('.online-users-bar');
-          if (onlineShow     && onlineBar)     _measureBar('online',     onlineBar);
-          if (quicklinksShow && qlBar)         _measureBar('quicklinks', qlBar);
-          _commitBarHeights();
+          var ql = document.getElementById('quickLinksBar')  || document.querySelector('.quicklinks-bar');
+          var ob = document.getElementById('onlineUsersBar') || document.querySelector('.online-users-bar');
+          if (quicklinksShow && ql) _measureOne('quicklinks', ql);
+          if (onlineShow     && ob) _measureOne('online',     ob);
+          _commitSpacer();
         } catch (_) {}
       }, 320);
     } catch (_) {}
@@ -3896,24 +3877,16 @@ function updateClocksPreviewTimes(){
     try {
       var onlineChk     = document.getElementById('toggleOnlineBar');
       var quicklinksChk = document.getElementById('toggleQuickLinksBar');
-
       if (onlineChk && !onlineChk.__barBound) {
         onlineChk.__barBound = true;
         onlineChk.checked = localStorage.getItem(BAR_KEYS.online) !== '0';
-        onlineChk.addEventListener('change', function() {
-          setBarVisibility('online', onlineChk.checked);
-        });
+        onlineChk.addEventListener('change', function() { setBarVisibility('online', onlineChk.checked); });
       }
-
       if (quicklinksChk && !quicklinksChk.__barBound) {
         quicklinksChk.__barBound = true;
         quicklinksChk.checked = localStorage.getItem(BAR_KEYS.quicklinks) !== '0';
-        quicklinksChk.addEventListener('change', function() {
-          setBarVisibility('quicklinks', quicklinksChk.checked);
-        });
+        quicklinksChk.addEventListener('change', function() { setBarVisibility('quicklinks', quicklinksChk.checked); });
       }
-
-      // Ensure observers are running whenever controls are bound
       _initBarObservers();
     } catch (_) {}
   }
