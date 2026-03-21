@@ -553,6 +553,62 @@
     }
   }
 
+  // ── CASE NOTES DATE UTILITIES (outer scope — shared by renderRecords + applySearchAndRender) ──
+  const _MONTH_MAP_CN = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+
+  function _parseCNDate(m) {
+    const mon = m[1].toUpperCase(), dd = parseInt(m[2],10), yy = parseInt(m[3],10);
+    const hh  = parseInt(m[4],10),   mi = parseInt(m[5],10), ap = (m[6]||'').toUpperCase();
+    if (!(mon in _MONTH_MAP_CN)) return null;
+    const year = yy < 50 ? 2000+yy : 1900+yy;
+    let h = hh;
+    if (ap==='PM' && h<12) h+=12;
+    if (ap==='AM' && h===12) h=0;
+    const d = new Date(year, _MONTH_MAP_CN[mon], dd, h, mi, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // Returns the most recent timestamp (ms) found in Case Notes text — 0 if none
+  function _caseNotesSortKey(text) {
+    if (!text) return 0;
+    const re = /\[([A-Z]{3})-(\d{1,2})-(\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/gi;
+    let best = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      const d = _parseCNDate(m);
+      if (d && d.getTime() > best) best = d.getTime();
+    }
+    return best;
+  }
+
+  // Returns today in Manila as "MAR-21-26"
+  function _getManilaToday() {
+    try {
+      const parts = {};
+      new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Manila',year:'2-digit',month:'short',day:'2-digit'})
+        .formatToParts(new Date()).forEach(p => { parts[p.type] = p.value; });
+      return parts.month.toUpperCase().slice(0,3) + '-' + parts.day.replace(/^0/,'') + '-' + parts.year;
+    } catch(_) { return ''; }
+  }
+
+  // Wraps [MON-DD-YY ...] that match todayStr with <mark class="qb-date-today">
+  // Returns highlighted HTML string, or null if today not found in text
+  function _highlightTodayInNotes(rawText, todayStr) {
+    if (!todayStr || !rawText) return null;
+    const escapedSafe = rawText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const re = /\[([A-Z]{3}-\d{1,2}-\d{2}\s[^\]]*)\]/g;
+    let hasHighlight = false;
+    const result = escapedSafe.replace(re, (full, inner) => {
+      const tok = inner.trim().split(/\s/)[0];
+      if (tok === todayStr) {
+        hasHighlight = true;
+        return '<mark class="qb-date-today">[' + inner + ']</mark>';
+      }
+      return '[' + inner + ']';
+    });
+    return hasHighlight ? result : null;
+  }
+  // ── END CASE NOTES DATE UTILITIES ─────────────────────────────────────────
+
   function renderRecords(root, payload, options) {
     const host = root.querySelector('#qbDataBody');
     const meta = root.querySelector('#qbDataMeta');
@@ -576,61 +632,8 @@
     const visibleRows = rows.slice((activePage - 1) * pageSize, activePage * pageSize);
     meta.innerHTML = `${rows.length} record${rows.length === 1 ? '' : 's'} loaded${rows.length > pageSize ? ` • Page ${activePage}/${totalPages}` : ''}`;
 
-    // ── CASE NOTES DATE UTILITIES ─────────────────────────────────────────────
-    // Case Notes format: "-- [MAR-20-26 2:13 PM Mace Ryan Reyes] ---------- ..."
-    // Extracts most recent date for sorting and highlights today's Manila date.
-    const _MONTH_MAP_CN = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
-
-    function _parseCNDate(m) {
-      const mon = m[1].toUpperCase(), dd = parseInt(m[2],10), yy = parseInt(m[3],10);
-      const hh  = parseInt(m[4],10),   mi = parseInt(m[5],10), ap = (m[6]||'').toUpperCase();
-      if (!(mon in _MONTH_MAP_CN)) return null;
-      const year = yy < 50 ? 2000+yy : 1900+yy;
-      let h = hh;
-      if (ap==='PM' && h<12) h+=12;
-      if (ap==='AM' && h===12) h=0;
-      const d = new Date(year, _MONTH_MAP_CN[mon], dd, h, mi, 0, 0);
-      return isNaN(d.getTime()) ? null : d;
-    }
-
-    // Returns the most recent timestamp found in Case Notes text (0 = none found)
-    function _caseNotesSortKey(text) {
-      if (!text) return 0;
-      const re = /\[([A-Z]{3})-(\d{1,2})-(\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/gi;
-      let best = 0, m;
-      while ((m = re.exec(text)) !== null) {
-        const d = _parseCNDate(m);
-        if (d && d.getTime() > best) best = d.getTime();
-      }
-      return best;
-    }
-
-    // Today's date in Manila as "MAR-21-26" format
-    function _getManilaToday() {
-      try {
-        const parts = {};
-        new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Manila',year:'2-digit',month:'short',day:'2-digit'})
-          .formatToParts(new Date()).forEach(p => { parts[p.type] = p.value; });
-        return parts.month.toUpperCase().slice(0,3) + '-' + parts.day.replace(/^0/,'') + '-' + parts.year;
-      } catch(_) { return ''; }
-    }
-
-    // Returns highlighted HTML string or null if no today-dates found
-    function _highlightTodayInNotes(rawText, todayStr) {
-      if (!todayStr || !rawText) return null;
-      const escapedSafe = rawText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      const re = /\[([A-Z]{3}-\d{1,2}-\d{2}\s[^\]]*)\]/g;
-      let hasHighlight = false;
-      const result = escapedSafe.replace(re, (full, inner) => {
-        const tok = inner.trim().split(/\s/)[0];
-        if (tok === todayStr) { hasHighlight = true; return '<mark class="qb-date-today">[' + inner + ']</mark>'; }
-        return '[' + inner + ']';
-      });
-      return hasHighlight ? result : null;
-    }
-
-    const _CN_TODAY = _getManilaToday(); // compute once per render
-    // ── END CASE NOTES DATE UTILITIES ─────────────────────────────────────────
+    // Compute Manila today once per renderRecords call (used for cell highlighting)
+    const _CN_TODAY = _getManilaToday();
 
     // ENHANCEMENT 1: Days-only duration — never show hours
 
