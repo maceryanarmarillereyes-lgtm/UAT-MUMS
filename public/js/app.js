@@ -3903,6 +3903,10 @@ ${idx < toShow.length - 1 ? '<div class="mnp-divider"></div>' : ''}`;
       // Retry after app boot (bell may not exist yet at this point)
       setTimeout(_bindBell, 800);
     }
+    // Also bind release notes button at same time
+    setTimeout(function() {
+      if (window.__mumsBindReleaseNotes) window.__mumsBindReleaseNotes();
+    }, 900);
   })();
   // ══════════════════════════════════════════════════════════════════════════
   // END NOTIFICATION SYSTEM
@@ -4014,27 +4018,38 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
       _showNote(noteId);
     };
 
-    async function _openViewer() {
-      if (window.UI && typeof UI.openModal === 'function') {
-        UI.openModal('releaseNotesModal');
-      } else {
-        const m = document.getElementById('releaseNotesModal');
-        if (m) { m.style.display = 'flex'; m.classList.add('open'); }
-      }
-      // Load notes
-      const sb = document.getElementById('rnSidebar');
-      if (sb) sb.innerHTML = '<div class="rn-sidebar-loading">Loading…</div>';
-      _notesList = await _loadNotes();
-      _renderSidebar(_notesList, _activeNoteId);
-      // Auto-open newest
-      if (_notesList.length && !_activeNoteId) {
-        _activeNoteId = _notesList[0].id;
+    function _openViewer() {
+      // Direct DOM — bypasses UI.openModal to avoid aria-hidden/class dependency
+      var m = document.getElementById('releaseNotesModal');
+      if (!m) return;
+      m.style.cssText = 'display:flex!important;position:fixed!important;inset:0!important;' +
+        'z-index:2147483100!important;align-items:center!important;justify-content:center!important;' +
+        'background:rgba(6,12,24,.88)!important;padding:16px!important;box-sizing:border-box!important;';
+      m.classList.add('open');
+      try { document.body.classList.add('modal-open'); } catch(_) {}
+      // Reload notes each open
+      var sb = document.getElementById('rnSidebar');
+      if (sb) sb.innerHTML = '<div class="rn-sidebar-loading">Loading\u2026</div>';
+      _loadNotes().then(function(notes) {
+        _notesList = notes;
         _renderSidebar(_notesList, _activeNoteId);
-        _showNote(_activeNoteId);
-      }
-      // Clear "new" dot
-      const dot = document.getElementById('rnNewDot');
+        if (_notesList.length && !_activeNoteId) {
+          _activeNoteId = _notesList[0].id;
+          _renderSidebar(_notesList, _activeNoteId);
+          _showNote(_activeNoteId);
+        }
+      });
+      // Clear new dot
+      var dot = document.getElementById('rnNewDot');
       if (dot) dot.style.display = 'none';
+    }
+
+    function _closeViewer() {
+      var m = document.getElementById('releaseNotesModal');
+      if (!m) return;
+      m.removeAttribute('style');
+      m.classList.remove('open');
+      try { if (!document.querySelector('.modal.open')) document.body.classList.remove('modal-open'); } catch(_) {}
     }
 
     // ── Check for new notes on load ────────────────────────────────────
@@ -4047,22 +4062,26 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
 
     // ── Bind bell button ───────────────────────────────────────────────
     function _bindBtn() {
-      const btn = document.getElementById('releaseNotesBtn');
+      var btn = document.getElementById('releaseNotesBtn');
       if (!btn || btn.__rnBound) return;
       btn.__rnBound = true;
       btn.addEventListener('click', _openViewer);
-      // Wire close
-      document.querySelectorAll('[data-close="releaseNotesModal"]').forEach(b => {
-        b.onclick = () => { if(window.UI&&UI.closeModal) UI.closeModal('releaseNotesModal'); else { const m=document.getElementById('releaseNotesModal'); if(m){m.style.display='none';m.classList.remove('open');} } };
+      // Wire all close buttons — use direct DOM close
+      document.querySelectorAll('[data-close="releaseNotesModal"]').forEach(function(b) {
+        b.onclick = _closeViewer;
       });
       setTimeout(_checkNew, 2000);
     }
 
+    // Expose globally so boot() can call it after hydration
+    window.__mumsBindReleaseNotes = _bindBtn;
+
+    // Try to bind now (if DOM already ready) and after delays
+    _bindBtn();
+    setTimeout(_bindBtn, 500);
+    setTimeout(_bindBtn, 1500);
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', _bindBtn);
-    } else {
-      _bindBtn();
-      setTimeout(_bindBtn, 800);
     }
 
     // ── ADMIN PANEL RENDERER ───────────────────────────────────────────
