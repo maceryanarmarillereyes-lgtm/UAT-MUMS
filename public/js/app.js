@@ -3918,6 +3918,7 @@ ${idx < toShow.length - 1 ? '<div class="mnp-divider"></div>' : ''}`;
   // Storage: mums_documents key='mums_release_notes' in Supabase.
   // ══════════════════════════════════════════════════════════════════════════
   (function _initReleaseNotes() {
+    console.info('[ReleaseNotes] System initializing v3.9.47');
 
     function _tok() {
       try { return (window.CloudAuth && CloudAuth.accessToken) ? CloudAuth.accessToken() : ''; } catch(_) { return ''; }
@@ -4078,6 +4079,7 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
     // Expose open/close globally — onclick attribute on button uses these directly
     window.__mumsOpenReleaseNotes  = _openViewer;
     window.__mumsCloseReleaseNotes = _closeViewer;
+    console.info('[ReleaseNotes] window.__mumsOpenReleaseNotes ready ✓');
 
     // Try to bind now (if DOM already ready) and after delays
     _bindBtn();
