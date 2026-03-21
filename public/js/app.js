@@ -4020,15 +4020,23 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
     };
 
     function _openViewer() {
-      // Direct DOM — bypasses UI.openModal to avoid aria-hidden/class dependency
       var m = document.getElementById('releaseNotesModal');
-      if (!m) return;
+      if (!m) { console.error('[ReleaseNotes] Modal element not found'); return; }
+
+      // CRITICAL: Re-append to body to escape .app overflow:hidden stacking context
+      // Same pattern used by qbCaseDetailModal which also lives inside .app
+      if (m.parentElement !== document.body) {
+        document.body.appendChild(m);
+      }
+
       m.style.cssText = 'display:flex!important;position:fixed!important;inset:0!important;' +
         'z-index:2147483100!important;align-items:center!important;justify-content:center!important;' +
         'background:rgba(6,12,24,.88)!important;padding:16px!important;box-sizing:border-box!important;';
       m.classList.add('open');
       try { document.body.classList.add('modal-open'); } catch(_) {}
-      // Reload notes each open
+      console.info('[ReleaseNotes] Modal opened');
+
+      // Load notes
       var sb = document.getElementById('rnSidebar');
       if (sb) sb.innerHTML = '<div class="rn-sidebar-loading">Loading\u2026</div>';
       _loadNotes().then(function(notes) {
@@ -4040,7 +4048,6 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
           _showNote(_activeNoteId);
         }
       });
-      // Clear new dot
       var dot = document.getElementById('rnNewDot');
       if (dot) dot.style.display = 'none';
     }
