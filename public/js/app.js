@@ -3908,6 +3908,377 @@ ${idx < toShow.length - 1 ? '<div class="mnp-divider"></div>' : ''}`;
   // END NOTIFICATION SYSTEM
   // ══════════════════════════════════════════════════════════════════════════
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // RELEASE NOTES SYSTEM — v3.9.47
+  // Viewer: all users. Admin panel: Super Admin only (publish HTML files).
+  // Storage: mums_documents key='mums_release_notes' in Supabase.
+  // ══════════════════════════════════════════════════════════════════════════
+  (function _initReleaseNotes() {
+
+    function _tok() {
+      try { return (window.CloudAuth && CloudAuth.accessToken) ? CloudAuth.accessToken() : ''; } catch(_) { return ''; }
+    }
+    function _headers() {
+      const t = _tok();
+      const h = { 'Content-Type': 'application/json' };
+      if (t) h['Authorization'] = 'Bearer ' + t;
+      return h;
+    }
+    function _esc(s) {
+      return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function _fmtDate(iso) {
+      try {
+        return new Date(iso).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+      } catch(_) { return iso || '—'; }
+    }
+    function _tagClass(t) {
+      const map = { feature:'rn-tag-feature', fix:'rn-tag-fix', security:'rn-tag-security', breaking:'rn-tag-breaking', ui:'rn-tag-ui' };
+      return map[String(t).toLowerCase()] || 'rn-tag-feature';
+    }
+
+    // ── Load notes list ────────────────────────────────────────────────
+    async function _loadNotes() {
+      try {
+        const r = await fetch('/api/settings/release_notes', { headers: _headers() });
+        const d = await r.json().catch(() => ({}));
+        return d.ok ? (d.notes || []) : [];
+      } catch(_) { return []; }
+    }
+
+    // ── Load single note full content ──────────────────────────────────
+    async function _loadNoteContent(noteId) {
+      try {
+        const r = await fetch('/api/settings/release_notes?noteId=' + encodeURIComponent(noteId), { headers: _headers() });
+        const d = await r.json().catch(() => ({}));
+        return d.ok ? d.note : null;
+      } catch(_) { return null; }
+    }
+
+    // ── Render sidebar ─────────────────────────────────────────────────
+    function _renderSidebar(notes, activeId) {
+      const sb = document.getElementById('rnSidebar');
+      if (!sb) return;
+      if (!notes.length) {
+        sb.innerHTML = '<div class="rn-sidebar-loading">No release notes yet.</div>';
+        return;
+      }
+      sb.innerHTML = notes.map((n, i) => {
+        const tags = (n.tags || []).map(t => `<span class="rn-tag ${_tagClass(t)}">${_esc(t)}</span>`).join('');
+        const isNew = n.isNew ? '<span class="rn-new-badge">NEW</span>' : '';
+        return `
+<div class="rn-note-item${n.id === activeId ? ' active' : ''}" onclick="window.__rnSelectNote('${_esc(n.id)}')">
+  <div class="rn-note-version">v${_esc(n.version)} ${isNew}</div>
+  <div class="rn-note-title">${_esc(n.title)}</div>
+  <div class="rn-note-date">${_fmtDate(n.publishedAt)}</div>
+  ${tags ? '<div class="rn-note-tags">' + tags + '</div>' : ''}
+</div>
+${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
+      }).join('');
+    }
+
+    // ── Show note in iframe ────────────────────────────────────────────
+    var _cachedNoteContent = {};
+    async function _showNote(noteId) {
+      const iframe = document.getElementById('rnIframe');
+      const empty  = document.getElementById('rnContentEmpty');
+      if (!iframe || !empty) return;
+
+      iframe.style.display = 'none';
+      empty.style.display = 'flex';
+
+      // Load content (cache it)
+      let note = _cachedNoteContent[noteId];
+      if (!note) {
+        note = await _loadNoteContent(noteId);
+        if (note) _cachedNoteContent[noteId] = note;
+      }
+      if (!note || !note.htmlContent) return;
+
+      // Inject HTML into sandboxed iframe
+      empty.style.display = 'none';
+      iframe.style.display = 'block';
+      const blob = new Blob([note.htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      iframe.onload = () => { try { URL.revokeObjectURL(url); } catch(_) {} };
+      iframe.src = url;
+    }
+
+    // ── Main open handler ──────────────────────────────────────────────
+    var _notesList = [];
+    var _activeNoteId = null;
+
+    window.__rnSelectNote = function(noteId) {
+      _activeNoteId = noteId;
+      _renderSidebar(_notesList, noteId);
+      _showNote(noteId);
+    };
+
+    async function _openViewer() {
+      if (window.UI && typeof UI.openModal === 'function') {
+        UI.openModal('releaseNotesModal');
+      } else {
+        const m = document.getElementById('releaseNotesModal');
+        if (m) { m.style.display = 'flex'; m.classList.add('open'); }
+      }
+      // Load notes
+      const sb = document.getElementById('rnSidebar');
+      if (sb) sb.innerHTML = '<div class="rn-sidebar-loading">Loading…</div>';
+      _notesList = await _loadNotes();
+      _renderSidebar(_notesList, _activeNoteId);
+      // Auto-open newest
+      if (_notesList.length && !_activeNoteId) {
+        _activeNoteId = _notesList[0].id;
+        _renderSidebar(_notesList, _activeNoteId);
+        _showNote(_activeNoteId);
+      }
+      // Clear "new" dot
+      const dot = document.getElementById('rnNewDot');
+      if (dot) dot.style.display = 'none';
+    }
+
+    // ── Check for new notes on load ────────────────────────────────────
+    async function _checkNew() {
+      const notes = await _loadNotes();
+      const hasNew = notes.some(n => n.isNew);
+      const dot = document.getElementById('rnNewDot');
+      if (dot) dot.style.display = hasNew ? '' : 'none';
+    }
+
+    // ── Bind bell button ───────────────────────────────────────────────
+    function _bindBtn() {
+      const btn = document.getElementById('releaseNotesBtn');
+      if (!btn || btn.__rnBound) return;
+      btn.__rnBound = true;
+      btn.addEventListener('click', _openViewer);
+      // Wire close
+      document.querySelectorAll('[data-close="releaseNotesModal"]').forEach(b => {
+        b.onclick = () => { if(window.UI&&UI.closeModal) UI.closeModal('releaseNotesModal'); else { const m=document.getElementById('releaseNotesModal'); if(m){m.style.display='none';m.classList.remove('open');} } };
+      });
+      setTimeout(_checkNew, 2000);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', _bindBtn);
+    } else {
+      _bindBtn();
+      setTimeout(_bindBtn, 800);
+    }
+
+    // ── ADMIN PANEL RENDERER ───────────────────────────────────────────
+    window.__mumsRenderReleaseNotes = async function() {
+      const body = document.getElementById('rnAdminPanelBody');
+      if (!body) return;
+
+      body.innerHTML = '<div style="text-align:center;padding:32px;color:var(--muted);font-size:12px">Loading…</div>';
+
+      const notes = await _loadNotes();
+
+      var _selectedTags = [];
+      var _htmlContent = '';
+      var _fileName = '';
+
+      function _refreshAdmin() {
+        body.innerHTML = `
+<div class="rn-admin-wrap">
+  <!-- Compose new note -->
+  <div class="rn-compose-card">
+    <div class="rn-compose-head">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Publish New Release Note
+    </div>
+    <div class="rn-compose-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="rn-field">
+          <div class="rn-label">Version</div>
+          <input class="rn-input" id="rnVersion" placeholder="e.g. 3.9.47" />
+        </div>
+        <div class="rn-field">
+          <div class="rn-label">Title</div>
+          <input class="rn-input" id="rnTitle" placeholder="e.g. Case Notes Sort + Notification Bell" />
+        </div>
+      </div>
+      <div class="rn-field">
+        <div class="rn-label">Summary (shown in list)</div>
+        <textarea class="rn-textarea" id="rnSummary" placeholder="Brief description of what's new in this build…" rows="2"></textarea>
+      </div>
+      <div class="rn-field">
+        <div class="rn-label">Tags</div>
+        <div class="rn-tags-row">
+          ${['Feature','Fix','Security','UI','Breaking'].map(t =>
+            `<button type="button" class="rn-tag-toggle" onclick="window.__rnToggleTag('${t}',this)">${t}</button>`
+          ).join('')}
+        </div>
+      </div>
+      <div class="rn-field">
+        <div class="rn-label">HTML Content File (.html)</div>
+        <div class="rn-upload-zone" id="rnDropZone">
+          <input type="file" id="rnFileInput" accept=".html,text/html" onchange="window.__rnFileLoaded(this)" />
+          <div class="rn-upload-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(34,211,238,.5)" stroke-width="1.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <div class="rn-upload-text">Drop your HTML mockup here or click to browse</div>
+          <div class="rn-upload-hint">Accepts .html files — rich formatting, images, custom CSS supported</div>
+        </div>
+        <div id="rnFileStatus" style="display:none" class="rn-file-loaded">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span class="rn-file-name" id="rnFileName"></span>
+          <button class="rn-file-clear" onclick="window.__rnClearFile()" title="Remove file">✕</button>
+        </div>
+      </div>
+      <div id="rnPreviewWrap" class="rn-preview-wrap" style="display:none">
+        <div class="rn-preview-head">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Preview
+        </div>
+        <iframe id="rnPreviewIframe" class="rn-preview-iframe" sandbox="allow-same-origin allow-scripts" title="Preview"></iframe>
+      </div>
+      <div style="display:flex;justify-content:flex-end;padding-top:4px">
+        <button class="rn-publish-btn" id="rnPublishBtn" onclick="window.__rnPublish()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+          Publish Release Note
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Published list -->
+  <div class="rn-compose-card">
+    <div class="rn-compose-head">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Published Notes (${notes.length})
+    </div>
+    <div class="rn-compose-body">
+      ${notes.length ? '<div class="rn-published-list">' + notes.map(n => `
+<div class="rn-published-item">
+  <div class="rn-pi-ver">v${_esc(n.version)}</div>
+  <div class="rn-pi-title">${_esc(n.title)}</div>
+  <div class="rn-pi-date">${_fmtDate(n.publishedAt)}</div>
+  <button class="rn-pi-del" onclick="window.__rnDelete('${_esc(n.id)}','${_esc(n.title)}')" title="Delete">🗑</button>
+</div>`).join('') + '</div>'
+  : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:16px">No release notes published yet.</div>'}
+    </div>
+  </div>
+</div>`;
+
+        // Restore state
+        _selectedTags.forEach(t => {
+          body.querySelectorAll('.rn-tag-toggle').forEach(btn => {
+            if (btn.textContent === t) btn.classList.add('selected');
+          });
+        });
+        if (_fileName) {
+          document.getElementById('rnDropZone').style.display = 'none';
+          const fs = document.getElementById('rnFileStatus');
+          if (fs) fs.style.display = '';
+          const fn = document.getElementById('rnFileName');
+          if (fn) fn.textContent = _fileName;
+          const pw = document.getElementById('rnPreviewWrap');
+          if (pw && _htmlContent) {
+            pw.style.display = '';
+            const iframe = document.getElementById('rnPreviewIframe');
+            if (iframe) {
+              const blob = new Blob([_htmlContent], { type:'text/html' });
+              iframe.src = URL.createObjectURL(blob);
+            }
+          }
+        }
+      }
+
+      // Global helpers for admin panel interactions
+      window.__rnToggleTag = function(tag, btn) {
+        const idx = _selectedTags.indexOf(tag);
+        if (idx >= 0) { _selectedTags.splice(idx, 1); btn.classList.remove('selected'); }
+        else { _selectedTags.push(tag); btn.classList.add('selected'); }
+      };
+
+      window.__rnFileLoaded = function(input) {
+        const file = input.files[0];
+        if (!file) return;
+        _fileName = file.name;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          _htmlContent = e.target.result;
+          // Show file status
+          document.getElementById('rnDropZone').style.display = 'none';
+          const fs = document.getElementById('rnFileStatus');
+          if (fs) { fs.style.display = ''; document.getElementById('rnFileName').textContent = _fileName; }
+          // Show preview
+          const pw = document.getElementById('rnPreviewWrap');
+          if (pw) {
+            pw.style.display = '';
+            const iframe = document.getElementById('rnPreviewIframe');
+            if (iframe) {
+              const blob = new Blob([_htmlContent], { type:'text/html' });
+              const url = URL.createObjectURL(blob);
+              iframe.onload = () => { try { URL.revokeObjectURL(url); } catch(_) {} };
+              iframe.src = url;
+            }
+          }
+        };
+        reader.readAsText(file);
+      };
+
+      window.__rnClearFile = function() {
+        _htmlContent = ''; _fileName = '';
+        document.getElementById('rnDropZone').style.display = '';
+        const fs = document.getElementById('rnFileStatus'); if (fs) fs.style.display = 'none';
+        const pw = document.getElementById('rnPreviewWrap'); if (pw) pw.style.display = 'none';
+        const fi = document.getElementById('rnFileInput'); if (fi) fi.value = '';
+      };
+
+      window.__rnPublish = async function() {
+        const version = (document.getElementById('rnVersion') || {}).value || '';
+        const title   = (document.getElementById('rnTitle')   || {}).value || '';
+        const summary = (document.getElementById('rnSummary') || {}).value || '';
+        if (!version.trim() || !title.trim() || !_htmlContent) {
+          alert('Please fill in version, title and attach an HTML file.');
+          return;
+        }
+        const btn = document.getElementById('rnPublishBtn');
+        if (btn) { btn.disabled = true; btn.textContent = 'Publishing…'; }
+        try {
+          const r = await fetch('/api/settings/release_notes', {
+            method: 'POST', headers: _headers(),
+            body: JSON.stringify({ version: version.trim(), title: title.trim(), summary: summary.trim(), tags: _selectedTags, htmlContent: _htmlContent })
+          });
+          const d = await r.json().catch(() => ({}));
+          if (d.ok) {
+            _htmlContent = ''; _fileName = ''; _selectedTags = [];
+            if (window.UI && UI.toast) UI.toast('Release note published successfully! 🚀', 'success');
+            window.__mumsRenderReleaseNotes();
+          } else {
+            if (window.UI && UI.toast) UI.toast('Failed: ' + (d.message || 'unknown error'), 'error');
+          }
+        } catch(e) {
+          if (window.UI && UI.toast) UI.toast('Network error publishing.', 'error');
+        }
+        if (btn) { btn.disabled = false; }
+      };
+
+      window.__rnDelete = async function(id, title) {
+        if (!confirm('Delete release note "' + title + '"?')) return;
+        try {
+          const r = await fetch('/api/settings/release_notes', {
+            method: 'POST', headers: _headers(),
+            body: JSON.stringify({ action:'delete', id })
+          });
+          const d = await r.json().catch(() => ({}));
+          if (d.ok) {
+            if (window.UI && UI.toast) UI.toast('Release note deleted.', 'success');
+            window.__mumsRenderReleaseNotes();
+          }
+        } catch(e) {}
+      };
+
+      _refreshAdmin();
+    };
+
+  })();
+  // ══════════════════════════════════════════════════════════════════════════
+  // END RELEASE NOTES SYSTEM
+  // ══════════════════════════════════════════════════════════════════════════
+
   function bindGlobalSearch(user){
     const topInput = document.getElementById('globalSearchInput');
     const topBtn = document.getElementById('globalSearchBtn');
@@ -4410,6 +4781,9 @@ ${idx < toShow.length - 1 ? '<div class="mnp-divider"></div>' : ''}`;
             },
             pinsecurity: function(){
               try{ if(window.__mumsRenderPinSettings) window.__mumsRenderPinSettings(); }catch(_){}
+            },
+            releasenotes: function(){
+              try{ if(window.__mumsRenderReleaseNotes) window.__mumsRenderReleaseNotes(); }catch(_){}
             },
             loginmode: function(){
               // Load current login mode status from server

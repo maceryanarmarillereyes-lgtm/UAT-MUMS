@@ -105,6 +105,9 @@ async function getRoutes(env) {
     'quickbase_tabs': unwrapCjs(await import('../../server/routes/quickbase_tabs.js')),
     'quickbase_tabs/upsert': unwrapCjs(await import('../../server/routes/quickbase_tabs.js')),
 
+    // Release Notes
+    'settings/release_notes': unwrapCjs(await import('../../server/routes/settings/release_notes.js')),
+
     // Security PIN routes
     'pin/setup':   unwrapCjs(await import('../../server/routes/pin.js')),
     'pin/verify':  unwrapCjs(await import('../../server/routes/pin.js')),
