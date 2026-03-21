@@ -4075,6 +4075,9 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
 
     // Expose globally so boot() can call it after hydration
     window.__mumsBindReleaseNotes = _bindBtn;
+    // Expose open/close globally — onclick attribute on button uses these directly
+    window.__mumsOpenReleaseNotes  = _openViewer;
+    window.__mumsCloseReleaseNotes = _closeViewer;
 
     // Try to bind now (if DOM already ready) and after delays
     _bindBtn();
