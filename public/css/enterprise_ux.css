@@ -7173,7 +7173,16 @@ mark.qb-date-today {
   min-width: 200px;
   max-width: 260px;
 }
-/* Facebook-style search — fully override all base .top-global-search styles */
+
+/*
+ * PERMANENT SPECIFICITY FIX:
+ * Theme rules use body[data-theme="X"] .top-global-search with !important = specificity (0,1,1,1).
+ * Using body[data-theme] .tb-search-left.top-global-search = (0,1,2,1) — beats ALL theme rules.
+ * This covers every active theme without needing to enumerate each one.
+ * Fallback (no theme set): .tb-search-left.top-global-search with !important.
+ */
+
+/* Fallback — no theme attribute set */
 .tb-search-left.top-global-search {
   border-radius: 20px !important;
   border: none !important;
@@ -7184,32 +7193,60 @@ mark.qb-date-today {
   box-shadow: none !important;
   outline: none !important;
   transition: background .15s !important;
-  /* Neutralize any inherited box shadows or borders from themes */
-  --control-bg: transparent;
-  --control-border: transparent;
 }
 .tb-search-left.top-global-search:hover,
 .tb-search-left.top-global-search:focus-within {
   background: rgba(255,255,255,.13) !important;
   border: none !important;
   box-shadow: none !important;
+  border-color: transparent !important;
 }
-.tb-search-icon {
-  color: var(--muted, #475569);
-  opacity: .7;
-  flex-shrink: 0;
+
+/* BEATS ALL THEME-SPECIFIC !important rules — specificity (0,1,2,1) */
+body[data-theme] .tb-search-left.top-global-search {
+  border-radius: 20px !important;
+  border: none !important;
+  border-color: transparent !important;
+  background: rgba(255,255,255,.08) !important;
+  padding: 0 14px !important;
+  height: 36px !important;
+  gap: 8px !important;
+  box-shadow: none !important;
+  outline: none !important;
+  transition: background .15s !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
+body[data-theme] .tb-search-left.top-global-search:hover,
+body[data-theme] .tb-search-left.top-global-search:focus-within {
+  background: rgba(255,255,255,.13) !important;
+  border: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+/* Input inside search — reset all theme overrides */
+body[data-theme] .tb-search-left #globalSearchInput,
 .tb-search-left #globalSearchInput {
   font-size: 13px !important;
   font-weight: 400 !important;
   color: var(--text, #cbd5e1) !important;
   width: 160px !important;
   background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
+body[data-theme] .tb-search-left #globalSearchInput::placeholder,
 .tb-search-left #globalSearchInput::placeholder {
   color: var(--muted, #475569) !important;
   font-weight: 400 !important;
 }
+/* Search icon */
+.tb-search-icon {
+  color: var(--muted, #475569);
+  opacity: .7;
+  flex-shrink: 0;
+}
+
 /* Override topbar grid so search sits left of center */
 .topbar {
   grid-template-columns: auto auto 1fr auto !important;
