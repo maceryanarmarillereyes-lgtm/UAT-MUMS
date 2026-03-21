@@ -4023,8 +4023,7 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
       var m = document.getElementById('releaseNotesModal');
       if (!m) { console.error('[ReleaseNotes] Modal element not found'); return; }
 
-      // CRITICAL: Re-append to body to escape .app overflow:hidden stacking context
-      // Same pattern used by qbCaseDetailModal which also lives inside .app
+      // Re-append to body to escape .app overflow:hidden stacking context
       if (m.parentElement !== document.body) {
         document.body.appendChild(m);
       }
@@ -4035,6 +4034,15 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
       m.classList.add('open');
       try { document.body.classList.add('modal-open'); } catch(_) {}
       console.info('[ReleaseNotes] Modal opened');
+
+      // Show Publish button for Super Admin
+      try {
+        var user = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
+        var role = String((user && user.role) || '').toUpperCase();
+        var isSA = role === 'SUPER_ADMIN';
+        var publishBtn = document.getElementById('rnPublishToggleBtn');
+        if (publishBtn) publishBtn.style.display = isSA ? 'inline-flex' : 'none';
+      } catch(_) {}
 
       // Load notes
       var sb = document.getElementById('rnSidebar');
@@ -4058,7 +4066,94 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
       m.removeAttribute('style');
       m.classList.remove('open');
       try { if (!document.querySelector('.modal.open')) document.body.classList.remove('modal-open'); } catch(_) {}
+      // Reset publish panel
+      var pp = document.getElementById('rnPublishPanel');
+      if (pp) pp.style.display = 'none';
     }
+
+    // ── Publish panel toggle (SA only) ────────────────────────────────
+    var _publishPanelOpen = false;
+    window.__rnTogglePublishPanel = function() {
+      var pp = document.getElementById('rnPublishPanel');
+      if (!pp) return;
+      _publishPanelOpen = !_publishPanelOpen;
+      pp.style.display = _publishPanelOpen ? '' : 'none';
+      var btn = document.getElementById('rnPublishToggleBtn');
+      if (btn) {
+        btn.style.background = _publishPanelOpen ? 'rgba(34,211,238,.22)' : 'rgba(34,211,238,.12)';
+        btn.innerHTML = _publishPanelOpen
+          ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg> Close'
+          : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Publish Note';
+      }
+    };
+
+    // ── File loaded handler ───────────────────────────────────────────
+    var _rnHtmlContent = '';
+    var _rnSelectedTags = [];
+    window.__rnFileLoaded = function(input) {
+      var file = input && input.files && input.files[0];
+      if (!file) return;
+      var lbl = document.getElementById('rnFileChosen');
+      if (lbl) lbl.textContent = file.name;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        _rnHtmlContent = e.target.result;
+        var pw = document.getElementById('rnPreviewWrap');
+        var pf = document.getElementById('rnPreviewIframe');
+        if (pw && pf) {
+          pw.style.display = '';
+          var blob = new Blob([_rnHtmlContent], { type: 'text/html' });
+          var url = URL.createObjectURL(blob);
+          pf.onload = function() { try { URL.revokeObjectURL(url); } catch(_) {} };
+          pf.src = url;
+        }
+      };
+      reader.readAsText(file);
+    };
+    window.__rnToggleTag = function(tag, btn) {
+      var idx = _rnSelectedTags.indexOf(tag);
+      if (idx >= 0) { _rnSelectedTags.splice(idx, 1); btn.classList.remove('selected'); }
+      else { _rnSelectedTags.push(tag); btn.classList.add('selected'); }
+    };
+    window.__rnPublish = async function() {
+      var version = (document.getElementById('rnVersion') || {}).value || '';
+      var title   = (document.getElementById('rnTitle')   || {}).value || '';
+      if (!version.trim() || !title.trim() || !_rnHtmlContent) {
+        if (window.UI && UI.toast) UI.toast('Fill in version, title and choose an HTML file.', 'error');
+        else alert('Fill in version, title and choose an HTML file.');
+        return;
+      }
+      var btn = document.getElementById('rnPublishBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Publishing\u2026'; }
+      try {
+        var r = await fetch('/api/settings/release_notes', {
+          method: 'POST', headers: _headers(),
+          body: JSON.stringify({ version: version.trim(), title: title.trim(), tags: _rnSelectedTags, htmlContent: _rnHtmlContent })
+        });
+        var d = await r.json().catch(function() { return {}; });
+        if (d.ok) {
+          _rnHtmlContent = ''; _rnSelectedTags = [];
+          if (document.getElementById('rnVersion')) document.getElementById('rnVersion').value = '';
+          if (document.getElementById('rnTitle'))   document.getElementById('rnTitle').value = '';
+          if (document.getElementById('rnFileChosen')) document.getElementById('rnFileChosen').textContent = '';
+          if (document.getElementById('rnPreviewWrap')) document.getElementById('rnPreviewWrap').style.display = 'none';
+          if (document.getElementById('rnFileInput')) document.getElementById('rnFileInput').value = '';
+          if (window.UI && UI.toast) UI.toast('Release note published! \uD83D\uDE80', 'success');
+          // Close publish panel and reload sidebar
+          window.__rnTogglePublishPanel();
+          _activeNoteId = null;
+          _loadNotes().then(function(notes) {
+            _notesList = notes;
+            _renderSidebar(_notesList, null);
+          });
+        } else {
+          if (window.UI && UI.toast) UI.toast('Error: ' + (d.message || 'unknown'), 'error');
+        }
+      } catch(e) {
+        if (window.UI && UI.toast) UI.toast('Network error.', 'error');
+      }
+      if (btn) { btn.disabled = false; btn.textContent = 'Publish \u2192'; }
+    };
 
     // ── Check for new notes on load ────────────────────────────────────
     async function _checkNew() {

@@ -1357,6 +1357,8 @@
   <!-- ── RELEASE NOTES VIEWER MODAL ─────────────────────────────── -->
   <div class="modal" id="releaseNotesModal" style="z-index:2147483000">
     <div class="panel rn-modal-panel">
+
+      <!-- Header -->
       <div class="rn-modal-head">
         <div class="rn-modal-head-left">
           <div class="rn-modal-icon">
@@ -1367,14 +1369,70 @@
             <div class="rn-modal-sub">MUMS Build Updates</div>
           </div>
         </div>
-        <button class="btn ghost" onclick="if(window.__mumsCloseReleaseNotes)window.__mumsCloseReleaseNotes();" style="align-self:flex-start">✕</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <!-- Publish button — only visible to SA, toggled by JS -->
+          <button class="rn-publish-toggle-btn" id="rnPublishToggleBtn" onclick="window.__rnTogglePublishPanel()" style="display:none;height:34px;padding:0 14px;border-radius:9px;background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.25);color:#22d3ee;font-size:12px;font-weight:700;cursor:pointer;display:none;align-items:center;gap:6px;font-family:inherit" title="Publish new release note">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Publish Note
+          </button>
+          <button class="btn ghost" onclick="if(window.__mumsCloseReleaseNotes)window.__mumsCloseReleaseNotes();" style="font-size:16px;line-height:1;padding:6px 10px">✕</button>
+        </div>
       </div>
+
+      <!-- Publish Panel (SA only, hidden by default) -->
+      <div id="rnPublishPanel" style="display:none;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(34,211,238,.025)">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <div class="rn-label" style="margin-bottom:4px">Version</div>
+            <input class="rn-input" id="rnVersion" placeholder="e.g. 3.9.47" style="width:100%"/>
+          </div>
+          <div style="grid-column:span 2">
+            <div class="rn-label" style="margin-bottom:4px">Title</div>
+            <input class="rn-input" id="rnTitle" placeholder="e.g. Notification Bell + Case Notes Sort" style="width:100%"/>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:flex-start">
+          <div>
+            <div class="rn-label" style="margin-bottom:4px">Tags</div>
+            <div class="rn-tags-row" id="rnTagsRow">
+              <button type="button" class="rn-tag-toggle" onclick="window.__rnToggleTag('Feature',this)">Feature</button>
+              <button type="button" class="rn-tag-toggle" onclick="window.__rnToggleTag('Fix',this)">Fix</button>
+              <button type="button" class="rn-tag-toggle" onclick="window.__rnToggleTag('Security',this)">Security</button>
+              <button type="button" class="rn-tag-toggle" onclick="window.__rnToggleTag('UI',this)">UI</button>
+              <button type="button" class="rn-tag-toggle" onclick="window.__rnToggleTag('Breaking',this)">Breaking</button>
+            </div>
+          </div>
+          <div>
+            <!-- File upload -->
+            <div class="rn-label" style="margin-bottom:4px">HTML File</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <label id="rnUploadLabel" style="height:34px;padding:0 14px;border-radius:9px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;white-space:nowrap">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Choose HTML File
+                <input type="file" id="rnFileInput" accept=".html,text/html" style="display:none" onchange="window.__rnFileLoaded(this)"/>
+              </label>
+              <span id="rnFileChosen" style="font-size:11px;color:var(--muted);font-family:monospace;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+              <button id="rnPublishBtn" onclick="window.__rnPublish()" style="height:34px;padding:0 16px;border-radius:9px;background:linear-gradient(135deg,rgba(34,211,238,.8),rgba(34,211,238,.55));border:none;color:#061018;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit">
+                Publish →
+              </button>
+            </div>
+          </div>
+        </div>
+        <!-- Preview -->
+        <div id="rnPreviewWrap" style="display:none;margin-top:10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden">
+          <div style="padding:6px 12px;font-size:10px;font-family:monospace;color:var(--muted);border-bottom:1px solid rgba(255,255,255,.06);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:6px">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            Preview
+          </div>
+          <iframe id="rnPreviewIframe" style="width:100%;height:220px;border:none;display:block;background:#fff" sandbox="allow-same-origin allow-scripts" title="Preview"></iframe>
+        </div>
+      </div>
+
+      <!-- Body: sidebar + content -->
       <div class="rn-modal-body">
-        <!-- Left: note list -->
         <div class="rn-sidebar" id="rnSidebar">
           <div class="rn-sidebar-loading">Loading…</div>
         </div>
-        <!-- Right: note content -->
         <div class="rn-content-area">
           <div class="rn-content-empty" id="rnContentEmpty">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -1383,6 +1441,7 @@
           <iframe id="rnIframe" class="rn-iframe" style="display:none" sandbox="allow-same-origin allow-scripts" title="Release Note Content"></iframe>
         </div>
       </div>
+
     </div>
   </div>
   <!-- ── END RELEASE NOTES MODAL ─────────────────────────────────── -->

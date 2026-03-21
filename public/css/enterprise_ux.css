@@ -7525,9 +7525,10 @@ body[data-theme] .tb-search-left #globalSearchInput::placeholder,
 
 /* ── VIEWER MODAL ─────────────────────────────────────────────────────── */
 .rn-modal-panel {
-  width: min(960px, 96vw) !important;
-  max-width: min(960px, 96vw) !important;
-  max-height: 88vh !important;
+  width: min(1000px, 96vw) !important;
+  max-width: min(1000px, 96vw) !important;
+  height: min(760px, 90vh) !important;
+  max-height: min(760px, 90vh) !important;
   display: flex;
   flex-direction: column;
   padding: 0 !important;
