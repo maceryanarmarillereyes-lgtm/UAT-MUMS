@@ -69,8 +69,7 @@
           <input id="globalSearchInput" type="text" placeholder="Search…" autocomplete="off" aria-label="Global search (Ctrl+K)" />
           <button class="btn ghost iconbtn" id="globalSearchBtn" type="button" title="Global search (Ctrl+K)" aria-label="Open global search"><span class="ico" data-ico="search" aria-hidden="true"></span></button>
         </div>
-        <button class="btn ghost iconbtn" id="releaseNotesBtn" type="button" title="Release Notes" aria-label="Release Notes"><span class="ico" data-ico="notes" aria-hidden="true"></span></button>
-        <button class="btn ghost iconbtn" id="dictionaryBtn" type="button" title="MUMS Dictionary" aria-label="MUMS Dictionary"><span class="ico" data-ico="book" aria-hidden="true"></span></button>
+
 <button class="btn ghost iconbtn" id="settingsBtn" type="button" title="Settings" aria-label="Settings"><span class="ico" data-ico="gear" aria-hidden="true"></span></button>
         <div id="realtimeSyncStatus" class="sync-status" title="Realtime Sync Status">
           <span class="dot" aria-hidden="true"></span>
@@ -95,13 +94,7 @@
 
     <aside class="right card pad" id="rightbar">
       <div id="right-sidebar-container">
-        <hr style="border: 0; border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 24px 0 16px 0; width: 100%; display: block;" />
-<button id="btn-controller-lab" onclick="window.open('/controller_lab.html', '_blank')" style="width: 100%; padding: 12px 16px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: #ffffff; cursor: pointer; text-align: center; font-weight: 600; font-size: 14px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: all 0.2s ease-in-out; display: flex; align-items: center; justify-content: center; gap: 10px; box-sizing: border-box;" onmouseover="this.style.background='rgba(255, 255, 255, 0.1)'; this.style.borderColor='rgba(255, 255, 255, 0.2)';" onmouseout="this.style.background='rgba(255, 255, 255, 0.05)'; this.style.borderColor='rgba(255, 255, 255, 0.1)';">
-  <!-- PERF-FIX-04: Replaced <i class="fas fa-gamepad"> (Font Awesome never loaded = broken icon)
-       with inline SVG equivalent. Zero extra HTTP requests. -->
-  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 6h10l1.5 7H5.5L7 6zM2 4h2l.5 2H2V4zm18 0h2v2h-2.5L20 4zM5 14h2v2H5v-2zm12 0h2v2h-2v-2zM9 9h2v2H9V9zm4 0h2v2h-2V9z"/></svg> Controller Lab
-</button>
-<div style="height: 8px;"></div>
+        
 <button id="btn-support-studio" onclick="window.open('/support_studio.html', '_blank')" style="width: 100%; padding: 12px 16px; background: rgba(0, 115, 234, 0.07); border: 1px solid rgba(0, 115, 234, 0.22); border-radius: 8px; color: #58a6ff; cursor: pointer; text-align: center; font-weight: 600; font-size: 14px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); transition: all 0.2s ease-in-out; display: flex; align-items: center; justify-content: center; gap: 10px; box-sizing: border-box;" onmouseover="this.style.background='rgba(0, 115, 234, 0.14)'; this.style.borderColor='rgba(0, 115, 234, 0.40)'; this.style.color='#79b8ff';" onmouseout="this.style.background='rgba(0, 115, 234, 0.07)'; this.style.borderColor='rgba(0, 115, 234, 0.22)'; this.style.color='#58a6ff';">
   <!-- PERF-FIX-04: Replaced <i class="fas fa-headset"> (Font Awesome never loaded = broken icon)
        with inline SVG equivalent. Zero extra HTTP requests. -->
@@ -1225,145 +1218,6 @@
       <div class="foot" style="display:flex;justify-content:flex-end;gap:10px">
         <button class="btn" type="button" id="cropCancel">Cancel</button>
         <button class="btn primary" type="button" id="cropSave">Use Photo</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal" id="releaseNotesModal">
-    <div class="panel" style="max-width:980px">
-      <div class="head">
-        <div>
-          <div class="announce-title">Release Notes</div>
-          <div class="small">All updates are appended per build. Older notes are retained.</div>
-        </div>
-        <button class="btn ghost" type="button" data-close="releaseNotesModal">✕</button>
-      </div>
-      <div class="body">
-        <div class="dict-top">
-          <div class="dict-search">
-            <label class="small">Search release notes</label>
-            <input class="input" id="rnSearch" placeholder="Type: aurora, theme, clock, members, settings, bug fix..." />
-          </div>
-          <div class="dict-ask">
-            <label class="small">Filter</label>
-            <select class="input" id="rnFilter">
-              <option value="all">All</option>
-              <option value="feature">Features</option>
-              <option value="fix">Fixes</option>
-              <option value="ui">UI/UX</option>
-              <option value="security">Security</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="small muted" id="rnMeta" style="margin-top:10px">—</div>
-        <div id="rnAdmin" style="display:none">
-          <div class="card pad" style="margin:14px 0">
-            <div class="row" style="justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
-              <div>
-                <div class="h3" style="margin:0 0 6px">Release notes management</div>
-                <div class="small muted">Super User/Admin can add, import/export, and delete notes. Notes persist across upgrades and factory reset.</div>
-              </div>
-              <div class="row" style="gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
-                <button class="btn" id="rnExportBtn" type="button" title="Export as JSON">Export</button>
-                <button class="btn danger" id="rnClearBtn" type="button" title="Delete all notes">Delete all</button>
-              </div>
-            </div>
-
-            <div class="h3" style="margin:14px 0 8px">Add a release note</div>
-            <div class="grid2">
-              <label class="small">Build / version
-                <input class="input" id="rnVer" placeholder="e.g. 20260120-aurora-fix16" />
-              </label>
-              <label class="small">Tags (comma-separated)
-                <input class="input" id="rnTags" placeholder="fix, ui, theme" />
-              </label>
-            </div>
-            <label class="small" style="margin-top:10px">Title
-              <input class="input" id="rnTitle" placeholder="Short summary" />
-            </label>
-
-            <div class="rn-editor" style="margin-top:10px">
-              <div class="rn-toolbar" id="rnToolbar" role="toolbar" aria-label="Release note editor toolbar">
-                <button class="btn ghost small" type="button" data-md="# {text}\n" title="Heading">H1</button>
-                <button class="btn ghost small" type="button" data-md="## {text}\n" title="Subheading">H2</button>
-                <button class="btn ghost small" type="button" data-md="**{text}**" title="Bold">Bold</button>
-                <button class="btn ghost small" type="button" data-md="*{text}*" title="Italic">Italic</button>
-                <button class="btn ghost small" type="button" data-md="`{text}`" title="Inline code">Code</button>
-                <button class="btn ghost small" type="button" data-md="- {text}\n" title="Bullet list">• List</button>
-                <button class="btn ghost small" type="button" data-md="1. {text}\n" title="Numbered list">1. List</button>
-                <button class="btn ghost small" type="button" data-md="\n```\n{text}\n```\n" title="Code block">```</button>
-              </div>
-              <div class="rn-editor-grid">
-                <label class="small" style="margin:0">Details (Markdown supported)
-                  <textarea class="input textarea" id="rnBody" rows="7" placeholder="Write details using Markdown.\n\nExample:\n- Fixed Aurora visibility in profile card\n- Rebuilt clock settings UI\n\nTip: Use the toolbar for formatting."></textarea>
-                </label>
-                <div>
-                  <div class="small" style="font-weight:900">Preview</div>
-                  <div class="rn-preview card" id="rnBodyPreview" style="margin-top:8px"></div>
-                </div>
-              </div>
-            </div>
-            <div class="row" style="justify-content:flex-end;gap:10px;margin-top:10px">
-              <button class="btn" id="rnAdd" type="button">Add</button>
-            </div>
-
-            <div class="h3" style="margin:18px 0 8px">Import release notes</div>
-            <div class="small muted">Upload JSON (.json) to merge/replace notes, or upload a text/markdown file to create a single note (first line becomes the title).</div>
-            <div class="row" style="gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:10px">
-              <label class="small" style="flex:1 1 360px">File
-                <input class="input" id="rnImportFile" type="file" accept=".json,.txt,.md" />
-              </label>
-              <label class="small" style="flex:0 0 200px">Mode
-                <select class="input" id="rnImportMode">
-                  <option value="merge">Merge (recommended)</option>
-                  <option value="replace">Replace all</option>
-                </select>
-              </label>
-              <button class="btn" id="rnImportBtn" type="button">Import</button>
-            </div>
-          </div>
-        </div>
-
-        <div id="rnList"></div>
-      </div>
-      <div class="foot" style="display:flex;justify-content:flex-end;gap:10px">
-        <button class="btn" type="button" data-close="releaseNotesModal">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal" id="dictionaryModal">
-    <div class="panel" style="max-width:980px">
-      <div class="head">
-        <div>
-          <div class="announce-title">MUMS Dictionary</div>
-          <div class="small">In-app guide that stays aligned with your current MUMS build.</div>
-        </div>
-        <button class="btn ghost" type="button" data-close="dictionaryModal">✕</button>
-      </div>
-      <div class="body">
-        <div class="dict-top">
-          <div class="dict-search">
-            <label class="small">Search features / guide</label>
-            <input class="input" id="dictSearch" placeholder="Type: rest day, auto schedule, leaves, send, acknowledgement..." />
-          </div>
-          <div class="dict-ask">
-            <label class="small">Ask a question</label>
-            <div class="row" style="gap:8px;align-items:center">
-              <input class="input" id="dictQuestion" placeholder="Ask anything about MUMS..." />
-              <button class="btn" id="dictAskBtn" type="button">Save</button>
-            </div>
-            <div class="small muted" id="dictAskHint" style="margin-top:6px">Saved questions appear to you as notes (local only).</div>
-          </div>
-        </div>
-
-        <div class="dict-meta" id="dictMeta"></div>
-        <div class="dict-content" id="dictContent"></div>
-      </div>
-      <div class="foot" style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div class="small muted" id="dictFooter">—</div>
-        <button class="btn" type="button" data-close="dictionaryModal">Close</button>
       </div>
     </div>
   </div>

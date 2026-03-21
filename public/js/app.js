@@ -4700,21 +4700,6 @@ async function boot(){
     try{ bindGlobalSearch(user); }catch(e){ console.error(e); }
 
 
-    const rnBtn = document.getElementById('releaseNotesBtn');
-    if(rnBtn){
-      rnBtn.onclick = ()=>{
-        try{ UI.bindReleaseNotesModal && UI.bindReleaseNotesModal(user); }catch(e){ console.error(e); }
-        UI.openModal('releaseNotesModal');
-      };
-    }
-
-    const dictBtn = document.getElementById('dictionaryBtn');
-    if(dictBtn){
-      dictBtn.onclick = ()=>{
-        try{ UI.bindDictionaryModal && UI.bindDictionaryModal(user); }catch(e){ console.error(e); }
-        UI.openModal('dictionaryModal');
-      };
-    }
 
     const settingsBtn = document.getElementById('settingsBtn');
     if(settingsBtn){
@@ -5646,7 +5631,7 @@ async function boot(){
     UI.els('[data-close="settingsModal"]').forEach(b=>b.onclick=()=>UI.closeModal('settingsModal'));
     UI.els('[data-close="systemCheckModal"]').forEach(b=>b.onclick=()=>UI.closeModal('systemCheckModal'));
     UI.els('[data-close="soundSettingsModal"]').forEach(b=>b.onclick=()=>UI.closeModal('soundSettingsModal'));
-    UI.els('[data-close="dictionaryModal"]').forEach(b=>b.onclick=()=>UI.closeModal('dictionaryModal'));
+
     UI.els('[data-close="profileModal"]').forEach(b=>b.onclick=()=>UI.closeModal('profileModal'));
     UI.els('[data-close="themeModal"]').forEach(b=>b.onclick=()=>UI.closeModal('themeModal'));
     UI.els('[data-close="linksModal"]').forEach(b=>b.onclick=()=>UI.closeModal('linksModal'));
