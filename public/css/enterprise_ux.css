@@ -7173,7 +7173,7 @@ mark.qb-date-today {
   min-width: 200px;
   max-width: 260px;
 }
-/* Facebook-style search overrides */
+/* Facebook-style search — fully override all base .top-global-search styles */
 .tb-search-left.top-global-search {
   border-radius: 20px !important;
   border: none !important;
@@ -7182,11 +7182,16 @@ mark.qb-date-today {
   height: 36px !important;
   gap: 8px !important;
   box-shadow: none !important;
+  outline: none !important;
   transition: background .15s !important;
+  /* Neutralize any inherited box shadows or borders from themes */
+  --control-bg: transparent;
+  --control-border: transparent;
 }
 .tb-search-left.top-global-search:hover,
 .tb-search-left.top-global-search:focus-within {
   background: rgba(255,255,255,.13) !important;
+  border: none !important;
   box-shadow: none !important;
 }
 .tb-search-icon {
@@ -7199,6 +7204,7 @@ mark.qb-date-today {
   font-weight: 400 !important;
   color: var(--text, #cbd5e1) !important;
   width: 160px !important;
+  background: transparent !important;
 }
 .tb-search-left #globalSearchInput::placeholder {
   color: var(--muted, #475569) !important;
