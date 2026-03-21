@@ -646,7 +646,39 @@
       return `${days} day${days === 1 ? '' : 's'}`;
     };
 
-    const headers = columns.map((c) => `<th>${esc(c.label || c.id || 'Field')}</th>`).join('');
+    // ── CASE NOTES AUTO-WIDTH: scan visible rows to fit [DATE TIME NAME] ──────
+    // Extracts the FULL content of the first [bracket] in each row's Case Notes field.
+    // Computes the pixel width needed so the name is never cut mid-word.
+    // Uses character-count × font-width-estimate (7.2px for 13px DM Sans) + cell padding.
+    const _cnColIdx = columns.findIndex(c =>
+      ['case notes', 'notes'].includes(String(c && c.label || '').trim().toLowerCase())
+    );
+    let _cnColWidth = 220; // default (matches existing CSS)
+    if (_cnColIdx >= 0) {
+      const _cnFid = String(columns[_cnColIdx].id);
+      let _maxBracketLen = 0;
+      visibleRows.forEach(r => {
+        const val = r && r.fields && r.fields[_cnFid] ? String(r.fields[_cnFid].value || '') : '';
+        // Find ALL bracket groups [MON-DD-YY TIME NAME] and track the longest
+        const re = /\[([^\]]{5,80})\]/g;
+        let m;
+        while ((m = re.exec(val)) !== null) {
+          if (m[1].length > _maxBracketLen) _maxBracketLen = m[1].length;
+        }
+      });
+      if (_maxBracketLen > 0) {
+        // 7.2px per char (DM Sans 13px) + 32px cell padding + 10px buffer
+        const _computed = Math.round(_maxBracketLen * 7.2 + 42);
+        // Clamp: never narrower than 200px, never wider than 500px
+        _cnColWidth = Math.min(500, Math.max(200, _computed));
+      }
+    }
+    // ── END AUTO-WIDTH COMPUTE ─────────────────────────────────────────────────
+
+    const headers = columns.map((c, _ci) => {
+      const _isNotesCol = _ci === _cnColIdx;
+      return `<th${_isNotesCol ? ' class="qb-cn-col"' : ''}>${esc(c.label || c.id || 'Field')}</th>`;
+    }).join('');
     const rowStartIndex = (activePage - 1) * pageSize;
 
     // ── SCROLL POSITION SAVE ─────────────────────────────────────────────────
@@ -759,10 +791,10 @@
           if (highlighted) {
             // Has today's date — render with highlight HTML
             // data-full stores plain text (for tooltip); inner HTML shows highlight
-            return `<td class="qb-col-clamped qb-col-hasnew"${tdStyle}><div class="qb-cell-clamp qb-cell-hasnew" data-full="${esc(rawStr)}"><span class="qb-cell-text qb-notes-html">${highlighted}</span></div></td>`;
+            return `<td class="qb-col-clamped qb-col-hasnew qb-cn-col"${tdStyle}><div class="qb-cell-clamp qb-cell-hasnew" data-full="${esc(rawStr)}"><span class="qb-cell-text qb-notes-html">${highlighted}</span></div></td>`;
           }
           // No today match — render normal clamped
-          return `<td class="qb-col-clamped"${tdStyle}><div class="qb-cell-clamp" data-full="${esc(rawStr)}"><span class="qb-cell-text">${safeVal}</span></div></td>`;
+          return `<td class="qb-col-clamped qb-cn-col"${tdStyle}><div class="qb-cell-clamp" data-full="${esc(rawStr)}"><span class="qb-cell-text">${safeVal}</span></div></td>`;
         }
 
         if (!forceClamp && rawStr.length <= 60) {
@@ -788,6 +820,12 @@
 
     const vcThPrefix = vcEnabled ? vcHeader : '';
     host.innerHTML = `<div class="qb-table-inner"><table class="qb-data-table"><thead><tr><th class="qb-row-num-th">#</th>${vcThPrefix}<th>Case #</th>${headers}</tr></thead><tbody>${body}</tbody></table></div>`;
+
+    // ── APPLY DYNAMIC CASE NOTES COLUMN WIDTH ─────────────────────────────────
+    // Sets CSS variable --qb-cn-w so the qb-cn-col class gets the computed width.
+    // Must run AFTER host.innerHTML is set so the host element exists in DOM.
+    host.style.setProperty('--qb-cn-w', _cnColWidth + 'px');
+    // ── END APPLY WIDTH ────────────────────────────────────────────────────────
 
     // ── PREMIUM TOOLTIP SETUP ─────────────────────────────────────────────
     _setupQbTooltips(host);

@@ -6900,6 +6900,26 @@ div.stngs-tile:hover { transform: none; }
   max-width: 320px;
 }
 
+/* ── CASE NOTES AUTO-WIDTH COLUMN ──────────────────────────────────────────
+   .qb-cn-col is applied only to the Case Notes th/td.
+   --qb-cn-w is set dynamically by renderRecords() based on the longest
+   [DATE TIME NAME] bracket found in visible rows.
+   min-width ensures the bracket never gets cut mid-name.
+   max-width clamp: 500px absolute ceiling to prevent layout overflow.
+   The 3-line -webkit-line-clamp stays in effect — only width changes.
+───────────────────────────────────────────────────────────────────────── */
+.qb-data-table th.qb-cn-col,
+.qb-data-table td.qb-cn-col {
+  width:     var(--qb-cn-w, 220px) !important;
+  min-width: var(--qb-cn-w, 220px) !important;
+  max-width: min(var(--qb-cn-w, 220px), 500px) !important;
+}
+/* The clamp div inside must respect the column width */
+.qb-data-table td.qb-cn-col .qb-cell-clamp {
+  max-width: 100%;
+}
+/* ── END CASE NOTES AUTO-WIDTH ───────────────────────────────────────── */
+
 /* ── CASE NOTES TODAY-DATE HIGHLIGHT ─────────────────────────────────────── */
 /* mark element wrapping [MAR-21-26 ...] timestamps that match today Manila */
 mark.qb-date-today {
