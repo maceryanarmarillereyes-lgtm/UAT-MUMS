@@ -3733,7 +3733,7 @@ function updateClocksPreviewTimes(){
         const shortId = item.caseId.length > 6 ? item.caseId.slice(-6) : item.caseId;
         const iconLines = shortId.match(/.{1,3}/g) || [shortId];
         html += `
-<div class="mnp-item${isUnread ? ' mnp-unread' : ''}" data-case="${_esc(item.caseId)}" onclick="window.__mumsNotifRead('${_esc(item.caseId)}')">
+<div class="mnp-item${isUnread ? ' mnp-unread' : ''}" data-case="${_esc(item.caseId)}" onclick="window.__mumsNotifOpenCase('${_esc(item.caseId)}')">
   <div class="mnp-icon ${c}">${iconLines.map(s => _esc(s)).join('<br>')}</div>
   <div class="mnp-body">
     <div class="mnp-row">
@@ -3781,6 +3781,13 @@ ${idx < toShow.length - 1 ? '<div class="mnp-divider"></div>' : ''}`;
       _readSet.add(caseId);
       _render(_activeTab);
     };
+    window.__mumsNotifOpenCase = function(caseId) {
+      _readSet.add(caseId);
+      _render(_activeTab);
+      _closePanel();
+      // Open Case Detail View for this case#
+      _openCaseDetail(caseId);
+    };
     window.__mumsNotifRefresh = function(records, columns) {
       _allItems = _buildNotifications(records, columns);
       _render(_activeTab);
@@ -3819,6 +3826,57 @@ ${idx < toShow.length - 1 ? '<div class="mnp-divider"></div>' : ''}`;
         e.stopPropagation();
         _panelOpen ? _closePanel() : _openPanel();
       });
+    }
+
+    // ── Open Case Detail by case ID ──────────────────────────────────────
+    function _openCaseDetail(caseId) {
+      var _tryOpen = function() {
+        try {
+          var mainEl = document.getElementById('main');
+          if (!mainEl) return false;
+          // root._qbcdOpen is set on the main element by _initQbCaseDetailModal
+          if (typeof mainEl._qbcdOpen !== 'function') return false;
+          // Find the snap matching this case ID from host._qbRowSnaps
+          var host = mainEl.querySelector('#qbDataBody');
+          if (!host) return false;
+          var snaps = host._qbRowSnaps || [];
+          if (!snaps.length) return false;
+          var snap = snaps.find(function(s) { return s && String(s.recordId) === String(caseId); });
+          if (!snap) return false;
+          mainEl._qbcdOpen(snap, snaps);
+          return true;
+        } catch(_) { return false; }
+      };
+
+      // Try immediately (already on QB page with records loaded)
+      if (_tryOpen()) return;
+
+      // Navigate to my_quickbase first, then open after records load
+      var _pendingCase = String(caseId);
+      var _onRecords = function() {
+        // Wait one tick for _qbcdOpen to be bound after render
+        setTimeout(function() {
+          if (!_tryOpen()) {
+            // Retry up to 3x with 300ms delay
+            var retries = 0;
+            var retry = setInterval(function() {
+              if (_tryOpen() || ++retries >= 6) clearInterval(retry);
+            }, 300);
+          }
+          window.removeEventListener('mums:qb_records_loaded', _onRecords);
+        }, 200);
+      };
+      window.addEventListener('mums:qb_records_loaded', _onRecords);
+
+      // Navigate to my_quickbase
+      try {
+        if (window.App && typeof App.navigate === 'function') {
+          App.navigate('my_quickbase');
+        } else {
+          var navBtn = document.querySelector('[data-page="my_quickbase"], a[href*="my_quickbase"]');
+          if (navBtn) navBtn.click();
+        }
+      } catch(_) {}
     }
 
     // ── Listen for QB records loaded event ────────────────────────────────

@@ -7170,8 +7170,39 @@ mark.qb-date-today {
 .tb-search-left {
   margin-left: 6px;
   flex-shrink: 0;
-  min-width: 220px;
-  max-width: 280px;
+  min-width: 200px;
+  max-width: 260px;
+}
+/* Facebook-style search overrides */
+.tb-search-left.top-global-search {
+  border-radius: 20px !important;
+  border: none !important;
+  background: rgba(255,255,255,.08) !important;
+  padding: 0 14px !important;
+  height: 36px !important;
+  gap: 8px !important;
+  box-shadow: none !important;
+  transition: background .15s !important;
+}
+.tb-search-left.top-global-search:hover,
+.tb-search-left.top-global-search:focus-within {
+  background: rgba(255,255,255,.13) !important;
+  box-shadow: none !important;
+}
+.tb-search-icon {
+  color: var(--muted, #475569);
+  opacity: .7;
+  flex-shrink: 0;
+}
+.tb-search-left #globalSearchInput {
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--text, #cbd5e1) !important;
+  width: 160px !important;
+}
+.tb-search-left #globalSearchInput::placeholder {
+  color: var(--muted, #475569) !important;
+  font-weight: 400 !important;
 }
 /* Override topbar grid so search sits left of center */
 .topbar {
