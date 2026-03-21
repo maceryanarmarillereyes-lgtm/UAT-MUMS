@@ -3538,6 +3538,318 @@ function updateClocksPreviewTimes(){
     }catch(e){ console.error(e); }
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // MUMS NOTIFICATION SYSTEM — v3.9.47
+  // Scans QB records for Case Notes with today's Manila date.
+  // Excludes entries where the tech name in [DATE TIME NAME] matches the
+  // current user's QB Name (they wrote it themselves — no need to notify them).
+  // ══════════════════════════════════════════════════════════════════════════
+  (function _initMumsNotifications() {
+
+    // ── Manila today string ──────────────────────────────────────────────
+    function _manilaToday() {
+      try {
+        const parts = {};
+        new Intl.DateTimeFormat('en-US', { timeZone:'Asia/Manila', year:'2-digit', month:'short', day:'2-digit' })
+          .formatToParts(new Date()).forEach(p => { parts[p.type] = p.value; });
+        return parts.month.toUpperCase().slice(0,3) + '-' + parts.day.replace(/^0/,'') + '-' + parts.year;
+      } catch(_) { return ''; }
+    }
+
+    // ── Relative time label ──────────────────────────────────────────────
+    function _relTime(dateObj) {
+      if (!dateObj) return '';
+      const diff = Date.now() - dateObj.getTime();
+      const mins = Math.round(diff / 60000);
+      if (mins < 1) return 'Just now';
+      if (mins < 60) return mins + ' min ago';
+      const hrs = Math.round(mins / 60);
+      if (hrs < 24) return hrs + 'h ago';
+      return 'Yesterday';
+    }
+
+    // ── Parse [MON-DD-YY HH:MM AM/PM NAME] bracket → { dateStr, time, who, dateObj } ──
+    function _parseBracket(bracketText) {
+      // Pattern: MON-DD-YY HH:MM AM/PM Name Here
+      const re = /^([A-Z]{3}-\d{1,2}-\d{2})\s+(\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)\s+(.+)$/i;
+      const m = re.exec(bracketText.trim());
+      if (!m) return null;
+      const MMAP = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+      const dateParts = m[1].split('-');
+      const mon = dateParts[0].toUpperCase();
+      if (!(mon in MMAP)) return null;
+      const dd = parseInt(dateParts[1], 10);
+      const yy = parseInt(dateParts[2], 10);
+      const year = yy < 50 ? 2000+yy : 1900+yy;
+      const timeParts = m[2].trim().split(/[\s:]/);
+      let hh = parseInt(timeParts[0], 10);
+      const mi = parseInt(timeParts[1], 10);
+      const ap = (m[2].match(/PM/i) ? 'PM' : (m[2].match(/AM/i) ? 'AM' : ''));
+      if (ap === 'PM' && hh < 12) hh += 12;
+      if (ap === 'AM' && hh === 12) hh = 0;
+      const dateObj = new Date(year, MMAP[mon], dd, hh, mi, 0);
+      return { dateStr: m[1], timeStr: m[2].trim(), who: m[3].trim(), dateObj, bracketDateToken: m[1] };
+    }
+
+    // ── Get current user's QB name ───────────────────────────────────────
+    function _myQbName() {
+      try {
+        const user = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
+        if (!user) return '';
+        // Check qb_name on profile
+        const prof = (window.Store && Store.getProfile) ? Store.getProfile(user.id || user.user_id) : null;
+        const qbName = String((prof && prof.qb_name) || (user && user.qb_name) || '').trim().toLowerCase();
+        return qbName;
+      } catch(_) { return ''; }
+    }
+
+    // ── Colour index for case icon ────────────────────────────────────────
+    function _colIdx(str) {
+      let h = 0;
+      for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffffffff;
+      return (Math.abs(h) % 4) + 1; // 1-4
+    }
+
+    // ── Escape HTML ───────────────────────────────────────────────────────
+    function _esc(s) {
+      return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── Core: scan records and build notification items ───────────────────
+    function _buildNotifications(records, columns) {
+      const today = _manilaToday();
+      if (!today || !Array.isArray(records)) return [];
+      const myQb = _myQbName();
+
+      // Find Case Notes column
+      const cnCol = columns.find(c => ['case notes','notes'].includes(String(c&&c.label||'').trim().toLowerCase()));
+      // Find Case # / record id column
+      const caseNumCol = columns.find(c => String(c&&c.label||'').trim().toLowerCase() === 'case #');
+      // Find Short Description column
+      const descCol = columns.find(c => {
+        const lbl = String(c&&c.label||'').trim().toLowerCase();
+        return lbl.includes('short description') || lbl.includes('concern') || lbl === 'description' || lbl === 'subject';
+      });
+
+      if (!cnCol) return [];
+
+      const items = [];
+      const todayRe = new RegExp('\\[(' + today.replace(/-/g,'\\-') + '\\s[^\\]]+)\\]', 'gi');
+
+      records.forEach(row => {
+        const cnVal = row && row.fields && row.fields[String(cnCol.id)] ? String(row.fields[String(cnCol.id)].value || '') : '';
+        if (!cnVal) return;
+
+        // Find all today brackets
+        const matches = [];
+        let m;
+        const re = new RegExp('\\[(' + today.replace(/-/g,'\\-') + '\\s[^\\]]+)\\]', 'gi');
+        while ((m = re.exec(cnVal)) !== null) {
+          const parsed = _parseBracket(m[1]);
+          if (!parsed) continue;
+          // Exclude if WHO matches current user's QB name
+          if (myQb && parsed.who.toLowerCase().includes(myQb) || (myQb && myQb.includes(parsed.who.toLowerCase()))) continue;
+          // Also exclude if myQb name appears anywhere in the who field (partial match, at least 4 chars)
+          if (myQb && myQb.length >= 4 && parsed.who.toLowerCase().split(' ').some(part => part.length >= 4 && myQb.includes(part))) continue;
+          matches.push(parsed);
+        }
+        if (!matches.length) return;
+
+        // Get the most recent today-bracket
+        const newest = matches.reduce((a,b) => (!a || (b.dateObj > a.dateObj)) ? b : a, null);
+        if (!newest) return;
+
+        const caseId = String(row.qbRecordId || (caseNumCol && row.fields && row.fields[String(caseNumCol.id)] ? row.fields[String(caseNumCol.id)].value : '') || 'N/A');
+        const shortDesc = descCol && row.fields && row.fields[String(descCol.id)] ? String(row.fields[String(descCol.id)].value || '') : '';
+
+        // Build the first line of the note (after the last bracket entry)
+        // Extract text after [DATE TIME NAME]
+        const afterBracket = cnVal.slice(cnVal.lastIndexOf(']') + 1).trim().replace(/^-+\s*/, '').trim();
+        const noteLine = afterBracket.slice(0, 120) || cnVal.slice(0, 120);
+
+        items.push({
+          caseId,
+          shortDesc,
+          who: newest.who,
+          timeStr: newest.timeStr,
+          dateToken: today,
+          dateObj: newest.dateObj,
+          noteLine,
+          colIdx: _colIdx(caseId),
+        });
+      });
+
+      // Sort by most recent first
+      items.sort((a, b) => b.dateObj - a.dateObj);
+      return items;
+    }
+
+    // ── Render items into panel ────────────────────────────────────────────
+    let _allItems = [];
+    let _readSet = new Set();
+
+    function _render(filter) {
+      const list = document.getElementById('mnpList');
+      const empty = document.getElementById('mnpEmpty');
+      const meta = document.getElementById('mnpMeta');
+      const badge = document.getElementById('mumsNotifBadge');
+      const bellBtn = document.getElementById('mumsNotifBtn');
+      const tabCt = document.getElementById('mnpTabCt');
+      if (!list) return;
+
+      const toShow = filter === 'unread'
+        ? _allItems.filter(it => !_readSet.has(it.caseId))
+        : _allItems;
+
+      const unreadCount = _allItems.filter(it => !_readSet.has(it.caseId)).length;
+
+      // Update badge
+      if (badge) {
+        badge.textContent = unreadCount > 9 ? '9+' : String(unreadCount);
+        badge.style.display = unreadCount > 0 ? '' : 'none';
+      }
+      if (bellBtn) {
+        bellBtn.classList.toggle('has-unread', unreadCount > 0);
+      }
+      if (meta) meta.textContent = unreadCount > 0 ? unreadCount + ' UNREAD' : 'ALL READ';
+      if (tabCt) {
+        tabCt.textContent = String(unreadCount);
+        tabCt.style.display = unreadCount > 0 ? '' : 'none';
+      }
+
+      if (!toShow.length) {
+        if (empty) empty.style.display = '';
+        // Remove all item nodes
+        Array.from(list.querySelectorAll('.mnp-item, .mnp-divider')).forEach(el => el.remove());
+        return;
+      }
+      if (empty) empty.style.display = 'none';
+
+      // Build HTML
+      let html = '';
+      toShow.forEach((item, idx) => {
+        const isUnread = !_readSet.has(item.caseId);
+        const c = 'mnp-c' + item.colIdx;
+        const shortId = item.caseId.length > 6 ? item.caseId.slice(-6) : item.caseId;
+        const iconLines = shortId.match(/.{1,3}/g) || [shortId];
+        html += `
+<div class="mnp-item${isUnread ? ' mnp-unread' : ''}" data-case="${_esc(item.caseId)}" onclick="window.__mumsNotifRead('${_esc(item.caseId)}')">
+  <div class="mnp-icon ${c}">${iconLines.map(s => _esc(s)).join('<br>')}</div>
+  <div class="mnp-body">
+    <div class="mnp-row">
+      <span class="mnp-casenum">CASE #${_esc(item.caseId)}</span>
+      <span class="mnp-ts">${_esc(_relTime(item.dateObj))}</span>
+      ${isUnread ? '<div class="mnp-unread-dot"></div>' : ''}
+    </div>
+    <div class="mnp-desc">${_esc(item.shortDesc || '(No description)')}</div>
+    <div class="mnp-note">
+      <span class="mnp-note-time">[${_esc(item.dateToken)} ${_esc(item.timeStr)}]</span>
+      <span class="mnp-note-who"> ${_esc(item.who)}</span>
+      ${item.noteLine ? '— ' + _esc(item.noteLine.slice(0,80)) : ''}
+    </div>
+  </div>
+</div>
+${idx < toShow.length - 1 ? '<div class="mnp-divider"></div>' : ''}`;
+      });
+      list.innerHTML = html + (empty ? empty.outerHTML : '');
+      if (empty) {
+        const newEmpty = list.querySelector('.mnp-empty');
+        if (newEmpty) newEmpty.style.display = 'none';
+      }
+    }
+
+    // ── Public interface ──────────────────────────────────────────────────
+    let _activeTab = 'all';
+
+    window.__mumsNotifTabAll = function() {
+      _activeTab = 'all';
+      document.getElementById('mnpTabAll').classList.add('mnp-tab-on');
+      document.getElementById('mnpTabUnread').classList.remove('mnp-tab-on');
+      _render('all');
+    };
+    window.__mumsNotifTabUnread = function() {
+      _activeTab = 'unread';
+      document.getElementById('mnpTabUnread').classList.add('mnp-tab-on');
+      document.getElementById('mnpTabAll').classList.remove('mnp-tab-on');
+      _render('unread');
+    };
+    window.__mumsNotifMarkAll = function() {
+      _allItems.forEach(it => _readSet.add(it.caseId));
+      _render(_activeTab);
+    };
+    window.__mumsNotifRead = function(caseId) {
+      _readSet.add(caseId);
+      _render(_activeTab);
+    };
+    window.__mumsNotifRefresh = function(records, columns) {
+      _allItems = _buildNotifications(records, columns);
+      _render(_activeTab);
+    };
+
+    // ── Bell toggle ───────────────────────────────────────────────────────
+    let _panelOpen = false;
+    function _openPanel() {
+      const panel = document.getElementById('mumsNotifPanel');
+      if (!panel) return;
+      _panelOpen = true;
+      panel.style.display = '';
+      panel.style.animation = 'mnpPanelIn .25s cubic-bezier(.34,1.2,.64,1) both';
+      document.getElementById('mumsNotifBtn').setAttribute('aria-expanded','true');
+      _render(_activeTab);
+      setTimeout(() => document.addEventListener('click', _closeOnOutside), 10);
+    }
+    function _closePanel() {
+      const panel = document.getElementById('mumsNotifPanel');
+      if (!panel) return;
+      _panelOpen = false;
+      panel.style.display = 'none';
+      document.getElementById('mumsNotifBtn').setAttribute('aria-expanded','false');
+      document.removeEventListener('click', _closeOnOutside);
+    }
+    function _closeOnOutside(e) {
+      const wrap = document.getElementById('mumsNotifWrap');
+      if (wrap && !wrap.contains(e.target)) _closePanel();
+    }
+
+    function _bindBell() {
+      const btn = document.getElementById('mumsNotifBtn');
+      if (!btn || btn.__mumsNotifBound) return;
+      btn.__mumsNotifBound = true;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _panelOpen ? _closePanel() : _openPanel();
+      });
+    }
+
+    // ── Listen for QB records loaded event ────────────────────────────────
+    window.addEventListener('mums:qb_records_loaded', function(e) {
+      const { records, columns } = e.detail || {};
+      if (Array.isArray(records) && Array.isArray(columns)) {
+        window.__mumsNotifRefresh(records, columns);
+      }
+    });
+
+    // ── Auto-refresh every 60 seconds (picks up live sync updates) ────────
+    setInterval(function() {
+      const qb = window.__mumsQbRecords;
+      if (qb && Array.isArray(qb.records)) {
+        window.__mumsNotifRefresh(qb.records, qb.columns);
+      }
+    }, 60000);
+
+    // Bind on DOMContentLoaded (or immediately if already loaded)
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', _bindBell);
+    } else {
+      _bindBell();
+      // Retry after app boot (bell may not exist yet at this point)
+      setTimeout(_bindBell, 800);
+    }
+  })();
+  // ══════════════════════════════════════════════════════════════════════════
+  // END NOTIFICATION SYSTEM
+  // ══════════════════════════════════════════════════════════════════════════
+
   function bindGlobalSearch(user){
     const topInput = document.getElementById('globalSearchInput');
     const topBtn = document.getElementById('globalSearchBtn');

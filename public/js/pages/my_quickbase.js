@@ -3241,6 +3241,13 @@
           const incomingColumns = Array.isArray(data && data.columns) ? data.columns : [];
           const incomingRecords = Array.isArray(data && data.records) ? data.records : [];
           state.baseRecords = incomingRecords.slice();
+          // Expose records globally so notification system can read them
+          window.__mumsQbRecords = {
+            records: state.baseRecords.slice(),
+            columns: incomingColumns.slice(),
+            loadedAt: Date.now()
+          };
+          try { window.dispatchEvent(new CustomEvent('mums:qb_records_loaded', { detail: window.__mumsQbRecords })); } catch(_) {}
           state._loadedForTabId = thisLoadTabId;
           if (thisLoadTabId) {
             state._tabDataCache = Object.assign({}, state._tabDataCache || {}, {
@@ -3283,6 +3290,9 @@
                 const bgRecords = Array.isArray(bgData && bgData.records) ? bgData.records : [];
                 if (!bgRecords.length) return;
                 state.baseRecords = mergeRecordsById(state.baseRecords, bgRecords);
+                // Keep global QB records in sync after background merge
+                window.__mumsQbRecords = { records: state.baseRecords.slice(), columns: incomingColumns.slice(), loadedAt: Date.now() };
+                try { window.dispatchEvent(new CustomEvent('mums:qb_records_loaded', { detail: window.__mumsQbRecords })); } catch(_) {}
                 if (activeTabId) {
                   state._tabDataCache = Object.assign({}, state._tabDataCache || {}, {
                     [activeTabId]: Object.assign({}, state._tabDataCache && state._tabDataCache[activeTabId] || {}, {
