@@ -576,7 +576,64 @@
     const visibleRows = rows.slice((activePage - 1) * pageSize, activePage * pageSize);
     meta.innerHTML = `${rows.length} record${rows.length === 1 ? '' : 's'} loaded${rows.length > pageSize ? ` • Page ${activePage}/${totalPages}` : ''}`;
 
+    // ── CASE NOTES DATE UTILITIES ─────────────────────────────────────────────
+    // Case Notes format: "-- [MAR-20-26 2:13 PM Mace Ryan Reyes] ---------- ..."
+    // Extracts most recent date for sorting and highlights today's Manila date.
+    const _MONTH_MAP_CN = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+
+    function _parseCNDate(m) {
+      const mon = m[1].toUpperCase(), dd = parseInt(m[2],10), yy = parseInt(m[3],10);
+      const hh  = parseInt(m[4],10),   mi = parseInt(m[5],10), ap = (m[6]||'').toUpperCase();
+      if (!(mon in _MONTH_MAP_CN)) return null;
+      const year = yy < 50 ? 2000+yy : 1900+yy;
+      let h = hh;
+      if (ap==='PM' && h<12) h+=12;
+      if (ap==='AM' && h===12) h=0;
+      const d = new Date(year, _MONTH_MAP_CN[mon], dd, h, mi, 0, 0);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // Returns the most recent timestamp found in Case Notes text (0 = none found)
+    function _caseNotesSortKey(text) {
+      if (!text) return 0;
+      const re = /\[([A-Z]{3})-(\d{1,2})-(\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/gi;
+      let best = 0, m;
+      while ((m = re.exec(text)) !== null) {
+        const d = _parseCNDate(m);
+        if (d && d.getTime() > best) best = d.getTime();
+      }
+      return best;
+    }
+
+    // Today's date in Manila as "MAR-21-26" format
+    function _getManilaToday() {
+      try {
+        const parts = {};
+        new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Manila',year:'2-digit',month:'short',day:'2-digit'})
+          .formatToParts(new Date()).forEach(p => { parts[p.type] = p.value; });
+        return parts.month.toUpperCase().slice(0,3) + '-' + parts.day.replace(/^0/,'') + '-' + parts.year;
+      } catch(_) { return ''; }
+    }
+
+    // Returns highlighted HTML string or null if no today-dates found
+    function _highlightTodayInNotes(rawText, todayStr) {
+      if (!todayStr || !rawText) return null;
+      const escapedSafe = rawText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const re = /\[([A-Z]{3}-\d{1,2}-\d{2}\s[^\]]*)\]/g;
+      let hasHighlight = false;
+      const result = escapedSafe.replace(re, (full, inner) => {
+        const tok = inner.trim().split(/\s/)[0];
+        if (tok === todayStr) { hasHighlight = true; return '<mark class="qb-date-today">[' + inner + ']</mark>'; }
+        return '[' + inner + ']';
+      });
+      return hasHighlight ? result : null;
+    }
+
+    const _CN_TODAY = _getManilaToday(); // compute once per render
+    // ── END CASE NOTES DATE UTILITIES ─────────────────────────────────────────
+
     // ENHANCEMENT 1: Days-only duration — never show hours
+
     const toDurationLabel = (value) => {
       const numeric = Number(value);
       if (!Number.isFinite(numeric) || numeric < 0) return String(value == null ? 'N/A' : value);
@@ -691,6 +748,20 @@
 
         // Force-clamp known long-text columns + any cell over 60 chars
         const forceClamp = _CLAMP_COLS.has(normalizedLabel);
+        const isCaseNotes = (normalizedLabel === 'case notes' || normalizedLabel === 'notes');
+
+        // Apply Manila-date highlight for Case Notes column
+        if (isCaseNotes && rawStr.length > 0) {
+          const highlighted = _highlightTodayInNotes(rawStr, _CN_TODAY);
+          if (highlighted) {
+            // Has today's date — render with highlight HTML
+            // data-full stores plain text (for tooltip); inner HTML shows highlight
+            return `<td class="qb-col-clamped qb-col-hasnew"${tdStyle}><div class="qb-cell-clamp qb-cell-hasnew" data-full="${esc(rawStr)}"><span class="qb-cell-text qb-notes-html">${highlighted}</span></div></td>`;
+          }
+          // No today match — render normal clamped
+          return `<td class="qb-col-clamped"${tdStyle}><div class="qb-cell-clamp" data-full="${esc(rawStr)}"><span class="qb-cell-text">${safeVal}</span></div></td>`;
+        }
+
         if (!forceClamp && rawStr.length <= 60) {
           return `<td${tdStyle}><span class="qb-cell-text">${safeVal}</span></td>`;
         }
@@ -823,7 +894,22 @@
     const hasLongContent = full.length > 80;
     if (!clamped && !hasLongContent) return;
     const tip = _getTooltip();
-    // Use innerHTML with sanitized content to preserve newlines as <br>
+
+    // For Case Notes cells: highlight today's Manila dates in the tooltip too
+    const todayStr = (typeof _getManilaToday === 'function') ? _getManilaToday() : '';
+    if (todayStr) {
+      const highlighted = (typeof _highlightTodayInNotes === 'function')
+        ? _highlightTodayInNotes(full, todayStr)
+        : null;
+      if (highlighted) {
+        tip.innerHTML = highlighted.replace(/\n/g,'<br>').replace(/\r/g,'');
+        tip.classList.add('is-visible');
+        _positionTooltip(tip, e);
+        return;
+      }
+    }
+
+    // Default: plain text with newlines
     tip.innerHTML = full.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>').replace(/\r/g,'');
     tip.classList.add('is-visible');
     _positionTooltip(tip, e);
@@ -3270,6 +3356,24 @@
       state.currentPayload = normalizedSearch
         ? filterRecordsBySearch(counterFilteredPayload, normalizedSearch)
         : counterFilteredPayload;
+      // ── SORT BY CASE NOTES MOST-RECENT DATE (default for all users) ──────────
+      // Extracts the most recent [MON-DD-YY HH:MM] timestamp from each record's
+      // Case Notes field and sorts DESC (newest first). Records with no date sort last.
+      if (Array.isArray(state.currentPayload.records) && state.currentPayload.records.length > 1) {
+        const _caseNotesCol = (state.currentPayload.columns || []).find(c =>
+          ['case notes','notes'].includes(String(c && c.label || '').trim().toLowerCase())
+        );
+        if (_caseNotesCol) {
+          const _cnFid = String(_caseNotesCol.id);
+          state.currentPayload.records = state.currentPayload.records.slice().sort((a, b) => {
+            const ta = _caseNotesSortKey(a && a.fields && a.fields[_cnFid] ? String(a.fields[_cnFid].value || '') : '');
+            const tb = _caseNotesSortKey(b && b.fields && b.fields[_cnFid] ? String(b.fields[_cnFid].value || '') : '');
+            return tb - ta; // DESC — most recent first
+          });
+        }
+      }
+      // ── END SORT ─────────────────────────────────────────────────────────────
+
       const totalRows = Array.isArray(state.currentPayload.records) ? state.currentPayload.records.length : 0;
       const maxPage = Math.max(1, Math.ceil(totalRows / state.pageSize));
       state.currentPage = Math.min(Math.max(state.currentPage, 1), maxPage);

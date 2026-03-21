@@ -6899,6 +6899,66 @@ div.stngs-tile:hover { transform: none; }
 .qb-data-table td {
   max-width: 320px;
 }
+
+/* ── CASE NOTES TODAY-DATE HIGHLIGHT ─────────────────────────────────────── */
+/* mark element wrapping [MAR-21-26 ...] timestamps that match today Manila */
+mark.qb-date-today {
+  background: transparent;
+  color: #22d3ee;
+  font-weight: 700;
+  position: relative;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(34, 211, 238, 0.12);
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.15);
+  white-space: nowrap;
+}
+
+/* Pulsing left border on rows with today's Case Notes date */
+.qb-data-table td.qb-col-hasnew {
+  position: relative;
+}
+.qb-data-table td.qb-col-hasnew::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #22d3ee, #6366f1);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
+  animation: qb-new-pulse 2.5s ease-in-out infinite;
+}
+@keyframes qb-new-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(34, 211, 238, 0.5); }
+  50%       { opacity: 0.5; box-shadow: 0 0 4px rgba(34, 211, 238, 0.2); }
+}
+
+/* NEW badge on row number pill when case notes has today's date */
+.qb-data-table tr:has(.qb-col-hasnew) td.qb-row-num-cell .qb-row-num-pill {
+  background: rgba(34, 211, 238, 0.14);
+  border-color: rgba(34, 211, 238, 0.4);
+  color: #22d3ee;
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.2);
+}
+/* Subtle row background tint for rows with today's date */
+.qb-data-table tr:has(.qb-col-hasnew) {
+  background: rgba(34, 211, 238, 0.025);
+}
+
+/* Tooltip mark highlight inherits from the mark style above */
+.qb-cell-tooltip mark.qb-date-today {
+  background: rgba(34, 211, 238, 0.18);
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  color: #22d3ee;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  box-shadow: 0 0 6px rgba(34, 211, 238, 0.2);
+}
+/* ── END CASE NOTES HIGHLIGHT ────────────────────────────────────────────── */
 /* Row expand on hover removed v3.9.28 — hover uses tooltip dialog instead */
 /* .qb-cell-clamp:hover { -webkit-line-clamp: unset; max-height: none; overflow: visible; } */
 .qb-cell-text { display: block; }
