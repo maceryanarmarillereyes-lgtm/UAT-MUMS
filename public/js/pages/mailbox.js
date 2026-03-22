@@ -785,6 +785,7 @@ function _mbxReadJwt(){
   const _rosterByTeam  = {};   // { teamId: [{id,name,role,teamId,...}] }
   const _scheduleReady = {};   // { teamId: true } once first fetch completes
   const _syncInFlight  = {};   // guard against concurrent fetches per team
+  let   _syncCooldown  = {};   // LOOP-GUARD: cooldown timestamps after failed fetches
   // _schedSyncPending: prevents re-triggering sync on every render while a sync
   // is in-flight or already completed.  This MUST be declared here — accessing an
   // undeclared variable throws a ReferenceError in strict mode (and in some browsers
@@ -812,6 +813,7 @@ function _mbxReadJwt(){
       // Clear all guards so _mbxSyncTeamScheduleBlocks will actually re-fetch
       delete _scheduleReady[tid];
       delete _syncInFlight[tid];
+      if (_syncCooldown) delete _syncCooldown[tid]; // LOOP-GUARD: clear cooldown on manual resync
       _schedSyncPending = false;
       _mbxSyncTeamScheduleBlocks(tid).catch(()=>{});
     }catch(_){}
@@ -986,10 +988,13 @@ function _mbxReadJwt(){
       // REALTIME ALL-USER FIX: After re-syncing roster+blocks, push the current mailbox
       // table to cloud (mums_mailbox_tables). This triggers Supabase realtime delivery
       // to ALL connected clients so every user's page updates without a manual refresh.
+      // LOOP-GUARD: Only push when we have real roster data (resolvedTeamMembers.length > 0).
+      // Pushing an empty-roster table triggers remote clients' _mbxForceResync which
+      // causes an infinite fetch storm when the network is saturated.
       try{
         if(window.Store && Store.getMailboxState && Store.getMailboxTable && Store.saveMailboxTable){
           const curKey = Store.getMailboxState().currentKey;
-          if(curKey){
+          if(curKey && resolvedTeamMembers.length > 0){ // LOOP-GUARD: only push when we have real data
             const t = Store.getMailboxTable(curKey);
             if(t) Store.saveMailboxTable(curKey, t); // triggers write → Realtime push
           }
@@ -1001,6 +1006,16 @@ function _mbxReadJwt(){
     } finally {
       _syncInFlight[teamId] = false;
       _schedSyncPending = false;
+      // LOOP-GUARD: If _scheduleReady was never set (fetch failed), mark it with
+      // a cooldown timestamp so render() doesn't immediately retry and cause
+      // an infinite ERR_INSUFFICIENT_RESOURCES storm.
+      // Format: _scheduleReady[teamId] stays falsy only during the cooldown window.
+      if (!_scheduleReady[teamId]) {
+        _scheduleReady[teamId] = false; // still falsy so next manual force-resync works
+        // Prevent render() from re-triggering for 15 seconds after a failure
+        _syncCooldown = _syncCooldown || {};
+        _syncCooldown[teamId] = Date.now() + 15000;
+      }
     }
   }
 
@@ -3723,7 +3738,9 @@ function _mbxReadJwt(){
       // OVERRIDE FIX: Also re-sync when active team changes due to time override
       // (e.g. override switches from Morning to Mid Shift — Mid roster may not be cached).
       const teamId = String(table?.meta?.teamId || '');
-      if (teamId && !_schedSyncPending && !(_scheduleReady && _scheduleReady[teamId])) {
+      // LOOP-GUARD: skip sync if within cooldown window after a failed fetch
+      const _inCooldown = _syncCooldown && _syncCooldown[teamId] && Date.now() < _syncCooldown[teamId];
+      if (teamId && !_schedSyncPending && !(_scheduleReady && _scheduleReady[teamId]) && !_inCooldown) {
         _schedSyncPending = true;
         _mbxSyncTeamScheduleBlocks(teamId).catch(() => {});
       }
@@ -4222,7 +4239,11 @@ function _mbxReadJwt(){
                       }
                     }
                     // If roster is empty (first load), trigger a fetch to populate it
-                    if(!rosterList.length && tid){
+                    // LOOP-GUARD: Skip if we're in a cooldown window (recent fetch failure).
+                    // Without this guard, every Realtime push would clear the cooldown and
+                    // re-trigger a fetch immediately after failure → infinite loop.
+                    const _noRosterCooldown = _syncCooldown && _syncCooldown[tid] && Date.now() < _syncCooldown[tid];
+                    if(!rosterList.length && tid && !_noRosterCooldown){
                       _mbxForceResync('remote-table-no-roster');
                     }
                   }
@@ -4254,13 +4275,19 @@ function _mbxReadJwt(){
           k === 'mums_team_config'        ||
           k === 'mums_schedule_lock_state'
         ) {
-          _mbxForceResync(k);
+          // LOOP-GUARD: Only force-resync on schedule changes if not in failure cooldown
+          const _schedCurTeam = String((window.Store && Store.getMailboxState ? Store.getMailboxState().currentKey || '' : '').split('|')[0]);
+          const _schedCooldownActive = _syncCooldown && _schedCurTeam && _syncCooldown[_schedCurTeam] && Date.now() < _syncCooldown[_schedCurTeam];
+          if (!_schedCooldownActive) { _mbxForceResync(k); }
           scheduleRender('schedule-update');
         }
         // REALTIME SHIFT CHANGE FIX: When mailbox state changes (shift rotated),
         // re-sync the new duty team's roster immediately so member list is up to date.
         if (k === 'mums_mailbox_state') {
-          _mbxForceResync('shift-state-change');
+          // LOOP-GUARD: Don't force-resync on state change if in failure cooldown
+          const _stateCurTeam = String((window.Store && Store.getMailboxState ? Store.getMailboxState().currentKey || '' : '').split('|')[0]);
+          const _stateCooldownActive = _syncCooldown && _stateCurTeam && _syncCooldown[_stateCurTeam] && Date.now() < _syncCooldown[_stateCurTeam];
+          if (!_stateCooldownActive) { _mbxForceResync('shift-state-change'); }
           scheduleRender('shift-state-change');
         }
         // CASE MATRIX ALL-USER FIX: ums_cases is synced to all clients via Supabase realtime.

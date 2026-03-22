@@ -1665,5 +1665,36 @@
   </div>
   <!-- ── END QB CASE DETAIL MODAL ──────────────────────────────────────── -->
 
+  <!-- ── MANILA CALENDAR NAVIGATION FIX ─────────────────────────────
+       Fixes: navigating to /manila_calendar renders my_task instead.
+       Root cause: manila_calendar.js loads with `defer` — if the router
+       fires before the defer script executes, Pages['manila_calendar']
+       is undefined and the router falls back to 'dashboard' (→ my_task).
+       Fix: after all defer scripts load, check if the intended page ID
+       matches the current route and re-trigger navigation if needed.
+       This does NOT modify app.js (which has @AI_CRITICAL_GUARD).
+  ──────────────────────────────────────────────────────────────────── -->
+  <script>
+  window.addEventListener('load', function() {
+    // Give defer scripts ~100ms to register then check current route
+    setTimeout(function() {
+      try {
+        var pages    = window.Pages || {};
+        var pathname = String(window.location.pathname || '').replace(/^\//, '').split('/')[0] || '';
+        var hash     = String(window.location.hash || '').replace(/^#\/?/, '').split('/')[0] || '';
+        var intended = pathname || hash;
+
+        // If intended page exists in Pages now but was never rendered, navigate to it
+        if (intended && pages[intended] && window.App && typeof window.App.navigate === 'function') {
+          var currentId = window._currentPageId || '';
+          if (currentId !== intended) {
+            // Page is now registered but the wrong page is showing — re-navigate
+            window.App.navigate(intended);
+          }
+        }
+      } catch(_) {}
+    }, 120);
+  });
+  </script>
 </body>
 </html>

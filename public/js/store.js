@@ -58,6 +58,32 @@
     user_extra_privs: 'mums_user_extra_privs',
   };
 
+  // ── STARTUP CLEANUP: Scrub stale ghost override from localStorage ─────────
+  // Root cause: The Supabase DB may have enabled:true from a previous session.
+  // The 10s poll restores it to localStorage → banner shows even when SA hasn't set it.
+  // Strategy: Clear ALL enabled:true from localStorage on startup.
+  // The startMailboxOverrideSync poll will restore if genuinely active within 10s.
+  try{
+    const _staleKey = 'mums_mailbox_time_override_cloud';
+    const _staleRaw = localStorage.getItem(_staleKey);
+    if(_staleRaw){
+      const _stale = JSON.parse(_staleRaw);
+      if(_stale && _stale.enabled){
+        localStorage.setItem(_staleKey,
+          JSON.stringify(Object.assign({}, _stale, { enabled:false, ms:0, setAt:0 })));
+      }
+    }
+    const _staleLocal = localStorage.getItem('mums_mailbox_time_override');
+    if(_staleLocal){
+      const _sl = JSON.parse(_staleLocal);
+      if(_sl && _sl.enabled && String(_sl.scope||'') === 'global'){
+        localStorage.setItem('mums_mailbox_time_override',
+          JSON.stringify(Object.assign({}, _sl, { enabled:false, ms:0, setAt:0 })));
+      }
+    }
+  }catch(_){}
+  // ── END STARTUP CLEANUP ───────────────────────────────────────────────────
+
   // 6 months retention as requested
   const SIX_MONTHS_MS = 183 * 24 * 60 * 60 * 1000;
 
@@ -1809,6 +1835,14 @@
         out.setAt = Number(out.setAt)||0;
         const scope = String(out.scope || fallbackScope || 'sa_only');
         out.scope = (scope === 'global') ? 'global' : 'sa_only';
+        // STALE-GUARD: If override claims enabled but ms is 0 or epoch, treat as disabled.
+        // This prevents ghost override banners from stale localStorage after a scope bug.
+        const MIN_VALID_MS = Date.UTC(2020, 0, 1);
+        if(out.enabled && (!out.ms || out.ms < MIN_VALID_MS)){
+          out.enabled = false;
+          out.ms = 0;
+          out.setAt = 0;
+        }
         return out;
       };
 
@@ -1930,54 +1964,86 @@
     // - Dispatches mums:store events so Mailbox UI re-renders immediately.
     disableMailboxTimeOverride(opts){
       try{
-        const curLocal = (function(){
-          try{ const raw = localStorage.getItem(KEYS.mailbox_time_override); return raw ? JSON.parse(raw) : null; }catch(_){ return null; }
-        })();
+        // FIX[GHOST-OVERRIDE-PERMANENT]: ALWAYS call the server to clear the DB override.
+        // The previous approach only called the server if localStorage had enabled:true,
+        // but our startup cleanup clears localStorage — so the server was never called,
+        // and the Supabase DB kept its enabled:true value, restoring via 10s poll.
+        //
+        // New strategy:
+        //   1. Clear localStorage immediately (instant UI feedback)
+        //   2. ALWAYS call POST /api/mailbox_override/set?scope=global&enabled=false
+        //      regardless of what localStorage currently says
+        //   3. Force a poll after to confirm server state is clean
+        //
+        // The opts.forceScope parameter allows the caller to specify scope explicitly
+        // (used by the Save button which knows draft.scope at click time).
+
         const curCloud = (function(){
           try{ const raw = localStorage.getItem(KEYS.mailbox_time_override_cloud); return raw ? JSON.parse(raw) : null; }catch(_){ return null; }
         })();
+        const curLocal = (function(){
+          try{ const raw = localStorage.getItem(KEYS.mailbox_time_override); return raw ? JSON.parse(raw) : null; }catch(_){ return null; }
+        })();
 
+        // Determine if we need to hit the global scope on the server.
+        // Always propagate if: caller passes propagateGlobal, OR forceScope='global',
+        // OR either localStorage key had scope='global', OR opts.scope='global'.
+        const forceScope = String((opts && opts.forceScope) || (opts && opts.scope) || '').toLowerCase();
         const shouldPropagateGlobal = !!(
           (opts && opts.propagateGlobal) ||
-          (curCloud && curCloud.enabled && String(curCloud.scope||'') === 'global') ||
-          (curLocal && curLocal.enabled && String(curLocal.scope||'') === 'global')
+          forceScope === 'global' ||
+          (curCloud && String(curCloud.scope||'') === 'global') ||
+          (curLocal && String(curLocal.scope||'') === 'global') ||
+          // ALWAYS propagate when we don't know — this is safe (server is idempotent)
+          (!curCloud && !curLocal)
         );
 
-        // Clear local + cloud storage keys to eliminate stale overrides.
+        // 1. Clear local + cloud storage keys immediately for instant UI feedback.
         try{ localStorage.removeItem(KEYS.mailbox_time_override); }catch(_){ }
         try{ localStorage.removeItem(KEYS.mailbox_time_override_cloud); }catch(_){ }
 
-        // Notify same-tab UI listeners.
-        try{ window.dispatchEvent(new CustomEvent('mums:store', { detail:{ key:'mailbox_time_override', source:'local', reason:'disable' } })); }catch(_){ }
-        try{ window.dispatchEvent(new CustomEvent('mums:store', { detail:{ key:'mailbox_override_cloud', source:'local', reason:'disable' } })); }catch(_){ }
+        // 2. Notify same-tab UI listeners to re-render banner immediately.
+        try{ window.dispatchEvent(new CustomEvent('mums:store', { detail:{ key:'mailbox_time_override', source:'local' } })); }catch(_){ }
+        try{ window.dispatchEvent(new CustomEvent('mums:store', { detail:{ key:'mailbox_override_cloud', source:'local' } })); }catch(_){ }
+        try{ window.dispatchEvent(new CustomEvent('mums:store', { detail:{ key:'mailbox_time_override_cloud', source:'local' } })); }catch(_){ }
 
-        // Best-effort backend propagation (global scope reset) so other devices do not re-sync stale override.
-        if(shouldPropagateGlobal && window.CloudAuth && CloudAuth.isEnabled && CloudAuth.isEnabled()){
+        // 3. ALWAYS call the server to clear the DB record for global scope.
+        // This is the permanent fix: without this, the 10s poll restores the DB value.
+        if(window.CloudAuth && CloudAuth.isEnabled && CloudAuth.isEnabled()){
           let token = '';
-          try{ token = (CloudAuth.accessToken && CloudAuth.accessToken()) ? String(CloudAuth.accessToken()||'').trim() : ''; }catch(_){ token=''; }
+          try{ token = (CloudAuth.accessToken && CloudAuth.accessToken()) ? String(CloudAuth.accessToken()||'').trim() : ''; }catch(_){}
           if(!token){
             try{
               const sess = CloudAuth.loadSession ? CloudAuth.loadSession() : null;
-              token = sess && (sess.access_token || (sess.session && sess.session.access_token)) ? String(sess.access_token || (sess.session && sess.session.access_token) || '').trim() : '';
+              token = sess && (sess.access_token || (sess.session && sess.session.access_token)) ? String(sess.access_token || sess.session.access_token).trim() : '';
             }catch(_){ token=''; }
           }
           if(token){
+            // Always clear global scope (the scope that shows the banner to all users)
             fetch('/api/mailbox_override/set', {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({
-                scope: 'global',
-                enabled: false,
-                freeze: true
-              })
-            }).catch(() => {});
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ scope: 'global', enabled: false, freeze: true, override_iso: '' })
+            }).then(function(r){
+              // Force a sync poll immediately after server confirms cleared
+              try{ if(window.Store && Store.startMailboxOverrideSync) Store.startMailboxOverrideSync({ force:true }); }catch(_){}
+            }).catch(function(){
+              // Even on error, force a poll to get authoritative server state
+              try{ if(window.Store && Store.startMailboxOverrideSync) Store.startMailboxOverrideSync({ force:true }); }catch(_){}
+            });
+
+            // Also clear superadmin scope if it was set
+            if(shouldPropagateGlobal || forceScope === 'superadmin' || (curLocal && String(curLocal.scope||'') === 'sa_only')){
+              fetch('/api/mailbox_override/set', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ scope: 'superadmin', enabled: false, freeze: true, override_iso: '' })
+              }).catch(()=>{});
+            }
           }
         }
 
-        // Force a sync poll so cloud key stays consistent after reset.
+        // 4. Force a sync poll so cloud key reflects server state.
         try{ if(window.Store && Store.startMailboxOverrideSync) Store.startMailboxOverrideSync({ force:true }); }catch(_){ }
 
         return true;
@@ -1985,6 +2051,7 @@
         return false;
       }
     },
+
 
     // Mailbox Counter tables (per shift)
     getMailboxState(){
@@ -2303,7 +2370,7 @@ Store.startMailboxOverrideSync = function(opts){
       // Mapping 'superadmin' -> 'global' ensures getMailboxTimeOverride's
       // c.scope === 'global' precedence check works for all cloud-synced records.
       const rawScope = String(out.scope||'global').toLowerCase();
-      out.scope = (rawScope === 'global' || rawScope === 'superadmin') ? 'global' : 'global';
+      out.scope = (rawScope === 'global' || rawScope === 'superadmin') ? 'global' : 'sa_only'; // FIX: was always 'global' — now correctly 'sa_only' for non-global scope
       out.enabled = !!out.enabled;
       out.freeze = (out.freeze !== false);
       out.ms = Number(out.ms);
@@ -2343,6 +2410,14 @@ Store.startMailboxOverrideSync = function(opts){
 
         if(res.ok && json && json.ok && json.override){
           const norm = normalize(json.override);
+
+          // FIX: If server says override is disabled, explicitly clear localStorage to prevent
+          // stale enabled:true data from persisting and showing ghost override banner.
+          if(!norm.enabled){
+            norm.enabled = false;
+            norm.ms = 0;
+            norm.setAt = 0;
+          }
 
           // Persist across tabs
           write(KEYS.mailbox_time_override_cloud, norm);

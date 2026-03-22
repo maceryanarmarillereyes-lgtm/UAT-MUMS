@@ -42,9 +42,11 @@ async function runQuickbaseReport({ realm, token, tableId, reportId, limit, extr
     ? `${rawRealm}.quickbase.com`
     : rawRealm;
 
-  const top = Math.min(Number(limit) > 0 ? Number(limit) : 500, 1000);
+  // Allow up to 10000 for search queries (extraWhere present) to cover all QB records
+  const top = Number(limit) > 0 ? Math.min(Number(limit), extraWhere ? 10000 : 1000) : (extraWhere ? 500 : 500);
   const cacheKey = `run:${normalizedRealm}:${tableId}:${reportId}:${top}:${extraWhere || ''}`;
-  const cached = readCache(reportMetaCache, cacheKey, REPORT_META_CACHE_TTL_MS);
+  // Never serve cached results for search queries — each search term is unique
+  const cached = extraWhere ? null : readCache(reportMetaCache, cacheKey, REPORT_META_CACHE_TTL_MS);
   if (cached) return cached;
 
   try {
@@ -81,7 +83,8 @@ async function runQuickbaseReport({ realm, token, tableId, reportId, limit, extr
       : [];
 
     const result = { ok: true, records, fields: reportFields };
-    writeCache(reportMetaCache, cacheKey, result);
+    // Only cache non-search responses
+    if (!extraWhere) writeCache(reportMetaCache, cacheKey, result);
     console.log(`[QB Report Run] ✅ reportId=${reportId} → ${records.length} records, ${reportFields.length} fields`);
     return result;
   } catch (err) {
@@ -428,9 +431,16 @@ module.exports = async (req, res) => {
     const hasPersonalQuickbaseQuery = !!String(qid || '').trim();
 
     // Column resolution priority (highest → lowest):
-    // 1. Active tab's customColumns (per-user, per-tab setting)
-    // 2. Global QB Settings customColumns (shared, set by Super Admin)
-    // 3. wantedLabels fallback (hardcoded defaults, now includes Case Notes etc.)
+    // FIX[GLOBAL-OVERRIDE]: When bypassGlobal=false AND global has customColumns set by SA,
+    // global columns ALWAYS take priority over stale per-tab columns.
+    // Per-tab customColumns only apply when the tab has bypassGlobal=true (personal report mode).
+    // This prevents old saved tab configs (e.g. "MAIN 3" from before global QB was configured)
+    // from silently overriding the SA's global column settings for all users.
+    //
+    // Priority (updated):
+    // 1. Global QB customColumns — when bypassGlobal=false AND global has columns (SA-controlled)
+    // 2. Tab's own customColumns — only when bypassGlobal=true OR global has no columns
+    // 3. wantedLabels fallback — hardcoded defaults when neither above is set
     const profileCustomColumns = normalizeProfileColumns(
       profileQuickbaseConfig.customColumns ||
       profileQuickbaseConfig.qb_custom_columns ||
@@ -438,10 +448,13 @@ module.exports = async (req, res) => {
     );
     const globalCustomColumns = normalizeProfileColumns(globalQb.customColumns || []);
 
-    // Use tab-level columns first, then global-level, then wantedLabels
-    const activeCustomColumns = profileCustomColumns.length
-      ? profileCustomColumns
-      : globalCustomColumns;
+    // GLOBAL-FIRST: When SA has configured global columns and tab is NOT bypassed,
+    // use global columns. This is the permanent fix for PROD vs UAT discrepancy.
+    const activeCustomColumns = (!bypassGlobal && globalCustomColumns.length)
+      ? globalCustomColumns        // SA global settings WIN for all non-bypass tabs
+      : profileCustomColumns.length
+        ? profileCustomColumns     // Tab's own columns (bypass mode or no global columns)
+        : globalCustomColumns;     // Fallback to global if tab also has none
 
     const mappedProfileColumns = activeCustomColumns
       .map((id) => {
@@ -718,14 +731,14 @@ module.exports = async (req, res) => {
           .map((f) => fieldsMetaById[String(f.id)] || { id: Number(f.id), label: String(f.label || '').trim() })
           .filter((f) => Number.isFinite(f.id) && String(f.label || '').trim());
 
-    // Order by: tab customColumns > global customColumns > profile fallback
-    const _columnOrderSource = (
-      profileQuickbaseConfig.customColumns ||
-      profileQuickbaseConfig.qb_custom_columns ||
-      profile.qb_custom_columns ||
-      globalQb.customColumns ||
-      []
-    );
+    // Order by: FIX[GLOBAL-OVERRIDE] global > tab (when not bypassed) > profile fallback
+    const _columnOrderSource = (!bypassGlobal && (globalQb.customColumns || []).length)
+      ? (globalQb.customColumns || [])
+      : (profileQuickbaseConfig.customColumns ||
+         profileQuickbaseConfig.qb_custom_columns ||
+         profile.qb_custom_columns ||
+         globalQb.customColumns ||
+         []);
     const orderedEffectiveFields = sortFieldsByProfileOrder(effectiveFields, _columnOrderSource);
 
     const columns = (Array.isArray(out.records) && out.records.length)

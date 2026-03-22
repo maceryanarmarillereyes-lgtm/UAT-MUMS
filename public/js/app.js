@@ -4891,7 +4891,143 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
               try{ initBrightnessControl(); _syncMsBrightnessBadge(); }catch(_){}
             },
             mailboxtime: function(){
+              // Run the original bind so open() / clock are initialized
               try{ if(typeof bindMailboxTimeModal === 'function') bindMailboxTimeModal(); }catch(_){}
+              // Always call open() to refresh draft from Store (bypasses __bound guard)
+              try{
+                var _mbModal = document.getElementById('mailboxTimeModal');
+                if(_mbModal && typeof _mbModal.__open === 'function') _mbModal.__open();
+              }catch(_){}
+              // FIX[PANEL-DIRECT]: Wire Save/Reset buttons with a DIRECT server API call
+              // This is a belt-and-suspenders override of the existing onclick handlers.
+              // It guarantees the DB is written regardless of draft/Store state issues.
+              try{
+                var _saveBtn  = document.getElementById('mbTimeSave');
+                var _resetBtn = document.getElementById('mbTimeReset');
+                var _enabledEl = document.getElementById('mbTimeEnabled');
+                var _inputEl   = document.getElementById('mbTimeInput');
+                var _scopeEl   = document.getElementById('mbTimeScope');
+                var _freezeEl  = document.getElementById('mbTimeFreeze');
+                var _errEl     = document.getElementById('mbTimeErr');
+
+                var _getToken = function(){
+                  try{
+                    var t = (window.CloudAuth && CloudAuth.accessToken) ? String(CloudAuth.accessToken()||'').trim() : '';
+                    if(t) return t;
+                    var sess = (window.CloudAuth && CloudAuth.loadSession) ? CloudAuth.loadSession() : null;
+                    return (sess && (sess.access_token || (sess.session && sess.session.access_token)))
+                      ? String(sess.access_token || sess.session.access_token).trim() : '';
+                  }catch(e){ return ''; }
+                };
+
+                var _callOverrideApi = function(payload, onOk, onErr){
+                  var token = _getToken();
+                  if(!token){ if(onErr) onErr('Not authenticated'); return; }
+                  fetch('/api/mailbox_override/set', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+                    body: JSON.stringify(payload)
+                  }).then(function(r){
+                    return r.json().then(function(d){
+                      if(r.ok && d && d.ok){ if(onOk) onOk(d); }
+                      else{ if(onErr) onErr((d && d.message) || ('HTTP '+r.status)); }
+                    });
+                  }).catch(function(e){ if(onErr) onErr(String(e && e.message || e)); });
+                };
+
+                if(_resetBtn){
+                  _resetBtn.onclick = function(){
+                    _resetBtn.disabled = true;
+                    _resetBtn.textContent = 'Clearing…';
+                    _callOverrideApi(
+                      {scope:'global', enabled:false, freeze:true, override_iso:''},
+                      function(){
+                        _callOverrideApi({scope:'superadmin', enabled:false, freeze:true, override_iso:''}, null, null);
+                        try{ if(window.Store && Store.disableMailboxTimeOverride) Store.disableMailboxTimeOverride({propagateGlobal:true, forceScope:'global'}); }catch(_){}
+                        try{ if(window.UI && UI.toast) UI.toast('Override cleared. Mailbox now uses system Manila time.','success'); }catch(_){}
+                        try{ if(_mbModal && typeof _mbModal.__open === 'function') _mbModal.__open(); }catch(_){}
+                        _resetBtn.disabled = false;
+                        _resetBtn.textContent = 'Return to normal time';
+                      },
+                      function(err){
+                        try{ if(window.UI && UI.toast) UI.toast('Error clearing override: '+err,'error'); }catch(_){}
+                        _resetBtn.disabled = false;
+                        _resetBtn.textContent = 'Return to normal time';
+                      }
+                    );
+                  };
+                }
+
+                if(_saveBtn){
+                  _saveBtn.onclick = function(){
+                    var isEnabled = _enabledEl ? !!_enabledEl.checked : false;
+                    if(!isEnabled){
+                      // Treat same as reset
+                      if(_resetBtn) _resetBtn.onclick();
+                      return;
+                    }
+                    // Parse date from input
+                    var inputVal = _inputEl ? String(_inputEl.value||'').trim() : '';
+                    var MIN_MS = Date.UTC(2020,0,1);
+                    var ms = 0;
+                    if(inputVal){
+                      try{
+                        var parts = inputVal.split('T');
+                        if(parts.length < 2) parts = inputVal.split(' ');
+                        var d = parts[0].trim(), t = (parts[1]||'').trim();
+                        var dp = d.split(/[-\/]/).map(Number);
+                        var tp = t.split(':').map(Number);
+                        // Handle MM/DD/YYYY or YYYY-MM-DD
+                        var y,m,day,hh,mm;
+                        if(dp[0] > 31){ y=dp[0];m=dp[1];day=dp[2]; }
+                        else{ m=dp[0];day=dp[1];y=dp[2]; }
+                        hh=tp[0]||0; mm=tp[1]||0;
+                        // Handle AM/PM
+                        var tStr = (parts[1]||'').toUpperCase();
+                        if(tStr.includes('PM') && hh < 12) hh+=12;
+                        if(tStr.includes('AM') && hh===12) hh=0;
+                        ms = Date.UTC(y,m-1,day,hh-8,mm,0,0);
+                        if(!Number.isFinite(ms) || ms < MIN_MS) ms = 0;
+                      }catch(e){ ms = 0; }
+                    }
+                    if(!ms || ms < MIN_MS){
+                      // Try Store's current draft
+                      try{
+                        var cur = Store.getMailboxTimeOverride ? Store.getMailboxTimeOverride() : null;
+                        if(cur && cur.ms && cur.ms > MIN_MS) ms = cur.ms;
+                      }catch(_){}
+                    }
+                    if(!ms || ms < MIN_MS){
+                      if(_errEl) _errEl.textContent = 'Please select a valid Manila date & time.';
+                      try{ if(window.UI && UI.toast) UI.toast('Please select a valid date & time first.','warn'); }catch(_){}
+                      return;
+                    }
+                    var scope = (_scopeEl && _scopeEl.value === 'global') ? 'global' : 'superadmin';
+                    var freeze = _freezeEl ? !!_freezeEl.checked : true;
+                    var isoStr = new Date(ms).toISOString();
+                    _saveBtn.disabled = true;
+                    _saveBtn.textContent = 'Saving…';
+                    _callOverrideApi(
+                      {scope:scope, enabled:true, freeze:freeze, override_iso:isoStr},
+                      function(){
+                        try{ if(window.Store && Store.saveMailboxTimeOverride) Store.saveMailboxTimeOverride({enabled:true,ms:ms,freeze:freeze,scope:scope,setAt:freeze?0:Date.now()}); }catch(_){}
+                        try{ window.dispatchEvent(new CustomEvent('mums:store',{detail:{key:'mailbox_override_cloud',source:'local'}})); }catch(_){}
+                        try{ window.dispatchEvent(new CustomEvent('mums:store',{detail:{key:'mailbox_time_override',source:'local'}})); }catch(_){}
+                        try{ if(window.UI && UI.toast) UI.toast('Override saved! ('+scope[0].toUpperCase()+scope.slice(1)+' scope)','success'); }catch(_){}
+                        try{ if(_mbModal && typeof _mbModal.__open === 'function') _mbModal.__open(); }catch(_){}
+                        _saveBtn.disabled = false;
+                        _saveBtn.textContent = 'Save';
+                      },
+                      function(err){
+                        try{ if(window.UI && UI.toast) UI.toast('Save failed: '+err,'error'); }catch(_){}
+                        if(_errEl) _errEl.textContent = 'Save failed: '+err;
+                        _saveBtn.disabled = false;
+                        _saveBtn.textContent = 'Save';
+                      }
+                    );
+                  };
+                }
+              }catch(_){}
             },
             systemcheck: function(){
               try{ if(typeof bindSystemCheckModal === 'function') bindSystemCheckModal(_panelUser); }catch(_){}
@@ -5889,8 +6025,15 @@ async function boot(){
           saveBtn.onclick = ()=>{
             try{ if(errEl) errEl.textContent=''; }catch(_){ }
             if(!draft.enabled){
-              if(Store.disableMailboxTimeOverride) Store.disableMailboxTimeOverride({ propagateGlobal:true });
-              else Store.saveMailboxTimeOverride({ enabled:false, ms:0, freeze:true, setAt:0, scope:'sa_only' });
+              // FIX[GHOST-OVERRIDE-PERMANENT]: Always propagate to BOTH global AND superadmin
+              // scopes on the server, regardless of what draft.scope shows.
+              // The DB may have scope='global' while draft loaded with stale 'sa_only'.
+              // Clearing both scopes is safe (idempotent) and ensures the DB is always clean.
+              if(Store.disableMailboxTimeOverride){
+                Store.disableMailboxTimeOverride({ propagateGlobal:true, forceScope:'global' });
+              } else {
+                Store.saveMailboxTimeOverride({ enabled:false, ms:0, freeze:true, setAt:0, scope:'sa_only' });
+              }
               try{
                 if(window.UI && UI.toast) UI.toast('Mailbox time override removed. System Manila time is now active.', 'success');
               }catch(_){ }
@@ -5934,8 +6077,12 @@ async function boot(){
 
         if(resetBtn){
           resetBtn.onclick = ()=>{
-            if(Store.disableMailboxTimeOverride) Store.disableMailboxTimeOverride({ propagateGlobal:true });
-            else Store.saveMailboxTimeOverride({ enabled:false, ms:0, freeze:true, setAt:0, scope:'sa_only' });
+            // FIX[GHOST-OVERRIDE-PERMANENT]: Always clear BOTH global and superadmin scopes.
+            if(Store.disableMailboxTimeOverride){
+              Store.disableMailboxTimeOverride({ propagateGlobal:true, forceScope:'global' });
+            } else {
+              Store.saveMailboxTimeOverride({ enabled:false, ms:0, freeze:true, setAt:0, scope:'sa_only' });
+            }
             draft = Store.getMailboxTimeOverride ? Store.getMailboxTimeOverride() : {};
             try{ if(window.UI && UI.toast) UI.toast('Mailbox time override removed. System Manila time is now active.', 'success'); }catch(_){ }
             // FIX[EPOCH-BUG]: Ensure draft.ms is never epoch after reset.

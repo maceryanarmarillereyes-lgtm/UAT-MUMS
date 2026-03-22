@@ -850,13 +850,38 @@ body[data-mode="light"] .sp-photo{background:rgba(15,23,42,.04)}
 .ms-save{display:flex;justify-content:flex-end}
 
 /* === Master Schedule (enterprise refresh) === */
-.ms-shell{display:flex;flex-direction:column;gap:12px}
+.ms-shell{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  width:100%;
+  min-height:100%;
+  box-sizing:border-box;
+}
+/* Master Schedule toolbar */
+.ms-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  padding:14px 0;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  margin-bottom:0;
+}
+/* Master Schedule grid body — scrolls vertically */
+.ms-grid-wrap{
+  flex:1;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding-bottom:40px;
+}
 .ms-topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap}
 .ms-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .ms-controls{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
 .ms-controls label{min-width:220px}
 
-.ms-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px;border:1px solid rgba(255,255,255,.10);border-radius:16px;background:rgba(255,255,255,.03)}
+/* ms-toolbar defined above */
 .ms-toolbar-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .ms-toolbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .ms-search{display:flex;align-items:center;gap:10px}
@@ -10618,11 +10643,12 @@ body.density-compact .main.card.pad {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* Shell */
-.ms-shell {
+/* Settings modal ms-shell — scoped to .modal to avoid bleeding onto Master Schedule page */
+.modal .ms-shell {
   display: flex;
   flex-direction: column;
-  width: 900px;
-  max-height: 600px;
+  width: min(900px, 96vw);
+  max-height: 88vh;
   border-radius: 14px;
   overflow: hidden;
   background: var(--surface, #0f1219);
@@ -10631,7 +10657,7 @@ body.density-compact .main.card.pad {
 }
 
 /* ── TOPBAR ────────────────────────────────────────────────────────────── */
-.ms-topbar {
+.modal .ms-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -10640,34 +10666,34 @@ body.density-compact .main.card.pad {
   border-bottom: 1px solid rgba(255,255,255,.06);
   flex-shrink: 0;
 }
-.ms-topbar-left { display: flex; align-items: center; gap: 9px; }
-.ms-topbar-dot {
+.modal .ms-topbar-left { display: flex; align-items: center; gap: 9px; }
+.modal .ms-topbar-dot {
   width: 6px; height: 6px;
   border-radius: 50%;
   background: #4d7cfe;
   box-shadow: 0 0 7px rgba(77,124,254,.6);
 }
-.ms-topbar-title {
+.modal .ms-topbar-title {
   font-size: 13px; font-weight: 600;
   color: rgba(255,255,255,.85);
   letter-spacing: -.01em;
 }
-.ms-topbar-tag {
+.modal .ms-topbar-tag {
   font-size: 9px; font-weight: 600; letter-spacing: .08em;
   color: #4d7cfe;
   background: rgba(77,124,254,.12);
   border: 1px solid rgba(77,124,254,.22);
   padding: 2px 7px; border-radius: 4px;
 }
-.ms-topbar-right { display: flex; align-items: center; gap: 8px; }
-.ms-meta-chip {
+.modal .ms-topbar-right { display: flex; align-items: center; gap: 8px; }
+.modal .ms-meta-chip {
   font-size: 10px; color: rgba(255,255,255,.3);
   background: rgba(255,255,255,.04);
   border: 1px solid rgba(255,255,255,.07);
   padding: 3px 9px; border-radius: 5px;
   white-space: nowrap;
 }
-.ms-xbtn {
+.modal .ms-xbtn {
   width: 26px; height: 26px;
   background: transparent;
   border: 1px solid rgba(255,255,255,.1);
@@ -10677,40 +10703,40 @@ body.density-compact .main.card.pad {
   display: flex; align-items: center; justify-content: center;
   transition: all .13s;
 }
-.ms-xbtn:hover { background: rgba(255,60,60,.09); border-color: rgba(255,60,60,.22); color: #ff6b6b; }
+.modal .ms-xbtn:hover { background: rgba(255,60,60,.09); border-color: rgba(255,60,60,.22); color: #ff6b6b; }
 
 /* ── BODY ──────────────────────────────────────────────────────────────── */
-.ms-body { display: flex; flex: 1; overflow: hidden; }
+.modal .ms-body { display: flex; flex: 1; overflow: hidden; }
 
 /* ── LEFT SIDENAV ──────────────────────────────────────────────────────── */
-.ms-sidenav {
+.modal .ms-sidenav {
   width: 224px; flex-shrink: 0;
   border-right: 1px solid rgba(255,255,255,.05);
   display: flex; flex-direction: column;
   overflow: hidden;
 }
-.ms-search-bar {
+.modal .ms-search-bar {
   display: flex; align-items: center; gap: 8px;
   padding: 9px 14px;
   border-bottom: 1px solid rgba(255,255,255,.05);
   background: rgba(255,255,255,.015);
 }
-.ms-search-bar svg { color: rgba(255,255,255,.22); flex-shrink: 0; }
-.ms-search-input {
+.modal .ms-search-bar svg { color: rgba(255,255,255,.22); flex-shrink: 0; }
+.modal .ms-search-input {
   flex: 1; background: none; border: none; outline: none;
   font-family: inherit; font-size: 12px;
   color: rgba(255,255,255,.65);
 }
-.ms-search-input::placeholder { color: rgba(255,255,255,.2); }
-.ms-nav-scroll { flex: 1; overflow-y: auto; padding: 6px 0; }
-.ms-grp-label {
+.modal .ms-search-input::placeholder { color: rgba(255,255,255,.2); }
+.modal .ms-nav-scroll { flex: 1; overflow-y: auto; padding: 6px 0; }
+.modal .ms-grp-label {
   display: flex; align-items: center; gap: 8px;
   padding: 9px 16px 3px;
   font-size: 9px; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: rgba(255,255,255,.2);
 }
-.ms-grp-label::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.06); }
-.ms-nav-item {
+.modal .ms-grp-label::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.06); }
+.modal .ms-nav-item {
   display: flex; align-items: center; gap: 9px;
   padding: 7px 14px 7px 12px;
   width: 100%; background: none; border: none;
@@ -10718,25 +10744,25 @@ body.density-compact .main.card.pad {
   cursor: pointer; transition: background .1s, border-color .1s;
   color: rgba(255,255,255,.45); text-align: left;
 }
-.ms-nav-item:hover { background: rgba(255,255,255,.04); color: rgba(255,255,255,.75); }
-.ms-nav-item.ms-active {
+.modal .ms-nav-item:hover { background: rgba(255,255,255,.04); color: rgba(255,255,255,.75); }
+.modal .ms-nav-item.ms-active {
   background: rgba(77,124,254,.1);
   border-left-color: #4d7cfe;
   color: rgba(255,255,255,.9);
 }
-.ms-ni-box {
+.modal .ms-ni-box {
   width: 26px; height: 26px; flex-shrink: 0;
   background: rgba(255,255,255,.05);
   border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
   transition: background .1s;
 }
-.ms-nav-item.ms-active .ms-ni-box { background: rgba(77,124,254,.18); color: #4d7cfe; }
-.ms-ni-text { flex: 1; }
-.ms-ni-name { font-size: 12.5px; font-weight: 500; display: block; }
-.ms-ni-sub { font-size: 10px; color: rgba(255,255,255,.25); display: block; margin-top: 1px; }
-.ms-nav-item.ms-active .ms-ni-sub { color: rgba(77,124,254,.5); }
-.ms-ni-kv {
+.modal .ms-nav-item.ms-active .ms-ni-box { background: rgba(77,124,254,.18); color: #4d7cfe; }
+.modal .ms-ni-text { flex: 1; }
+.modal .ms-ni-name { font-size: 12.5px; font-weight: 500; display: block; }
+.modal .ms-ni-sub { font-size: 10px; color: rgba(255,255,255,.25); display: block; margin-top: 1px; }
+.modal .ms-nav-item.ms-active .ms-ni-sub { color: rgba(77,124,254,.5); }
+.modal .ms-ni-kv {
   font-size: 9px; font-weight: 600;
   color: #4d7cfe;
   background: rgba(77,124,254,.14);
@@ -10745,93 +10771,93 @@ body.density-compact .main.card.pad {
 }
 
 /* ── RIGHT CONTENT ─────────────────────────────────────────────────────── */
-.ms-content { flex: 1; overflow-y: auto; }
-.ms-panel { display: flex; flex-direction: column; height: 100%; }
+.modal .ms-content { flex: 1; overflow-y: auto; }
+.modal .ms-panel { display: flex; flex-direction: column; height: 100%; }
 
 /* Hero bar */
-.ms-panel-hero {
+.modal .ms-panel-hero {
   display: flex; align-items: center; gap: 14px;
   padding: 20px 24px 16px;
   border-bottom: 1px solid rgba(255,255,255,.05);
   flex-shrink: 0;
 }
-.ms-hero-icon {
+.modal .ms-hero-icon {
   width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
   background: rgba(77,124,254,.12);
   border: 1px solid rgba(77,124,254,.22);
   display: flex; align-items: center; justify-content: center;
   color: #4d7cfe;
 }
-.ms-hero-icon--default { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.08); color: rgba(255,255,255,.3); }
-.ms-hero-icon--admin { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.22); color: #f59e0b; }
-.ms-hero-title { font-size: 16px; font-weight: 600; color: rgba(255,255,255,.9); letter-spacing: -.02em; }
-.ms-hero-desc { font-size: 12px; color: rgba(255,255,255,.3); margin-top: 3px; line-height: 1.5; }
+.modal .ms-hero-icon--default { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.08); color: rgba(255,255,255,.3); }
+.modal .ms-hero-icon--admin { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.22); color: #f59e0b; }
+.modal .ms-hero-title { font-size: 16px; font-weight: 600; color: rgba(255,255,255,.9); letter-spacing: -.02em; }
+.modal .ms-hero-desc { font-size: 12px; color: rgba(255,255,255,.3); margin-top: 3px; line-height: 1.5; }
 
 /* Panel body */
-.ms-panel-body { padding: 20px 24px; flex: 1; overflow-y: auto; }
+.modal .ms-panel-body { padding: 20px 24px; flex: 1; overflow-y: auto; }
 
 /* Control group */
-.ms-ctrl-group {
+.modal .ms-ctrl-group {
   border: 1px solid rgba(255,255,255,.07);
   border-radius: 10px; overflow: hidden; margin-bottom: 12px;
 }
-.ms-ctrl-group-label {
+.modal .ms-ctrl-group-label {
   font-size: 9px; font-weight: 700; letter-spacing: .13em;
   text-transform: uppercase; color: rgba(255,255,255,.22);
   padding: 9px 16px;
   background: rgba(255,255,255,.02);
   border-bottom: 1px solid rgba(255,255,255,.05);
 }
-.ms-ctrl-row {
+.modal .ms-ctrl-row {
   display: flex; align-items: center; gap: 16px;
   padding: 13px 16px;
   border-bottom: 1px solid rgba(255,255,255,.04);
 }
-.ms-ctrl-row:last-child { border-bottom: none; }
-.ms-ctrl-label { flex: 1; }
-.ms-ctrl-name { font-size: 13px; font-weight: 500; color: rgba(255,255,255,.8); }
-.ms-ctrl-hint { font-size: 11px; color: rgba(255,255,255,.28); margin-top: 3px; line-height: 1.4; }
-.ms-ctrl-control { flex-shrink: 0; }
+.modal .ms-ctrl-row:last-child { border-bottom: none; }
+.modal .ms-ctrl-label { flex: 1; }
+.modal .ms-ctrl-name { font-size: 13px; font-weight: 500; color: rgba(255,255,255,.8); }
+.modal .ms-ctrl-hint { font-size: 11px; color: rgba(255,255,255,.28); margin-top: 3px; line-height: 1.4; }
+.modal .ms-ctrl-control { flex-shrink: 0; }
 
 /* Slider */
-.ms-ctrl-slider-wrap { display: flex; align-items: center; gap: 9px; min-width: 200px; }
-.ms-slider-dim { color: rgba(255,255,255,.25); display: flex; }
-.ms-slider-bright { color: rgba(255,255,255,.75); display: flex; }
-.ms-slider {
+.modal .ms-ctrl-slider-wrap { display: flex; align-items: center; gap: 9px; min-width: 200px; }
+.modal .ms-slider-dim { color: rgba(255,255,255,.25); display: flex; }
+.modal .ms-slider-bright { color: rgba(255,255,255,.75); display: flex; }
+.modal .ms-slider {
   flex: 1; height: 3px; -webkit-appearance: none; appearance: none;
   border-radius: 99px; outline: none; cursor: pointer;
   background: linear-gradient(to right, #4d7cfe 0%, #4d7cfe var(--ms-sval,52.6%), rgba(255,255,255,.1) var(--ms-sval,52.6%));
 }
-.ms-slider::-webkit-slider-thumb {
+.modal .ms-slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
   width: 14px; height: 14px; background: #fff; border-radius: 50%;
   box-shadow: 0 1px 4px rgba(0,0,0,.5), 0 0 0 2px rgba(77,124,254,.35);
   transition: box-shadow .14s, transform .1s; cursor: pointer;
 }
-.ms-slider::-webkit-slider-thumb:hover { box-shadow: 0 1px 6px rgba(0,0,0,.6), 0 0 0 3px rgba(77,124,254,.5); transform: scale(1.1); }
-.ms-slider:disabled { opacity: .3; cursor: not-allowed; }
-.ms-slider-val { font-size: 11px; font-weight: 600; color: #4d7cfe; min-width: 36px; text-align: right; }
+.modal .ms-slider::-webkit-slider-thumb:hover { box-shadow: 0 1px 6px rgba(0,0,0,.6), 0 0 0 3px rgba(77,124,254,.5); transform: scale(1.1); }
+.modal .ms-slider:disabled { opacity: .3; cursor: not-allowed; }
+.modal .ms-slider-val { font-size: 11px; font-weight: 600; color: #4d7cfe; min-width: 36px; text-align: right; }
 
 /* Toggle */
-.ms-toggle-wrap { display: inline-flex; align-items: center; cursor: pointer; }
-.ms-toggle-input { position: absolute; opacity: 0; width: 0; height: 0; }
-.ms-toggle-track {
+.modal .ms-toggle-wrap { display: inline-flex; align-items: center; cursor: pointer; }
+.modal .ms-toggle-input { position: absolute; opacity: 0; width: 0; height: 0; }
+.modal .ms-toggle-track {
   width: 36px; height: 20px; border-radius: 99px;
   background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
   position: relative; transition: background .18s, border-color .18s;
   display: block;
 }
-.ms-toggle-thumb {
+.modal .ms-toggle-thumb {
   position: absolute; width: 14px; height: 14px;
   background: rgba(255,255,255,.4); border-radius: 50%;
   top: 2px; left: 2px;
   transition: all .18s cubic-bezier(.34,1.56,.64,1);
 }
-.ms-toggle-input:checked + .ms-toggle-track { background: #4d7cfe; border-color: rgba(77,124,254,.6); }
-.ms-toggle-input:checked + .ms-toggle-track .ms-toggle-thumb { left: 18px; background: #fff; }
+.modal .ms-toggle-input:checked + .ms-toggle-track { background: #4d7cfe; border-color: rgba(77,124,254,.6); }
+.modal .ms-toggle-input:checked + .ms-toggle-track .ms-toggle-thumb { left: 18px; background: #fff; }
 
 /* Action buttons */
-.ms-action-btn {
+.modal .ms-action-btn {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 10px 16px; border-radius: 8px;
   background: rgba(77,124,254,.1); border: 1px solid rgba(77,124,254,.22);
@@ -10839,24 +10865,24 @@ body.density-compact .main.card.pad {
   cursor: pointer; transition: all .14s; margin-bottom: 8px;
   width: 100%; justify-content: space-between;
 }
-.ms-action-btn:hover { background: rgba(77,124,254,.18); border-color: rgba(77,124,254,.35); color: #b8d4ff; }
-.ms-action-btn--secondary {
+.modal .ms-action-btn:hover { background: rgba(77,124,254,.18); border-color: rgba(77,124,254,.35); color: #b8d4ff; }
+.modal .ms-action-btn--secondary {
   background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.1); color: rgba(255,255,255,.5);
 }
-.ms-action-btn--secondary:hover { background: rgba(255,255,255,.07); color: rgba(255,255,255,.75); }
+.modal .ms-action-btn--secondary:hover { background: rgba(255,255,255,.07); color: rgba(255,255,255,.75); }
 
 /* Status bar */
-.ms-status-bar {
+.modal .ms-status-bar {
   display: flex; align-items: center; gap: 9px;
   padding: 10px 14px; border-radius: 8px;
   background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.06);
   margin-top: 12px;
 }
-.ms-status-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; flex-shrink: 0; box-shadow: 0 0 5px rgba(34,197,94,.4); }
-.ms-status-text { font-size: 11px; color: rgba(255,255,255,.3); }
+.modal .ms-status-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; flex-shrink: 0; box-shadow: 0 0 5px rgba(34,197,94,.4); }
+.modal .ms-status-text { font-size: 11px; color: rgba(255,255,255,.3); }
 
 /* Panel actions row */
-.ms-panel-actions {
+.modal .ms-panel-actions {
   display: flex; align-items: center; gap: 10px; margin-top: 14px;
   padding-top: 14px; border-top: 1px solid rgba(255,255,255,.06);
 }

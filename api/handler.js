@@ -87,6 +87,13 @@ const ROUTES = {
   'quickbase/monitoring': require('../server/routes/quickbase/monitoring'),
   'quickbase_tabs': require('../server/routes/quickbase_tabs'),
   'quickbase_tabs/upsert': require('../server/routes/quickbase_tabs'),
+
+  // Studio QB — completely isolated from MUMS global QB settings
+  'studio/qb_settings': require('../server/routes/studio/qb_settings'),
+  'studio/qb_data':     require('../server/routes/studio/qb_data'),
+  'studio/qb_settings_global': require('../server/routes/studio/qb_settings_global'),
+  'studio/qb_monitoring':      require('../server/routes/studio/qb_monitoring'),
+  'studio/qb_search':          require('../server/routes/studio/qb_search'),
 };
 
 const DYNAMIC_ROUTES = [

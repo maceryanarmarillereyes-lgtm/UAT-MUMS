@@ -3216,12 +3216,23 @@
             lastQuickbaseLoadAt = Date.now();
             return;
           }
+          // FIX[GLOBAL-OVERRIDE]: When tab is not bypassed AND global QB has customColumns set,
+          // send empty customColumns [] so the server uses its global column config.
+          // This prevents stale old tab column configs (from before global QB was set up)
+          // from silently overriding the SA's global settings.
+          // When bypassed: always send the tab's own columns (personal report mode).
+          const _effectiveCustomCols = isTabBypassed
+            ? (Array.isArray(freshTabSettings.customColumns) ? freshTabSettings.customColumns : [])
+            : (Array.isArray(globalQbSettings.customColumns) && globalQbSettings.customColumns.length
+                ? []   // Non-bypass + global has columns → let server apply global (don't send stale tab cols)
+                : (Array.isArray(freshTabSettings.customColumns) ? freshTabSettings.customColumns : []));
+
           const data = await window.QuickbaseAdapter.fetchMonitoringData({
             ...requestPayload,
             tab_id: activeTabId,
             reportLink,
             bypassGlobal: isTabBypassed,
-            customColumns: Array.isArray(freshTabSettings.customColumns) ? freshTabSettings.customColumns : [],
+            customColumns: _effectiveCustomCols,
             customFilters: mergedFilters,
             filterMatch: tabFilterMatch,
             search: ''

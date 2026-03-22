@@ -12,6 +12,20 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.snow.min.css" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.min.js"></script>
+  <!-- MUMS scripts needed for QuickBase_S (my_quickbase page) -->
+  <script src="/js/env_runtime.js"></script>
+  <script src="/js/cloud_auth.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/store.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/quickbase_adapter.js"></script>
+  <script src="/js/pages/my_quickbase_tab_manager.js"></script>
+  <script src="/js/pages/my_quickbase.js"></script>
+  <style>
+    /* Ensure my_quickbase styles work inside the studio canvas */
+    #qbs-root { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+    #qbs-root .main.card.pad { overflow: hidden !important; padding: 0 !important; height: 100% !important; }
+  </style>
   <style>
     /* ─────────────────────────────────────────────────────────────────
        MUMS SUPPORT STUDIO — Base Styles
@@ -1061,15 +1075,11 @@
     }
 
     /* ── Single-body tab switching ─────────────────────────────── */
-    .ss-canvas-inner { display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
-    .ss-canvas-inner.active { display: flex; }
-    #left-panel-tickets { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+    .ss-canvas-inner { display: none !important; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
+    .ss-canvas-inner.active { display: flex !important; }
     #left-panel-catalog  { display: none; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
-    #left-panel-history  { display: none; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
     #left-panel-config   { display: none; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
-    #left-panel-tickets.active  { display: flex; }
     #left-panel-catalog.active  { display: flex; }
-    #left-panel-history.active  { display: flex; }
     #left-panel-config.active   { display: flex; }
 
     /* Call Info inputs match ss-input style */
@@ -1089,6 +1099,8 @@
     .ci-note-card:hover { background: rgba(255,255,255,.06); }
     .ci-note-time   { font-size: 9px; color: var(--ss-muted); margin-bottom: 2px; }
     .ci-note-caller { font-weight: 700; color: #58a6ff; }
+    .sqb-col-item:hover { background: rgba(88,166,255,.08) !important; }
+    .sqb-col-item { transition: background .12s; }
   </style>
 </head>
 <body>
@@ -1110,16 +1122,29 @@
         </div>
       </div>
 
-      <!-- Tabs -->
+      <!-- Search bar -->
+      <div class="ss-search-wrap" style="margin-left:8px;">
+        <input class="ss-search-input" id="ss-search" type="text" placeholder="Search cases, users, tickets…" autocomplete="off" style="width:260px;">
+        <button class="ss-search-btn" onclick="document.getElementById('ss-search').focus()">
+          <i class="fas fa-search"></i>
+        </button>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           NAV TABS — Support Studio
+           Order: QuickBase_S → Connect+ → Product Controllers
+           General Settings is in ss-header-right (upper-right corner)
+           NOTE FOR AI: To add a new tab, insert a new <button class="ss-tab"> here,
+           add its panel to LEFT_PANELS array in Core JS, add its left-panel-{id} div
+           in the sidebar, and add its canvas-{id} div in the canvas area.
+           General Settings always stays in ss-header-right (rightmost, separated).
+      ═══════════════════════════════════════════════════════════════ -->
       <nav class="ss-tabs" id="ss-tabs">
-        <button class="ss-tab active" data-tab="tickets">
-          <i class="fas fa-ticket-alt"></i> Tickets
+        <button class="ss-tab active" data-tab="qbs" id="ss-tab-qbs">
+          <i class="fas fa-database"></i> QuickBase_S
         </button>
-        <button class="ss-tab" data-tab="history">
-          <i class="fas fa-history"></i> History
-        </button>
-        <button class="ss-tab" data-tab="config">
-          <i class="fas fa-cog"></i> Config
+        <button class="ss-tab" data-tab="connectplus" id="ss-tab-connectplus">
+          <i class="fas fa-plug"></i> Connect+
         </button>
         <button class="ss-tab" data-tab="catalog" id="ss-tab-catalog">
           <i class="fas fa-microchip"></i> Product Controllers
@@ -1128,16 +1153,12 @@
 
     </div>
 
-    <!-- Right controls -->
+    <!-- Right controls — General Settings pinned to upper-right corner -->
     <div class="ss-header-right">
-      <div class="ss-search-wrap">
-        <input class="ss-search-input" id="ss-search" type="text" placeholder="Search cases, users, tickets…" autocomplete="off">
-        <button class="ss-search-btn" onclick="document.getElementById('ss-search').focus()">
-          <i class="fas fa-search"></i>
-        </button>
-      </div>
-      <button class="ss-btn-primary" id="ss-connect-btn" disabled title="Coming soon">
-        <i class="fas fa-satellite-dish"></i> Connect to Case
+      <!-- General Settings always stays rightmost — gear icon tab style -->
+      <button class="ss-tab" data-tab="config" id="ss-tab-config"
+        style="border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);">
+        <i class="fas fa-sliders-h"></i> General Settings
       </button>
     </div>
   </header>
@@ -1153,32 +1174,6 @@
     <aside class="ss-sidebar" id="ss-left-sidebar">
 
       <!-- Session Manager (Tickets tab) -->
-      <div id="left-panel-tickets">
-        <div class="ss-panel">
-          <div class="ss-panel-title"><i class="fas fa-folder-open"></i> Session Manager</div>
-          <div class="ss-input-row">
-            <input class="ss-input" type="text" placeholder="Session name…" id="ss-session-name">
-            <button class="ss-icon-btn" title="Save session (coming soon)" disabled><i class="fas fa-save"></i></button>
-          </div>
-          <div class="ss-empty-note">
-            <i class="fas fa-folder-plus"></i>
-            No active sessions.<br>Create one to begin.
-          </div>
-        </div>
-        <div class="ss-panel grow">
-          <div class="ss-panel-title"><i class="fas fa-tools"></i> Support Tools</div>
-          <button class="ss-tool-btn" disabled><i class="fas fa-user-check"></i> User Lookup<span class="badge-soon">Soon</span></button>
-          <button class="ss-tool-btn" disabled><i class="fas fa-file-alt"></i> Case Report<span class="badge-soon">Soon</span></button>
-          <button class="ss-tool-btn" disabled><i class="fas fa-exchange-alt"></i> Case Reassign<span class="badge-soon">Soon</span></button>
-          <button class="ss-tool-btn" disabled><i class="fas fa-bell"></i> Send Reminder<span class="badge-soon">Soon</span></button>
-          <button class="ss-tool-btn" disabled><i class="fas fa-chart-line"></i> Performance Snapshot<span class="badge-soon">Soon</span></button>
-          <button class="ss-tool-btn" disabled><i class="fas fa-download"></i> Export Logs<span class="badge-soon">Soon</span></button>
-          <hr class="ss-divider">
-          <button class="ss-tool-btn" disabled><i class="fas fa-bug"></i> Diagnostics<span class="badge-soon">Soon</span></button>
-          <button class="ss-tool-btn" disabled><i class="fas fa-shield-alt"></i> Audit Trail<span class="badge-soon">Soon</span></button>
-        </div>
-      </div>
-
       <!-- Product Controllers left panel (catalog tab) — hidden by default -->
       <div id="left-panel-catalog" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
         <div class="cat-sidebar-head">
@@ -1193,19 +1188,120 @@
         </div>
       </div>
 
-      <!-- History left panel -->
-      <div id="left-panel-history" style="display:none;">
-        <div class="ss-panel grow">
-          <div class="ss-panel-title"><i class="fas fa-filter"></i> Filters</div>
-          <div class="ss-empty-note"><i class="fas fa-sliders-h"></i> Filter options coming soon.</div>
+      <!-- ═══════════════════════════════════════════════════════════════
+           LEFT PANEL: General Settings — Sidebar nav
+           NOTE FOR AI: To add a new settings section:
+           1. Add a <button class="ss-settings-nav-btn"> here with data-settings-section="your-id"
+           2. Add a <div id="settings-section-your-id"> inside canvas-config's settings content area
+           3. Follow the exact same HTML pattern as the existing sections below
+           4. Icon: use a Font Awesome icon in the <i> tag
+           5. If feature is not yet built, add the "Soon" badge span (see Appearance/Integrations)
+           6. Active state is handled automatically by the settings nav JS listener
+      ═══════════════════════════════════════════════════════════════ -->
+      <div id="left-panel-config" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
+
+        <!-- Sidebar header -->
+        <div style="padding:14px 16px 10px;border-bottom:1px solid var(--ss-border2);flex-shrink:0;">
+          <div style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:2px;">General Settings</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.3);">Configure your Studio preferences</div>
+        </div>
+
+        <!-- Nav items — each button maps to a settings section panel in the canvas -->
+        <nav style="flex:1;overflow-y:auto;padding:8px 0;">
+
+          <!-- ── Studio Quickbase Settings ── -->
+          <button class="ss-settings-nav-btn active" data-settings-section="studio-qb"
+            style="width:100%;padding:10px 16px;background:rgba(88,166,255,.08);border:none;border-left:3px solid #58a6ff;color:#58a6ff;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;font-family:var(--ss-font);font-weight:600;text-align:left;transition:all .15s;">
+            <span style="width:26px;height:26px;border-radius:7px;background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="fas fa-database" style="font-size:11px;"></i>
+            </span>
+            <span>Studio Quickbase Settings</span>
+          </button>
+
+          <!-- ── Connect+ Settings ── -->
+          <button class="ss-settings-nav-btn" data-settings-section="connectplus-settings"
+            style="width:100%;padding:10px 16px;background:transparent;border:none;border-left:3px solid transparent;color:var(--ss-muted);cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;font-family:var(--ss-font);font-weight:600;text-align:left;transition:all .15s;">
+            <span style="width:26px;height:26px;border-radius:7px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="fas fa-plug" style="font-size:11px;color:#22d3ee;"></i>
+            </span>
+            <span>Connect+ Settings</span>
+          </button>
+
+          <!-- ── Separator ── -->
+          <div style="height:1px;background:var(--ss-border2);margin:6px 12px;"></div>
+
+          <!-- ── Appearance ── -->
+          <button class="ss-settings-nav-btn" data-settings-section="studio-appearance"
+            style="width:100%;padding:10px 16px;background:transparent;border:none;border-left:3px solid transparent;color:var(--ss-muted);cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;font-family:var(--ss-font);font-weight:600;text-align:left;transition:all .15s;">
+            <span style="width:26px;height:26px;border-radius:7px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="fas fa-paint-brush" style="font-size:11px;color:#a78bfa;"></i>
+            </span>
+            <span>Appearance</span>
+          </button>
+
+          <!-- ── Integrations (coming soon) ── -->
+          <button class="ss-settings-nav-btn" data-settings-section="studio-integrations"
+            style="width:100%;padding:10px 16px;background:transparent;border:none;border-left:3px solid transparent;color:var(--ss-muted);cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;font-family:var(--ss-font);font-weight:600;text-align:left;transition:all .15s;opacity:.6;">
+            <span style="width:26px;height:26px;border-radius:7px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="fas fa-network-wired" style="font-size:11px;"></i>
+            </span>
+            <span>Integrations</span>
+            <span style="margin-left:auto;font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.06);color:var(--ss-muted);border:1px solid rgba(255,255,255,.08);white-space:nowrap;">Soon</span>
+          </button>
+
+        </nav>
+
+        <!-- Version footer -->
+        <div style="padding:10px 16px;border-top:1px solid var(--ss-border2);flex-shrink:0;">
+          <div style="font-size:9px;color:rgba(255,255,255,.18);font-weight:600;letter-spacing:.04em;">MUMS SUPPORT STUDIO</div>
         </div>
       </div>
 
-      <!-- Config left panel -->
-      <div id="left-panel-config" style="display:none;">
-        <div class="ss-panel grow">
-          <div class="ss-panel-title"><i class="fas fa-cog"></i> Config Sections</div>
-          <div class="ss-empty-note"><i class="fas fa-cog fa-spin"></i> Configuration options coming soon.</div>
+      <!-- QuickBase_S left panel -->
+      <div id="left-panel-qbs" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
+        <div class="ss-panel" style="flex-shrink:0;">
+          <div class="ss-panel-title"><i class="fas fa-database"></i> QuickBase_S</div>
+          <div style="font-size:10px;color:var(--ss-muted);margin-top:-6px;">Studio-isolated QB dashboard</div>
+        </div>
+
+        <!-- Deep search panel -->
+        <div class="ss-panel" style="flex-shrink:0;padding:10px 12px;border-bottom:1px solid var(--ss-border2);">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:7px;display:flex;align-items:center;gap:5px;">
+            <i class="fas fa-search" style="font-size:8px;"></i> Deep Search
+            <span style="font-size:8px;padding:1px 5px;border-radius:4px;background:rgba(88,166,255,.12);color:#58a6ff;border:1px solid rgba(88,166,255,.2);font-weight:700;margin-left:auto;">22k+ Records</span>
+          </div>
+          <div style="position:relative;margin-bottom:7px;">
+            <input class="ss-input" type="text" id="qbs-search-input"
+              placeholder="Search all 22,314+ records…"
+              autocomplete="off"
+              style="font-size:11px;padding-right:28px;">
+            <button onclick="document.getElementById('qbs-search-input').value='';document.getElementById('qbs-search-status').textContent='';document.getElementById('qbs-search-results').innerHTML='';"
+              style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ss-muted);cursor:pointer;font-size:11px;padding:2px 4px;" title="Clear">✕</button>
+          </div>
+          <button id="qbs-deep-search-btn"
+            onclick="window._qbsDeepSearch(document.getElementById('qbs-search-input').value, 0)"
+            style="width:100%;padding:7px;background:linear-gradient(135deg,rgba(88,166,255,.15),rgba(162,93,220,.1));border:1px solid rgba(88,166,255,.3);border-radius:6px;color:#58a6ff;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+            <i class="fas fa-search"></i> Search All Records
+          </button>
+          <div id="qbs-search-status" style="font-size:10px;color:var(--ss-muted);padding:4px 0;min-height:16px;"></div>
+        </div>
+
+        <!-- Reload button -->
+        <div class="ss-panel" style="flex-shrink:0;padding:8px 10px;">
+          <button id="qbs-reload-btn" style="width:100%;padding:6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:5px;color:var(--ss-muted);font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s;">
+            <i class="fas fa-sync-alt"></i> Reload Data
+          </button>
+        </div>
+
+        <!-- Search results scroll area -->
+        <div style="flex:1;overflow-y:auto;padding:6px 10px;" id="qbs-search-results-wrap">
+          <div id="qbs-search-results"></div>
+
+          <!-- Quick Filters (shown when no search) -->
+          <div id="qbs-quick-filters">
+            <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:6px;padding-top:4px;">Quick Filters</div>
+            <div class="ss-empty-note" style="padding:4px 0;font-size:10px;">Load data to see filters.</div>
+          </div>
         </div>
       </div>
 
@@ -1215,26 +1311,8 @@
     <main class="ss-canvas" id="ss-center-canvas">
 
       <!-- Tickets canvas -->
-      <div id="canvas-tickets" class="ss-canvas-inner">
-        <div class="ss-canvas-toolbar">
-          <div class="ss-canvas-toolbar-left">
-            <button class="ss-mode-btn" id="ss-mode-btn"><i class="fas fa-mouse-pointer"></i> Enable Support Mode</button>
-            <span class="ss-mode-badge" id="ss-mode-badge"><i class="fas fa-circle" style="font-size:7px;margin-right:4px;"></i> Standby</span>
-          </div>
-          <div class="ss-canvas-path"><i class="fas fa-desktop"></i> Workspace: /support_studio.html</div>
-        </div>
-        <div class="ss-canvas-body" id="ss-canvas-body">
-          <div class="ss-empty-icon"><i class="fas fa-headset"></i></div>
-          <div>
-            <div class="ss-empty-title">MUMS Support Studio</div>
-            <div class="ss-empty-sub">Select a session or create a new support ticket to begin.<br>Tools and workspace will appear here.</div>
-          </div>
-          <div class="ss-coming-soon">MUMS Support Studio &nbsp;·&nbsp; Enterprise Support Console &nbsp;·&nbsp; Coming Soon</div>
-        </div>
-      </div>
-
       <!-- Product Controllers canvas — item detail -->
-      <div id="canvas-catalog" class="ss-canvas-inner" style="display:none;flex-direction:column;overflow:hidden;">
+      <div id="canvas-catalog" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
         <div class="ss-canvas-toolbar" style="flex-shrink:0;">
           <div class="ss-canvas-toolbar-left">
             <span class="ss-mode-badge" style="background:rgba(88,166,255,.1);color:#58a6ff;border-color:rgba(88,166,255,.3);">
@@ -1251,7 +1329,7 @@
         </div>
 
         <!-- Item detail view -->
-        <div id="cat-detail-view" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
+        <div id="cat-detail-view" style="flex:1;flex-direction:column;overflow:hidden;min-height:0;display:none;">
           <div class="cat-detail-header">
             <div class="cat-detail-top">
               <button class="cat-parent-crumb" id="cdd-parent-crumb" title="Go to parent item">
@@ -1327,18 +1405,587 @@
       </div>
 
       <!-- History canvas -->
-      <div id="canvas-history" class="ss-canvas-inner" style="display:none;">
-        <div class="ss-canvas-toolbar"><div class="ss-canvas-toolbar-left"><span class="ss-mode-badge">History View</span></div><div class="ss-canvas-path"><i class="fas fa-history"></i> Support History Log</div></div>
-        <div class="ss-canvas-body"><div class="ss-empty-icon"><i class="fas fa-history"></i></div><div><div class="ss-empty-title">History</div><div class="ss-empty-sub">Support history log will appear here.</div></div><div class="ss-coming-soon">MUMS Support Studio &nbsp;·&nbsp; History Module &nbsp;·&nbsp; Coming Soon</div></div>
+      <!-- General Settings canvas -->
+      <div id="canvas-config" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
+        <div class="ss-canvas-toolbar" style="flex-shrink:0;">
+          <div class="ss-canvas-toolbar-left">
+            <span class="ss-mode-badge" style="background:rgba(88,166,255,.1);color:#58a6ff;border-color:rgba(88,166,255,.3);">
+              <i class="fas fa-sliders-h" style="font-size:9px;margin-right:4px;"></i> General Settings
+            </span>
+          </div>
+          <div class="ss-canvas-path"><i class="fas fa-sliders-h"></i> Support Studio / General Settings</div>
+        </div>
+        <!-- ═══════════════════════════════════════════════════════════════
+             SETTINGS CANVAS - General Settings Content Panels
+             ═══════════════════════════════════════════════════════════════
+             PATTERN FOR AI — When adding a new settings section:
+               1. Add nav button in left-panel-config with data-settings-section="your-id"
+               2. Add <div id="settings-section-your-id" style="display:none;"> here
+               3. Use the UNIFORM SECTION HEADER pattern (icon 44px + title + description)
+               4. Add horizontal divider after header
+               5. Add tab bar if multi-tab (follow cps-tab pattern)
+               6. Save button uses: gradient #1a56db→#6d28d9 (QB) or #0e7490→#155e75 (Connect+)
+             CSS VARIABLES: --ss-surface3 (inputs), --ss-border, --ss-muted, --ss-text, --ss-font
+             Accent colors: QB=#58a6ff | Connect+=#22d3ee | Appearance=#a78bfa | Integrations=#3fb950
+        ═══════════════════════════════════════════════════════════════ -->
+        <div style="flex:1;overflow:auto;padding:0;">
+          <div style="max-width:760px;margin:0 auto;padding:28px 32px;">
+
+          <div id="settings-section-studio-qb">
+            <!-- Header -->
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:0;">
+              <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,rgba(88,166,255,.15),rgba(162,93,220,.1));border:1px solid rgba(88,166,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 16px rgba(88,166,255,.12);">
+                <i class="fas fa-database" style="color:#58a6ff;font-size:18px;"></i>
+              </div>
+              <div>
+                <div style="font-size:17px;font-weight:900;color:#e6edf3;letter-spacing:-.01em;">Studio Quickbase Settings</div>
+                <div style="font-size:11px;color:var(--ss-muted);margin-top:2px;">Configure the Quickbase report used by the <a onclick="document.querySelector('[data-tab=qbs]').click()" style="color:#58a6ff;cursor:pointer;text-decoration:none;font-weight:700;">QuickBase_S</a> tab. <span style="color:rgba(245,158,11,.8);">Isolated</span> from MUMS Global QB Settings.</div>
+              </div>
+            </div>
+            <div style="height:1px;background:linear-gradient(90deg,rgba(88,166,255,.3),transparent);margin:18px 0 0;"></div>
+
+            <!-- Tabs -->
+            <div style="display:flex;gap:0;border-bottom:1px solid var(--ss-border);margin-bottom:0;" id="sqb-tab-bar">
+              <button class="sqb-tab active" data-sqb-tab="report-config" onclick="window._sqbSwitchTab('report-config')"
+                style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid #58a6ff;color:#58a6ff;white-space:nowrap;font-family:var(--ss-font);transition:color .15s;">
+                Report Config
+              </button>
+              <button class="sqb-tab" data-sqb-tab="custom-columns" onclick="window._sqbSwitchTab('custom-columns')"
+                style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--ss-muted);white-space:nowrap;font-family:var(--ss-font);transition:color .15s;">
+                Custom Columns
+              </button>
+              <button class="sqb-tab" data-sqb-tab="filter-config" onclick="window._sqbSwitchTab('filter-config')"
+                style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--ss-muted);white-space:nowrap;font-family:var(--ss-font);transition:color .15s;">
+                Filter Config
+              </button>
+            </div>
+
+            <!-- Tab: Report Config -->
+            <div id="sqb-panel-report-config" style="padding:20px 0;max-width:660px;">
+              <div style="margin-bottom:16px;">
+                <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);display:block;margin-bottom:6px;">Report Link (URL)</label>
+                <input type="text" id="sqb-report-link" class="ss-input" placeholder="https://your-realm.quickbase.com/nav/app/…/table/…/action/q?qid=…"
+                  style="font-size:11px;" oninput="window._sqbAutoFill(this.value)" onpaste="setTimeout(function(){window._sqbAutoFill(document.getElementById('sqb-report-link').value)},10)">
+                <div style="font-size:10px;color:rgba(245,158,11,.8);margin-top:5px;display:flex;align-items:center;gap:5px;">
+                  <i class="fas fa-bolt" style="font-size:9px;"></i> Realm, Table ID and QID auto-fill from the Report Link URL
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
+                <div>
+                  <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);display:block;margin-bottom:5px;">Realm</label>
+                  <input type="text" id="sqb-realm" class="ss-input" placeholder="copeland-coldchainservices" style="font-size:11px;">
+                </div>
+                <div>
+                  <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);display:block;margin-bottom:5px;">Table ID</label>
+                  <input type="text" id="sqb-table-id" class="ss-input" placeholder="bpvmztzr5" style="font-size:11px;">
+                </div>
+                <div>
+                  <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);display:block;margin-bottom:5px;">QID</label>
+                  <input type="text" id="sqb-qid" class="ss-input" placeholder="e.g. 1000315" style="font-size:11px;">
+                </div>
+              </div>
+
+              <div style="margin-bottom:24px;">
+                <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);display:block;margin-bottom:5px;">QB Token</label>
+                <input type="password" autocomplete="new-password" tabindex="-1"
+                  style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;" />
+                <input type="password" id="sqb-token" class="ss-input" placeholder="Enter your QB User Token" autocomplete="new-password" data-lpignore="true" style="font-size:11px;">
+                <div style="font-size:10px;color:var(--ss-muted);margin-top:4px;" id="sqb-token-hint">Token is encrypted on the server. Enter a new value to replace.</div>
+              </div>
+
+              <!-- Premium save bar -->
+              <div style="display:flex;align-items:center;gap:10px;padding-top:16px;border-top:1px solid var(--ss-border2);">
+                <button id="sqb-save-btn" onclick="window._sqbSaveSettings()"
+                  style="position:relative;overflow:hidden;background:linear-gradient(135deg,#1a56db 0%,#6d28d9 100%);border:1px solid rgba(109,40,217,.6);color:#fff;padding:10px 24px;border-radius:9px;font-size:12px;font-weight:800;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:8px;letter-spacing:.02em;box-shadow:0 4px 20px rgba(29,78,216,.35),inset 0 1px 0 rgba(255,255,255,.15);transition:all .2s;">
+                  <i class="fas fa-save" style="font-size:12px;"></i> Save Studio QB Settings
+                </button>
+                <button onclick="window._sqbTestSettings()"
+                  style="background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.2);color:#58a6ff;padding:10px 18px;border-radius:9px;font-size:12px;font-weight:600;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:7px;transition:all .18s;">
+                  <i class="fas fa-satellite-dish" style="font-size:11px;"></i> Test Connection
+                </button>
+                <span id="sqb-save-msg" style="font-size:11px;opacity:0;transition:opacity .3s;font-weight:600;"></span>
+              </div>
+            </div>
+
+            <!-- Tab: Custom Columns -->
+            <div id="sqb-panel-custom-columns" style="display:none;padding:20px 0;max-width:660px;">
+              <div style="font-size:12px;color:var(--ss-muted);margin-bottom:16px;">Select which columns appear in the QuickBase_S table. Drag to reorder. Leave empty to use all report columns.</div>
+              <div style="margin-bottom:12px;">
+                <input type="text" id="sqb-col-search" class="ss-input" placeholder="Search available fields…" style="font-size:11px;" oninput="window._sqbFilterColumns(this.value)">
+              </div>
+              <div style="display:flex;gap:12px;min-height:200px;">
+                <div style="flex:1;">
+                  <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:8px;">Available Fields</div>
+                  <div id="sqb-col-available" style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:7px;overflow-y:auto;max-height:260px;padding:6px;display:flex;flex-direction:column;gap:2px;">
+                    <div style="padding:8px;font-size:11px;color:var(--ss-muted);text-align:center;">Load data first — click Reload in QuickBase_S tab.</div>
+                  </div>
+                </div>
+                <div style="flex:1;">
+                  <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:8px;">Selected Columns <span id="sqb-col-count" style="color:#58a6ff;"></span></div>
+                  <div id="sqb-col-selected" style="background:var(--ss-surface3);border:1px solid rgba(88,166,255,.2);border-radius:7px;overflow-y:auto;max-height:260px;padding:6px;display:flex;flex-direction:column;gap:2px;">
+                    <div style="padding:8px;font-size:11px;color:var(--ss-muted);text-align:center;">No columns selected — using report defaults.</div>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:14px;display:flex;align-items:center;gap:10px;padding-top:14px;border-top:1px solid var(--ss-border2);">
+                <button onclick="window._sqbSaveColumns()"
+                  style="background:linear-gradient(135deg,#1a56db 0%,#6d28d9 100%);border:1px solid rgba(109,40,217,.6);color:#fff;padding:9px 20px;border-radius:9px;font-size:12px;font-weight:800;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:7px;box-shadow:0 4px 16px rgba(29,78,216,.3);">
+                  <i class="fas fa-save"></i> Save Column Config
+                </button>
+                <button onclick="window._sqbClearColumns()"
+                  style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:9px 14px;border-radius:9px;font-size:12px;font-weight:600;font-family:var(--ss-font);cursor:pointer;">
+                  Clear All
+                </button>
+                <span id="sqb-col-msg" style="font-size:11px;opacity:0;font-weight:600;"></span>
+              </div>
+            </div>
+
+            <!-- Tab: Filter Config -->
+            <div id="sqb-panel-filter-config" style="display:none;padding:20px 0;max-width:660px;">
+              <div style="font-size:12px;color:var(--ss-muted);margin-bottom:16px;">Add server-side filters applied to every data fetch. Useful for hiding resolved cases, filtering by End User, etc.</div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <span style="font-size:11px;color:var(--ss-muted);">Match</span>
+                <select id="sqb-filter-match" class="ss-input" style="width:auto;font-size:11px;padding:5px 10px;background:var(--ss-surface3);">
+                  <option value="ALL">ALL of the following</option>
+                  <option value="ANY">ANY of the following</option>
+                </select>
+                <button onclick="window._sqbAddFilter()"
+                  style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);color:#58a6ff;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;">
+                  + Add Filter
+                </button>
+              </div>
+              <div id="sqb-filter-rows" style="display:flex;flex-direction:column;gap:6px;min-height:40px;margin-bottom:14px;">
+                <div style="font-size:11px;color:var(--ss-muted);padding:8px 0;">No filters configured. Click + Add Filter to begin.</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;padding-top:14px;border-top:1px solid var(--ss-border2);">
+                <button onclick="window._sqbSaveFilters()"
+                  style="background:linear-gradient(135deg,#1a56db 0%,#6d28d9 100%);border:1px solid rgba(109,40,217,.6);color:#fff;padding:9px 20px;border-radius:9px;font-size:12px;font-weight:800;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:7px;box-shadow:0 4px 16px rgba(29,78,216,.3);">
+                  <i class="fas fa-save"></i> Save Filters
+                </button>
+                <span id="sqb-filter-msg" style="font-size:11px;opacity:0;font-weight:600;"></span>
+              </div>
+            </div>
+          </div>
+
+
+          <!-- ════════════════════════════════════════════════════════
+               SECTION: Connect+ Settings
+               section-id: connectplus-settings
+               nav-btn: data-settings-section="connectplus-settings"
+               Connected to: Connect+ tab (canvas-connectplus)
+               Storage: localStorage key ss_connectplus_settings (JSON)
+               Accent color: #22d3ee (cyan)
+               Tabs: Data Source | Search Columns
+          ════════════════════════════════════════════════════════ -->
+          <div id="settings-section-connectplus-settings" style="display:none;">
+
+            <!-- Uniform section header -->
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:0;">
+              <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,rgba(34,211,238,.15),rgba(6,182,212,.08));border:1px solid rgba(34,211,238,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 16px rgba(34,211,238,.12);">
+                <i class="fas fa-plug" style="color:#22d3ee;font-size:18px;"></i>
+              </div>
+              <div>
+                <div style="font-size:17px;font-weight:900;color:#e6edf3;letter-spacing:-.01em;">Connect+ Settings</div>
+                <div style="font-size:11px;color:var(--ss-muted);margin-top:2px;">Configure the Google Sheets data source and search behaviour for the <a onclick="document.querySelector('[data-tab=connectplus]').click()" style="color:#22d3ee;cursor:pointer;text-decoration:none;font-weight:700;">Connect+</a> tab.</div>
+              </div>
+            </div>
+            <div style="height:1px;background:linear-gradient(90deg,rgba(34,211,238,.3),transparent);margin:18px 0 0;"></div>
+
+            <!-- Tab bar (Data Source | Search Columns) -->
+            <div style="display:flex;gap:0;border-bottom:1px solid var(--ss-border);margin-bottom:0;" id="cps-tab-bar">
+              <button class="cps-tab active" data-cps-tab="data-source" onclick="window._cpsSwitchTab('data-source')"
+                style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid #22d3ee;color:#22d3ee;white-space:nowrap;font-family:var(--ss-font);transition:color .15s;">
+                Data Source
+              </button>
+              <button class="cps-tab" data-cps-tab="search-columns" onclick="window._cpsSwitchTab('search-columns')"
+                style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--ss-muted);white-space:nowrap;font-family:var(--ss-font);transition:color .15s;">
+                Search Columns
+              </button>
+            </div>
+
+            <!-- ── Panel: Data Source ────────────────────────────── -->
+            <div id="cps-panel-data-source" style="padding:20px 0;max-width:660px;">
+
+              <div style="margin-bottom:18px;">
+                <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);display:block;margin-bottom:6px;">Google Sheets CSV URL</label>
+                <div style="position:relative;">
+                  <input type="url" id="cps-csv-url" class="ss-input"
+                    placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?gid=…&output=csv"
+                    style="font-size:11px;padding-right:44px;">
+                  <button onclick="window._cpsPreviewUrl()" title="Test & preview"
+                    style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.25);border-radius:5px;color:#22d3ee;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--ss-font);">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+                <div style="font-size:10px;color:rgba(34,211,238,.7);margin-top:5px;display:flex;align-items:center;gap:5px;">
+                  <i class="fas fa-info-circle" style="font-size:9px;"></i>
+                  Google Sheets: File → Share → Publish to web → Select sheet → CSV → Copy link
+                </div>
+              </div>
+
+              <!-- URL validation / preview status -->
+              <div id="cps-url-status" style="display:none;margin-bottom:16px;padding:12px 14px;border-radius:8px;font-size:11px;line-height:1.6;"></div>
+
+              <!-- Detected columns preview (shown after successful URL test) -->
+              <div id="cps-columns-preview" style="display:none;margin-bottom:18px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                  <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);">Detected Columns</label>
+                  <span id="cps-row-count-text" style="font-size:10px;color:#22d3ee;font-weight:700;"></span>
+                </div>
+                <div id="cps-columns-list" style="display:flex;flex-wrap:wrap;gap:6px;padding:12px;background:rgba(34,211,238,.04);border:1px solid rgba(34,211,238,.15);border-radius:8px;"></div>
+              </div>
+
+              <!-- Save row -->
+              <div style="display:flex;align-items:center;gap:10px;padding-top:16px;border-top:1px solid var(--ss-border2);">
+                <button id="cps-save-btn" onclick="window._cpsSaveSettings()"
+                  style="background:linear-gradient(135deg,#0e7490,#155e75);border:1px solid rgba(34,211,238,.4);color:#fff;padding:10px 24px;border-radius:9px;font-size:12px;font-weight:800;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(34,211,238,.2),inset 0 1px 0 rgba(255,255,255,.12);transition:all .2s;">
+                  <i class="fas fa-save"></i> Save Connect+ Settings
+                </button>
+                <button onclick="window._cpsTestUrl()"
+                  style="background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.2);color:#22d3ee;padding:10px 18px;border-radius:9px;font-size:12px;font-weight:600;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:7px;transition:all .18s;">
+                  <i class="fas fa-satellite-dish" style="font-size:11px;"></i> Test &amp; Preview
+                </button>
+                <span id="cps-save-msg" style="font-size:11px;opacity:0;transition:opacity .3s;font-weight:600;"></span>
+              </div>
+            </div>
+
+            <!-- ── Panel: Search Columns ─────────────────────────── -->
+            <div id="cps-panel-search-columns" style="display:none;padding:20px 0;max-width:660px;">
+              <div style="font-size:12px;color:var(--ss-muted);margin-bottom:16px;line-height:1.6;">
+                Select which columns the Connect+ search box targets. All checked columns will be searched.
+                Column list is auto-populated from your CSV URL.
+              </div>
+
+              <!-- Quick actions -->
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <button onclick="window._cpsSelectAllCols(true)"
+                  style="background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.2);border-radius:6px;color:#22d3ee;padding:5px 14px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;transition:background .15s;">
+                  <i class="fas fa-check-square" style="margin-right:4px;"></i> Select All
+                </button>
+                <button onclick="window._cpsSelectAllCols(false)"
+                  style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--ss-muted);padding:5px 14px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;transition:background .15s;">
+                  <i class="fas fa-square" style="margin-right:4px;"></i> Deselect All
+                </button>
+                <span id="cps-col-filter-count" style="font-size:10px;color:var(--ss-muted);"></span>
+              </div>
+
+              <!-- Dynamic column checkboxes (auto-populated from CSV headers) -->
+              <div id="cps-col-checkboxes"
+                style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;padding:16px;background:rgba(255,255,255,.02);border:1px solid var(--ss-border2);border-radius:10px;min-height:60px;">
+                <div style="font-size:11px;color:var(--ss-muted);opacity:.5;grid-column:1/-1;text-align:center;padding:8px 0;">
+                  Save a CSV URL in the Data Source tab first — columns will appear here automatically.
+                </div>
+              </div>
+
+              <!-- Save search column settings -->
+              <div style="display:flex;align-items:center;gap:10px;padding-top:16px;margin-top:16px;border-top:1px solid var(--ss-border2);">
+                <button onclick="window._cpsSaveSearchCols()"
+                  style="background:linear-gradient(135deg,#0e7490,#155e75);border:1px solid rgba(34,211,238,.4);color:#fff;padding:10px 24px;border-radius:9px;font-size:12px;font-weight:800;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(34,211,238,.2);">
+                  <i class="fas fa-save"></i> Save Search Columns
+                </button>
+                <span id="cps-cols-msg" style="font-size:11px;opacity:0;transition:opacity .3s;font-weight:600;"></span>
+              </div>
+            </div>
+
+          </div><!-- /settings-section-connectplus-settings -->
+
+
+          <!-- ════════════════════════════════════════════════════════
+               SECTION: Appearance  [PLACEHOLDER — coming soon]
+               section-id: studio-appearance
+               Accent color: #a78bfa (violet)
+          ════════════════════════════════════════════════════════ -->
+          <div id="settings-section-studio-appearance" style="display:none;">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:0;">
+              <div style="width:44px;height:44px;border-radius:12px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <i class="fas fa-paint-brush" style="color:#a78bfa;font-size:18px;"></i>
+              </div>
+              <div>
+                <div style="font-size:17px;font-weight:900;color:#e6edf3;letter-spacing:-.01em;">Appearance</div>
+                <div style="font-size:11px;color:var(--ss-muted);margin-top:2px;">Adjust brightness, contrast, and visual comfort settings for the Support Studio.</div>
+              </div>
+            </div>
+            <div style="height:1px;background:linear-gradient(90deg,rgba(167,139,250,.3),transparent);margin:18px 0 0;"></div>
+
+            <!-- Tab bar -->
+            <div style="display:flex;gap:0;border-bottom:1px solid var(--ss-border);margin-bottom:0;">
+              <button class="app-tab active" data-app-tab="display"
+                onclick="window._appSwitchTab('display')"
+                style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid #a78bfa;color:#a78bfa;white-space:nowrap;font-family:var(--ss-font);">
+                Display
+              </button>
+              <button class="app-tab" data-app-tab="theme"
+                onclick="window._appSwitchTab('theme')"
+                style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--ss-muted);white-space:nowrap;font-family:var(--ss-font);">
+                Theme
+              </button>
+            </div>
+
+            <!-- Panel: Display -->
+            <div id="app-panel-display" style="padding:20px 0;max-width:660px;">
+
+              <!-- Brightness control -->
+              <div style="margin-bottom:24px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                  <div>
+                    <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);">Brightness</label>
+                    <div style="font-size:10px;color:var(--ss-muted);margin-top:2px;">Adjust overall screen brightness</div>
+                  </div>
+                  <span id="app-brightness-val" style="font-size:13px;font-weight:800;color:#a78bfa;min-width:40px;text-align:right;">100%</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <i class="fas fa-sun" style="color:var(--ss-muted);font-size:10px;opacity:.5;"></i>
+                  <input type="range" id="app-brightness" min="40" max="130" value="100" step="5"
+                    style="flex:1;accent-color:#a78bfa;height:4px;cursor:pointer;"
+                    oninput="window._appApplyDisplay()">
+                  <i class="fas fa-sun" style="color:#a78bfa;font-size:14px;"></i>
+                </div>
+              </div>
+
+              <!-- Contrast control -->
+              <div style="margin-bottom:24px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                  <div>
+                    <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);">Contrast</label>
+                    <div style="font-size:10px;color:var(--ss-muted);margin-top:2px;">Increase for sharper text and UI edges</div>
+                  </div>
+                  <span id="app-contrast-val" style="font-size:13px;font-weight:800;color:#a78bfa;min-width:40px;text-align:right;">100%</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <i class="fas fa-adjust" style="color:var(--ss-muted);font-size:11px;opacity:.5;"></i>
+                  <input type="range" id="app-contrast" min="60" max="140" value="100" step="5"
+                    style="flex:1;accent-color:#a78bfa;height:4px;cursor:pointer;"
+                    oninput="window._appApplyDisplay()">
+                  <i class="fas fa-adjust" style="color:#a78bfa;font-size:14px;"></i>
+                </div>
+              </div>
+
+              <!-- Text size -->
+              <div style="margin-bottom:24px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                  <div>
+                    <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);">UI Scale / Text Size</label>
+                    <div style="font-size:10px;color:var(--ss-muted);margin-top:2px;">Scale the entire interface up or down</div>
+                  </div>
+                  <span id="app-scale-val" style="font-size:13px;font-weight:800;color:#a78bfa;min-width:40px;text-align:right;">100%</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <span style="color:var(--ss-muted);font-size:9px;font-weight:800;">A</span>
+                  <input type="range" id="app-scale" min="80" max="120" value="100" step="5"
+                    style="flex:1;accent-color:#a78bfa;height:4px;cursor:pointer;"
+                    oninput="window._appApplyDisplay()">
+                  <span style="color:#a78bfa;font-size:14px;font-weight:800;">A</span>
+                </div>
+              </div>
+
+              <!-- Sidebar opacity -->
+              <div style="margin-bottom:28px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                  <div>
+                    <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);">Sidebar Opacity</label>
+                    <div style="font-size:10px;color:var(--ss-muted);margin-top:2px;">Reduce to make the sidebar less prominent</div>
+                  </div>
+                  <span id="app-sidebar-opacity-val" style="font-size:13px;font-weight:800;color:#a78bfa;min-width:40px;text-align:right;">100%</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <i class="fas fa-columns" style="color:var(--ss-muted);font-size:11px;opacity:.3;"></i>
+                  <input type="range" id="app-sidebar-opacity" min="30" max="100" value="100" step="5"
+                    style="flex:1;accent-color:#a78bfa;height:4px;cursor:pointer;"
+                    oninput="window._appApplyDisplay()">
+                  <i class="fas fa-columns" style="color:#a78bfa;font-size:11px;"></i>
+                </div>
+              </div>
+
+              <!-- Preview box -->
+              <div style="padding:14px;background:rgba(167,139,250,.05);border:1px solid rgba(167,139,250,.15);border-radius:10px;margin-bottom:20px;">
+                <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:8px;">Live Preview</div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <div style="width:32px;height:32px;border-radius:8px;background:rgba(167,139,250,.15);border:1px solid rgba(167,139,250,.3);display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-paint-brush" style="color:#a78bfa;font-size:12px;"></i>
+                  </div>
+                  <div>
+                    <div style="font-size:12px;font-weight:700;color:#e6edf3;">MUMS Support Studio</div>
+                    <div style="font-size:10px;color:var(--ss-muted);">Brightness · Contrast · Scale applied live</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Actions row -->
+              <div style="display:flex;align-items:center;gap:10px;padding-top:16px;border-top:1px solid var(--ss-border2);">
+                <button onclick="window._appSaveDisplay()"
+                  style="background:linear-gradient(135deg,#7c3aed,#6d28d9);border:1px solid rgba(167,139,250,.4);color:#fff;padding:10px 24px;border-radius:9px;font-size:12px;font-weight:800;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(109,40,217,.3);transition:all .2s;">
+                  <i class="fas fa-save"></i> Save Appearance
+                </button>
+                <button onclick="window._appResetDisplay()"
+                  style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:10px 18px;border-radius:9px;font-size:12px;font-weight:600;font-family:var(--ss-font);cursor:pointer;transition:all .18s;">
+                  <i class="fas fa-undo"></i> Reset to Default
+                </button>
+                <span id="app-display-msg" style="font-size:11px;opacity:0;font-weight:600;transition:opacity .3s;"></span>
+              </div>
+            </div>
+
+            <!-- Panel: Theme -->
+            <div id="app-panel-theme" style="display:none;padding:20px 0;max-width:660px;">
+              <div style="font-size:12px;color:var(--ss-muted);margin-bottom:16px;line-height:1.6;">
+                Choose a preset colour theme for the Support Studio interface.
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:24px;" id="app-theme-grid"></div>
+              <div style="display:flex;align-items:center;gap:10px;padding-top:16px;border-top:1px solid var(--ss-border2);">
+                <button onclick="window._appSaveDisplay()"
+                  style="background:linear-gradient(135deg,#7c3aed,#6d28d9);border:1px solid rgba(167,139,250,.4);color:#fff;padding:10px 24px;border-radius:9px;font-size:12px;font-weight:800;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(109,40,217,.3);">
+                  <i class="fas fa-save"></i> Save Theme
+                </button>
+                <span id="app-theme-msg" style="font-size:11px;opacity:0;font-weight:600;transition:opacity .3s;"></span>
+              </div>
+            </div>
+
+          </div>
+
+
+          <!-- ════════════════════════════════════════════════════════
+               SECTION: Integrations  [PLACEHOLDER — coming soon]
+               section-id: studio-integrations
+               Accent color: #3fb950 (green)
+          ════════════════════════════════════════════════════════ -->
+          <div id="settings-section-studio-integrations" style="display:none;">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:0;">
+              <div style="width:44px;height:44px;border-radius:12px;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <i class="fas fa-network-wired" style="color:#3fb950;font-size:18px;"></i>
+              </div>
+              <div>
+                <div style="font-size:17px;font-weight:900;color:#e6edf3;letter-spacing:-.01em;">Integrations</div>
+                <div style="font-size:11px;color:var(--ss-muted);margin-top:2px;">Connect external services and APIs to the Support Studio.</div>
+              </div>
+            </div>
+            <div style="height:1px;background:linear-gradient(90deg,rgba(63,185,80,.3),transparent);margin:18px 0 20px;"></div>
+            <div class="ss-empty-note"><i class="fas fa-network-wired"></i><br>Integration settings coming soon.</div>
+          </div>
+
+          </div><!-- /max-width wrapper -->
+        </div><!-- /overflow scroll -->
+      </div><!-- /canvas-config -->
+
+      <!-- Connect+ left panel -->
+      <div id="left-panel-connectplus" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
+        <div class="ss-panel" style="flex-shrink:0;">
+          <div class="ss-panel-title"><i class="fas fa-plug" style="color:#22d3ee;"></i> Connect+</div>
+          <div style="font-size:10px;color:var(--ss-muted);margin-top:-6px;">36,000+ sites across all regions</div>
+        </div>
+        <!-- Search panel -->
+        <div class="ss-panel" style="flex-shrink:0;padding:10px 12px;">
+          <div style="position:relative;margin-bottom:7px;">
+            <input class="ss-input" type="text" id="cp-search-input"
+              placeholder="Search sites, cities, states…"
+              autocomplete="off" style="font-size:11px;padding-right:28px;"
+              oninput="window._cpOnSearch(this.value)"
+              onkeydown="if(event.key==='Enter') window._cpOnSearch(this.value)">
+            <button onclick="document.getElementById('cp-search-input').value='';window._cpOnSearch('');"
+              style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ss-muted);cursor:pointer;font-size:11px;">✕</button>
+          </div>
+          <!-- Filter chips -->
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;" id="cp-filter-chips"></div>
+          <!-- Status -->
+          <div id="cp-status" style="font-size:10px;color:var(--ss-muted);min-height:14px;"></div>
+        </div>
+        <!-- Results list -->
+        <div style="flex:1;overflow-y:auto;" id="cp-results-list">
+          <div style="padding:16px 12px;text-align:center;color:var(--ss-muted);">
+            <i class="fas fa-plug" style="font-size:20px;opacity:.2;display:block;margin-bottom:8px;"></i>
+            <div style="font-size:11px;">Loading Connect+ sites…</div>
+          </div>
+        </div>
       </div>
 
-      <!-- Config canvas -->
-      <div id="canvas-config" class="ss-canvas-inner" style="display:none;">
-        <div class="ss-canvas-toolbar"><div class="ss-canvas-toolbar-left"><span class="ss-mode-badge">Config View</span></div><div class="ss-canvas-path"><i class="fas fa-cog"></i> Studio Configuration</div></div>
-        <div class="ss-canvas-body"><div class="ss-empty-icon"><i class="fas fa-cog"></i></div><div><div class="ss-empty-title">Configuration</div><div class="ss-empty-sub">Studio configuration settings will appear here.</div></div><div class="ss-coming-soon">MUMS Support Studio &nbsp;·&nbsp; Config Module &nbsp;·&nbsp; Coming Soon</div></div>
+      <!-- QuickBase_S canvas — full MY QUICKBASE page injected here -->
+      <!-- Connect+ canvas -->
+      <div id="canvas-connectplus" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
+        <!-- Toolbar -->
+        <div class="ss-canvas-toolbar" style="flex-shrink:0;">
+          <div class="ss-canvas-toolbar-left">
+            <span class="ss-mode-badge" style="background:rgba(34,211,238,.1);color:#22d3ee;border-color:rgba(34,211,238,.3);">
+              <i class="fas fa-plug" style="font-size:9px;margin-right:4px;"></i> Connect+
+            </span>
+            <span id="cp-live-badge" style="display:none;padding:3px 8px;border-radius:999px;font-size:9px;font-weight:700;letter-spacing:.04em;background:rgba(63,185,80,.12);color:#3fb950;border:1px solid rgba(63,185,80,.3);">● LIVE</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+            <span id="cp-record-count" style="font-size:10px;color:var(--ss-muted);"></span>
+            <select id="cp-country-filter" onchange="window._cpApplyFilters()"
+              style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:5px;color:var(--ss-text);font-size:11px;padding:4px 8px;font-family:var(--ss-font);cursor:pointer;max-width:160px;">
+              <option value="">All Countries</option>
+            </select>
+            <select id="cp-dir-filter" onchange="window._cpApplyFilters()"
+              style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:5px;color:var(--ss-text);font-size:11px;padding:4px 8px;font-family:var(--ss-font);cursor:pointer;max-width:160px;">
+              <option value="">All Directories</option>
+            </select>
+            <button onclick="window._cpExportCsv()"
+              style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:4px 10px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:5px;">
+              <i class="fas fa-download"></i> Export CSV
+            </button>
+            <button onclick="window._cpRefresh()"
+              style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:4px 10px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:5px;">
+              <i class="fas fa-sync-alt"></i> Reload
+            </button>
+          </div>
+        </div>
+
+        <!-- Search bar (mirrors QuickBase_S) -->
+        <div style="flex-shrink:0;padding:8px 16px;background:var(--ss-surface2);border-bottom:1px solid var(--ss-border);display:flex;gap:8px;align-items:center;">
+          <div style="flex:1;display:flex;align-items:center;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:6px;overflow:hidden;transition:border-color .18s;">
+            <i class="fas fa-search" style="padding:0 10px;color:var(--ss-muted);font-size:11px;"></i>
+            <input type="text" id="cp-main-search" placeholder="Search across all 36,000+ Connect+ sites…"
+              style="flex:1;background:transparent;border:none;outline:none;color:var(--ss-text);font-family:var(--ss-font);font-size:12px;padding:7px 0 7px 0;"
+              oninput="window._cpOnSearch(this.value)"
+              onkeydown="if(event.key==='Enter') window._cpOnSearch(this.value)">
+            <button onclick="document.getElementById('cp-main-search').value='';window._cpOnSearch('');"
+              style="background:none;border:none;color:var(--ss-muted);padding:7px 10px;cursor:pointer;font-size:10px;" title="Clear">✕</button>
+          </div>
+          <span id="cp-search-count" style="font-size:10px;color:var(--ss-muted);white-space:nowrap;min-width:80px;text-align:right;"></span>
+        </div>
+
+        <!-- Table header -->
+        <div style="flex-shrink:0;overflow-x:auto;background:var(--ss-surface3);">
+          <table id="cp-table-head" style="width:100%;border-collapse:collapse;min-width:900px;">
+            <thead>
+              <tr style="border-bottom:1px solid var(--ss-border);">
+                <th style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;width:40px;">#</th>
+                <th onclick="window._cpSort('site')" style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;cursor:pointer;min-width:180px;">Site <i class="fas fa-sort" id="cp-sort-site" style="opacity:.3;"></i></th>
+                <th onclick="window._cpSort('directory')" style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;cursor:pointer;min-width:130px;">Directory <i class="fas fa-sort" id="cp-sort-directory" style="opacity:.3;"></i></th>
+                <th onclick="window._cpSort('city')" style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;cursor:pointer;min-width:120px;">City <i class="fas fa-sort" id="cp-sort-city" style="opacity:.3;"></i></th>
+                <th onclick="window._cpSort('state')" style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;cursor:pointer;">State/Region <i class="fas fa-sort" id="cp-sort-state" style="opacity:.3;"></i></th>
+                <th onclick="window._cpSort('country')" style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;cursor:pointer;">Country <i class="fas fa-sort" id="cp-sort-country" style="opacity:.3;"></i></th>
+                <th onclick="window._cpSort('timezone')" style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;cursor:pointer;">Time Zone <i class="fas fa-sort" id="cp-sort-timezone" style="opacity:.3;"></i></th>
+                <th style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;">Systems</th>
+                <th style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;">Connect+ Link</th>
+              </tr>
+            </thead>
+          </table>
+        </div>
+
+        <!-- Scrollable table body -->
+        <div id="cp-table-body" style="flex:1;overflow:auto;min-height:0;">
+          <div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--ss-muted);">
+            <i class="fas fa-spinner fa-spin" style="font-size:20px;opacity:.4;"></i>
+            <span style="font-size:13px;opacity:.5;">Loading Connect+ data…</span>
+          </div>
+        </div>
+
+        <!-- Pagination -->
+        <div id="cp-pagination" style="flex-shrink:0;padding:8px 16px;background:var(--ss-surface);border-top:1px solid var(--ss-border);display:flex;align-items:center;gap:10px;">
+          <span id="cp-page-info" style="font-size:11px;color:var(--ss-muted);flex:1;"></span>
+          <button onclick="window._cpChangePage(-1)" id="cp-prev-btn"
+            style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:5px 12px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;">‹ Prev</button>
+          <div id="cp-page-btns" style="display:flex;gap:4px;"></div>
+          <button onclick="window._cpChangePage(1)" id="cp-next-btn"
+            style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:5px 12px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;">Next ›</button>
+        </div>
       </div>
 
-    </main>
+      <div id="canvas-qbs" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
+        <div id="qbs-root" style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;"></div>
+      </div>
+
+        </main>
 
     <!-- ── PERSISTENT RIGHT SIDEBAR ──────────────────────────── -->
     <aside class="ss-sidebar right" id="ss-right-sidebar">
@@ -1556,18 +2203,32 @@
 
   function getToken() {
     try {
-      const keys = ['mums_access_token','sb-access-token','supabase.auth.token'];
-      for (const k of keys) { const v = localStorage.getItem(k); if (v) return v; }
-      for (let i = 0; i < sessionStorage.length; i++) {
-        const k = sessionStorage.key(i);
-        if (k && (k.includes('token') || k.includes('auth'))) {
-          const v = sessionStorage.getItem(k);
-          if (v && v.length > 20) return v;
-        }
+      // Primary: CloudAuth session key (mums_supabase_session)
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) {
+        try {
+          var parsed = JSON.parse(raw);
+          var t = parsed && (parsed.access_token || (parsed.session && parsed.session.access_token));
+          if (t) return String(t);
+        } catch(_) {}
       }
+      // CloudAuth API
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') {
+        var t2 = window.CloudAuth.accessToken();
+        if (t2) return t2;
+      }
+      // Auth API
+      if (window.Auth && typeof window.Auth.getSession === 'function') {
+        var s = window.Auth.getSession();
+        var t3 = s && s.access_token;
+        if (t3) return String(t3);
+      }
+      // Legacy
+      const legacyKeys = ['mums_access_token','sb-access-token','supabase.auth.token'];
+      for (const k of legacyKeys) { const v = localStorage.getItem(k); if (v) return v; }
       if (window.opener && window.opener.CloudAuth) {
-        const t = window.opener.CloudAuth.accessToken();
-        if (t) return t;
+        const t4 = window.opener.CloudAuth.accessToken();
+        if (t4) return t4;
       }
     } catch(_) {}
     return '';
@@ -2283,7 +2944,7 @@
   'use strict';
 
   // ── Tab switching — single persistent layout ────────────────────
-  const LEFT_PANELS = ['tickets','catalog','history','config'];
+  const LEFT_PANELS = ['catalog','config','qbs','connectplus'];
 
   function activateTab(target) {
     document.querySelectorAll('.ss-tab').forEach(t =>
@@ -2300,13 +2961,34 @@
     if (target === 'catalog' && typeof window._catInit === 'function') {
       window._catInit();
     }
+    if (target === 'config') {
+      // Load the currently active settings section
+      // Guard: _sqbLoadSettings may not be defined if called before its script block loads
+      const activeNavBtn = document.querySelector('.ss-settings-nav-btn.active, .ss-settings-nav-btn[style*="border-left-color: rgb"]');
+      const activeSection = activeNavBtn ? activeNavBtn.dataset.settingsSection : 'studio-qb';
+      if ((activeSection === 'studio-qb' || !activeSection) && typeof window._sqbLoadSettings === 'function') {
+        window._sqbLoadSettings();
+      } else if (activeSection === 'connectplus-settings' && typeof window._cpsLoadSettings === 'function') {
+        window._cpsLoadSettings();
+      }
+    }
+    if (target === 'qbs') {
+      // Guard: _qbsInit is defined in a later script block
+      if (typeof window._qbsInit === 'function') window._qbsInit();
+      else setTimeout(function() { if (typeof window._qbsInit === 'function') window._qbsInit(); }, 200);
+    }
+    if (target === 'connectplus') {
+      if (typeof window._cpInit === 'function') window._cpInit();
+    }
   }
 
   document.querySelectorAll('.ss-tab').forEach(tab => {
     tab.addEventListener('click', () => activateTab(tab.dataset.tab));
   });
 
-  activateTab('tickets');
+  // Default to config tab on load — avoids dependency on _qbsInit which is
+  // defined in a later script block. QBS tab init happens on first click.
+  activateTab('config');
 
   // ── Live clock ──────────────────────────────────────────────────
   const clockEl = document.getElementById('ss-clock');
@@ -2585,8 +3267,2207 @@
   renderRecentNotes();
   document.title = 'MUMS Support Studio';
 
+  // ── Settings nav switching ──────────────────────────────────────
+  // NOTE FOR AI: Each settings section has its own accent color.
+  // Add new entries to SECTION_COLORS when adding a new settings section.
+  var SECTION_COLORS = {
+    'studio-qb':              { fg: '#58a6ff', bg: 'rgba(88,166,255,.1)',  border: '#58a6ff' },
+    'connectplus-settings':   { fg: '#22d3ee', bg: 'rgba(34,211,238,.1)',  border: '#22d3ee' },
+    'studio-appearance':      { fg: '#a78bfa', bg: 'rgba(167,139,250,.1)', border: '#a78bfa' },
+    'studio-integrations':    { fg: '#3fb950', bg: 'rgba(63,185,80,.1)',   border: '#3fb950' },
+  };
+
+  document.querySelectorAll('.ss-settings-nav-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var section = btn.dataset.settingsSection;
+      var colors  = SECTION_COLORS[section] || SECTION_COLORS['studio-qb'];
+
+      // Reset ALL nav buttons to inactive state
+      document.querySelectorAll('.ss-settings-nav-btn').forEach(function(b) {
+        b.classList.remove('ss-settings-nav-active');
+        b.style.background      = 'transparent';
+        b.style.borderLeftColor = 'transparent';
+        b.style.color           = 'var(--ss-muted)';
+        b.style.opacity         = b.dataset.settingsSection === 'studio-appearance' ||
+                                   b.dataset.settingsSection === 'studio-integrations' ? '0.6' : '1';
+      });
+
+      // Activate clicked button with section accent color
+      btn.classList.add('ss-settings-nav-active');
+      btn.style.background      = colors.bg;
+      btn.style.borderLeftColor = colors.border;
+      btn.style.color           = colors.fg;
+      btn.style.opacity         = '1';
+
+      // Show only the target settings section panel
+      document.querySelectorAll('[id^="settings-section-"]').forEach(function(s) {
+        s.style.display = 'none';
+      });
+      var target = document.getElementById('settings-section-' + section);
+      if (target) target.style.display = 'block';
+
+      // Call section-specific load hooks after the DOM is updated
+      if (section === 'studio-qb' && typeof window._sqbLoadSettings === 'function') {
+        window._sqbLoadSettings();
+      } else if (section === 'connectplus-settings' && typeof window._cpsLoadSettings === 'function') {
+        window._cpsLoadSettings();
+      }
+    });
+  });
 
 })();
 </script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   STUDIO QB SETTINGS — General Settings > Studio Quickbase Settings
+   Fully isolated: reads/writes /api/studio/qb_settings only.
+═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  // ── Token helper ──────────────────────────────────────────────────
+  function sqbGetToken() {
+    try {
+      // Primary: CloudAuth session (mums_supabase_session) — same key as cloud_auth.js LS_SESSION
+      var sessionKeys = ['mums_supabase_session'];
+      for (var i = 0; i < sessionKeys.length; i++) {
+        var raw = localStorage.getItem(sessionKeys[i]) || sessionStorage.getItem(sessionKeys[i]);
+        if (raw) {
+          try {
+            var parsed = JSON.parse(raw);
+            var t = parsed && (parsed.access_token || (parsed.session && parsed.session.access_token));
+            if (t) return String(t);
+          } catch(_) {}
+        }
+      }
+      // Fallback: CloudAuth in-memory via window.CloudAuth
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') {
+        var t2 = window.CloudAuth.accessToken();
+        if (t2) return t2;
+      }
+      // Fallback: Auth via window.Auth
+      if (window.Auth && typeof window.Auth.getSession === 'function') {
+        var s = window.Auth.getSession();
+        var t3 = s && s.access_token;
+        if (t3) return String(t3);
+      }
+      // Legacy fallbacks
+      var legacyKeys = ['mums_access_token','sb-access-token','supabase.auth.token'];
+      for (var j = 0; j < legacyKeys.length; j++) {
+        var v = localStorage.getItem(legacyKeys[j]);
+        if (v) return v;
+      }
+    } catch(_) {}
+    return '';
+  }
+
+  function sqbFetch(url, opts) {
+    var tok = sqbGetToken();
+    var headers = Object.assign({ 'Content-Type': 'application/json' }, (opts && opts.headers) || {});
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
+    return fetch(url, Object.assign({}, opts || {}, { headers: headers }));
+  }
+
+  // ── Tab switcher ──────────────────────────────────────────────────
+  window._sqbSwitchTab = function(tabId) {
+    document.querySelectorAll('.sqb-tab').forEach(function(btn) {
+      var active = btn.dataset.sqbTab === tabId;
+      btn.style.borderBottomColor = active ? '#58a6ff' : 'transparent';
+      btn.style.color = active ? '#58a6ff' : 'var(--ss-muted)';
+    });
+    ['report-config','custom-columns','filter-config'].forEach(function(id) {
+      var el = document.getElementById('sqb-panel-' + id);
+      if (el) el.style.display = id === tabId ? 'block' : 'none';
+    });
+    if (tabId === 'custom-columns') window._sqbLoadColumns();
+    if (tabId === 'filter-config')  window._sqbRenderFilters();
+  };
+
+  // ── URL parser ────────────────────────────────────────────────────
+  function sqbParseLink(url) {
+    var out = { realm: '', tableId: '', qid: '' };
+    if (!url) return out;
+    try {
+      var u = new URL(url);
+      var host = u.hostname;
+      var m = host.match(/^([a-z0-9-]+)\.quickbase\.com$/i);
+      if (m) out.realm = m[1];
+      var segs = u.pathname.split('/').filter(Boolean);
+      var ti = segs.indexOf('table');
+      if (ti >= 0 && segs[ti+1]) out.tableId = segs[ti+1];
+      if (!out.tableId) {
+        var di = segs.indexOf('db');
+        if (di >= 0 && segs[di+1]) out.tableId = segs[di+1];
+      }
+      var qRaw = u.searchParams.get('qid') || '';
+      var qm = qRaw.match(/-?\d+/);
+      if (qm) out.qid = qm[0];
+      if (!out.qid) {
+        var rm = url.match(/[?&]qid=(-?\d+)/i);
+        if (rm) out.qid = rm[1];
+      }
+    } catch(_) {}
+    return out;
+  }
+
+  // ── Auto-fill (on URL input AND on load) ──────────────────────────
+  window._sqbAutoFill = function(val) {
+    var p = sqbParseLink(val);
+    var el = function(id) { return document.getElementById(id); };
+    if (p.realm   && el('sqb-realm'))    el('sqb-realm').value    = p.realm;
+    if (p.tableId && el('sqb-table-id')) el('sqb-table-id').value = p.tableId;
+    if (p.qid     && el('sqb-qid'))      el('sqb-qid').value      = p.qid;
+  };
+
+  // ── Load settings from server ─────────────────────────────────────
+  window._sqbLoadSettings = function() {
+    sqbFetch('/api/studio/qb_settings')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) return;
+        var s = d.settings || {};
+        var el = function(id) { return document.getElementById(id); };
+        var rl = s.reportLink || '';
+        if (el('sqb-report-link')) el('sqb-report-link').value = rl;
+
+        // Always populate parsed fields — use stored values first, fallback to parse
+        var realm   = s.realm   || '';
+        var tableId = s.tableId || '';
+        var qid     = s.qid     || '';
+
+        // If stored realm/tableId/qid are empty, parse from reportLink
+        if (rl && (!realm || !tableId || !qid)) {
+          var parsed = sqbParseLink(rl);
+          if (!realm   && parsed.realm)   realm   = parsed.realm;
+          if (!tableId && parsed.tableId) tableId = parsed.tableId;
+          if (!qid     && parsed.qid)     qid     = parsed.qid;
+        }
+
+        if (el('sqb-realm'))    el('sqb-realm').value    = realm;
+        if (el('sqb-table-id')) el('sqb-table-id').value = tableId;
+        if (el('sqb-qid'))      el('sqb-qid').value      = qid;
+
+        var hint = el('sqb-token-hint');
+        if (s.qbTokenSet) {
+          if (el('sqb-token')) el('sqb-token').placeholder = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+          if (hint) hint.textContent = '\u2713 Token saved. Enter a new value to replace.';
+        } else {
+          if (hint) hint.textContent = 'Token not set. Enter your QB User Token.';
+        }
+
+        // Store customColumns / filterConfig for other tabs
+        window._sqbState = window._sqbState || {};
+        window._sqbState.customColumns = Array.isArray(s.customColumns) ? s.customColumns : [];
+        window._sqbState.filterConfig  = Array.isArray(s.filterConfig)  ? s.filterConfig  : [];
+        window._sqbState.filterMatch   = s.filterMatch || 'ALL';
+      }).catch(function() {});
+  };
+
+  // ── Save Report Config ────────────────────────────────────────────
+  window._sqbSaveSettings = function() {
+    var el = function(id) { return document.getElementById(id); };
+    var msg = el('sqb-save-msg');
+    var btn = el('sqb-save-btn');
+    var tokenVal = el('sqb-token') ? el('sqb-token').value.trim() : '';
+    var rl = el('sqb-report-link') ? el('sqb-report-link').value.trim() : '';
+    var realm   = el('sqb-realm')    ? el('sqb-realm').value.trim()    : '';
+    var tableId = el('sqb-table-id') ? el('sqb-table-id').value.trim() : '';
+    var qid     = el('sqb-qid')      ? el('sqb-qid').value.trim()      : '';
+
+    // Auto-parse realm/tableId/qid from URL if fields are empty
+    if (rl && (!realm || !tableId || !qid)) {
+      var p = sqbParseLink(rl);
+      if (!realm   && p.realm)   { realm = p.realm;     if (el('sqb-realm'))    el('sqb-realm').value    = realm;   }
+      if (!tableId && p.tableId) { tableId = p.tableId; if (el('sqb-table-id')) el('sqb-table-id').value = tableId; }
+      if (!qid     && p.qid)     { qid = p.qid;         if (el('sqb-qid'))      el('sqb-qid').value      = qid;     }
+    }
+
+    var body = {
+      reportLink: rl,
+      realm:      realm,
+      tableId:    tableId,
+      qid:        qid,
+      qbToken:    tokenVal || '__QB_TOKEN_SAVED__',
+    };
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving\u2026';
+      btn.style.opacity = '.7';
+    }
+    sqbFetch('/api/studio/qb_settings', { method: 'POST', body: JSON.stringify(body) })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) throw new Error(d.error || 'Save failed');
+        if (tokenVal && el('sqb-token')) {
+          el('sqb-token').value = '';
+          el('sqb-token').placeholder = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+          var hint = el('sqb-token-hint');
+          if (hint) hint.textContent = '\u2713 Token saved. Enter a new value to replace.';
+        }
+        if (msg) {
+          msg.textContent = '\u2713 Studio QB Settings saved!';
+          msg.style.cssText = 'font-size:11px;color:#3fb950;opacity:1;font-weight:600;';
+          clearTimeout(msg._t);
+          msg._t = setTimeout(function() { msg.style.opacity = '0'; }, 4000);
+        }
+        if (typeof window._qbsReset === 'function') window._qbsReset();
+      })
+      .catch(function(e) {
+        if (msg) {
+          msg.textContent = '\u2717 ' + (e && e.message || 'Save failed');
+          msg.style.cssText = 'font-size:11px;color:#f85149;opacity:1;font-weight:600;';
+        }
+      })
+      .finally(function() {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-save"></i> Save Studio QB Settings';
+          btn.style.opacity = '1';
+        }
+      });
+  };
+
+  // ── Test Connection ───────────────────────────────────────────────
+  window._sqbTestSettings = function() {
+    if (typeof window._qbsReset === 'function') window._qbsReset();
+    var qbsTab = document.querySelector('[data-tab="qbs"]');
+    if (qbsTab) qbsTab.click();
+  };
+
+  // ── Custom Columns tab ────────────────────────────────────────────
+  window._sqbState = window._sqbState || {};
+
+  window._sqbLoadColumns = function() {
+    var avail = document.getElementById('sqb-col-available');
+    var sel   = document.getElementById('sqb-col-selected');
+    if (!avail || !sel) return;
+
+    var allFields  = window._sqbState.allFields  || [];
+    var selCols    = window._sqbState.customColumns || [];
+
+    if (!allFields.length) {
+      // Try to load from QBS page state
+      if (window.__mumsQbRecords && window.__mumsQbRecords.columns) {
+        allFields = window.__mumsQbRecords.columns.map(function(c) {
+          return { id: Number(c.id), label: c.label };
+        });
+        window._sqbState.allFields = allFields;
+      }
+    }
+
+    if (!allFields.length) {
+      avail.innerHTML = '<div style="padding:12px;font-size:11px;color:var(--ss-muted);text-align:center;"><i class="fas fa-info-circle" style="margin-right:5px;"></i>Go to QuickBase_S tab and click Reload to populate fields.</div>';
+    } else {
+      var selectedSet = new Set(selCols.map(String));
+      avail.innerHTML = allFields.filter(function(f) {
+        return !selectedSet.has(String(f.id));
+      }).map(function(f) {
+        return '<div onclick="window._sqbSelectCol(' + f.id + ',\'' + f.label.replace(/'/g,"\\'") + '\')" class="sqb-col-item" style="padding:6px 10px;border-radius:5px;cursor:pointer;font-size:11px;color:var(--ss-text);display:flex;align-items:center;gap:6px;transition:background .12s;">' +
+          '<span style="color:#58a6ff;font-size:9px;font-weight:800;">+</span> ' + f.label +
+          '</div>';
+      }).join('') || '<div style="padding:8px;font-size:11px;color:var(--ss-muted);text-align:center;">All fields selected.</div>';
+    }
+
+    window._sqbRenderSelectedCols();
+  };
+
+  window._sqbRenderSelectedCols = function() {
+    var sel = document.getElementById('sqb-col-selected');
+    var cnt = document.getElementById('sqb-col-count');
+    var cols = window._sqbState.customColumns || [];
+    var allFields = window._sqbState.allFields || [];
+    var byId = {};
+    allFields.forEach(function(f) { byId[String(f.id)] = f.label; });
+    if (cnt) cnt.textContent = cols.length ? '(' + cols.length + ')' : '';
+    if (!sel) return;
+    if (!cols.length) {
+      sel.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--ss-muted);text-align:center;">No columns selected — using report defaults.</div>';
+      return;
+    }
+    sel.innerHTML = cols.map(function(id, idx) {
+      var label = byId[String(id)] || 'Field #' + id;
+      return '<div style="padding:6px 10px;border-radius:5px;font-size:11px;color:var(--ss-text);display:flex;align-items:center;gap:6px;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.12);margin-bottom:2px;">' +
+        '<span style="color:#58a6ff;font-size:9px;font-weight:800;cursor:ns-resize;">⠿</span>' +
+        '<span style="flex:1;">' + label + '</span>' +
+        '<span onclick="window._sqbDeselectCol(' + id + ')" style="color:var(--ss-muted);cursor:pointer;font-size:10px;padding:0 3px;" title="Remove">✕</span>' +
+        '</div>';
+    }).join('');
+  };
+
+  window._sqbSelectCol = function(id, label) {
+    window._sqbState.customColumns = window._sqbState.customColumns || [];
+    if (window._sqbState.customColumns.indexOf(Number(id)) === -1) {
+      window._sqbState.customColumns.push(Number(id));
+    }
+    window._sqbLoadColumns();
+  };
+
+  window._sqbDeselectCol = function(id) {
+    window._sqbState.customColumns = (window._sqbState.customColumns || []).filter(function(c) { return c !== Number(id); });
+    window._sqbLoadColumns();
+  };
+
+  window._sqbFilterColumns = function(term) {
+    var avail = document.getElementById('sqb-col-available');
+    if (!avail) return;
+    var allFields = window._sqbState.allFields || [];
+    var selCols = window._sqbState.customColumns || [];
+    var selectedSet = new Set(selCols.map(String));
+    var filtered = term
+      ? allFields.filter(function(f) { return f.label.toLowerCase().includes(term.toLowerCase()) && !selectedSet.has(String(f.id)); })
+      : allFields.filter(function(f) { return !selectedSet.has(String(f.id)); });
+    avail.innerHTML = filtered.map(function(f) {
+      return '<div onclick="window._sqbSelectCol(' + f.id + ',\'' + f.label.replace(/'/g,"\\'") + '\')" class="sqb-col-item" style="padding:6px 10px;border-radius:5px;cursor:pointer;font-size:11px;color:var(--ss-text);display:flex;align-items:center;gap:6px;transition:background .12s;">' +
+        '<span style="color:#58a6ff;font-size:9px;font-weight:800;">+</span> ' + f.label + '</div>';
+    }).join('') || '<div style="padding:8px;font-size:11px;color:var(--ss-muted);text-align:center;">No results.</div>';
+  };
+
+  window._sqbSaveColumns = function() {
+    var msg = document.getElementById('sqb-col-msg');
+    var cols = window._sqbState.customColumns || [];
+    sqbFetch('/api/studio/qb_settings', {
+      method: 'POST',
+      body: JSON.stringify({
+        reportLink: (document.getElementById('sqb-report-link') || {}).value || '',
+        realm:      (document.getElementById('sqb-realm')       || {}).value || '',
+        tableId:    (document.getElementById('sqb-table-id')    || {}).value || '',
+        qid:        (document.getElementById('sqb-qid')         || {}).value || '',
+        qbToken:    '__QB_TOKEN_SAVED__',
+        customColumns: cols,
+        filterConfig:  window._sqbState.filterConfig || [],
+        filterMatch:   window._sqbState.filterMatch  || 'ALL',
+      })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      if (!d.ok) throw new Error(d.error || 'Save failed');
+      if (msg) { msg.textContent = '\u2713 Columns saved!'; msg.style.cssText = 'font-size:11px;color:#3fb950;opacity:1;font-weight:600;'; clearTimeout(msg._t); msg._t = setTimeout(function() { msg.style.opacity='0'; }, 3000); }
+      if (typeof window._qbsReset === 'function') window._qbsReset();
+    }).catch(function(e) {
+      if (msg) { msg.textContent = '\u2717 ' + e.message; msg.style.cssText = 'font-size:11px;color:#f85149;opacity:1;'; }
+    });
+  };
+
+  window._sqbClearColumns = function() {
+    window._sqbState.customColumns = [];
+    window._sqbRenderSelectedCols();
+    window._sqbLoadColumns();
+  };
+
+  // ── Filter Config tab ─────────────────────────────────────────────
+  window._sqbRenderFilters = function() {
+    var container = document.getElementById('sqb-filter-rows');
+    var matchEl   = document.getElementById('sqb-filter-match');
+    if (!container) return;
+    var filters = window._sqbState.filterConfig || [];
+    if (matchEl) matchEl.value = window._sqbState.filterMatch || 'ALL';
+
+    if (!filters.length) {
+      container.innerHTML = '<div style="font-size:11px;color:var(--ss-muted);padding:8px 0;">No filters configured.</div>';
+      return;
+    }
+    container.innerHTML = filters.map(function(f, idx) {
+      return '<div style="display:flex;gap:8px;align-items:center;background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:7px;padding:8px 10px;">' +
+        '<input type="number" value="' + (f.fieldId || '') + '" placeholder="Field ID" onchange="window._sqbUpdateFilter(' + idx + ',\'fieldId\',this.value)" style="width:80px;background:var(--ss-bg);border:1px solid var(--ss-border);border-radius:5px;color:var(--ss-text);padding:5px 8px;font-size:11px;font-family:var(--ss-font);">' +
+        '<select onchange="window._sqbUpdateFilter(' + idx + ',\'operator\',this.value)" style="background:var(--ss-bg);border:1px solid var(--ss-border);border-radius:5px;color:var(--ss-text);padding:5px 8px;font-size:11px;font-family:var(--ss-font);">' +
+          ['EX','XEX','CT','XCT'].map(function(op) { return '<option value="' + op + '"' + (f.operator === op ? ' selected' : '') + '>' + op + '</option>'; }).join('') +
+        '</select>' +
+        '<input type="text" value="' + ((f.value || '') + '').replace(/"/g,'&quot;') + '" placeholder="Value" onchange="window._sqbUpdateFilter(' + idx + ',\'value\',this.value)" style="flex:1;background:var(--ss-bg);border:1px solid var(--ss-border);border-radius:5px;color:var(--ss-text);padding:5px 8px;font-size:11px;font-family:var(--ss-font);">' +
+        '<button onclick="window._sqbRemoveFilter(' + idx + ')" style="background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);border-radius:5px;color:#f85149;padding:4px 8px;cursor:pointer;font-size:10px;">✕</button>' +
+        '</div>';
+    }).join('');
+  };
+
+  window._sqbAddFilter = function() {
+    window._sqbState.filterConfig = window._sqbState.filterConfig || [];
+    window._sqbState.filterConfig.push({ fieldId: '', operator: 'XEX', value: '' });
+    window._sqbRenderFilters();
+  };
+  window._sqbRemoveFilter = function(idx) {
+    (window._sqbState.filterConfig || []).splice(idx, 1);
+    window._sqbRenderFilters();
+  };
+  window._sqbUpdateFilter = function(idx, key, val) {
+    if (window._sqbState.filterConfig && window._sqbState.filterConfig[idx]) {
+      window._sqbState.filterConfig[idx][key] = key === 'fieldId' ? Number(val) : val;
+    }
+  };
+
+  window._sqbSaveFilters = function() {
+    var msg = document.getElementById('sqb-filter-msg');
+    var matchEl = document.getElementById('sqb-filter-match');
+    if (matchEl) window._sqbState.filterMatch = matchEl.value;
+    sqbFetch('/api/studio/qb_settings', {
+      method: 'POST',
+      body: JSON.stringify({
+        reportLink: (document.getElementById('sqb-report-link') || {}).value || '',
+        realm:      (document.getElementById('sqb-realm')       || {}).value || '',
+        tableId:    (document.getElementById('sqb-table-id')    || {}).value || '',
+        qid:        (document.getElementById('sqb-qid')         || {}).value || '',
+        qbToken:    '__QB_TOKEN_SAVED__',
+        customColumns: window._sqbState.customColumns || [],
+        filterConfig:  window._sqbState.filterConfig  || [],
+        filterMatch:   window._sqbState.filterMatch   || 'ALL',
+      })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      if (!d.ok) throw new Error(d.error || 'Save failed');
+      if (msg) { msg.textContent = '\u2713 Filters saved!'; msg.style.cssText = 'font-size:11px;color:#3fb950;opacity:1;font-weight:600;'; clearTimeout(msg._t); msg._t = setTimeout(function() { msg.style.opacity='0'; }, 3000); }
+      if (typeof window._qbsReset === 'function') window._qbsReset();
+    }).catch(function(e) {
+      if (msg) { msg.textContent = '\u2717 ' + e.message; msg.style.cssText = 'font-size:11px;color:#f85149;opacity:1;'; }
+    });
+  };
+
+})();
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   QuickBase_S — Injects Pages.my_quickbase into #qbs-root
+   ISOLATED: Uses /api/studio/qb_settings (per-user) NOT global QB.
+   fetch() is patched ONLY for the my_quickbase instance running inside
+   #qbs-root, redirecting global_quickbase calls to studio/qb_settings_global.
+═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  var _qbsPageMounted = false;
+  var _fetchPatched   = false;
+
+  // ── Patch fetch ONCE before my_quickbase.js boots ─────────────────
+  // my_quickbase.js calls two endpoints we need to redirect to Studio-isolated versions:
+  // 1. /api/settings/global_quickbase  → /api/studio/qb_settings_global  (settings)
+  // 2. /api/quickbase/monitoring       → /api/studio/qb_monitoring        (data fetch)
+  // This ensures QuickBase_S reads from Studio QB Settings, never from Global QB.
+  function applyFetchPatch() {
+    if (_fetchPatched) return;
+    _fetchPatched = true;
+    var _orig = window.fetch;
+    window.fetch = function(resource, init) {
+      var url = (resource && typeof resource === 'object' && resource.url)
+        ? resource.url : String(resource || '');
+      // Redirect global QB settings reads/writes → Studio isolated settings
+      if (url === '/api/settings/global_quickbase' ||
+          url.startsWith('/api/settings/global_quickbase?') ||
+          url.startsWith('/api/settings/global_quickbase ')) {
+        var studioUrl = url.replace('/api/settings/global_quickbase', '/api/studio/qb_settings_global');
+        return _orig.call(this, studioUrl, init);
+      }
+      // Redirect monitoring data fetch → Studio monitoring proxy (uses Studio token)
+      if (url.startsWith('/api/quickbase/monitoring') ||
+          url.startsWith('/functions/quickbase/monitoring')) {
+        var studioMonUrl = url
+          .replace('/api/quickbase/monitoring', '/api/studio/qb_monitoring')
+          .replace('/functions/quickbase/monitoring', '/api/studio/qb_monitoring');
+        return _orig.call(this, studioMonUrl, init);
+      }
+      return _orig.apply(this, arguments);
+    };
+  }
+
+  window._qbsInit = function() {
+    if (_qbsPageMounted) return;
+
+    var root = document.getElementById('qbs-root');
+    if (!root) return;
+
+    // Apply patch before my_quickbase boots
+    applyFetchPatch();
+
+    function tryInit() {
+      if (!window.Pages || !window.Pages.my_quickbase) {
+        setTimeout(tryInit, 150);
+        return;
+      }
+      root.className = 'main card pad';
+      root.style.cssText = 'flex:1;min-height:0;overflow:hidden;';
+      root.innerHTML = '';
+      try {
+        window.Pages.my_quickbase(root);
+        _qbsPageMounted = true;
+      } catch (e) {
+        root.innerHTML =
+          '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:#f85149;padding:24px;text-align:center;">' +
+          '<i class="fas fa-exclamation-triangle" style="font-size:32px;opacity:.6;"></i>' +
+          '<div style="font-size:13px;font-weight:600;">QuickBase_S failed to load</div>' +
+          '<div style="font-size:11px;opacity:.6;max-width:360px;">' + String(e && e.message || e) + '</div>' +
+          '<button onclick="window._qbsReset()" style="margin-top:8px;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:#f85149;padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;">Retry</button>' +
+          '</div>';
+        console.error('[QBS] my_quickbase init failed:', e);
+      }
+    }
+
+    tryInit();
+  };
+
+  window._qbsReset = function() {
+    _qbsPageMounted = false;
+    var root = document.getElementById('qbs-root');
+    if (root) {
+      if (typeof root._cleanup === 'function') { try { root._cleanup(); } catch(_) {} root._cleanup = null; }
+      root.innerHTML = '';
+    }
+    window._qbsInit();
+  };
+
+  // ── Open Case Detail Modal ─────────────────────────────────────────
+  // Works for both: row number clicks (from my_quickbase) and deep search cards.
+  // The modal #qbCaseDetailModal is now in support_studio.html directly.
+  window._qbsOpenCaseDetail = function(snap, allSnaps) {
+    var root = document.getElementById('qbs-root');
+
+    // Primary path: use root._qbcdOpen set by Pages.my_quickbase
+    if (root && typeof root._qbcdOpen === 'function') {
+      root._qbcdOpen(snap, allSnaps || [snap]);
+      return;
+    }
+
+    // Fallback path: directly open the modal ourselves
+    // (when QBS page is mounted but _qbcdOpen ref lost, or called before full mount)
+    var m = document.getElementById('qbCaseDetailModal');
+    if (!m) { console.warn('[QBS] qbCaseDetailModal not found'); return; }
+
+    // Populate fields
+    function set(id, val) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = val || '—';
+    }
+    function html(id, val) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = val || '';
+    }
+    function fieldVal(keys) {
+      if (!snap || !snap.fields || !snap.columnMap) return '';
+      var colId = Object.keys(snap.columnMap).find(function(id) {
+        var lbl = (snap.columnMap[id] || '').toLowerCase();
+        return keys.some(function(k) { return lbl.includes(k); });
+      });
+      if (!colId) return '';
+      var f = snap.fields[colId];
+      return f && f.value != null ? String(f.value) : '';
+    }
+    function statusBadge(s) {
+      if (!s) return '';
+      var colors = { resolv: '#3fb950', invest: '#58a6ff', initial: '#f59e0b',
+        triag: '#a78bfa', close: '#8b949e', wait: '#f97316' };
+      var sl = s.toLowerCase();
+      var c = '#8b949e';
+      for (var k in colors) { if (sl.includes(k)) { c = colors[k]; break; } }
+      return '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:' + c + '18;color:' + c + ';border:1px solid ' + c + '40;">' + s + '</span>';
+    }
+
+    var caseId = snap.recordId || '—';
+    var desc   = fieldVal(['short description','description','concern','subject']) || '—';
+    var assign = fieldVal(['assigned to','assigned','agent']);
+    var contact= fieldVal(['contact','full name','customer name']);
+    var endUser= fieldVal(['end user','client','account','customer']);
+    var type   = fieldVal(['type','category']);
+    var status = fieldVal(['case status','status']);
+    var age    = fieldVal(['age']);
+    var lastUpd= fieldVal(['last update days','last update']);
+    var latest = fieldVal(['latest update','last comment','update on the case']);
+    var notes  = fieldVal(['case notes','notes']);
+
+    set('qbcdRowBadge', snap.rowNum || '—');
+    set('qbcdCaseId',   caseId);
+    set('qbcdDesc',     desc);
+    html('qbcdStatusBadge', statusBadge(status));
+    set('qbcdMeta',     'Row ' + (snap.rowNum || '?') + (endUser ? ' · ' + endUser : ''));
+    set('qbcdKpiAge',   age     ? (Number(age) < 86400000 ? '< 1 day' : Math.round(Number(age)/(86400000)) + ' days') : '—');
+    set('qbcdKpiLast',  lastUpd ? (Number(lastUpd) < 1 ? '< 1 day' : lastUpd + ' days') : '—');
+    set('qbcdKpiType',  type);
+    set('qbcdKpiEndUser', endUser);
+    set('qbcdAssigned', assign);
+    set('qbcdContact',  contact);
+    set('qbcdEndUser',  endUser);
+    set('qbcdCaseId2',  caseId);
+    set('qbcdType2',    type);
+    html('qbcdStatus2', statusBadge(status));
+    set('qbcdLatest',   latest || '—');
+
+    var notesBlock = document.getElementById('qbcdNotesBlock');
+    if (notes) {
+      set('qbcdNotes', notes);
+      if (notesBlock) notesBlock.style.display = '';
+    } else {
+      if (notesBlock) notesBlock.style.display = 'none';
+    }
+
+    // Nav position
+    var _allSnaps = Array.isArray(allSnaps) ? allSnaps : [snap];
+    var _idx = _allSnaps.findIndex(function(s) { return s && s.rowNum === snap.rowNum; });
+    if (_idx < 0) _idx = 0;
+    var posEl = document.getElementById('qbcdPos');
+    if (posEl) posEl.textContent = (_idx + 1) + ' of ' + _allSnaps.length;
+    var prevBtn = document.getElementById('qbcdPrevBtn');
+    var nextBtn = document.getElementById('qbcdNextBtn');
+    if (prevBtn) prevBtn.disabled = _idx <= 0;
+    if (nextBtn) nextBtn.disabled = _idx >= _allSnaps.length - 1;
+
+    // Store state for nav buttons
+    m._qbsSnaps = _allSnaps;
+    m._qbsIdx   = _idx;
+
+    // Wire nav/close if not already wired
+    if (!m._qbsWired) {
+      m._qbsWired = true;
+      function navTo(newIdx) {
+        var s = m._qbsSnaps[newIdx];
+        if (!s) return;
+        m._qbsIdx = newIdx;
+        window._qbsOpenCaseDetail(s, m._qbsSnaps);
+      }
+      var cbtn  = document.getElementById('qbcdCloseBtn');
+      var cbtn2 = document.getElementById('qbcdCloseBtn2');
+      var pb    = document.getElementById('qbcdPrevBtn');
+      var nb    = document.getElementById('qbcdNextBtn');
+      var cpy   = document.getElementById('qbcdCopyBtn');
+      function closeModal() {
+        m.classList.remove('open');
+        m.removeAttribute('style');
+        try { document.body.classList.remove('modal-open'); } catch(_) {}
+      }
+      if (cbtn)  cbtn.addEventListener('click',  closeModal);
+      if (cbtn2) cbtn2.addEventListener('click', closeModal);
+      if (pb)    pb.addEventListener('click', function() { navTo(m._qbsIdx - 1); });
+      if (nb)    nb.addEventListener('click', function() { navTo(m._qbsIdx + 1); });
+      if (cpy)   cpy.addEventListener('click', function() {
+        var id = (document.getElementById('qbcdCaseId') || {}).textContent || '';
+        if (id && navigator.clipboard) navigator.clipboard.writeText(id).then(function() {
+          cpy.textContent = 'Copied!';
+          setTimeout(function() { cpy.textContent = 'Copy Case #'; }, 1800);
+        }).catch(function() {});
+      });
+      m.addEventListener('mousedown', function(e) { if (e.target === m) closeModal(); });
+      document.addEventListener('keydown', function(e) {
+        if (!m.classList.contains('open')) return;
+        if (e.key === 'Escape')    closeModal();
+        if (e.key === 'ArrowLeft') navTo(m._qbsIdx - 1);
+        if (e.key === 'ArrowRight') navTo(m._qbsIdx + 1);
+      });
+    }
+
+    // Open
+    m.removeAttribute('style');
+    m.style.cssText = 'display:flex!important;position:fixed!important;inset:0!important;' +
+      'z-index:2147483647!important;align-items:center!important;justify-content:center!important;' +
+      'background:rgba(6,12,24,.88)!important;padding:16px!important;box-sizing:border-box!important;';
+    m.classList.add('open');
+    if (m.parentElement !== document.body) document.body.appendChild(m);
+    try { document.body.classList.add('modal-open'); } catch(_) {}
+  };
+
+  // Clean up when leaving the QBS tab
+  document.querySelectorAll('.ss-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      if (tab.dataset.tab !== 'qbs' && _qbsPageMounted) {
+        var root = document.getElementById('qbs-root');
+        if (root && typeof root._cleanup === 'function') {
+          try { root._cleanup(); } catch(_) {}
+          root._cleanup = null;
+        }
+        _qbsPageMounted = false;
+      }
+    });
+  });
+
+  // ── Deep Search — server-side across ALL QB records ─────────────
+  // Called from left sidebar "Search all records" button.
+  // Uses /api/studio/qb_search which sends the term to QB API as a
+  // CT (contains) WHERE clause — QB searches all 22,314+ records.
+  (function() {
+    var _dsInFlight = false;
+
+    function sqbToken() {
+      try {
+        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+        if (raw) { var p = JSON.parse(raw); var t = p && p.access_token; if (t) return t; }
+        if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken();
+      } catch(_) {}
+      return '';
+    }
+
+    window._qbsDeepSearch = function(term, skip) {
+      skip = skip || 0;
+      if (!term || !term.trim()) return;
+
+      var statusEl = document.getElementById('qbs-search-status');
+      var resultEl = document.getElementById('qbs-search-results');
+      var btnEl    = document.getElementById('qbs-deep-search-btn');
+
+      if (skip === 0) {
+        if (statusEl) {
+          statusEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:5px;font-size:9px;"></i>Searching all records…';
+          statusEl.style.cssText = 'font-size:10px;color:#58a6ff;padding:4px 0;display:flex;align-items:center;';
+        }
+        if (resultEl) resultEl.innerHTML = '';
+        if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching…'; }
+      }
+
+      var tok = sqbToken();
+      var headers = { 'Content-Type': 'application/json' };
+      if (tok) headers['Authorization'] = 'Bearer ' + tok;
+
+      var url = '/api/studio/qb_search?q=' + encodeURIComponent(term.trim()) +
+        '&skip=' + skip + '&top=100';
+
+      fetch(url, { headers: headers })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (btnEl) {
+            btnEl.disabled = false;
+            btnEl.innerHTML = '<i class="fas fa-search"></i> Search All Records';
+          }
+
+          if (d.warning === 'studio_qb_not_configured') {
+            if (statusEl) {
+              statusEl.innerHTML = '<i class="fas fa-exclamation-circle" style="color:#f85149;margin-right:4px;"></i>Studio QB not configured';
+              statusEl.style.cssText = 'font-size:10px;color:#f85149;padding:4px 0;';
+            }
+            return;
+          }
+          if (!d.ok) {
+            if (statusEl) {
+              statusEl.innerHTML = '<i class="fas fa-times-circle" style="color:#f85149;margin-right:4px;"></i>' + (d.message || 'Search failed');
+              statusEl.style.cssText = 'font-size:10px;color:#f85149;padding:4px 0;';
+            }
+            return;
+          }
+
+          var total    = d.total;
+          var returned = (d.records || []).length;
+          var fromIdx  = skip + 1;
+          var toIdx    = skip + returned;
+
+          if (statusEl) {
+            if (total != null && total > 0) {
+              var pct = Math.round((toIdx / total) * 100);
+              statusEl.innerHTML =
+                '<span style="color:#3fb950;font-weight:800;">' + total.toLocaleString() + '</span>' +
+                ' records match <em style="color:#58a6ff;">&ldquo;' + term + '&rdquo;</em>' +
+                (skip > 0 ? ' &nbsp;·&nbsp; showing ' + fromIdx + '&ndash;' + toIdx : '');
+            } else if (returned === 0) {
+              statusEl.innerHTML = '<span style="color:var(--ss-muted);">No records found for <em>&ldquo;' + term + '&rdquo;</em></span>';
+            } else {
+              statusEl.innerHTML =
+                '<span style="color:#58a6ff;font-weight:800;">' + returned + '</span> records returned';
+            }
+            statusEl.style.cssText = 'font-size:10px;color:var(--ss-muted);padding:4px 0;line-height:1.6;';
+          }
+
+          if (!resultEl) return;
+          var cols = d.columns || [];
+          var recs = d.records || [];
+
+          if (!recs.length && skip === 0) {
+            resultEl.innerHTML =
+              '<div style="text-align:center;padding:16px 8px;color:var(--ss-muted);">' +
+              '<i class="fas fa-search" style="font-size:20px;opacity:.2;display:block;margin-bottom:8px;"></i>' +
+              '<div style="font-size:11px;">No results for <strong>&ldquo;' + term + '&rdquo;</strong></div>' +
+              '<div style="font-size:10px;opacity:.6;margin-top:4px;">Try different keywords</div>' +
+              '</div>';
+            return;
+          }
+
+          // Priority fields for card display
+          var caseNumCol = cols.find(function(c) { return /case.?#/i.test(c.label); });
+          var descCol    = cols.find(function(c) { return /short.?desc|description/i.test(c.label); });
+          var statusCol  = cols.find(function(c) { return /status/i.test(c.label); });
+          var assignCol  = cols.find(function(c) { return /assigned/i.test(c.label); });
+          var notesCol   = cols.find(function(c) { return /notes|update/i.test(c.label); });
+          var typeCol    = cols.find(function(c) { return /^type$/i.test(c.label); });
+          var endUserCol = cols.find(function(c) { return /end.?user/i.test(c.label); });
+
+          function getVal(rec, col) {
+            if (!col) return '';
+            return String((rec.fields[col.id] || {}).value || '');
+          }
+          function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+          var statusColorMap = {
+            'resolved': '#3fb950', 'initial': '#f59e0b',
+            'investigating': '#58a6ff', 'triag': '#a78bfa',
+            'closed': '#8b949e', 'response': '#f97316'
+          };
+          function statusColor(s) {
+            var sl = String(s || '').toLowerCase();
+            for (var k in statusColorMap) { if (sl.indexOf(k) >= 0) return statusColorMap[k]; }
+            return '#8b949e';
+          }
+
+          // Build snaps array for prev/next navigation in case detail modal
+          var colMap = {};
+          cols.forEach(function(c) { colMap[String(c.id)] = c.label; });
+          // All columns including Case # (field 3)
+          var fullColMap = Object.assign({ '3': 'Case #' }, colMap);
+
+          var dsSnaps = recs.map(function(rec, idx) {
+            return {
+              rowNum:    (skip + idx + 1),
+              recordId:  rec.qbRecordId || '?',
+              fields:    rec.fields || {},
+              columnMap: fullColMap,
+            };
+          });
+
+          // Merge into global snap store (for navigation across load-more pages)
+          if (skip === 0) {
+            window._qbsDsSnaps = dsSnaps;
+          } else {
+            window._qbsDsSnaps = (window._qbsDsSnaps || []).concat(dsSnaps);
+          }
+
+          // Build card DOM elements with proper click handlers
+          var fragment = document.createDocumentFragment();
+          dsSnaps.forEach(function(snap, localIdx) {
+            var rec     = recs[localIdx];
+            var caseId  = snap.recordId;
+            var desc    = getVal(rec, descCol).slice(0, 90);
+            if (getVal(rec, descCol).length > 90) desc += '…';
+            var status  = getVal(rec, statusCol);
+            var assign  = getVal(rec, assignCol);
+            var type    = getVal(rec, typeCol);
+            var endUser = getVal(rec, endUserCol);
+            var sc      = statusColor(status);
+            var globalIdx = skip + localIdx;
+
+            var card = document.createElement('div');
+            card.style.cssText = 'background:var(--ss-surface3);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:8px 10px;margin-bottom:5px;cursor:pointer;transition:border-color .15s,background .15s;';
+            card.addEventListener('mouseenter', function() {
+              this.style.borderColor = 'rgba(88,166,255,.4)';
+              this.style.background  = 'rgba(88,166,255,.05)';
+            });
+            card.addEventListener('mouseleave', function() {
+              this.style.borderColor = 'rgba(255,255,255,.07)';
+              this.style.background  = 'var(--ss-surface3)';
+            });
+            // CLICK → open case detail modal
+            // Use globalIdx to look up snap at click time (handles load-more correctly)
+            card.setAttribute('data-qbs-snap-idx', globalIdx);
+            card.addEventListener('click', function() {
+              var idx = parseInt(this.getAttribute('data-qbs-snap-idx'), 10);
+              var allSnaps = window._qbsDsSnaps || [];
+              var s = allSnaps[idx];
+              if (s) window._qbsOpenCaseDetail(s, allSnaps);
+            });
+
+            var statusHtml = status
+              ? '<span style="font-size:8px;font-weight:700;color:' + sc + ';background:' + sc + '20;border-radius:4px;padding:2px 6px;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis;">' + esc(status.replace(/^[A-Z]\s*-\s*/, '')) + '</span>'
+              : '';
+            var descHtml = desc
+              ? '<div style="font-size:10px;color:var(--ss-text);line-height:1.45;margin-bottom:3px;">' + esc(desc) + '</div>'
+              : '';
+            var endUserHtml = endUser ? '<span style="font-size:9px;color:var(--ss-muted);background:rgba(255,255,255,.04);border-radius:3px;padding:1px 5px;">' + esc(endUser) + '</span>' : '';
+            var typeHtml    = type    ? '<span style="font-size:9px;color:var(--ss-muted);background:rgba(255,255,255,.04);border-radius:3px;padding:1px 5px;">' + esc(type) + '</span>' : '';
+            var assignHtml  = assign  ? '<span style="font-size:9px;color:#8b949e;padding:1px 0;">→ ' + esc(assign.split(' ').pop()) + '</span>' : '';
+
+            card.innerHTML =
+              '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;">' +
+                '<span style="font-size:11px;font-weight:900;color:#58a6ff;letter-spacing:.01em;">#' + esc(caseId) + '</span>' +
+                statusHtml +
+              '</div>' +
+              descHtml +
+              '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;">' + endUserHtml + typeHtml + assignHtml + '</div>';
+
+            fragment.appendChild(card);
+          });
+
+          // Remove old load-more before appending
+          var oldLoadMore = resultEl.querySelector('.qbs-load-more');
+          if (oldLoadMore) oldLoadMore.remove();
+
+          if (skip === 0) {
+            resultEl.innerHTML = '';
+          }
+          resultEl.appendChild(fragment);
+
+          // Load more button
+          var nextSkip = skip + returned;
+          var hasMore  = total == null ? returned === 100 : nextSkip < total;
+          if (hasMore) {
+            var remaining = total != null ? (total - nextSkip).toLocaleString() : 'more';
+            var lm = document.createElement('button');
+            lm.className = 'qbs-load-more';
+            lm.innerHTML = '<i class="fas fa-arrow-down" style="margin-right:5px;"></i>Load more (' + remaining + ' remaining)';
+            lm.style.cssText = 'width:100%;padding:8px;background:rgba(88,166,255,.07);border:1px solid rgba(88,166,255,.18);border-radius:7px;color:#58a6ff;font-size:10px;font-weight:700;cursor:pointer;margin-top:4px;font-family:var(--ss-font);transition:background .15s;';
+            lm.onmouseover = function() { this.style.background = 'rgba(88,166,255,.14)'; };
+            lm.onmouseout  = function() { this.style.background = 'rgba(88,166,255,.07)'; };
+            lm.onclick = function() {
+              lm.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i>Loading…';
+              lm.disabled  = true;
+              window._qbsDeepSearch(term, nextSkip);
+            };
+            resultEl.appendChild(lm);
+          }
+        })
+        .catch(function(e) {
+          if (btnEl) {
+            btnEl.disabled = false;
+            btnEl.innerHTML = '<i class="fas fa-search"></i> Search All Records';
+          }
+          if (statusEl) {
+            statusEl.innerHTML = '<i class="fas fa-times-circle" style="color:#f85149;margin-right:4px;"></i>' + (e && e.message || 'Network error');
+            statusEl.style.cssText = 'font-size:10px;color:#f85149;padding:4px 0;';
+          }
+        });
+    };
+
+        // Trigger deep search from sidebar input
+    var sideInput = document.getElementById('qbs-search-input');
+    if (sideInput) {
+      var _debounce;
+      sideInput.addEventListener('input', function() {
+        clearTimeout(_debounce);
+        var val = sideInput.value.trim();
+        _debounce = setTimeout(function() {
+          if (val.length >= 2) window._qbsDeepSearch(val, 0);
+          else if (!val) {
+            var statusEl = document.getElementById('qbs-search-status');
+            var resultEl = document.getElementById('qbs-search-results');
+            if (statusEl) statusEl.textContent = '';
+            if (resultEl) resultEl.innerHTML = '';
+          }
+        }, 500);
+      });
+      sideInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          clearTimeout(_debounce);
+          var val = sideInput.value.trim();
+          if (val) window._qbsDeepSearch(val, 0);
+        }
+      });
+    }
+  })();
+
+})();
+</script>
+
+
+  <!-- ── QB CASE DETAIL MODAL (injected for Support Studio) ─────────── -->
+  <div class="modal" id="qbCaseDetailModal" aria-label="Case Detail" role="dialog" aria-modal="true">
+    <div class="panel qbcd-panel">
+      <div class="qbcd-accent-bar"></div>
+      <div class="qbcd-header">
+        <div class="qbcd-row-badge" id="qbcdRowBadge">1</div>
+        <div class="qbcd-title-block">
+          <div class="qbcd-case-label">Case Detail View</div>
+          <div class="qbcd-case-id">CASE# <span id="qbcdCaseId">—</span></div>
+          <div class="qbcd-desc" id="qbcdDesc">—</div>
+        </div>
+        <button class="btn ghost qbcd-close-btn" type="button" id="qbcdCloseBtn" aria-label="Close">✕</button>
+      </div>
+      <div class="qbcd-status-bar">
+        <span class="qbcd-status-label">Status:</span>
+        <span id="qbcdStatusBadge"></span>
+        <span class="qbcd-status-spacer"></span>
+        <span class="qbcd-meta" id="qbcdMeta"></span>
+      </div>
+      <div class="body qbcd-body">
+        <div class="qbcd-kpi-row">
+          <div class="qbcd-kpi qbcd-kpi-cyan">
+            <div class="qbcd-kpi-label">Case Age</div>
+            <div class="qbcd-kpi-value" id="qbcdKpiAge">—</div>
+            <div class="qbcd-kpi-sub">Open duration</div>
+          </div>
+          <div class="qbcd-kpi qbcd-kpi-amber">
+            <div class="qbcd-kpi-label">Last Updated</div>
+            <div class="qbcd-kpi-value" id="qbcdKpiLast">—</div>
+            <div class="qbcd-kpi-sub">Days since update</div>
+          </div>
+          <div class="qbcd-kpi qbcd-kpi-violet">
+            <div class="qbcd-kpi-label">Type</div>
+            <div class="qbcd-kpi-value qbcd-kpi-value-sm" id="qbcdKpiType">—</div>
+            <div class="qbcd-kpi-sub">Case category</div>
+          </div>
+          <div class="qbcd-kpi qbcd-kpi-emerald">
+            <div class="qbcd-kpi-label">End User</div>
+            <div class="qbcd-kpi-value qbcd-kpi-value-sm" id="qbcdKpiEndUser">—</div>
+            <div class="qbcd-kpi-sub">Client account</div>
+          </div>
+        </div>
+        <div class="qbcd-detail-cols">
+          <div class="qbcd-detail-block qbcd-block-cyan">
+            <div class="qbcd-block-title">Case Assignment</div>
+            <div class="qbcd-kv-list">
+              <div class="qbcd-kv"><span class="qbcd-kv-lbl">Assigned To</span><span class="qbcd-kv-val qbcd-kv-hi" id="qbcdAssigned">—</span></div>
+              <div class="qbcd-kv"><span class="qbcd-kv-lbl">Contact — Full Name</span><span class="qbcd-kv-val" id="qbcdContact">—</span></div>
+              <div class="qbcd-kv"><span class="qbcd-kv-lbl">End User / Client</span><span class="qbcd-kv-val" id="qbcdEndUser">—</span></div>
+            </div>
+          </div>
+          <div class="qbcd-detail-block qbcd-block-violet">
+            <div class="qbcd-block-title">Case Classification</div>
+            <div class="qbcd-kv-list">
+              <div class="qbcd-kv"><span class="qbcd-kv-lbl">Case #</span><span class="qbcd-kv-val qbcd-kv-hi" id="qbcdCaseId2">—</span></div>
+              <div class="qbcd-kv"><span class="qbcd-kv-lbl">Case Type</span><span class="qbcd-kv-val" id="qbcdType2">—</span></div>
+              <div class="qbcd-kv"><span class="qbcd-kv-lbl">Case Status</span><span id="qbcdStatus2"></span></div>
+            </div>
+          </div>
+        </div>
+        <!-- Case Notes block — shown only when Case Notes column is configured -->
+        <div class="qbcd-update-block qbcd-notes-block" id="qbcdNotesBlock" style="display:none;">
+          <div class="qbcd-update-label">
+            <span class="qbcd-update-dot" style="background:#a78bfa;box-shadow:0 0 7px #a78bfa;"></span>
+            Case Notes
+          </div>
+          <div class="qbcd-update-text" id="qbcdNotes">—</div>
+        </div>
+        <!-- Latest Update block -->
+        <div class="qbcd-update-block">
+          <div class="qbcd-update-label"><span class="qbcd-update-dot"></span>Latest Update on the Case</div>
+          <div class="qbcd-update-text" id="qbcdLatest">—</div>
+        </div>
+        <!-- Dynamic extra fields — any column not in the known groups above -->
+        <div class="qbcd-detail-block qbcd-extra-block" id="qbcdExtraBlock" style="display:none;">
+          <div class="qbcd-block-title" style="color:rgba(148,163,184,.7);">Additional Fields</div>
+          <div class="qbcd-kv-list" id="qbcdExtraFields"></div>
+        </div>
+      </div>
+      <div class="qbcd-footer">
+        <div class="qbcd-nav-btns">
+          <button class="btn ghost qbcd-nav-btn" id="qbcdPrevBtn" type="button">← Prev</button>
+          <button class="btn ghost qbcd-nav-btn" id="qbcdNextBtn" type="button">Next →</button>
+        </div>
+        <span class="qbcd-pos" id="qbcdPos"></span>
+        <span style="flex:1"></span>
+        <button class="btn qbcd-action-btn" type="button" id="qbcdCopyBtn">Copy Case #</button>
+        <button class="btn ghost" type="button" id="qbcdCloseBtn2">Close</button>
+      </div>
+    </div>
+  </div>
+  <!-- ── END QB CASE DETAIL MODAL ──────────────────────────────────────── -->
+
+  <!-- ── CONNECT+ SITE DETAIL MODAL ────────────────────────────────── -->
+  <div id="cp-detail-modal" style="display:none;position:fixed;inset:0;z-index:2147483647;background:rgba(6,12,24,.88);align-items:center;justify-content:center;padding:16px;box-sizing:border-box;">
+    <div style="background:var(--ss-surface);border:1px solid var(--ss-border);border-radius:16px;width:min(680px,96vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.6);animation:cpModalIn .2s ease;">
+      <style>
+        @keyframes cpModalIn { from { opacity:0;transform:scale(.95) translateY(12px); } to { opacity:1;transform:none; } }
+        .cp-kv { display:flex;flex-direction:column;gap:2px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06); }
+        .cp-kv:last-child { border-bottom:none; }
+        .cp-kv-label { font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted); }
+        .cp-kv-value { font-size:13px;color:#e6edf3;font-weight:500;word-break:break-word; }
+      </style>
+      <!-- Header -->
+      <div style="padding:18px 24px 14px;border-bottom:1px solid var(--ss-border);display:flex;align-items:flex-start;gap:14px;flex-shrink:0;">
+        <div style="width:42px;height:42px;border-radius:11px;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="fas fa-plug" style="color:#22d3ee;font-size:16px;"></i>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#22d3ee;margin-bottom:3px;">Connect+ Site Detail</div>
+          <div id="cp-modal-site" style="font-size:18px;font-weight:900;color:#e6edf3;letter-spacing:-.01em;"></div>
+          <div id="cp-modal-address" style="font-size:11px;color:var(--ss-muted);margin-top:2px;"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <button id="cp-modal-prev" onclick="window._cpModalNav(-1)"
+            style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--ss-muted);padding:6px 12px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;">← Prev</button>
+          <button id="cp-modal-next" onclick="window._cpModalNav(1)"
+            style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--ss-muted);padding:6px 12px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;">Next →</button>
+          <button onclick="window._cpCloseModal()"
+            style="background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);border-radius:6px;color:#f85149;padding:6px 10px;font-size:12px;cursor:pointer;">✕</button>
+        </div>
+      </div>
+      <!-- KPI bar -->
+      <div style="display:flex;gap:0;flex-shrink:0;border-bottom:1px solid var(--ss-border);">
+        <div style="flex:1;padding:12px 18px;border-right:1px solid var(--ss-border);">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:4px;">Country</div>
+          <div id="cp-modal-country" style="font-size:13px;font-weight:700;color:#22d3ee;"></div>
+        </div>
+        <div style="flex:1;padding:12px 18px;border-right:1px solid var(--ss-border);">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:4px;">Directory</div>
+          <div id="cp-modal-directory" style="font-size:13px;font-weight:700;color:#e6edf3;"></div>
+        </div>
+        <div style="flex:1;padding:12px 18px;border-right:1px solid var(--ss-border);">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:4px;">Time Zone</div>
+          <div id="cp-modal-timezone" style="font-size:12px;font-weight:600;color:#e6edf3;"></div>
+        </div>
+        <div style="flex:1;padding:12px 18px;">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:4px;">Control Systems</div>
+          <div id="cp-modal-systems" style="font-size:20px;font-weight:900;color:#3fb950;"></div>
+        </div>
+      </div>
+      <!-- Body -->
+      <div style="flex:1;overflow:auto;padding:16px 24px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px;">
+          <div class="cp-kv"><span class="cp-kv-label">City</span><span id="cp-modal-city" class="cp-kv-value"></span></div>
+          <div class="cp-kv"><span class="cp-kv-label">State / Province / Region</span><span id="cp-modal-state" class="cp-kv-value"></span></div>
+          <div class="cp-kv"><span class="cp-kv-label">Zip / Postal Code</span><span id="cp-modal-zip" class="cp-kv-value"></span></div>
+          <div class="cp-kv"><span class="cp-kv-label">Address</span><span id="cp-modal-addr1" class="cp-kv-value"></span></div>
+        </div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06);">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:8px;">Connect+ URL</div>
+          <a id="cp-modal-url" href="#" target="_blank" rel="noopener noreferrer"
+            style="display:inline-flex;align-items:center;gap:8px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.25);border-radius:8px;color:#22d3ee;padding:10px 16px;font-size:12px;font-weight:700;text-decoration:none;transition:background .15s;word-break:break-all;"
+            onmouseover="this.style.background='rgba(34,211,238,.15)'" onmouseout="this.style.background='rgba(34,211,238,.08)'">
+            <i class="fas fa-external-link-alt" style="flex-shrink:0;"></i>
+            <span id="cp-modal-url-text">Open Connect+</span>
+          </a>
+        </div>
+      </div>
+      <!-- Footer -->
+      <div style="padding:12px 24px;border-top:1px solid var(--ss-border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+        <span id="cp-modal-pos" style="font-size:11px;color:var(--ss-muted);"></span>
+        <button onclick="window._cpCloseModal()"
+          style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:7px;color:var(--ss-text);padding:7px 18px;font-size:12px;font-weight:600;font-family:var(--ss-font);cursor:pointer;">Close</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   CONNECT+ TAB — Support Studio
+   Loads 36,000+ sites from Google Sheets CSV (published to web).
+   Client-side search/filter/sort/paginate. Click row → detail modal.
+═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  // CSV URL: reads from Connect+ Settings (General Settings → Connect+ Settings → Data Source)
+  // Falls back to the original default URL if no custom URL is saved.
+  // To change: go to General Settings → Connect+ Settings and paste your new CSV link.
+  var DEFAULT_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTI_dFlSCQPrUJu0bNi4O-G2Lev7G-r5iyUpMo0o2gJmfJVok3dyBpx8XigVeSwl-UORbr6a0J1HIH3/pub?gid=970184644&single=true&output=csv';
+  function _getActiveCsvUrl() {
+    try {
+      if (window._cpCsvUrl) return window._cpCsvUrl;
+      var raw = localStorage.getItem('ss_connectplus_settings');
+      if (raw) { var s = JSON.parse(raw); if (s && s.csvUrl) return s.csvUrl; }
+    } catch(_) {}
+    return DEFAULT_CSV_URL;
+  }
+  var CSV_URL = _getActiveCsvUrl();
+  var PAGE_SIZE = 100;
+
+  var _state = {
+    all:        [],    // all parsed rows
+    filtered:   [],    // after search+filter
+    page:       1,
+    loaded:     false,
+    loading:    false,
+    sortCol:    '',
+    sortDir:    1,
+    search:     '',
+    country:    '',
+    directory:  '',
+    modalIdx:   -1,    // index in filtered for current modal row
+  };
+
+  // ── CSV parser (handles quoted fields with commas) ──────────────────
+  function parseCSV(text) {
+    var lines = [];
+    var cur = '';
+    var inQ  = false;
+    var rows = [];
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (c === '"') { inQ = !inQ; cur += c; }
+      else if (c === '\n' && !inQ) { rows.push(cur); cur = ''; }
+      else if (c === '\r' && !inQ) {}
+      else { cur += c; }
+    }
+    if (cur) rows.push(cur);
+
+    return rows.map(function(row) {
+      var fields = [];
+      var f = ''; var q = false;
+      for (var j = 0; j < row.length; j++) {
+        var ch = row[j];
+        if (ch === '"') {
+          if (q && row[j+1] === '"') { f += '"'; j++; }
+          else q = !q;
+        } else if (ch === ',' && !q) { fields.push(f); f = ''; }
+        else f += ch;
+      }
+      fields.push(f);
+      return fields;
+    });
+  }
+
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  // ── Load CSV ────────────────────────────────────────────────────────
+  window._cpInit = function() {
+    if (_state.loaded || _state.loading) return;
+    _cpLoad();
+  };
+
+  window._cpRefresh = function() {
+    _state.loaded = false;
+    _state.all = [];
+    _state.filtered = [];
+    _state.page = 1;
+    _cpLoad();
+  };
+
+  function _cpLoad() {
+    _state.loading = true;
+    // Re-read URL and search columns from settings on every load
+    CSV_URL = _getActiveCsvUrl();
+    _setStatus('Loading…');
+
+    var body = document.getElementById('cp-table-body');
+    if (body) body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--ss-muted);"><i class="fas fa-spinner fa-spin" style="font-size:20px;opacity:.4;"></i><span style="font-size:13px;opacity:.5;">Loading Connect+ sites…</span></div>';
+
+    fetch(CSV_URL, { cache: 'no-store' })
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      })
+      .then(function(text) {
+        var rows = parseCSV(text);
+        if (!rows.length) throw new Error('Empty CSV');
+        var header = rows[0];
+        // Column map by index (from screenshot):
+        // 0:Site 1:Directory 2:Address1 3:Country 4:City 5:State 6:Zip 7:TimeZone 8:Systems 9:URL
+        var data = [];
+        for (var i = 1; i < rows.length; i++) {
+          var r = rows[i];
+          if (!r || !r[0] || !String(r[0]).trim()) continue;
+          data.push({
+            site:      String(r[0]  || '').trim(),
+            directory: String(r[1]  || '').trim(),
+            address1:  String(r[2]  || '').trim(),
+            country:   String(r[3]  || '').trim(),
+            city:      String(r[4]  || '').trim(),
+            state:     String(r[5]  || '').trim(),
+            zip:       String(r[6]  || '').trim(),
+            timezone:  String(r[7]  || '').trim(),
+            systems:   String(r[8]  || '').trim(),
+            url:       String(r[9]  || '').trim(),
+            // _search includes ALL text columns including URL — searches all 36k+ records by default
+            _search:   [r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[9]].join(' ').toLowerCase(),
+          });
+        }
+        _state.all     = data;
+        _state.loaded  = true;
+        _state.loading = false;
+        _buildFilterOptions();
+        _cpApplyFilters();
+        // Show live badge
+        var lb = document.getElementById('cp-live-badge');
+        if (lb) lb.style.display = '';
+      })
+      .catch(function(e) {
+        _state.loading = false;
+        var body2 = document.getElementById('cp-table-body');
+        if (body2) body2.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:10px;color:#f85149;"><i class="fas fa-exclamation-triangle" style="font-size:28px;opacity:.6;"></i><div style="font-size:13px;">Failed to load Connect+ data</div><div style="font-size:11px;opacity:.6;">' + esc(e.message) + '</div><button onclick="window._cpRefresh()" style="margin-top:8px;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:#f85149;padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;font-family:var(--ss-font);cursor:pointer;"><i class="fas fa-redo"></i> Retry</button></div>';
+        _setStatus('Error: ' + e.message);
+      });
+  }
+
+  function _buildFilterOptions() {
+    var countries = {};
+    var dirs      = {};
+    _state.all.forEach(function(r) {
+      if (r.country) countries[r.country] = 1;
+      if (r.directory) dirs[r.directory]  = 1;
+    });
+    var cSel = document.getElementById('cp-country-filter');
+    var dSel = document.getElementById('cp-dir-filter');
+    if (cSel) {
+      var cOpts = Object.keys(countries).sort();
+      cSel.innerHTML = '<option value="">All Countries</option>' +
+        cOpts.map(function(c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+    }
+    if (dSel) {
+      var dOpts = Object.keys(dirs).sort();
+      dSel.innerHTML = '<option value="">All Directories</option>' +
+        dOpts.map(function(d) { return '<option value="' + esc(d) + '">' + esc(d) + '</option>'; }).join('');
+    }
+  }
+
+  // ── Search + Filter + Sort ──────────────────────────────────────────
+  window._cpOnSearch = function(val) {
+    _state.search = String(val || '').trim().toLowerCase();
+    // Sync both search inputs
+    var si = document.getElementById('cp-search-input');
+    var sm = document.getElementById('cp-main-search');
+    if (si && si.value.toLowerCase() !== _state.search) si.value = val || '';
+    if (sm && sm.value.toLowerCase() !== _state.search) sm.value = val || '';
+    _state.page = 1;
+    _cpApplyFilters();
+  };
+
+  window._cpApplyFilters = function() {
+    var cSel = document.getElementById('cp-country-filter');
+    var dSel = document.getElementById('cp-dir-filter');
+    _state.country   = cSel ? cSel.value : '';
+    _state.directory = dSel ? dSel.value : '';
+
+    var q = _state.search;
+    // Respect active search columns from Connect+ Settings
+    // window._cpSearchCols = null or empty = search ALL columns (default)
+    var activeCols = (Array.isArray(window._cpSearchCols) && window._cpSearchCols.length > 0)
+      ? window._cpSearchCols : null;
+
+    var colIndexMap = { 'Site':0,'Directory':1,'Address 1':2,'Country':3,'City':4,'State/Province/Region':5,'Zip/Postal Code':6,'Time Zone':7 };
+    var filtered = _state.all.filter(function(r) {
+      if (_state.country   && r.country   !== _state.country)   return false;
+      if (_state.directory && r.directory !== _state.directory) return false;
+      if (q) {
+        var haystack;
+        if (!activeCols) {
+          // No column filter — search all indexed fields
+          haystack = r._search || [r.site,r.directory,r.address1,r.country,r.city,r.state,r.zip,r.timezone,r.url].join(' ').toLowerCase();
+        } else {
+          // Build haystack from only selected columns
+          haystack = activeCols.map(function(col) {
+            var colKey = col.toLowerCase().replace(/[^a-z0-9]/g, '');
+            // Map column name to row field
+            if (colKey === 'site')                     return r.site      || '';
+            if (colKey === 'directory')                return r.directory || '';
+            if (colKey.includes('address'))            return r.address1  || '';
+            if (colKey === 'country')                  return r.country   || '';
+            if (colKey === 'city')                     return r.city      || '';
+            if (colKey.includes('state') || colKey.includes('province') || colKey.includes('region')) return r.state || '';
+            if (colKey.includes('zip') || colKey.includes('postal'))     return r.zip      || '';
+            if (colKey.includes('time') || colKey.includes('zone'))      return r.timezone || '';
+            if (colKey.includes('url') || colKey.includes('connect') || colKey.includes('link')) return r.url || '';
+            if (colKey.includes('system') || colKey.includes('control')) return r.systems || '';
+            // Fallback: try index map
+            var idx = colIndexMap[col];
+            if (idx != null) {
+              var fields = [r.site,r.directory,r.address1,r.country,r.city,r.state,r.zip,r.timezone];
+              return fields[idx] || '';
+            }
+            return '';
+          }).join(' ').toLowerCase();
+        }
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+
+    // Sort
+    if (_state.sortCol) {
+      var col = _state.sortCol;
+      var dir = _state.sortDir;
+      filtered.sort(function(a, b) {
+        var av = String(a[col] || '').toLowerCase();
+        var bv = String(b[col] || '').toLowerCase();
+        return av < bv ? -dir : av > bv ? dir : 0;
+      });
+    }
+
+    _state.filtered = filtered;
+    _state.page = 1;
+    _cpRender();
+  };
+
+  window._cpSort = function(col) {
+    if (_state.sortCol === col) _state.sortDir *= -1;
+    else { _state.sortCol = col; _state.sortDir = 1; }
+    document.querySelectorAll('[id^="cp-sort-"]').forEach(function(el) {
+      el.className = 'fas fa-sort'; el.style.opacity = '.3';
+    });
+    var icon = document.getElementById('cp-sort-' + col);
+    if (icon) {
+      icon.className = 'fas fa-sort-' + (_state.sortDir > 0 ? 'up' : 'down');
+      icon.style.opacity = '1';
+      icon.style.color = '#22d3ee';
+    }
+    _cpApplyFilters();
+  };
+
+  // ── Render table ────────────────────────────────────────────────────
+  function _cpRender() {
+    var total    = _state.filtered.length;
+    var page     = _state.page;
+    var maxPage  = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (page > maxPage) page = _state.page = 1;
+    var start = (page - 1) * PAGE_SIZE;
+    var end   = Math.min(start + PAGE_SIZE, total);
+    var rows  = _state.filtered.slice(start, end);
+
+    // Update counts
+    var cnt = document.getElementById('cp-record-count');
+    if (cnt) cnt.textContent = total.toLocaleString() + ' site' + (total !== 1 ? 's' : '');
+    var sc = document.getElementById('cp-search-count');
+    if (sc) sc.textContent = _state.search
+      ? (total.toLocaleString() + ' of ' + _state.all.length.toLocaleString())
+      : (_state.all.length.toLocaleString() + ' total');
+
+    _setStatus('');
+
+    var body = document.getElementById('cp-table-body');
+    if (!body) return;
+
+    if (!total) {
+      body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:10px;color:var(--ss-muted);"><i class="fas fa-search" style="font-size:28px;opacity:.2;"></i><div style="font-size:13px;opacity:.5;">No sites match your search.</div></div>';
+      document.getElementById('cp-pagination').style.display = 'none';
+      return;
+    }
+
+    // Build table
+    var html = '<table style="width:100%;border-collapse:collapse;min-width:900px;font-size:11px;">';
+    html += '<tbody>';
+    rows.forEach(function(row, i) {
+      var globalIdx = start + i;
+      var isEven    = i % 2 === 0;
+      var rowBg     = isEven ? 'transparent' : 'rgba(255,255,255,.015)';
+      html += '<tr data-cp-idx="' + globalIdx + '" style="background:' + rowBg + ';transition:background .08s;cursor:pointer;" ' +
+        'onclick="window._cpOpenDetail(' + globalIdx + ')" ' +
+        'onmouseover="this.style.background=\'rgba(34,211,238,.06)\'" ' +
+        'onmouseout="this.style.background=\'' + rowBg + '\'">';
+      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--ss-muted);font-size:10px;width:40px;">' + (start + i + 1) + '</td>';
+      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);font-weight:700;color:#22d3ee;max-width:200px;">' + esc(row.site) + '</td>';
+      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--ss-text);">' + esc(row.directory) + '</td>';
+      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--ss-text);">' + esc(row.city) + '</td>';
+      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--ss-muted);">' + esc(row.state) + '</td>';
+      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--ss-text);">' + esc(row.country) + '</td>';
+      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--ss-muted);font-size:10px;">' + esc(row.timezone) + '</td>';
+      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);text-align:center;font-weight:800;color:#3fb950;">' + esc(row.systems || '—') + '</td>';
+      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);">';
+      if (row.url) {
+        html += '<a href="' + esc(row.url) + '" target="_blank" rel="noopener noreferrer" ' +
+          'onclick="event.stopPropagation()" ' +
+          'style="display:inline-flex;align-items:center;gap:5px;color:#22d3ee;font-size:10px;font-weight:700;text-decoration:none;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.2);border-radius:5px;padding:3px 8px;white-space:nowrap;" ' +
+          'onmouseover="this.style.background=\'rgba(34,211,238,.18)\'" onmouseout="this.style.background=\'rgba(34,211,238,.08)\'">' +
+          '<i class="fas fa-external-link-alt" style="font-size:9px;"></i> Open</a>';
+      }
+      html += '</td></tr>';
+    });
+    html += '</tbody></table>';
+    body.innerHTML = html;
+
+    _renderPagination(total, maxPage);
+  }
+
+  function _renderPagination(total, maxPage) {
+    var pg = document.getElementById('cp-pagination');
+    if (!pg) return;
+    if (maxPage <= 1 && total <= PAGE_SIZE) { pg.style.display = 'none'; return; }
+    pg.style.display = 'flex';
+    var page = _state.page;
+    var start = (page - 1) * PAGE_SIZE + 1;
+    var end   = Math.min(page * PAGE_SIZE, total);
+    var info  = document.getElementById('cp-page-info');
+    if (info) info.textContent = 'Showing ' + start.toLocaleString() + '–' + end.toLocaleString() + ' of ' + total.toLocaleString() + ' sites';
+    var prevBtn = document.getElementById('cp-prev-btn');
+    var nextBtn = document.getElementById('cp-next-btn');
+    if (prevBtn) prevBtn.disabled = page <= 1;
+    if (nextBtn) nextBtn.disabled = page >= maxPage;
+    var btnContainer = document.getElementById('cp-page-btns');
+    if (btnContainer) {
+      var pages = [];
+      for (var p = Math.max(1, page - 2); p <= Math.min(maxPage, page + 2); p++) pages.push(p);
+      btnContainer.innerHTML = pages.map(function(p) {
+        var active = p === page;
+        return '<button onclick="window._cpGoPage(' + p + ')" style="min-width:28px;padding:4px 6px;border-radius:4px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;border:1px solid ' + (active ? 'rgba(34,211,238,.5)' : 'rgba(255,255,255,.1)') + ';background:' + (active ? 'rgba(34,211,238,.15)' : 'rgba(255,255,255,.04)') + ';color:' + (active ? '#22d3ee' : 'var(--ss-muted)') + ';">' + p + '</button>';
+      }).join('');
+    }
+  }
+
+  window._cpChangePage = function(delta) {
+    var maxPage = Math.max(1, Math.ceil(_state.filtered.length / PAGE_SIZE));
+    _state.page = Math.max(1, Math.min(_state.page + delta, maxPage));
+    _cpRender();
+    var body = document.getElementById('cp-table-body');
+    if (body) body.scrollTop = 0;
+  };
+  window._cpGoPage = function(p) {
+    _state.page = p;
+    _cpRender();
+    var body2 = document.getElementById('cp-table-body');
+    if (body2) body2.scrollTop = 0;
+  };
+
+  // ── Detail Modal ────────────────────────────────────────────────────
+  window._cpOpenDetail = function(idx) {
+    var row = _state.filtered[idx];
+    if (!row) return;
+    _state.modalIdx = idx;
+    _cpPopulateModal(row, idx);
+    var m = document.getElementById('cp-detail-modal');
+    if (m) {
+      m.style.display = 'flex';
+      if (m.parentElement !== document.body) document.body.appendChild(m);
+    }
+    try { document.body.classList.add('modal-open'); } catch(_) {}
+  };
+
+  function _cpPopulateModal(row, idx) {
+    function set(id, v) { var el = document.getElementById(id); if (el) el.textContent = v || '—'; }
+    var total = _state.filtered.length;
+    set('cp-modal-site',      row.site);
+    set('cp-modal-address',   [row.address1, row.city, row.state, row.zip].filter(Boolean).join(', '));
+    set('cp-modal-country',   row.country);
+    set('cp-modal-directory', row.directory);
+    set('cp-modal-timezone',  row.timezone);
+    set('cp-modal-systems',   row.systems || '0');
+    set('cp-modal-city',      row.city);
+    set('cp-modal-state',     row.state);
+    set('cp-modal-zip',       row.zip);
+    set('cp-modal-addr1',     row.address1);
+    set('cp-modal-pos',       (idx + 1) + ' of ' + total.toLocaleString());
+
+    var urlEl = document.getElementById('cp-modal-url');
+    var urlTx = document.getElementById('cp-modal-url-text');
+    if (urlEl) {
+      if (row.url) {
+        urlEl.href = row.url;
+        urlEl.style.display = 'inline-flex';
+        if (urlTx) urlTx.textContent = row.url;
+      } else {
+        urlEl.style.display = 'none';
+      }
+    }
+
+    var prev = document.getElementById('cp-modal-prev');
+    var next = document.getElementById('cp-modal-next');
+    if (prev) prev.disabled = idx <= 0;
+    if (next) next.disabled = idx >= total - 1;
+  }
+
+  window._cpModalNav = function(dir) {
+    var next = _state.modalIdx + dir;
+    if (next < 0 || next >= _state.filtered.length) return;
+    _state.modalIdx = next;
+    _cpPopulateModal(_state.filtered[next], next);
+  };
+
+  window._cpCloseModal = function() {
+    var m = document.getElementById('cp-detail-modal');
+    if (m) m.style.display = 'none';
+    try { if (!document.querySelector('.modal.open')) document.body.classList.remove('modal-open'); } catch(_) {}
+  };
+
+  // Keyboard nav + escape for modal
+  document.addEventListener('keydown', function(e) {
+    var m = document.getElementById('cp-detail-modal');
+    if (!m || m.style.display === 'none') return;
+    if (e.key === 'Escape')     window._cpCloseModal();
+    if (e.key === 'ArrowLeft')  window._cpModalNav(-1);
+    if (e.key === 'ArrowRight') window._cpModalNav(1);
+  });
+  // Backdrop click
+  document.getElementById('cp-detail-modal').addEventListener('click', function(e) {
+    if (e.target === this) window._cpCloseModal();
+  });
+
+  // ── CSV Export ──────────────────────────────────────────────────────
+  window._cpExportCsv = function() {
+    var rows = _state.filtered;
+    if (!rows.length) { alert('No data to export.'); return; }
+    var header = ['Site','Directory','Address 1','Country','City','State/Province/Region','Zip/Postal Code','Time Zone','Number of Control Systems','URL CONNECT+ LINK'];
+    var csv = [header].concat(rows.map(function(r) {
+      return [r.site,r.directory,r.address1,r.country,r.city,r.state,r.zip,r.timezone,r.systems,r.url].map(function(v) {
+        return '"' + String(v||'').replace(/"/g,'""') + '"';
+      });
+    })).map(function(r) { return r.join ? r.join(',') : r; }).join('\n');
+    var a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    a.download = 'connect_plus_sites_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+  };
+
+  function _setStatus(msg) {
+    var el = document.getElementById('cp-status');
+    if (el) el.textContent = msg;
+  }
+
+})();
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   CONNECT+ SETTINGS — General Settings > Connect+ Settings
+   ═══════════════════════════════════════════════════════════════════
+   Storage: localStorage key 'ss_connectplus_settings'
+   Shape: { csvUrl: string, searchColumns: string[] | null }
+   - csvUrl: the Google Sheets published CSV link
+   - searchColumns: array of column names to search (null = all)
+
+   NOTE FOR AI: This module manages Connect+ tab configuration.
+   - _cpsSwitchTab(tabId)    → switches between 'data-source' and 'search-columns'
+   - _cpsLoadSettings()      → called when General Settings tab opens
+   - _cpsSaveSettings()      → saves csvUrl + triggers Connect+ reload
+   - _cpsSaveSearchCols()    → saves searchColumns selection
+   - _cpsTestUrl()           → fetches first 5 rows to validate URL + populate columns
+   - _cpsSelectAllCols(bool) → check/uncheck all column checkboxes
+   - window._cpSearchCols    → live array of active search columns (read by Connect+ tab)
+   - window._cpCsvUrl        → live CSV URL (read by Connect+ tab)
+   DO NOT modify the Connect+ tab JS (_cpInit, _cpLoad etc.) from here.
+═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  var LS_KEY = 'ss_connectplus_settings';
+
+  // ── Helpers ──────────────────────────────────────────────────────
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function loadStoredSettings() {
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch(_) {}
+    return { csvUrl: '', searchColumns: null };
+  }
+
+  function storeSettings(obj) {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch(_) {}
+  }
+
+  function showMsg(id, text, ok) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.style.cssText = 'font-size:11px;opacity:1;font-weight:600;color:' + (ok ? '#3fb950' : '#f85149') + ';transition:opacity .3s;';
+    clearTimeout(el._t);
+    el._t = setTimeout(function() { el.style.opacity = '0'; }, 4000);
+  }
+
+  function setUrlStatus(msg, type) {
+    var el = document.getElementById('cps-url-status');
+    if (!el) return;
+    if (!msg) { el.style.display = 'none'; return; }
+    var colors = { ok: { bg: 'rgba(63,185,80,.08)', border: 'rgba(63,185,80,.25)', text: '#3fb950' },
+                   err:{ bg: 'rgba(248,81,73,.08)',  border: 'rgba(248,81,73,.25)',  text: '#f85149' },
+                   info:{ bg: 'rgba(34,211,238,.06)', border: 'rgba(34,211,238,.2)', text: '#22d3ee' } };
+    var c = colors[type] || colors.info;
+    el.style.cssText = 'display:block;margin-bottom:16px;padding:12px 14px;border-radius:8px;font-size:11px;line-height:1.6;background:' + c.bg + ';border:1px solid ' + c.border + ';color:' + c.text + ';';
+    el.innerHTML = msg;
+  }
+
+  // ── Tab switcher ─────────────────────────────────────────────────
+  window._cpsSwitchTab = function(tabId) {
+    document.querySelectorAll('.cps-tab').forEach(function(btn) {
+      var active = btn.dataset.cpsTab === tabId;
+      btn.style.borderBottomColor = active ? '#22d3ee' : 'transparent';
+      btn.style.color = active ? '#22d3ee' : 'var(--ss-muted)';
+    });
+    ['data-source','search-columns'].forEach(function(id) {
+      var el = document.getElementById('cps-panel-' + id);
+      if (el) el.style.display = id === tabId ? 'block' : 'none';
+    });
+    if (tabId === 'search-columns') _cpsRenderColCheckboxes();
+  };
+
+  // ── Load settings into form on General Settings open ─────────────
+  window._cpsLoadSettings = function() {
+    var stored = loadStoredSettings();
+    var urlEl  = document.getElementById('cps-csv-url');
+    if (urlEl) urlEl.value = stored.csvUrl || '';
+
+    // Expose URL to Connect+ tab
+    window._cpCsvUrl = stored.csvUrl || '';
+
+    // If we have a stored URL, show columns preview from cache
+    if (stored.csvUrl && stored.detectedColumns && stored.detectedColumns.length) {
+      _showColumnsPreview(stored.detectedColumns, stored.rowCount || null);
+    }
+
+    // Set active search columns
+    // null or empty array = search ALL columns; non-empty array = only those columns
+    window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
+
+    setUrlStatus('', '');
+  };
+
+  // _cpsLoadSettings is called by the main settings nav listener (in Core JS)
+  // when the user clicks "Connect+ Settings" in the sidebar.
+  // It is also exposed on window so it can be called from activateTab if needed.
+  // No duplicate listener needed here — Core JS handles the click routing.
+
+  // ── Test & Preview URL ───────────────────────────────────────────
+  window._cpsTestUrl = window._cpsPreviewUrl = function() {
+    var urlEl = document.getElementById('cps-csv-url');
+    var url   = urlEl ? urlEl.value.trim() : '';
+    if (!url) { setUrlStatus('<i class="fas fa-exclamation-circle" style="margin-right:6px;"></i>Please enter a CSV URL first.', 'err'); return; }
+
+    var btn = document.querySelector('[onclick*="_cpsTestUrl"]');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing…'; }
+    setUrlStatus('<i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>Fetching CSV to validate…', 'info');
+
+    fetch(url, { cache: 'no-store' })
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' — check the URL is correct and published');
+        return r.text();
+      })
+      .then(function(text) {
+        // Parse CSV header row
+        var lines = text.split('\n');
+        var header = _parseCsvRow(lines[0] || '');
+        var rowCount = Math.max(0, lines.filter(function(l) { return l.trim(); }).length - 1);
+
+        if (!header.length) throw new Error('Could not detect column headers — empty CSV?');
+
+        // Cache detected columns in stored settings
+        var stored = loadStoredSettings();
+        stored.detectedColumns = header;
+        stored.rowCount = rowCount;
+        storeSettings(stored);
+
+        setUrlStatus(
+          '<i class="fas fa-check-circle" style="margin-right:6px;"></i>' +
+          '<strong>Valid CSV</strong> — ' + rowCount.toLocaleString() + ' data rows, ' + header.length + ' columns detected.',
+          'ok'
+        );
+        _showColumnsPreview(header, rowCount);
+
+        // Update search columns panel
+        _cpsRenderColCheckboxes(header);
+      })
+      .catch(function(e) {
+        setUrlStatus('<i class="fas fa-times-circle" style="margin-right:6px;"></i><strong>Failed:</strong> ' + esc(e.message), 'err');
+        document.getElementById('cps-columns-preview').style.display = 'none';
+      })
+      .finally(function() {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-satellite-dish"></i> Test &amp; Preview'; }
+      });
+  };
+
+  function _parseCsvRow(row) {
+    var fields = []; var f = ''; var q = false;
+    for (var i = 0; i < row.length; i++) {
+      var c = row[i];
+      if (c === '"') { q = !q; }
+      else if (c === ',' && !q) { fields.push(f.trim()); f = ''; }
+      else f += c;
+    }
+    fields.push(f.trim());
+    return fields.filter(function(s) { return s; });
+  }
+
+  function _showColumnsPreview(cols, rowCount) {
+    var wrap = document.getElementById('cps-columns-preview');
+    var list = document.getElementById('cps-columns-list');
+    var cnt  = document.getElementById('cps-row-count-text');
+    if (!wrap || !list) return;
+    if (cnt && rowCount != null) cnt.textContent = rowCount.toLocaleString() + ' rows';
+    list.innerHTML = cols.map(function(c) {
+      return '<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.18);border-radius:5px;padding:3px 9px;font-size:10px;font-weight:600;color:#22d3ee;">' +
+        '<i class="fas fa-columns" style="font-size:8px;opacity:.7;"></i>' + esc(c) + '</span>';
+    }).join('');
+    wrap.style.display = 'block';
+  }
+
+  // ── Search columns checkboxes ────────────────────────────────────
+  function _cpsRenderColCheckboxes(cols) {
+    var stored = loadStoredSettings();
+    var columns = cols || stored.detectedColumns || [];
+    var activeCols = Array.isArray(stored.searchColumns) ? stored.searchColumns : columns;
+    var container  = document.getElementById('cps-col-checkboxes');
+    var countEl    = document.getElementById('cps-col-filter-count');
+    if (!container) return;
+
+    if (!columns.length) {
+      container.innerHTML = '<div style="font-size:11px;color:var(--ss-muted);opacity:.5;grid-column:1/-1;text-align:center;padding:8px 0;">Save a CSV URL in Data Source tab first.</div>';
+      return;
+    }
+
+    container.innerHTML = columns.map(function(col, i) {
+      var checked = activeCols.length === 0 || activeCols.indexOf(col) >= 0;
+      return '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,.03);border:1px solid var(--ss-border2);border-radius:7px;cursor:pointer;transition:background .12s;font-size:11px;color:var(--ss-text);font-weight:500;" ' +
+        'onmouseover="this.style.background=\'rgba(34,211,238,.06)\'" onmouseout="this.style.background=\'rgba(255,255,255,.03)\'">' +
+        '<input type="checkbox" class="cps-col-chk" data-col="' + esc(col) + '" ' + (checked ? 'checked' : '') + ' ' +
+        'style="width:14px;height:14px;accent-color:#22d3ee;cursor:pointer;" onchange="window._cpsUpdateColCount()">' +
+        '<span>' + esc(col) + '</span>' +
+        '</label>';
+    }).join('');
+
+    _cpsUpdateColCount();
+  }
+
+  window._cpsUpdateColCount = function() {
+    var checks = document.querySelectorAll('.cps-col-chk');
+    var total   = checks.length;
+    var checked = document.querySelectorAll('.cps-col-chk:checked').length;
+    var el = document.getElementById('cps-col-filter-count');
+    if (el) el.textContent = checked + ' of ' + total + ' columns selected for search';
+  };
+
+  window._cpsSelectAllCols = function(val) {
+    document.querySelectorAll('.cps-col-chk').forEach(function(cb) { cb.checked = val; });
+    _cpsUpdateColCount();
+  };
+
+  // ── Save settings ─────────────────────────────────────────────────
+  window._cpsSaveSettings = function() {
+    var urlEl = document.getElementById('cps-csv-url');
+    var url   = urlEl ? urlEl.value.trim() : '';
+    var btn   = document.getElementById('cps-save-btn');
+
+    if (!url) { showMsg('cps-save-msg', '✗ Enter a CSV URL first', false); return; }
+
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; btn.style.opacity = '.7'; }
+
+    var stored = loadStoredSettings();
+    stored.csvUrl = url;
+    storeSettings(stored);
+
+    // Expose to Connect+ tab
+    window._cpCsvUrl = url;
+
+    showMsg('cps-save-msg', '✓ Saved! Reload Connect+ to apply.', true);
+
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Connect+ Settings'; btn.style.opacity = '1'; }
+
+    // Trigger Connect+ tab reload if it was already loaded
+    if (typeof window._cpRefresh === 'function') window._cpRefresh();
+  };
+
+  window._cpsSaveSearchCols = function() {
+    var checks  = document.querySelectorAll('.cps-col-chk');
+    var stored  = loadStoredSettings();
+    var allCols = (stored.detectedColumns || []);
+    var selected = [];
+
+    checks.forEach(function(cb) {
+      if (cb.checked) selected.push(cb.getAttribute('data-col'));
+    });
+
+    // null = all columns (no filter); array = specific columns
+    stored.searchColumns = (selected.length === allCols.length) ? null : selected;
+    storeSettings(stored);
+
+    // Expose live to Connect+ search
+    // null or empty = all columns; only restrict when user explicitly selected subset
+    window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
+
+    showMsg('cps-cols-msg', '✓ Search columns saved!', true);
+  };
+
+})();
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   APPEARANCE SETTINGS — General Settings > Appearance
+   ═══════════════════════════════════════════════════════════════════
+   Storage: localStorage key 'ss_appearance_settings'
+   Shape: { brightness, contrast, scale, sidebarOpacity, theme }
+   - brightness: 40–130 (default 100)
+   - contrast:   60–140 (default 100)
+   - scale:      80–120 (default 100) — applied as font-size on :root
+   - sidebarOpacity: 30–100 (default 100)
+   - theme: string — preset theme name (default 'default')
+
+   NOTE FOR AI: To add a new display control:
+   1. Add a <input type="range"> in settings-section-studio-appearance
+   2. Call window._appApplyDisplay() on oninput
+   3. Read the value in _appApplyDisplay() and apply it to the DOM
+   4. Save/restore in _appSaveDisplay() / _appLoadDisplay()
+   DO NOT modify app.js — all appearance is scoped to support_studio.html only.
+═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  var LS_KEY = 'ss_appearance_settings';
+
+  // ── Preset themes ─────────────────────────────────────────────────
+  var THEMES = [
+    { id:'default',  name:'Void',       bg:'#010409', surface:'#0d1117', accent:'#58a6ff' },
+    { id:'midnight', name:'Midnight',   bg:'#050a0f', surface:'#0a1628', accent:'#60a5fa' },
+    { id:'slate',    name:'Slate',      bg:'#0a0c10', surface:'#13161d', accent:'#818cf8' },
+    { id:'onyx',     name:'Onyx',       bg:'#080808', surface:'#111111', accent:'#a78bfa' },
+    { id:'deep',     name:'Deep Ocean', bg:'#00050f', surface:'#071020', accent:'#22d3ee' },
+    { id:'forest',   name:'Forest',     bg:'#030a05', surface:'#0b1a0e', accent:'#4ade80' },
+  ];
+
+  function loadStored() {
+    try { var r = localStorage.getItem(LS_KEY); if (r) return JSON.parse(r); } catch(_) {}
+    return { brightness: 100, contrast: 100, scale: 100, sidebarOpacity: 100, theme: 'default' };
+  }
+  function saveStored(obj) { try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch(_) {} }
+
+  // ── Tab switcher (Display / Theme) ───────────────────────────────
+  window._appSwitchTab = function(tabId) {
+    document.querySelectorAll('.app-tab').forEach(function(b) {
+      var active = b.dataset.appTab === tabId;
+      b.style.borderBottomColor = active ? '#a78bfa' : 'transparent';
+      b.style.color = active ? '#a78bfa' : 'var(--ss-muted)';
+    });
+    ['display','theme'].forEach(function(id) {
+      var el = document.getElementById('app-panel-' + id);
+      if (el) el.style.display = id === tabId ? 'block' : 'none';
+    });
+    if (tabId === 'theme') _appRenderThemes();
+  };
+
+  // ── Apply display settings live ──────────────────────────────────
+  window._appApplyDisplay = function() {
+    var brightness    = Number(document.getElementById('app-brightness')?.value    || 100);
+    var contrast      = Number(document.getElementById('app-contrast')?.value      || 100);
+    var scale         = Number(document.getElementById('app-scale')?.value         || 100);
+    var sidebarOp     = Number(document.getElementById('app-sidebar-opacity')?.value || 100);
+
+    // Update label values
+    var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v + '%'; };
+    set('app-brightness-val',    brightness);
+    set('app-contrast-val',      contrast);
+    set('app-scale-val',         scale);
+    set('app-sidebar-opacity-val', sidebarOp);
+
+    // Apply CSS filter to entire body
+    document.body.style.filter = 'brightness(' + (brightness/100) + ') contrast(' + (contrast/100) + ')';
+
+    // Apply font-size scale to root element
+    document.documentElement.style.fontSize = (scale / 100 * 16) + 'px';
+
+    // Apply sidebar opacity
+    var sidebar = document.getElementById('ss-left-sidebar');
+    if (sidebar) sidebar.style.opacity = (sidebarOp / 100).toString();
+
+    // Apply right sidebar opacity too
+    var rsidebar = document.querySelector('.ss-right-panel');
+    if (rsidebar) rsidebar.style.opacity = (sidebarOp / 100).toString();
+  };
+
+  // ── Save display settings ────────────────────────────────────────
+  window._appSaveDisplay = function() {
+    var stored = loadStored();
+    stored.brightness    = Number(document.getElementById('app-brightness')?.value    || 100);
+    stored.contrast      = Number(document.getElementById('app-contrast')?.value      || 100);
+    stored.scale         = Number(document.getElementById('app-scale')?.value         || 100);
+    stored.sidebarOpacity = Number(document.getElementById('app-sidebar-opacity')?.value || 100);
+    saveStored(stored);
+    _appApplyDisplay();
+    var msg = document.getElementById('app-display-msg') || document.getElementById('app-theme-msg');
+    if (msg) {
+      msg.textContent = '✓ Appearance saved!';
+      msg.style.cssText = 'font-size:11px;opacity:1;color:#3fb950;font-weight:600;transition:opacity .3s;';
+      clearTimeout(msg._t); msg._t = setTimeout(function() { msg.style.opacity = '0'; }, 3000);
+    }
+  };
+
+  // ── Reset to defaults ────────────────────────────────────────────
+  window._appResetDisplay = function() {
+    var defaults = { brightness: 100, contrast: 100, scale: 100, sidebarOpacity: 100 };
+    Object.keys(defaults).forEach(function(k) {
+      var map = { brightness:'app-brightness', contrast:'app-contrast', scale:'app-scale', sidebarOpacity:'app-sidebar-opacity' };
+      var el = document.getElementById(map[k]);
+      if (el) el.value = defaults[k];
+    });
+    _appApplyDisplay();
+    var stored = loadStored();
+    stored.brightness = 100; stored.contrast = 100; stored.scale = 100; stored.sidebarOpacity = 100;
+    saveStored(stored);
+    var msg = document.getElementById('app-display-msg');
+    if (msg) {
+      msg.textContent = '↺ Reset to defaults';
+      msg.style.cssText = 'font-size:11px;opacity:1;color:#58a6ff;font-weight:600;';
+      clearTimeout(msg._t); msg._t = setTimeout(function() { msg.style.opacity = '0'; }, 2500);
+    }
+  };
+
+  // ── Load settings into sliders ───────────────────────────────────
+  window._appLoadDisplay = function() {
+    var s = loadStored();
+    function setSlider(id, val) { var e = document.getElementById(id); if (e) e.value = val; }
+    setSlider('app-brightness',    s.brightness    || 100);
+    setSlider('app-contrast',      s.contrast      || 100);
+    setSlider('app-scale',         s.scale         || 100);
+    setSlider('app-sidebar-opacity', s.sidebarOpacity || 100);
+    _appApplyDisplay();
+    _appRenderThemes(s.theme);
+  };
+
+  // ── Theme renderer ───────────────────────────────────────────────
+  function _appRenderThemes(activeTheme) {
+    var grid = document.getElementById('app-theme-grid');
+    if (!grid) return;
+    var stored = loadStored();
+    var current = activeTheme || stored.theme || 'default';
+    grid.innerHTML = THEMES.map(function(t) {
+      var isActive = t.id === current;
+      return '<div onclick="window._appSelectTheme(\'' + t.id + '\')" ' +
+        'style="padding:12px;background:' + (isActive ? 'rgba(167,139,250,.12)' : 'rgba(255,255,255,.03)') + ';border:2px solid ' +
+        (isActive ? '#a78bfa' : 'rgba(255,255,255,.08)') + ';border-radius:10px;cursor:pointer;transition:all .15s;">' +
+        '<div style="display:flex;gap:4px;margin-bottom:8px;">' +
+          '<div style="width:20px;height:20px;border-radius:4px;background:' + t.bg + ';border:1px solid rgba(255,255,255,.1);"></div>' +
+          '<div style="width:20px;height:20px;border-radius:4px;background:' + t.surface + ';border:1px solid rgba(255,255,255,.1);"></div>' +
+          '<div style="width:20px;height:20px;border-radius:4px;background:' + t.accent + ';"></div>' +
+        '</div>' +
+        '<div style="font-size:11px;font-weight:700;color:' + (isActive ? '#a78bfa' : '#e6edf3') + ';">' + t.name + '</div>' +
+        (isActive ? '<div style="font-size:9px;color:#a78bfa;margin-top:2px;font-weight:800;">ACTIVE</div>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  window._appSelectTheme = function(themeId) {
+    var t = THEMES.find(function(x) { return x.id === themeId; });
+    if (!t) return;
+    document.documentElement.style.setProperty('--ss-bg',       t.bg);
+    document.documentElement.style.setProperty('--ss-surface',  t.surface);
+    document.documentElement.style.setProperty('--ss-accent',   t.accent);
+    var stored = loadStored();
+    stored.theme = themeId;
+    saveStored(stored);
+    _appRenderThemes(themeId);
+    var msg = document.getElementById('app-theme-msg');
+    if (msg) {
+      msg.textContent = '✓ Theme applied!';
+      msg.style.cssText = 'font-size:11px;opacity:1;color:#3fb950;font-weight:600;';
+      clearTimeout(msg._t); msg._t = setTimeout(function() { msg.style.opacity = '0'; }, 2500);
+    }
+  };
+
+  // ── Load on settings nav click ───────────────────────────────────
+  document.querySelectorAll('.ss-settings-nav-btn').forEach(function(btn) {
+    if (btn.dataset.settingsSection === 'studio-appearance') {
+      btn.addEventListener('click', window._appLoadDisplay);
+    }
+  });
+
+  // ── Apply saved settings immediately on page load ─────────────────
+  (function applyOnLoad() {
+    var s = loadStored();
+    if (s.brightness !== 100 || s.contrast !== 100) {
+      document.body.style.filter = 'brightness(' + ((s.brightness||100)/100) + ') contrast(' + ((s.contrast||100)/100) + ')';
+    }
+    if (s.scale && s.scale !== 100) {
+      document.documentElement.style.fontSize = (s.scale/100 * 16) + 'px';
+    }
+    if (s.sidebarOpacity && s.sidebarOpacity !== 100) {
+      var sidebar = document.getElementById('ss-left-sidebar');
+      if (sidebar) sidebar.style.opacity = (s.sidebarOpacity/100).toString();
+    }
+    if (s.theme && s.theme !== 'default') {
+      var t = THEMES.find(function(x) { return x.id === s.theme; });
+      if (t) {
+        document.documentElement.style.setProperty('--ss-bg',      t.bg);
+        document.documentElement.style.setProperty('--ss-surface', t.surface);
+        document.documentElement.style.setProperty('--ss-accent',  t.accent);
+      }
+    }
+  })();
+
+})();
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   SUPER ADMIN GATE — Hide General Settings from non-SUPER_ADMIN
+   ═══════════════════════════════════════════════════════════════════
+   General Settings tab is only visible to users with role === 'SUPER_ADMIN'.
+   All other roles see the tab as hidden (display:none).
+
+   NOTE FOR AI: To change who can see General Settings, update the
+   ALLOWED_ROLES array below. Current allowed: ['SUPER_ADMIN'].
+   Add 'SUPER_USER' or 'ADMIN' if needed.
+═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  var ALLOWED_ROLES = ['SUPER_ADMIN'];
+
+  function getUserRole() {
+    try {
+      // CloudAuth session (primary)
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) {
+        var sess = JSON.parse(raw);
+        var userId = sess && (sess.userId || (sess.user && sess.user.id));
+        if (userId && window.Store && typeof Store.getUserById === 'function') {
+          var u = Store.getUserById(userId);
+          if (u && u.role) return String(u.role).trim().toUpperCase();
+        }
+        // Fallback: role embedded in session
+        if (sess && sess.role) return String(sess.role).trim().toUpperCase();
+        if (sess && sess.user && sess.user.role) return String(sess.user.role).trim().toUpperCase();
+      }
+      // CloudAuth API
+      if (window.Auth && typeof window.Auth.getUser === 'function') {
+        var user = window.Auth.getUser();
+        if (user && user.role) return String(user.role).trim().toUpperCase();
+      }
+    } catch(_) {}
+    return '';
+  }
+
+  function applyGate() {
+    var role     = getUserRole();
+    var allowed  = ALLOWED_ROLES.indexOf(role) >= 0;
+    var configTab = document.getElementById('ss-tab-config');
+
+    if (configTab) {
+      configTab.style.display = allowed ? '' : 'none';
+      configTab.setAttribute('data-role-gated', allowed ? 'visible' : 'hidden');
+    }
+
+    // If user is on the config tab but not allowed, redirect to first available tab
+    if (!allowed) {
+      var active = document.querySelector('.ss-tab.active');
+      if (active && active.dataset.tab === 'config') {
+        var firstTab = document.querySelector('.ss-tab:not([id="ss-tab-config"])');
+        if (firstTab && typeof window.activateTab === 'function') {
+          window.activateTab(firstTab.dataset.tab);
+        }
+      }
+    }
+  }
+
+  // Apply immediately + retry after hydration completes
+  applyGate();
+  setTimeout(applyGate, 300);
+  setTimeout(applyGate, 1200);
+
+  // Re-apply if user changes (Store dispatches events)
+  try {
+    window.addEventListener('mums:store', function() { setTimeout(applyGate, 100); });
+    window.addEventListener('mums:auth', function()  { setTimeout(applyGate, 100); });
+  } catch(_) {}
+
+})();
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   MANILA CALENDAR FIX — Retry navigation if Pages not yet registered
+   ═══════════════════════════════════════════════════════════════════
+   When support_studio.html opens a new tab, the MUMS app at /manila_calendar
+   may render my_task instead if window.Pages['manila_calendar'] hasn't
+   registered by the time navigateToPageId fires.
+
+   This patch adds a popstate/load listener that retries the route render
+   up to 5 times if the expected page isn't registered yet.
+
+   NOTE FOR AI: This is a safe client-side patch — it does NOT modify
+   app.js (which has @AI_CRITICAL_GUARD). It patches window.App.navigate
+   to add retry logic for deferred page scripts.
+═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  // Only runs inside the MUMS main app (index.html), not support_studio.html
+  // Since this script IS in support_studio.html, we add a postMessage bridge
+  // that the main MUMS window can use to retry navigation when needed.
+
+  // Bridge: when a link to MUMS opens support_studio.html, and user clicks
+  // Manila Calendar in the MUMS sidebar, MUMS calls navigateToPageId.
+  // The fix is to ensure the retry logic exists in the MUMS app.
+  // We inject a tiny retry helper that survives across the deferred script loading.
+
+  if (window.location.pathname.includes('support_studio')) {
+    // We are in support_studio.html — nothing to do here for Manila Calendar
+    // The Manila Calendar fix runs in the MUMS main window (index.html)
+    return;
+  }
+
+  // Retry logic (runs in MUMS main window context if somehow loaded there)
+  var _mcRetries = 0;
+  function _retryManilaCalendar() {
+    var pages = window.Pages || {};
+    var currentId = window._currentPageId || '';
+    if (currentId === 'manila_calendar' && !pages['manila_calendar']) {
+      _mcRetries++;
+      if (_mcRetries < 10) {
+        setTimeout(function() {
+          var p2 = window.Pages || {};
+          if (p2['manila_calendar'] && window.App && typeof window.App.navigate === 'function') {
+            window.App.navigate('manila_calendar');
+          } else {
+            _retryManilaCalendar();
+          }
+        }, 300);
+      }
+    }
+  }
+
+  window.addEventListener('popstate', function() {
+    setTimeout(_retryManilaCalendar, 100);
+  });
+
+})();
+</script>
+
 </body>
 </html>

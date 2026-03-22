@@ -180,7 +180,7 @@ window.Pages.master_schedule = function(root){
       const ruleLabel = 'Up to 2 rest days';
 
       root.innerHTML = `
-        <div class="ms-shell">
+        <div class="ms-shell" style="padding:20px 24px 0;box-sizing:border-box">
           <div class="ms-topbar">
             <div>
               <div class="h1" style="margin-bottom:4px">Master Schedule</div>
@@ -254,7 +254,7 @@ window.Pages.master_schedule = function(root){
             </div>
           </div>
 
-          <div class="card pad">
+          <div class="ms-grid-wrap"><div class="card pad">
             <div class="ms-grid">
               <div class="ms-grid-head">
                 <div></div>
@@ -298,6 +298,7 @@ window.Pages.master_schedule = function(root){
                 }).join('')}
               </div>
             </div>
+          </div>
           </div>
         </div>
       `;

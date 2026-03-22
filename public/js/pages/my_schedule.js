@@ -1780,7 +1780,8 @@
       };
 
       // ── Fetch ─────────────────────────────────────────────────────────────
-      const res = await fetch(buildUrl(), { headers, cache: 'no-store' });
+      // FIX[SCHEDULE-LATENCY]: Include resolveTeamId on first call to avoid double fetch
+      const res = await fetch(buildUrl(liveTeamId ? { resolveTeamId: liveTeamId } : {}), { headers, cache: 'no-store' });
       if (!res.ok) return;
       const data = await res.json().catch(() => ({}));
 

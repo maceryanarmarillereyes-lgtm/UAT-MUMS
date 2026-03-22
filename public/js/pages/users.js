@@ -448,8 +448,16 @@ if (!createAllowed) {
     };
   }
 
-  async function loadQbNameOptions(currentQbName) {
+  let _qbLoadToken = 0;
+  let _qbLoadAbort = null;
+
+  async function loadQbNameOptions(currentQbName, _ownerToken) {
     if (!qbNameSel) return;
+    // Cancel in-flight request from previous user edit
+    if (_qbLoadAbort) { try { _qbLoadAbort.abort(); } catch(_) {} }
+    const abortCtrl = new AbortController();
+    _qbLoadAbort = abortCtrl;
+    const myToken = _ownerToken;
 
     // Always show current name immediately — don't wait for network
     if (currentQbName) {
@@ -462,8 +470,13 @@ if (!createAllowed) {
     try {
       const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
       const res = await fetch('/api/quickbase/assigned_to_names', {
-        headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }
+        headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+        signal: abortCtrl.signal
       });
+      // STALE-GUARD: Another user was opened while fetch was in-flight
+      if (myToken !== _qbLoadToken) return;
+      // STALE-GUARD: Another user was opened while this fetch was in-flight — discard
+      if (myToken !== _qbLoadToken) return;
       const data = await res.json();
 
       const names = Array.isArray(data.names) ? data.names : [];
@@ -720,7 +733,25 @@ function openUserModal(actor, user){
   // QB Name — load options and pre-select current value
   if (actor && actor.role === Config.ROLES.SUPER_ADMIN) {
     const currentQbName = (user && user.qb_name) ? String(user.qb_name) : '';
-    loadQbNameOptions(currentQbName);
+
+    // FIX[QBNAME-STALE]: Reset toggle to default "Pick from list" mode on each user open.
+    // Without this: if SA was in manual mode for User A, opening User B keeps manual mode
+    // visible and the manual input retains User A's value until async fetch completes.
+    const _resetManualWrap  = document.getElementById('u_qb_name_manual_wrap');
+    const _resetSel         = document.getElementById('u_qb_name');
+    const _resetToggleBtn   = document.getElementById('u_qb_name_toggle');
+    const _resetManualInput = document.getElementById('u_qb_name_manual');
+    if (_resetManualWrap)  _resetManualWrap.style.display  = 'none';  // hide manual input
+    if (_resetSel)         _resetSel.style.display         = '';       // show dropdown
+    if (_resetToggleBtn)   _resetToggleBtn.textContent     = '✏️ Enter manually';
+    if (_resetManualInput) _resetManualInput.value         = '';       // clear stale value
+
+    // FIX[QBNAME-RACE]: Increment token so any in-flight async fetch from a previous
+    // user edit can detect it's stale and discard its result.
+    _qbLoadToken = (_qbLoadToken || 0) + 1;
+    const _thisUserToken = _qbLoadToken;
+
+    loadQbNameOptions(currentQbName, _thisUserToken);
   }
 
   // Cloud mode: prevent editing username/email for existing users to avoid breaking auth mapping.
@@ -818,12 +849,17 @@ function openUserModal(actor, user){
       // QB Name: read from manual input if visible, otherwise from dropdown
       let qbName = undefined;
       if (actor && actor.role === Config.ROLES.SUPER_ADMIN) {
-        const manualWrap = document.getElementById('u_qb_name_manual_wrap');
-        const isManual = manualWrap && manualWrap.style.display !== 'none';
+        const manualWrap    = document.getElementById('u_qb_name_manual_wrap');
+        const manualInput   = document.getElementById('u_qb_name_manual');
+        const dropdownSel   = document.getElementById('u_qb_name');
+        const isManual      = manualWrap && manualWrap.style.display !== 'none';
         if (isManual) {
-          qbName = String((UI.el('#u_qb_name_manual') && UI.el('#u_qb_name_manual').value) || '').trim();
+          // FIX[QBNAME-STALE]: Read from manual input — the reset in openUserModal
+          // guarantees this value was typed by SA explicitly for THIS user.
+          qbName = String((manualInput && manualInput.value) || '').trim();
         } else {
-          qbName = String((UI.el('#u_qb_name') && UI.el('#u_qb_name').value) || '').trim();
+          // Dropdown value is always bound to the current user's options
+          qbName = String((dropdownSel && dropdownSel.value) || '').trim();
         }
       }
 
