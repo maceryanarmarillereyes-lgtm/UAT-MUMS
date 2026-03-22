@@ -978,9 +978,9 @@
 
   function _qbTooltipEnter(e) {
     const el = e.currentTarget;
-    const rawFull = el.getAttribute('data-full') || '';
-    // Convert EST→PHT for all timestamp-bearing tooltip text
-    const full = (typeof _convertNotesESTtoPHT === 'function') ? _convertNotesESTtoPHT(rawFull) : rawFull;
+    // data-full already stores PHT-converted text (set during renderRecords).
+    // Do NOT run _convertNotesESTtoPHT again — that would double-convert.
+    const full = el.getAttribute('data-full') || '';
     // Don't show tooltip if content isn't clamped (short text fits in 3 lines)
     if (!full || full.trim().length < 2) return;
     // Only show tooltip if text is actually truncated

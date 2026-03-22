@@ -3569,6 +3569,7 @@ function updateClocksPreviewTimes(){
     }
 
     // ── Parse [MON-DD-YY HH:MM AM/PM NAME] bracket → { dateStr, time, who, dateObj } ──
+    // NOTE: Input is already PHT-converted text. dateObj is for sorting/relTime display only.
     function _parseBracket(bracketText) {
       // Pattern: MON-DD-YY HH:MM AM/PM Name Here
       const re = /^([A-Z]{3}-\d{1,2}-\d{2})\s+(\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)\s+(.+)$/i;
@@ -3587,7 +3588,8 @@ function updateClocksPreviewTimes(){
       const ap = (m[2].match(/PM/i) ? 'PM' : (m[2].match(/AM/i) ? 'AM' : ''));
       if (ap === 'PM' && hh < 12) hh += 12;
       if (ap === 'AM' && hh === 12) hh = 0;
-      const dateObj = new Date(year, MMAP[mon], dd, hh, mi, 0);
+      // Timestamps are already PHT — interpret as UTC+8 for accurate absolute time
+      const dateObj = new Date(Date.UTC(year, MMAP[mon], dd, hh - 8, mi, 0)); // PHT(UTC+8) → UTC
       return { dateStr: m[1], timeStr: m[2].trim(), who: m[3].trim(), dateObj, bracketDateToken: m[1] };
     }
 
@@ -3616,6 +3618,38 @@ function updateClocksPreviewTimes(){
     }
 
     // ── Core: scan records and build notification items ───────────────────
+    // IMPORTANT: QB stores case note timestamps in EST (UTC-5).
+    // We must convert them to PHT (UTC+8) before comparing against Manila today.
+    // _convertCNtoPHT mirrors the logic in my_quickbase.js _convertNotesESTtoPHT.
+    function _convertCNtoPHT(text) {
+      if (!text) return text;
+      const _MMAP = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+      const _MN   = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+      return text.replace(
+        /\[([A-Z]{3})-(\d{1,2})-(\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)([\s\S]*?)\]/gi,
+        function(full, mon, dd, yy, hh, mi, ap, rest) {
+          try {
+            const monU = mon.toUpperCase();
+            if (!(_MMAP[monU] !== undefined)) return full;
+            const year = parseInt(yy) < 50 ? 2000+parseInt(yy) : 1900+parseInt(yy);
+            let h = parseInt(hh);
+            if (ap.toUpperCase()==='PM' && h<12) h+=12;
+            if (ap.toUpperCase()==='AM' && h===12) h=0;
+            // EST = UTC-5: add 5h to get UTC, then add 8h for PHT
+            const utcMs = Date.UTC(year, _MMAP[monU], parseInt(dd), h+5, parseInt(mi), 0);
+            const phtMs = utcMs + 8*3600*1000;
+            const p     = new Date(phtMs);
+            const ph    = p.getUTCHours(), pm2 = p.getUTCMinutes();
+            const pap   = ph>=12?'PM':'AM';
+            const ph12  = ph%12||12;
+            return '['+_MN[p.getUTCMonth()]+'-'+p.getUTCDate()+'-'+
+              String(p.getUTCFullYear()).slice(-2)+' '+ph12+':'+
+              String(pm2).padStart(2,'0')+' '+pap+rest+']';
+          } catch(_) { return full; }
+        }
+      );
+    }
+
     function _buildNotifications(records, columns) {
       const today = _manilaToday();
       if (!today || !Array.isArray(records)) return [];
@@ -3637,8 +3671,10 @@ function updateClocksPreviewTimes(){
       const todayRe = new RegExp('\\[(' + today.replace(/-/g,'\\-') + '\\s[^\\]]+)\\]', 'gi');
 
       records.forEach(row => {
-        const cnVal = row && row.fields && row.fields[String(cnCol.id)] ? String(row.fields[String(cnCol.id)].value || '') : '';
-        if (!cnVal) return;
+        const cnRaw = row && row.fields && row.fields[String(cnCol.id)] ? String(row.fields[String(cnCol.id)].value || '') : '';
+        if (!cnRaw) return;
+        // Convert EST→PHT so timestamps match Manila today correctly
+        const cnVal = _convertCNtoPHT(cnRaw);
 
         // Find all today brackets
         const matches = [];
