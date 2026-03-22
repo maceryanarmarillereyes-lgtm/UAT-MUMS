@@ -1982,6 +1982,18 @@
       </div>
 
       <div id="canvas-qbs" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
+        <!-- QBS Export toolbar — full export of all QB records -->
+        <div style="flex-shrink:0;padding:6px 16px;background:var(--ss-surface);border-bottom:1px solid var(--ss-border);display:flex;align-items:center;gap:8px;justify-content:flex-end;">
+          <span id="qbs-export-status" style="font-size:10px;color:var(--ss-muted);flex:1;"></span>
+          <button onclick="window._qbsExportAll('csv')" id="qbs-export-csv-btn"
+            style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.25);color:#3fb950;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s;">
+            <i class="fas fa-file-csv"></i> Export All (CSV)
+          </button>
+          <button onclick="window._qbsExportAll('xlsx')" id="qbs-export-xls-btn"
+            style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);color:#4ade80;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s;">
+            <i class="fas fa-file-excel"></i> Export All (Excel)
+          </button>
+        </div>
         <div id="qbs-root" style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;"></div>
       </div>
 
@@ -3970,7 +3982,80 @@
     });
   });
 
-  // ── Deep Search — server-side across ALL QB records ─────────────
+  // ── Export ALL QB records (server-side paginated) ─────────────────
+  // Calls /api/studio/qb_export which paginates through all QB records
+  // server-side and returns a full CSV or XLS file.
+  // No record limit — fetches all 22,000+ cases.
+  window._qbsExportAll = function(format) {
+    var statusEl  = document.getElementById('qbs-export-status');
+    var csvBtn    = document.getElementById('qbs-export-csv-btn');
+    var xlsBtn    = document.getElementById('qbs-export-xls-btn');
+    var isCsv     = format === 'csv';
+    var btn       = isCsv ? csvBtn : xlsBtn;
+
+    if (statusEl) {
+      statusEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i>' +
+        'Fetching all QB records… This may take 20–40 seconds for 22,000+ rows.';
+      statusEl.style.color = '#58a6ff';
+    }
+    if (csvBtn) csvBtn.disabled = true;
+    if (xlsBtn) xlsBtn.disabled = true;
+
+    var tok = sqbToken();
+    var headers = {};
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
+
+    var url = '/api/studio/qb_export?format=' + encodeURIComponent(format || 'csv');
+    var startTime = Date.now();
+
+    fetch(url, { headers: headers })
+      .then(function(r) {
+        var count = r.headers.get('X-Record-Count');
+        if (!r.ok) return r.json().then(function(e) { throw new Error(e.message || 'Export failed (HTTP ' + r.status + ')'); });
+        if (statusEl && count) {
+          statusEl.innerHTML = '<i class="fas fa-check-circle" style="margin-right:5px;color:#3fb950;"></i>' +
+            count.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' records — building file…';
+          statusEl.style.color = '#3fb950';
+        }
+        return r.blob();
+      })
+      .then(function(blob) {
+        var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        var ext  = isCsv ? 'csv' : 'xls';
+        var mime = isCsv ? 'text/csv' : 'application/vnd.ms-excel';
+        var date = new Date().toISOString().slice(0, 10);
+        var filename = 'quickbase_all_cases_' + date + '.' + ext;
+
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([blob], { type: mime }));
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(a.href); }, 5000);
+
+        if (statusEl) {
+          statusEl.innerHTML = '<i class="fas fa-check-circle" style="margin-right:5px;"></i>' +
+            'Export complete — ' + filename + ' (' + elapsed + 's)';
+          statusEl.style.color = '#3fb950';
+          clearTimeout(statusEl._t);
+          statusEl._t = setTimeout(function() { statusEl.innerHTML = ''; }, 8000);
+        }
+      })
+      .catch(function(e) {
+        if (statusEl) {
+          statusEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:5px;"></i>Export failed: ' +
+            (e && e.message || 'Unknown error');
+          statusEl.style.color = '#f85149';
+        }
+      })
+      .finally(function() {
+        if (csvBtn) csvBtn.disabled = false;
+        if (xlsBtn) xlsBtn.disabled = false;
+      });
+  };
+
+
   // Called from left sidebar "Search all records" button.
   // Uses /api/studio/qb_search which sends the term to QB API as a
   // CT (contains) WHERE clause — QB searches all 22,314+ records.
