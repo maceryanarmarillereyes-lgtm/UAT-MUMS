@@ -3824,6 +3824,37 @@
   // ── Open Case Detail Modal ─────────────────────────────────────────
   // Works for both: row number clicks (from my_quickbase) and deep search cards.
   // The modal #qbCaseDetailModal is now in support_studio.html directly.
+
+  // PHT conversion — EST(UTC-5) → PHT(UTC+8), converts [MON-DD-YY H:MM AM/PM] timestamps
+  function _ssConvertPHT(text) {
+    if (!text) return text;
+    var _MON = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+    var _MN  = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    return text.replace(
+      /\[([A-Z]{3})-(\d{1,2})-(\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)([\s\S]*?)\]/gi,
+      function(full, mon, dd, yy, hh, mi, ap, rest) {
+        try {
+          var monU = mon.toUpperCase();
+          if (!(_MON[monU] !== undefined)) return full;
+          var year = parseInt(yy,10); year = year < 50 ? 2000+year : 1900+year;
+          var h = parseInt(hh,10);
+          if (ap.toUpperCase()==='PM' && h<12) h+=12;
+          if (ap.toUpperCase()==='AM' && h===12) h=0;
+          // EST = UTC-5, add 5h to get UTC, then add 8h for PHT
+          var utcMs = Date.UTC(year, _MON[monU], parseInt(dd,10), h+5, parseInt(mi,10), 0);
+          var phtMs = utcMs + 8*3600*1000;
+          var p = new Date(phtMs);
+          var ph = p.getUTCHours(), pm2 = p.getUTCMinutes();
+          var pap = ph >= 12 ? 'PM' : 'AM';
+          ph = ph % 12 || 12;
+          return '[' + _MN[p.getUTCMonth()] + '-' + p.getUTCDate() + '-' +
+            String(p.getUTCFullYear()).slice(-2) + ' ' + ph + ':' +
+            String(pm2).padStart(2,'0') + ' ' + pap + rest + ']';
+        } catch(_) { return full; }
+      }
+    );
+  }
+
   window._qbsOpenCaseDetail = function(snap, allSnaps) {
     var root = document.getElementById('qbs-root');
 
@@ -3876,8 +3907,9 @@
     var status = fieldVal(['case status','status']);
     var age    = fieldVal(['age']);
     var lastUpd= fieldVal(['last update days','last update']);
-    var latest = fieldVal(['latest update','last comment','update on the case']);
-    var notes  = fieldVal(['case notes','notes']);
+    // Convert EST→PHT timestamps in all text-bearing fields
+    var latest = _ssConvertPHT(fieldVal(['latest update','last comment','update on the case']));
+    var notes  = _ssConvertPHT(fieldVal(['case notes','notes']));
 
     set('qbcdRowBadge', snap.rowNum || '—');
     set('qbcdCaseId',   caseId);
@@ -3991,7 +4023,17 @@
     var csvBtn    = document.getElementById('qbs-export-csv-btn');
     var xlsBtn    = document.getElementById('qbs-export-xls-btn');
     var isCsv     = format === 'csv';
-    var btn       = isCsv ? csvBtn : xlsBtn;
+
+    // Inline token getter — reads from mums_supabase_session (same as CloudAuth storage)
+    function _getToken() {
+      try {
+        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+        if (raw) { var p = JSON.parse(raw); var t = p && p.access_token; if (t) return t; }
+        if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken();
+        if (window.Auth && typeof window.Auth.getSession === 'function') { var s = window.Auth.getSession(); if (s && s.access_token) return s.access_token; }
+      } catch(_) {}
+      return '';
+    }
 
     if (statusEl) {
       statusEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i>' +
@@ -4001,7 +4043,7 @@
     if (csvBtn) csvBtn.disabled = true;
     if (xlsBtn) xlsBtn.disabled = true;
 
-    var tok = sqbToken();
+    var tok = _getToken();
     var headers = {};
     if (tok) headers['Authorization'] = 'Bearer ' + tok;
 

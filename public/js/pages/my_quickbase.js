@@ -556,6 +556,56 @@
   // ── CASE NOTES DATE UTILITIES (outer scope — shared by renderRecords + applySearchAndRender) ──
   const _MONTH_MAP_CN = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
 
+  // ── PHT CONVERSION (EST → Philippine Time, UTC+8) ────────────────────────
+  // QB stores case note timestamps in EST (UTC-5). PHT is UTC+8 = EST+13h.
+  // Format: [MON-DD-YY H:MM AM/PM Name...] → converted date+time in same bracket.
+  // Example: [MAR-22-26 7:22 PM Mace] → [MAR-22-26 8:22 PM Mace] (PHT)
+  const _MONTH_NAMES_CN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const _PHT_OFFSET_MS  = 13 * 60 * 60 * 1000; // EST(UTC-5) → PHT(UTC+8) = +13h
+
+  function _cnDateToEST(mon, dd, yy, hh, mi, ap) {
+    // Parse as if it were UTC then apply EST offset to get true UTC
+    // QB times are in EST (UTC-5), so add 5h to get UTC
+    const year = (yy < 50 ? 2000 : 1900) + yy;
+    let h = hh;
+    if (ap === 'PM' && h < 12) h += 12;
+    if (ap === 'AM' && h === 12) h = 0;
+    // Create date treating input as EST (UTC-5) → add 5h for UTC
+    return new Date(Date.UTC(year, _MONTH_MAP_CN[mon], dd, h + 5, mi, 0, 0));
+  }
+
+  function _fmtPHT(utcDate) {
+    // Convert UTC date to PHT formatted string: MON-DD-YY H:MM AM/PM
+    const pht = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000)); // UTC+8
+    const mon = _MONTH_NAMES_CN[pht.getUTCMonth()];
+    const dd  = pht.getUTCDate();
+    const yy  = String(pht.getUTCFullYear()).slice(-2);
+    let   h   = pht.getUTCHours();
+    const mi  = String(pht.getUTCMinutes()).padStart(2, '0');
+    const ap  = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${mon}-${dd}-${yy} ${h}:${mi} ${ap}`;
+  }
+
+  // Convert all [MON-DD-YY TIME ...] timestamps in a notes string from EST to PHT.
+  // Preserves everything else in the bracket (name, etc.) intact.
+  // Called on every case notes / latest-update field before rendering.
+  function _convertNotesESTtoPHT(text) {
+    if (!text) return text;
+    // Match [MON-DD-YY H:MM AM/PM ...rest...]
+    return text.replace(
+      /\[([A-Z]{3})-(\d{1,2})-(\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)([\s\S]*?)\]/gi,
+      function(full, mon, dd, yy, hh, mi, ap, rest) {
+        try {
+          const utc  = _cnDateToEST(mon.toUpperCase(), parseInt(dd,10), parseInt(yy,10), parseInt(hh,10), parseInt(mi,10), ap.toUpperCase());
+          const phtStr = _fmtPHT(utc);
+          return '[' + phtStr + rest + ']';
+        } catch(_) { return full; }
+      }
+    );
+  }
+  // ── END PHT CONVERSION ────────────────────────────────────────────────────
+
   function _parseCNDate(m) {
     const mon = m[1].toUpperCase(), dd = parseInt(m[2],10), yy = parseInt(m[3],10);
     const hh  = parseInt(m[4],10),   mi = parseInt(m[5],10), ap = (m[6]||'').toUpperCase();
@@ -783,18 +833,19 @@
 
         // Force-clamp known long-text columns + any cell over 60 chars
         const forceClamp = _CLAMP_COLS.has(normalizedLabel);
-        const isCaseNotes = (normalizedLabel === 'case notes' || normalizedLabel === 'notes');
+        const isCaseNotes = (normalizedLabel === 'case notes' || normalizedLabel === 'notes'
+          || normalizedLabel === 'latest update on the case' || normalizedLabel === 'latest update'
+          || normalizedLabel === 'last comment');
 
         // Apply Manila-date highlight for Case Notes column
         if (isCaseNotes && rawStr.length > 0) {
-          const highlighted = _highlightTodayInNotes(rawStr, _CN_TODAY);
+          // Convert EST timestamps → PHT before highlighting/rendering
+          const phtStr  = _convertNotesESTtoPHT(rawStr);
+          const highlighted = _highlightTodayInNotes(phtStr, _CN_TODAY);
           if (highlighted) {
-            // Has today's date — render with highlight HTML
-            // data-full stores plain text (for tooltip); inner HTML shows highlight
-            return `<td class="qb-col-clamped qb-col-hasnew qb-cn-col"${tdStyle}><div class="qb-cell-clamp qb-cell-hasnew" data-full="${esc(rawStr)}"><span class="qb-cell-text qb-notes-html">${highlighted}</span></div></td>`;
+            return `<td class="qb-col-clamped qb-col-hasnew qb-cn-col"${tdStyle}><div class="qb-cell-clamp qb-cell-hasnew" data-full="${esc(phtStr)}"><span class="qb-cell-text qb-notes-html">${highlighted}</span></div></td>`;
           }
-          // No today match — render normal clamped
-          return `<td class="qb-col-clamped qb-cn-col"${tdStyle}><div class="qb-cell-clamp" data-full="${esc(rawStr)}"><span class="qb-cell-text">${safeVal}</span></div></td>`;
+          return `<td class="qb-col-clamped qb-cn-col"${tdStyle}><div class="qb-cell-clamp" data-full="${esc(phtStr)}"><span class="qb-cell-text">${esc(phtStr)}</span></div></td>`;
         }
 
         if (!forceClamp && rawStr.length <= 60) {
@@ -927,7 +978,9 @@
 
   function _qbTooltipEnter(e) {
     const el = e.currentTarget;
-    const full = el.getAttribute('data-full') || '';
+    const rawFull = el.getAttribute('data-full') || '';
+    // Convert EST→PHT for all timestamp-bearing tooltip text
+    const full = (typeof _convertNotesESTtoPHT === 'function') ? _convertNotesESTtoPHT(rawFull) : rawFull;
     // Don't show tooltip if content isn't clamped (short text fits in 3 lines)
     if (!full || full.trim().length < 2) return;
     // Only show tooltip if text is actually truncated
@@ -3790,8 +3843,9 @@
         var status  = _val('status')  || '—';
         var age     = _val('age');
         var lastUpd = _val('lastUpd');
-        var latest  = _val('latest')  || '—';
-        var notes   = _val('notes');
+        // Convert EST→PHT for all timestamp-bearing text fields
+        var latest  = _convertNotesESTtoPHT(_val('latest')  || '') || '—';
+        var notes   = _convertNotesESTtoPHT(_val('notes')   || '');
 
         // ── Populate fixed DOM slots ─────────────────────────────────────────
         _set('qbcdRowBadge',  snap.rowNum || '—');
