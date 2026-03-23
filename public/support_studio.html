@@ -2377,33 +2377,90 @@
         </div><!-- /overflow scroll -->
       </div><!-- /canvas-config -->
 
-      <!-- Connect+ left panel -->      <div id="left-panel-connectplus" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
-        <div class="ss-panel" style="flex-shrink:0;">
-          <div class="ss-panel-title"><i class="fas fa-plug" style="color:#22d3ee;"></i> Connect+</div>
-          <div style="font-size:10px;color:var(--ss-muted);margin-top:-6px;">36,000+ sites across all regions</div>
+      <!-- Connect+ left panel — PREMIUM REDESIGN -->
+      <div id="left-panel-connectplus" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
+
+        <!-- Header / identity -->
+        <div style="padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;">
+            <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#0891b2,#22d3ee);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(34,211,238,.3);">
+              <i class="fas fa-plug" style="color:#fff;font-size:11px;"></i>
+            </div>
+            <div>
+              <div style="font-size:12px;font-weight:800;color:#fff;line-height:1;">Connect+</div>
+              <div style="font-size:9px;color:var(--ss-muted);margin-top:2px;font-weight:500;">36,000+ sites across all regions</div>
+            </div>
+          </div>
+          <!-- Stats mini bar -->
+          <div id="cp-stats-mini" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+            <div style="background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.15);border-radius:6px;padding:6px 8px;text-align:center;">
+              <div style="font-size:13px;font-weight:800;color:#22d3ee;">—</div>
+              <div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:1px;">Sites</div>
+            </div>
+            <div style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.15);border-radius:6px;padding:6px 8px;text-align:center;">
+              <div id="cp-stats-countries" style="font-size:13px;font-weight:800;color:#3fb950;">—</div>
+              <div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:1px;">Countries</div>
+            </div>
+          </div>
         </div>
-        <!-- Search panel -->
-        <div class="ss-panel" style="flex-shrink:0;padding:10px 12px;">
-          <div style="position:relative;margin-bottom:7px;">
-            <input class="ss-input" type="text" id="cp-search-input"
+
+        <!-- Search box in sidebar -->
+        <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
+          <div style="position:relative;">
+            <i class="fas fa-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--ss-muted);font-size:11px;pointer-events:none;"></i>
+            <input id="cp-search-input" type="text"
               placeholder="Search sites, cities, states…"
-              autocomplete="off" style="font-size:11px;padding-right:28px;"
-              oninput="window._cpOnSearch(this.value)"
-              onkeydown="if(event.key==='Enter') window._cpOnSearch(this.value)">
-            <button onclick="document.getElementById('cp-search-input').value='';window._cpOnSearch('');"
-              style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ss-muted);cursor:pointer;font-size:11px;">✕</button>
+              autocomplete="off"
+              style="width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 28px;color:#fff;font-size:11px;font-family:var(--ss-font);outline:none;transition:border-color .18s;"
+              onfocus="this.style.borderColor='rgba(34,211,238,.5)'"
+              onblur="this.style.borderColor='rgba(255,255,255,.1)'"
+              oninput="window._cpOnSearch(this.value);document.getElementById('cp-sb-clear').style.display=this.value?'block':'none';"
+              onkeydown="if(event.key==='Enter') window._cpOnSearch(this.value);">
+            <button id="cp-sb-clear" onclick="document.getElementById('cp-search-input').value='';document.getElementById('cp-sb-clear').style.display='none';window._cpOnSearch('');"
+              style="display:none;position:absolute;right:7px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ss-muted);cursor:pointer;font-size:10px;padding:0;line-height:1;">✕</button>
           </div>
-          <!-- Filter chips -->
-          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;" id="cp-filter-chips"></div>
-          <!-- Status -->
-          <div id="cp-status" style="font-size:10px;color:var(--ss-muted);min-height:14px;"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px;">
+            <div id="cp-status" style="font-size:10px;color:var(--ss-muted);"></div>
+            <div id="cp-search-count" style="font-size:10px;color:var(--ss-muted);"></div>
+          </div>
         </div>
-        <!-- Results list -->
-        <div style="flex:1;overflow-y:auto;" id="cp-results-list">
-          <div style="padding:16px 12px;text-align:center;color:var(--ss-muted);">
-            <i class="fas fa-plug" style="font-size:20px;opacity:.2;display:block;margin-bottom:8px;"></i>
-            <div style="font-size:11px;">Loading Connect+ sites…</div>
+
+        <!-- Active filter badge -->
+        <div id="cp-active-filter" style="display:none;margin:8px 12px 0;align-items:center;gap:6px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.25);border-radius:6px;padding:5px 9px;font-size:10px;color:#22d3ee;">
+          <i class="fas fa-filter" style="font-size:9px;opacity:.7;flex-shrink:0;"></i>
+          <span id="cp-filter-label" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          <button onclick="window._cpClearSidebarFilter()" style="background:none;border:none;color:#22d3ee;cursor:pointer;font-size:10px;padding:0;flex-shrink:0;opacity:.8;">✕</button>
+        </div>
+
+        <!-- Hidden legacy elements for JS compat -->
+        <div id="cp-filter-chips" style="display:none;"></div>
+
+        <!-- Country filter section -->
+        <div style="padding:10px 12px 5px;flex-shrink:0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.28);letter-spacing:.1em;text-transform:uppercase;">COUNTRY</div>
+            <button id="cp-country-toggle-btn" onclick="window._cpToggleSection('country')" style="background:none;border:none;color:rgba(255,255,255,.28);cursor:pointer;font-size:9px;padding:0;transition:transform .15s;">▾</button>
           </div>
+        </div>
+        <div id="cp-sidebar-country-list" style="flex-shrink:0;max-height:150px;overflow-y:auto;padding:0 8px 4px;display:flex;flex-direction:column;gap:1px;">
+          <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
+        </div>
+
+        <!-- Directory filter section -->
+        <div style="padding:8px 12px 5px;flex-shrink:0;border-top:1px solid rgba(255,255,255,.05);">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.28);letter-spacing:.1em;text-transform:uppercase;">DIRECTORY</div>
+            <button id="cp-dir-toggle-btn" onclick="window._cpToggleSection('directory')" style="background:none;border:none;color:rgba(255,255,255,.28);cursor:pointer;font-size:9px;padding:0;transition:transform .15s;">▾</button>
+          </div>
+        </div>
+        <div id="cp-sidebar-dir-list" style="flex:1;overflow-y:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:1px;">
+          <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
+        </div>
+
+        <!-- Hidden select elements — kept for JS filter compat -->
+        <div style="display:none;" aria-hidden="true">
+          <select id="cp-country-filter" onchange="window._cpApplyFilters()"><option value="">All Countries</option></select>
+          <select id="cp-dir-filter" onchange="window._cpApplyFilters()"><option value="">All Directories</option></select>
         </div>
       </div>
 
@@ -2420,14 +2477,6 @@
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
             <span id="cp-record-count" style="font-size:10px;color:var(--ss-muted);"></span>
-            <select id="cp-country-filter" onchange="window._cpApplyFilters()"
-              style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:5px;color:var(--ss-text);font-size:11px;padding:4px 8px;font-family:var(--ss-font);cursor:pointer;max-width:160px;">
-              <option value="">All Countries</option>
-            </select>
-            <select id="cp-dir-filter" onchange="window._cpApplyFilters()"
-              style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:5px;color:var(--ss-text);font-size:11px;padding:4px 8px;font-family:var(--ss-font);cursor:pointer;max-width:160px;">
-              <option value="">All Directories</option>
-            </select>
             <button onclick="window._cpExportCsv()"
               style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:4px 10px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:5px;">
               <i class="fas fa-download"></i> Export CSV
@@ -2438,20 +2487,8 @@
             </button>
           </div>
         </div>
-
-        <!-- Search bar (mirrors QuickBase_S) -->
-        <div style="flex-shrink:0;padding:8px 16px;background:var(--ss-surface2);border-bottom:1px solid var(--ss-border);display:flex;gap:8px;align-items:center;">
-          <div style="flex:1;display:flex;align-items:center;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:6px;overflow:hidden;transition:border-color .18s;">
-            <i class="fas fa-search" style="padding:0 10px;color:var(--ss-muted);font-size:11px;"></i>
-            <input type="text" id="cp-main-search" placeholder="Search across all 36,000+ Connect+ sites…"
-              style="flex:1;background:transparent;border:none;outline:none;color:var(--ss-text);font-family:var(--ss-font);font-size:12px;padding:7px 0 7px 0;"
-              oninput="window._cpOnSearch(this.value)"
-              onkeydown="if(event.key==='Enter') window._cpOnSearch(this.value)">
-            <button onclick="document.getElementById('cp-main-search').value='';window._cpOnSearch('');"
-              style="background:none;border:none;color:var(--ss-muted);padding:7px 10px;cursor:pointer;font-size:10px;" title="Clear">✕</button>
-          </div>
-          <span id="cp-search-count" style="font-size:10px;color:var(--ss-muted);white-space:nowrap;min-width:80px;text-align:right;"></span>
-        </div>
+        <!-- Hidden main-search for JS compat (sync target) -->
+        <input type="text" id="cp-main-search" style="display:none;" aria-hidden="true">
 
         <!-- Table header -->
         <div style="flex-shrink:0;overflow-x:auto;background:var(--ss-surface3);">
@@ -2496,34 +2533,79 @@
            PARTS NUMBER — Left Panel + Canvas
       ═══════════════════════════════════════════════════════════════ -->
 
-      <!-- Parts Number left panel -->
+      <!-- Parts Number left panel — PREMIUM REDESIGN -->
       <div id="left-panel-parts_number" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
-        <div class="ss-panel" style="flex-shrink:0;">
-          <div class="ss-panel-title"><i class="fas fa-barcode" style="color:#fb923c;"></i> Parts Number</div>
-          <div style="font-size:10px;color:var(--ss-muted);margin-top:-6px;">Search parts, models &amp; product numbers</div>
+
+        <!-- Header / identity -->
+        <div style="padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;">
+            <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#c2410c,#fb923c);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(251,146,60,.3);">
+              <i class="fas fa-barcode" style="color:#fff;font-size:11px;"></i>
+            </div>
+            <div>
+              <div style="font-size:12px;font-weight:800;color:#fff;line-height:1;">Parts Number</div>
+              <div style="font-size:9px;color:var(--ss-muted);margin-top:2px;font-weight:500;">Search parts, models &amp; product numbers</div>
+            </div>
+          </div>
+          <!-- Stats mini bar -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+            <div style="background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.15);border-radius:6px;padding:6px 8px;text-align:center;">
+              <div id="pn-stats-total" style="font-size:13px;font-weight:800;color:#fb923c;">—</div>
+              <div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:1px;">Total Parts</div>
+            </div>
+            <div style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.15);border-radius:6px;padding:6px 8px;text-align:center;">
+              <div id="pn-stats-cats" style="font-size:13px;font-weight:800;color:#a78bfa;">—</div>
+              <div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:1px;">Categories</div>
+            </div>
+          </div>
         </div>
-        <!-- Search panel -->
-        <div class="ss-panel" style="flex-shrink:0;padding:10px 12px;">
-          <div style="position:relative;margin-bottom:7px;">
-            <input class="ss-input" type="text" id="pn-search-input"
+
+        <!-- Search box in sidebar -->
+        <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
+          <div style="position:relative;">
+            <i class="fas fa-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--ss-muted);font-size:11px;pointer-events:none;"></i>
+            <input id="pn-search-input" type="text"
               placeholder="Search part numbers, models…"
-              autocomplete="off" style="font-size:11px;padding-right:28px;"
-              oninput="window._pnOnSearch(this.value)"
-              onkeydown="if(event.key==='Enter') window._pnOnSearch(this.value)">
-            <button onclick="document.getElementById('pn-search-input').value='';window._pnOnSearch('');"
-              style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ss-muted);cursor:pointer;font-size:11px;">✕</button>
+              autocomplete="off"
+              style="width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 28px;color:#fff;font-size:11px;font-family:var(--ss-font);outline:none;transition:border-color .18s;"
+              onfocus="this.style.borderColor='rgba(251,146,60,.5)'"
+              onblur="this.style.borderColor='rgba(255,255,255,.1)'"
+              oninput="window._pnOnSearch(this.value);document.getElementById('pn-sb-clear').style.display=this.value?'block':'none';"
+              onkeydown="if(event.key==='Enter') window._pnOnSearch(this.value);">
+            <button id="pn-sb-clear" onclick="document.getElementById('pn-search-input').value='';document.getElementById('pn-sb-clear').style.display='none';window._pnOnSearch('');"
+              style="display:none;position:absolute;right:7px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ss-muted);cursor:pointer;font-size:10px;padding:0;line-height:1;">✕</button>
           </div>
-          <!-- Filter chips -->
-          <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;" id="pn-filter-chips"></div>
-          <!-- Status -->
-          <div id="pn-status" style="font-size:10px;color:var(--ss-muted);min-height:14px;"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px;">
+            <div id="pn-status" style="font-size:10px;color:var(--ss-muted);"></div>
+            <div id="pn-search-count" style="font-size:10px;color:var(--ss-muted);"></div>
+          </div>
         </div>
-        <!-- Results list -->
-        <div style="flex:1;overflow-y:auto;" id="pn-results-list">
-          <div style="padding:16px 12px;text-align:center;color:var(--ss-muted);">
-            <i class="fas fa-barcode" style="font-size:20px;opacity:.2;display:block;margin-bottom:8px;"></i>
-            <div style="font-size:11px;">Loading Parts Number data…</div>
+
+        <!-- Active filter badge -->
+        <div id="pn-active-filter" style="display:none;margin:8px 12px 0;align-items:center;gap:6px;background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.25);border-radius:6px;padding:5px 9px;font-size:10px;color:#fb923c;">
+          <i class="fas fa-filter" style="font-size:9px;opacity:.7;flex-shrink:0;"></i>
+          <span id="pn-filter-label" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          <button onclick="window._pnClearSidebarFilter()" style="background:none;border:none;color:#fb923c;cursor:pointer;font-size:10px;padding:0;flex-shrink:0;opacity:.8;">✕</button>
+        </div>
+
+        <!-- Hidden legacy elements for JS compat -->
+        <div id="pn-filter-chips" style="display:none;"></div>
+        <div id="pn-results-list" style="display:none;" aria-hidden="true"></div>
+
+        <!-- Type / Category filter section -->
+        <div style="padding:10px 12px 5px;flex-shrink:0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.28);letter-spacing:.1em;text-transform:uppercase;">TYPE / CATEGORY</div>
+            <button id="pn-cat-toggle-btn" onclick="window._pnToggleSection()" style="background:none;border:none;color:rgba(255,255,255,.28);cursor:pointer;font-size:9px;padding:0;transition:transform .15s;">▾</button>
           </div>
+        </div>
+        <div id="pn-sidebar-cat-list" style="flex:1;overflow-y:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:1px;">
+          <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
+        </div>
+
+        <!-- Hidden select for JS filter compat -->
+        <div style="display:none;" aria-hidden="true">
+          <select id="pn-cat-filter" onchange="window._pnApplyFilters()"><option value="">All Categories</option></select>
         </div>
       </div>
 
@@ -2539,10 +2621,6 @@
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
             <span id="pn-record-count" style="font-size:10px;color:var(--ss-muted);"></span>
-            <select id="pn-cat-filter" onchange="window._pnApplyFilters()"
-              style="background:var(--ss-surface3);border:1px solid var(--ss-border);border-radius:5px;color:var(--ss-text);font-size:11px;padding:4px 8px;font-family:var(--ss-font);cursor:pointer;max-width:160px;">
-              <option value="">All Categories</option>
-            </select>
             <button onclick="window._pnExportCsv()"
               style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:4px 10px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:5px;">
               <i class="fas fa-download"></i> Export CSV
@@ -2553,20 +2631,8 @@
             </button>
           </div>
         </div>
-
-        <!-- Search bar -->
-        <div style="flex-shrink:0;padding:8px 16px;background:var(--ss-surface2);border-bottom:1px solid var(--ss-border);display:flex;gap:8px;align-items:center;">
-          <div style="flex:1;display:flex;align-items:center;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:6px;overflow:hidden;transition:border-color .18s;">
-            <i class="fas fa-search" style="padding:0 10px;color:var(--ss-muted);font-size:11px;"></i>
-            <input type="text" id="pn-main-search" placeholder="Search across all Parts Number entries…"
-              style="flex:1;background:transparent;border:none;outline:none;color:var(--ss-text);font-family:var(--ss-font);font-size:12px;padding:7px 0;"
-              oninput="window._pnOnSearch(this.value)"
-              onkeydown="if(event.key==='Enter') window._pnOnSearch(this.value)">
-            <button onclick="document.getElementById('pn-main-search').value='';window._pnOnSearch('');"
-              style="background:none;border:none;color:var(--ss-muted);padding:7px 10px;cursor:pointer;font-size:10px;" title="Clear">✕</button>
-          </div>
-          <span id="pn-search-count" style="font-size:10px;color:var(--ss-muted);white-space:nowrap;min-width:80px;text-align:right;"></span>
-        </div>
+        <!-- Hidden main-search for JS compat (sync target) -->
+        <input type="text" id="pn-main-search" style="display:none;" aria-hidden="true">
 
         <!-- Dynamic table header -->
         <div style="flex-shrink:0;overflow-x:auto;background:var(--ss-surface3);">
@@ -8167,6 +8233,477 @@
     a.click();
     URL.revokeObjectURL(a.href);
   };
+
+})();
+</script>
+
+<style>
+/* ═══════════════════════════════════════════════════════
+   CONNECT+ & PARTS NUMBER — SIDEBAR FILTER LIST STYLES
+   Premium matching Support Records sidebar design
+═══════════════════════════════════════════════════════ */
+
+/* Generic sidebar filter button used by both CP and PN */
+.cp-filter-btn, .pn-filter-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 5px 8px;
+  cursor: pointer;
+  font-family: var(--ss-font);
+  transition: all .12s;
+  text-align: left;
+  gap: 6px;
+}
+.cp-filter-btn:hover { background: rgba(34,211,238,.05) !important; border-color: rgba(34,211,238,.12) !important; }
+.cp-filter-btn.active { background: rgba(34,211,238,.1) !important; border-color: rgba(34,211,238,.28) !important; }
+.pn-filter-btn:hover { background: rgba(251,146,60,.05) !important; border-color: rgba(251,146,60,.12) !important; }
+.pn-filter-btn.active { background: rgba(251,146,60,.1) !important; border-color: rgba(251,146,60,.28) !important; }
+
+/* Filter item icon badge */
+.cp-filter-icon {
+  width: 18px; height: 18px; border-radius: 4px;
+  background: rgba(34,211,238,.12); border: 1px solid rgba(34,211,238,.2);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.pn-filter-icon {
+  width: 18px; height: 18px; border-radius: 4px;
+  background: rgba(251,146,60,.12); border: 1px solid rgba(251,146,60,.2);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+
+/* Count badge */
+.cp-filter-count {
+  font-size: 9px; font-weight: 600; color: rgba(255,255,255,.3);
+  background: rgba(255,255,255,.05); border-radius: 8px; padding: 1px 5px; flex-shrink: 0;
+}
+.cp-filter-btn.active .cp-filter-count { color: #22d3ee; background: rgba(34,211,238,.12); }
+.pn-filter-count {
+  font-size: 9px; font-weight: 600; color: rgba(255,255,255,.3);
+  background: rgba(255,255,255,.05); border-radius: 8px; padding: 1px 5px; flex-shrink: 0;
+}
+.pn-filter-btn.active .pn-filter-count { color: #fb923c; background: rgba(251,146,60,.12); }
+
+/* Scrollbar for sidebar lists */
+#cp-sidebar-country-list::-webkit-scrollbar,
+#cp-sidebar-dir-list::-webkit-scrollbar,
+#pn-sidebar-cat-list::-webkit-scrollbar { width: 3px; }
+#cp-sidebar-country-list::-webkit-scrollbar-thumb,
+#cp-sidebar-dir-list::-webkit-scrollbar-thumb { background: rgba(34,211,238,.18); border-radius: 2px; }
+#pn-sidebar-cat-list::-webkit-scrollbar-thumb { background: rgba(251,146,60,.18); border-radius: 2px; }
+
+/* Connect+ stats total number updated via JS */
+#cp-stats-mini .cp-stats-num { font-size: 13px; font-weight: 800; color: #22d3ee; }
+</style>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   SIDEBAR FILTER BRIDGE — Connect+ & Parts Number
+   Monkey-patches _buildFilterOptions (CP) and _buildCategoryFilter (PN)
+   to also populate the new premium sidebar filter lists.
+   All existing JS logic untouched — this only ADDS behavior.
+═══════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  /* ── Helpers ───────────────────────────────────────────────── */
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function $(id) { return document.getElementById(id); }
+
+  /* ── CONNECT+ SIDEBAR BRIDGE ─────────────────────────────── */
+
+  // State for sidebar active filter
+  var _cpSidebarCountry = '';
+  var _cpSidebarDir     = '';
+
+  // Read total sites count from cp-search-count DOM text: "36,251 total" → 36251
+  function _cpParseTotalSites() {
+    var sc = $('cp-search-count');
+    if (!sc) return 0;
+    var m = sc.textContent.match(/([\d,]+)\s+(?:total|of)/);
+    if (m) return parseInt(m[1].replace(/,/g,'')) || 0;
+    // Also try cp-record-count: "36,251 sites"
+    var rc = $('cp-record-count');
+    if (!rc) return 0;
+    var m2 = rc.textContent.match(/([\d,]+)/);
+    return m2 ? (parseInt(m2[1].replace(/,/g,'')) || 0) : 0;
+  }
+
+  // Called after _buildFilterOptions populates the hidden selects
+  function _cpPopulateSidebarLists() {
+    var cSel = $('cp-country-filter');
+    var dSel = $('cp-dir-filter');
+    if (!cSel || !dSel) return;
+
+    var totalSites   = _cpParseTotalSites();
+    var numCountries = Math.max(0, cSel.options.length - 1); // minus "All Countries"
+
+    var miniEl = $('cp-stats-mini');
+    if (miniEl && (totalSites > 0 || numCountries > 0)) {
+      miniEl.innerHTML =
+        '<div style="background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.15);border-radius:6px;padding:6px 8px;text-align:center;">' +
+          '<div style="font-size:13px;font-weight:800;color:#22d3ee;">' + (totalSites > 0 ? totalSites.toLocaleString() : numCountries > 0 ? '36K+' : '—') + '</div>' +
+          '<div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:1px;">Sites</div>' +
+        '</div>' +
+        '<div style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.15);border-radius:6px;padding:6px 8px;text-align:center;">' +
+          '<div style="font-size:13px;font-weight:800;color:#3fb950;">' + (numCountries > 0 ? numCountries : '—') + '</div>' +
+          '<div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:1px;">Countries</div>' +
+        '</div>';
+    }
+
+    // Build country list
+    _cpBuildFilterList(
+      'cp-sidebar-country-list',
+      cSel,
+      'fa-globe',
+      '#22d3ee',
+      'country',
+      _cpSidebarCountry,
+      totalSites
+    );
+
+    // Build directory list
+    _cpBuildFilterList(
+      'cp-sidebar-dir-list',
+      dSel,
+      'fa-folder',
+      '#22d3ee',
+      'directory',
+      _cpSidebarDir,
+      totalSites
+    );
+  }
+
+  function _cpBuildFilterList(containerId, selectEl, icon, color, type, activeVal, totalCount) {
+    var container = $(containerId);
+    if (!container) return;
+
+    var options = [];
+    for (var i = 0; i < selectEl.options.length; i++) {
+      var opt = selectEl.options[i];
+      if (opt.value !== '') {
+        // Extract count from text like "Florida (1234)" or just use label
+        var label = opt.textContent.trim();
+        var m = label.match(/^(.+?)\s*\((\d+)\)$/);
+        options.push({ value: opt.value, label: m ? m[1] : label, count: m ? parseInt(m[2]) : '' });
+      }
+    }
+
+    var allIsActive = (activeVal === '');
+    var html = '';
+
+    // "All" button
+    html += '<button class="cp-filter-btn' + (allIsActive ? ' active' : '') + '" ' +
+      'onclick="window._cpSidebarFilter(\'' + type + '\',\'\')">' +
+      '<span style="display:flex;align-items:center;gap:7px;flex:1;min-width:0;">' +
+        '<span class="cp-filter-icon"><i class="fas ' + icon + '" style="font-size:8px;color:' + color + ';"></i></span>' +
+        '<span style="font-size:11px;color:' + (allIsActive ? color : 'var(--ss-muted)') + ';font-weight:' + (allIsActive ? '700' : '500') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+          'All ' + (type === 'country' ? 'Countries' : 'Directories') +
+        '</span>' +
+      '</span>' +
+      '<span class="cp-filter-count">' + (totalCount ? totalCount.toLocaleString() : '') + '</span>' +
+    '</button>';
+
+    options.forEach(function(opt) {
+      var isActive = (activeVal === opt.value);
+      html += '<button class="cp-filter-btn' + (isActive ? ' active' : '') + '" ' +
+        'onclick="window._cpSidebarFilter(\'' + type + '\',\'' + opt.value.replace(/'/g,"\\'") + '\')">' +
+        '<span style="display:flex;align-items:center;gap:7px;flex:1;min-width:0;">' +
+          '<span style="width:18px;height:18px;border-radius:4px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
+            '<i class="fas ' + icon + '" style="font-size:7px;color:rgba(255,255,255,.3);"></i>' +
+          '</span>' +
+          '<span style="font-size:11px;color:' + (isActive ? color : 'var(--ss-muted)') + ';font-weight:' + (isActive ? '700' : '400') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(opt.label) + '</span>' +
+        '</span>' +
+        '<span class="cp-filter-count">' + (opt.count !== '' ? opt.count.toLocaleString() : '') + '</span>' +
+      '</button>';
+    });
+
+    container.innerHTML = html;
+  }
+
+  // Sidebar filter click handler
+  window._cpSidebarFilter = function(type, val) {
+    var cSel = $('cp-country-filter');
+    var dSel = $('cp-dir-filter');
+    if (type === 'country') {
+      _cpSidebarCountry = val;
+      if (cSel) cSel.value = val;
+    } else {
+      _cpSidebarDir = val;
+      if (dSel) dSel.value = val;
+    }
+    // Update active filter badge
+    _cpUpdateFilterBadge();
+    // Rebuild lists to reflect active state
+    _cpPopulateSidebarLists();
+    // Trigger filter
+    if (typeof window._cpApplyFilters === 'function') window._cpApplyFilters();
+  };
+
+  window._cpClearSidebarFilter = function() {
+    _cpSidebarCountry = '';
+    _cpSidebarDir = '';
+    var cSel = $('cp-country-filter');
+    var dSel = $('cp-dir-filter');
+    if (cSel) cSel.value = '';
+    if (dSel) dSel.value = '';
+    _cpUpdateFilterBadge();
+    _cpPopulateSidebarLists();
+    if (typeof window._cpApplyFilters === 'function') window._cpApplyFilters();
+  };
+
+  function _cpUpdateFilterBadge() {
+    var badge  = $('cp-active-filter');
+    var label  = $('cp-filter-label');
+    if (!badge || !label) return;
+    var parts = [];
+    if (_cpSidebarCountry) parts.push(_cpSidebarCountry);
+    if (_cpSidebarDir)     parts.push(_cpSidebarDir);
+    if (parts.length) {
+      label.textContent = parts.join(' · ');
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  window._cpToggleSection = function(section) {
+    var listId  = section === 'country' ? 'cp-sidebar-country-list' : 'cp-sidebar-dir-list';
+    var btnId   = section === 'country' ? 'cp-country-toggle-btn'   : 'cp-dir-toggle-btn';
+    var list    = $(listId);
+    var btn     = $(btnId);
+    if (!list) return;
+    var hidden = list.style.display === 'none';
+    list.style.display = hidden ? 'flex' : 'none';
+    if (btn) btn.textContent = hidden ? '▾' : '▸';
+  };
+
+  /* ── PARTS NUMBER SIDEBAR BRIDGE ─────────────────────────── */
+
+  var _pnSidebarCat     = '';
+
+  // Parse total parts from pn-record-count DOM: innerHTML contains a span with number
+  function _pnParseTotalParts() {
+    var rc = $('pn-record-count');
+    if (!rc) return 0;
+    // innerHTML: "<span...>1,234</span> <span...>of 4,948 total</span>"
+    var full = rc.textContent || '';
+    var nums = full.match(/of\s+([\d,]+)/);
+    if (nums) return parseInt(nums[1].replace(/,/g,'')) || 0;
+    // Fallback: first number
+    var m = full.match(/([\d,]+)/);
+    return m ? (parseInt(m[1].replace(/,/g,'')) || 0) : 0;
+  }
+
+  function _pnPopulateSidebarList() {
+    var catEl = $('pn-cat-filter');
+    if (!catEl) return;
+
+    var totalParts = _pnParseTotalParts();
+    var catCount   = Math.max(0, catEl.options.length - 1);
+
+    var statsTotal = $('pn-stats-total');
+    var statsCats  = $('pn-stats-cats');
+    if (statsTotal) statsTotal.textContent = totalParts > 0 ? totalParts.toLocaleString() : (catCount > 0 ? '—' : '—');
+    if (statsCats  && catCount > 0) statsCats.textContent  = catCount;
+
+    var container = $('pn-sidebar-cat-list');
+    if (!container) return;
+
+    var allIsActive = (_pnSidebarCat === '');
+    var html = '';
+
+    // "All" button
+    html += '<button class="pn-filter-btn' + (allIsActive ? ' active' : '') + '" ' +
+      'onclick="window._pnSidebarFilter(\'\')">' +
+      '<span style="display:flex;align-items:center;gap:7px;flex:1;min-width:0;">' +
+        '<span class="pn-filter-icon"><i class="fas fa-th-large" style="font-size:8px;color:#fb923c;"></i></span>' +
+        '<span style="font-size:11px;color:' + (allIsActive ? '#fb923c' : 'var(--ss-muted)') + ';font-weight:' + (allIsActive ? '700' : '500') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">All Categories</span>' +
+      '</span>' +
+      '<span class="pn-filter-count">' + (totalParts ? totalParts.toLocaleString() : '') + '</span>' +
+    '</button>';
+
+    for (var j = 0; j < catEl.options.length; j++) {
+      var opt = catEl.options[j];
+      if (!opt.value) continue;
+      var isActive = (_pnSidebarCat === opt.value);
+      // Parse "Type Name (count)" format
+      var lbl = opt.textContent.trim();
+      var match = lbl.match(/^(.+?)\s*\((\d+)\)$/);
+      var labelClean = match ? match[1] : lbl;
+      var cnt = match ? parseInt(match[2]) : '';
+
+      // Pick a type icon based on label keywords
+      var typeIcon = 'fa-cube';
+      var lc = labelClean.toLowerCase();
+      if (lc.includes('control') || lc.includes('xr') || lc.includes('cc')) typeIcon = 'fa-microchip';
+      else if (lc.includes('stand alone') || lc.includes('standalone'))      typeIcon = 'fa-server';
+      else if (lc.includes('network') || lc.includes('connect'))             typeIcon = 'fa-wifi';
+      else if (lc.includes('sensor') || lc.includes('probe'))                typeIcon = 'fa-thermometer-half';
+      else if (lc.includes('valve') || lc.includes('sporlan'))               typeIcon = 'fa-cog';
+      else if (lc.includes('license') || lc.includes('key'))                 typeIcon = 'fa-key';
+      else if (lc.includes('rga') || lc.includes('warranty'))                typeIcon = 'fa-undo-alt';
+      else if (lc.includes('display') || lc.includes('screen'))              typeIcon = 'fa-desktop';
+
+      html += '<button class="pn-filter-btn' + (isActive ? ' active' : '') + '" ' +
+        'onclick="window._pnSidebarFilter(\'' + opt.value.replace(/'/g,"\\'") + '\')">' +
+        '<span style="display:flex;align-items:center;gap:7px;flex:1;min-width:0;">' +
+          '<span style="width:18px;height:18px;border-radius:4px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
+            '<i class="fas ' + typeIcon + '" style="font-size:7px;color:' + (isActive ? '#fb923c' : 'rgba(255,255,255,.3)') + ';"></i>' +
+          '</span>' +
+          '<span style="font-size:11px;color:' + (isActive ? '#fb923c' : 'var(--ss-muted)') + ';font-weight:' + (isActive ? '700' : '400') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(labelClean) + '</span>' +
+        '</span>' +
+        '<span class="pn-filter-count">' + (cnt !== '' ? cnt.toLocaleString() : '') + '</span>' +
+      '</button>';
+    }
+
+    container.innerHTML = html;
+  }
+
+  window._pnSidebarFilter = function(val) {
+    _pnSidebarCat = val;
+    var catEl = $('pn-cat-filter');
+    if (catEl) catEl.value = val;
+    // Update active filter badge
+    _pnUpdateFilterBadge(val);
+    // Rebuild list
+    _pnPopulateSidebarList();
+    // Trigger filter
+    if (typeof window._pnApplyFilters === 'function') window._pnApplyFilters();
+  };
+
+  window._pnClearSidebarFilter = function() {
+    _pnSidebarCat = '';
+    var catEl = $('pn-cat-filter');
+    if (catEl) catEl.value = '';
+    _pnUpdateFilterBadge('');
+    _pnPopulateSidebarList();
+    if (typeof window._pnApplyFilters === 'function') window._pnApplyFilters();
+  };
+
+  function _pnUpdateFilterBadge(val) {
+    var badge = $('pn-active-filter');
+    var label = $('pn-filter-label');
+    if (!badge || !label) return;
+    if (val) {
+      label.textContent = val;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  window._pnToggleSection = function() {
+    var list = $('pn-sidebar-cat-list');
+    var btn  = $('pn-cat-toggle-btn');
+    if (!list) return;
+    var hidden = list.style.display === 'none';
+    list.style.display = hidden ? 'flex' : 'none';
+    if (btn) btn.textContent = hidden ? '▾' : '▸';
+  };
+
+  /* ── Monkey-patch _cpApplyFilters to sync sidebar state ───── */
+  function _patchCpApplyFilters() {
+    var orig = window._cpApplyFilters;
+    if (!orig || orig.__bridgePatched) return;
+    window._cpApplyFilters = function() {
+      orig.apply(this, arguments);
+      var cEl = $('cp-country-filter');
+      var dEl = $('cp-dir-filter');
+      if (cEl) _cpSidebarCountry = cEl.value;
+      if (dEl) _cpSidebarDir     = dEl.value;
+      _cpUpdateFilterBadge();
+      // Refresh stats after render (count will have updated in DOM)
+      setTimeout(function() {
+        var miniEl = $('cp-stats-mini');
+        if (miniEl) {
+          var cSel2 = $('cp-country-filter');
+          var total2 = _cpParseTotalSites();
+          var nc = cSel2 ? Math.max(0, cSel2.options.length - 1) : 0;
+          if (total2 > 0 || nc > 0) {
+            miniEl.querySelector('div:first-child div:first-child').textContent =
+              total2 > 0 ? total2.toLocaleString() : '36K+';
+          }
+        }
+      }, 120);
+    };
+    window._cpApplyFilters.__bridgePatched = true;
+  }
+
+  /* ── MutationObserver: watch hidden selects for options ───── */
+  function _observeSelect(selectId, callback) {
+    var sel = $(selectId);
+    if (!sel) { setTimeout(function() { _observeSelect(selectId, callback); }, 600); return; }
+    // Fire immediately if already populated
+    if (sel.options.length > 1) { callback(); }
+    // Watch for future changes
+    var obs = new MutationObserver(function(muts) {
+      var hasNew = muts.some(function(m) {
+        return m.type === 'childList' && m.addedNodes.length > 0;
+      });
+      if (hasNew && sel.options.length > 1) callback();
+    });
+    obs.observe(sel, { childList: true });
+  }
+
+  // ── Also watch pn-record-count for PN total parts update ────
+  function _observeRecordCount(rcId, callback) {
+    var rc = $(rcId);
+    if (!rc) { setTimeout(function() { _observeRecordCount(rcId, callback); }, 600); return; }
+    var obs = new MutationObserver(function() { callback(); });
+    obs.observe(rc, { childList: true, subtree: true, characterData: true });
+  }
+
+  // ── Bootstrap ───────────────────────────────────────────────
+  function _boot() {
+    // CP: watch country-filter for population
+    _observeSelect('cp-country-filter', function() {
+      _patchCpApplyFilters();
+      _cpPopulateSidebarLists();
+    });
+
+    // CP: also watch cp-record-count to refresh stats after data loads
+    _observeRecordCount('cp-record-count', function() {
+      var miniEl = $('cp-stats-mini');
+      if (!miniEl) return;
+      var total = _cpParseTotalSites();
+      var cSel  = $('cp-country-filter');
+      var nc    = cSel ? Math.max(0, cSel.options.length - 1) : 0;
+      if (total > 0) {
+        var siteDiv = miniEl.querySelector('div');
+        if (siteDiv) {
+          var numDiv = siteDiv.querySelector('div');
+          if (numDiv) numDiv.textContent = total.toLocaleString();
+        }
+      }
+    });
+
+    // PN: watch cat-filter for population
+    _observeSelect('pn-cat-filter', function() {
+      _pnPopulateSidebarList();
+    });
+
+    // PN: watch record count for total parts update
+    _observeRecordCount('pn-record-count', function() {
+      var total = _pnParseTotalParts();
+      var statsTotal = $('pn-stats-total');
+      if (statsTotal && total > 0) statsTotal.textContent = total.toLocaleString();
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _boot);
+  } else {
+    _boot();
+  }
+
+  // Expose hooks (optional convenience)
+  window._cpOnDataLoaded = function() { _cpPopulateSidebarLists(); };
+  window._pnOnDataLoaded = function() { _pnPopulateSidebarList(); };
 
 })();
 </script>
