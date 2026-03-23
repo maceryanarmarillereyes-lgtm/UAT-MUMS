@@ -95,6 +95,8 @@ const ROUTES = {
   'studio/qb_monitoring':      require('../server/routes/studio/qb_monitoring'),
   'studio/qb_search':          require('../server/routes/studio/qb_search'),
   'studio/qb_export':          require('../server/routes/studio/qb_export'),
+  'studio/cache_manifest':     require('../server/routes/studio/cache_manifest'),
+  'studio/cache_bundle':       require('../server/routes/studio/cache_bundle'),
 };
 
 const DYNAMIC_ROUTES = [
