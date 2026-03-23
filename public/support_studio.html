@@ -2461,10 +2461,6 @@
 
       <style>
         @keyframes spin { to { transform: rotate(360deg); } }
-      </style>
-
-      <style>
-        @keyframes spin { to { transform: rotate(360deg); } }
         /* SR result card hover */
         .sr-card { transition: border-color .15s, background .15s; }
         .sr-card:hover { border-color: var(--sr-card-accent) !important; }
@@ -2609,7 +2605,7 @@
             btn.style.cssText = `width:100%;display:flex;align-items:center;justify-content:space-between;background:transparent;border:1px solid transparent;border-radius:6px;padding:5px 8px;cursor:pointer;font-family:var(--ss-font);transition:all .12s;text-align:left;`;
             btn.onmouseover = () => { if (srFilter !== cat.id) { btn.style.background='rgba(255,255,255,.04)'; btn.querySelector('.sr-cat-count').style.color='rgba(255,255,255,.5)'; } };
             btn.onmouseout  = () => { if (srFilter !== cat.id) { btn.style.background='transparent'; btn.querySelector('.sr-cat-count').style.color='rgba(255,255,255,.25)'; } };
-            btn.onclick = () => window._srSetFilter(cat.id, cat.label, cat.color);
+            btn.onclick = () => window._srCatClick(cat.id, cat.label, cat.color);
             cf.appendChild(btn);
           });
 
@@ -2706,7 +2702,7 @@
             wc.innerHTML = cats.map(cat => {
               const pct = Math.round(cat.resolved/(cat.count||1)*100);
               return `
-                <div onclick="window._srSetFilter('${cat.id}','${cat.label}','${cat.color}')"
+                <div onclick="window._srCatClick('${cat.id}','${cat.label}','${cat.color}')"
                   style="background:var(--ss-surface2);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;"
                   onmouseover="this.style.borderColor='${cat.color}44';this.style.background='rgba(255,255,255,.03)';"
                   onmouseout="this.style.borderColor='rgba(255,255,255,.07)';this.style.background='var(--ss-surface2)';">
@@ -2779,6 +2775,8 @@
               if (lbl) lbl.style.color = 'var(--ss-muted)';
             }
           });
+          // Always rebuild full welcome grid (in case we came from subcat view)
+          _srShowWelcome(srCats);
           _srRender();
         };
 
@@ -2810,7 +2808,14 @@
         // ── SEARCH ─────────────────────────────────────────────────────
         function _srSearch(q, cat) {
           if (!srFlat) return [];
-          let pool = cat ? srFlat.filter(e => e.id === cat) : srFlat;
+          let pool;
+          if (!cat) {
+            pool = srFlat;
+          } else if (cat === 'parts_products') {
+            pool = srFlat.filter(e => e.id.startsWith('parts_'));
+          } else {
+            pool = srFlat.filter(e => e.id === cat);
+          }
           if (!q || q.length < 1) return pool;
           const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
           return pool.filter(e => {
@@ -2843,11 +2848,14 @@
 
           // Show welcome when nothing active and loaded
           if (!hasQ && !hasF) {
-            if (loading)  loading.style.display  = srLoaded ? 'none' : 'flex';
-            if (welcome)  welcome.style.display   = srLoaded ? 'block' : 'none';
+            if (loading)  loading.style.display  = 'none';
+            if (welcome)  welcome.style.display   = 'block';
             if (content)  content.style.display   = 'none';
             if (pBar)     pBar.style.display       = 'none';
-            if (countEl)  countEl.textContent = srLoaded ? (srFlat ? srFlat.length.toLocaleString() : '—') + ' Records' : 'Loading…';
+            if (countEl)  {
+              const total = srFlat ? srFlat.length : srCats.reduce((a,c)=>a+c.entries,0);
+              countEl.textContent = total.toLocaleString() + ' Records';
+            }
             return;
           }
 
@@ -2940,42 +2948,99 @@
         };
 
         function _srShowSubcatWelcome(cat) {
-          const welcome = $('sr-welcome');
-          const wc      = $('sr-welcome-cats');
-          const content = $('sr-content');
-          const pBar    = $('sr-pagination-bar');
-          const countEl = $('sr-result-count');
-          const bc      = $('sr-breadcrumb');
+          const welcome  = $('sr-welcome');
+          const wc       = $('sr-welcome-cats');
+          const content  = $('sr-content');
+          const pBar     = $('sr-pagination-bar');
+          const countEl  = $('sr-result-count');
+          const bc       = $('sr-breadcrumb');
+
+          // Hide results, show welcome
           if (content) content.style.display = 'none';
           if (pBar)    pBar.style.display = 'none';
           if (welcome) welcome.style.display = 'block';
-          if (bc) bc.innerHTML = `<span style="color:rgba(255,255,255,.2);">›</span><span style="color:${cat.color};font-weight:600;">${cat.label}</span>`;
-          if (countEl) countEl.textContent = cat.label;
+
+          // Breadcrumb
+          if (bc) bc.innerHTML = `<span style="color:rgba(255,255,255,.2);">›</span><span style="color:${cat.color};font-weight:700;">${cat.label}</span>`;
+
+          // Result count badge
+          if (countEl) countEl.textContent = cat.entries.toLocaleString() + ' Entries';
+
+          // Filter badge in sidebar
+          const af = $('sr-active-filter'), fl = $('sr-filter-label');
+          if (af && fl) {
+            af.style.display = 'flex';
+            af.style.background = cat.color + '15';
+            af.style.borderColor = cat.color + '40';
+            af.style.color = cat.color;
+            fl.textContent = cat.label;
+          }
+
+          // Highlight sidebar button
+          document.querySelectorAll('#sr-cat-filter .sr-cat-btn').forEach(b => {
+            const isActive = b.dataset.cat === cat.id;
+            if (isActive) {
+              b.style.background  = cat.color + '15';
+              b.style.borderColor = cat.color + '30';
+              b.classList.add('active-cat');
+              const lbl = b.querySelectorAll('span')[2];
+              if (lbl) lbl.style.color = cat.color;
+            } else if (!b.dataset.cat) {
+              _styleAllBtn(b, false);
+            } else {
+              b.style.background  = 'transparent';
+              b.style.borderColor = 'transparent';
+              b.classList.remove('active-cat');
+              const lbl = b.querySelectorAll('span')[2];
+              if (lbl) lbl.style.color = 'var(--ss-muted)';
+            }
+          });
+
+          // Subcats stat grid (entry counts per subcat)
           const ws = $('sr-welcome-stats');
           if (ws) ws.innerHTML = cat.subcats.map(s => `
-            <div style="background:var(--ss-surface2);border:1px solid ${s.color}20;border-radius:8px;padding:10px;text-align:center;">
-              <div style="font-size:16px;font-weight:800;color:${s.color};">${s.entries}</div>
-              <div style="font-size:9px;color:var(--ss-muted);margin-top:2px;">${s.label}</div>
+            <div onclick="window._srSetFilter('${s.id}','${s.label}','${s.color}')"
+              style="background:var(--ss-surface2);border:1px solid ${s.color}20;border-radius:8px;padding:10px;text-align:center;cursor:pointer;transition:all .14s;"
+              onmouseover="this.style.borderColor='${s.color}55'" onmouseout="this.style.borderColor='${s.color}20'">
+              <div style="font-size:16px;font-weight:800;color:${s.color};">${s.entries.toLocaleString()}</div>
+              <div style="font-size:8.5px;color:var(--ss-muted);margin-top:3px;line-height:1.3;">${s.label}</div>
             </div>`).join('');
-          if (wc) wc.innerHTML = cat.subcats.map(sub => `
+
+          // Subcategory cards with Back button
+          if (wc) wc.innerHTML = `
+            <div style="grid-column:1/-1;display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+              <button onclick="window._srClearFilter()"
+                style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--ss-muted);
+                       padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;
+                       font-family:var(--ss-font);display:flex;align-items:center;gap:6px;transition:all .12s;"
+                onmouseover="this.style.background='rgba(255,255,255,.09)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">
+                <i class="fas fa-arrow-left" style="font-size:9px;"></i> Back to All Categories
+              </button>
+              <span style="font-size:9px;font-weight:700;color:rgba(255,255,255,.25);letter-spacing:.08em;text-transform:uppercase;">
+                <i class="fas ${cat.icon}" style="color:${cat.color};margin-right:4px;"></i>${cat.label} — Select a sub-category
+              </span>
+            </div>
+            ${cat.subcats.map(sub => `
             <div onclick="window._srSetFilter('${sub.id}','${sub.label}','${sub.color}')"
-              style="background:var(--ss-surface2);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;"
+              style="background:var(--ss-surface2);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px;
+                     cursor:pointer;transition:all .15s;position:relative;overflow:hidden;"
               onmouseover="this.style.borderColor='${sub.color}44';this.style.background='rgba(255,255,255,.03)';"
               onmouseout="this.style.borderColor='rgba(255,255,255,.07)';this.style.background='var(--ss-surface2)';">
-              <div style="position:absolute;top:0;left:0;right:0;height:2px;background:${sub.color};opacity:.4;"></div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                <div style="width:28px;height:28px;border-radius:7px;background:${sub.color}15;border:1px solid ${sub.color}28;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <div style="position:absolute;top:0;left:0;right:0;height:2px;background:${sub.color};opacity:.45;"></div>
+              <div style="display:flex;align-items:flex-start;gap:9px;margin-bottom:8px;">
+                <div style="width:28px;height:28px;border-radius:7px;background:${sub.color}18;border:1px solid ${sub.color}28;
+                            display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                   <i class="fas ${sub.icon}" style="color:${sub.color};font-size:11px;"></i>
                 </div>
-                <div>
-                  <div style="font-size:11px;font-weight:700;color:#fff;">${sub.label}</div>
-                  <div style="font-size:9px;color:var(--ss-muted);">${sub.entries} KB entries</div>
+                <div style="min-width:0;flex:1;">
+                  <div style="font-size:11px;font-weight:700;color:#fff;line-height:1.3;">${sub.label}</div>
+                  <div style="font-size:9px;color:var(--ss-muted);margin-top:2px;">${sub.entries.toLocaleString()} KB entries</div>
                 </div>
               </div>
-              <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                ${sub.tags.slice(0,4).map(t=>`<span style="background:${sub.color}14;border:1px solid ${sub.color}22;color:${sub.color};padding:2px 6px;border-radius:6px;font-size:8px;font-weight:600;">${t}</span>`).join('')}
+              <div style="display:flex;gap:3px;flex-wrap:wrap;">
+                ${sub.tags.slice(0,4).map(t => `<span style="background:${sub.color}14;border:1px solid ${sub.color}22;color:${sub.color};padding:2px 6px;border-radius:6px;font-size:8px;font-weight:600;">${t}</span>`).join('')}
               </div>
-            </div>`).join('');
+            </div>`).join('')}`;
         }
 
       })();
