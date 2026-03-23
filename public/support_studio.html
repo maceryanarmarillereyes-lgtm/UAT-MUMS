@@ -3825,11 +3825,20 @@
   // Works for both: row number clicks (from my_quickbase) and deep search cards.
   // The modal #qbCaseDetailModal is now in support_studio.html directly.
 
-  // PHT conversion — EST(UTC-5) → PHT(UTC+8), converts [MON-DD-YY H:MM AM/PM] timestamps
+  // PHT conversion — Eastern Time (ET) → PHT(UTC+8)
+  // QB uses Eastern Time which observes US DST:
+  //   EDT(UTC-4): 2nd Sunday March → 1st Sunday November
+  //   EST(UTC-5): December, January, February
   function _ssConvertPHT(text) {
     if (!text) return text;
     var _MON = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
     var _MN  = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    function _etOffset(year, month, day) {
+      if (month > 2 && month < 10) return 4;
+      if (month === 2) { var d = new Date(year,2,1); var s2 = ((7-d.getDay())%7)+8; return day>=s2?4:5; }
+      if (month === 10) { var d2 = new Date(year,10,1); var s1 = ((7-d2.getDay())%7)+1; return day<s1?4:5; }
+      return 5;
+    }
     return text.replace(
       /\[([A-Z]{3})-(\d{1,2})-(\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)([\s\S]*?)\]/gi,
       function(full, mon, dd, yy, hh, mi, ap, rest) {
@@ -3837,11 +3846,12 @@
           var monU = mon.toUpperCase();
           if (!(_MON[monU] !== undefined)) return full;
           var year = parseInt(yy,10); year = year < 50 ? 2000+year : 1900+year;
+          var month = _MON[monU], day = parseInt(dd,10);
           var h = parseInt(hh,10);
           if (ap.toUpperCase()==='PM' && h<12) h+=12;
           if (ap.toUpperCase()==='AM' && h===12) h=0;
-          // EST = UTC-5, add 5h to get UTC, then add 8h for PHT
-          var utcMs = Date.UTC(year, _MON[monU], parseInt(dd,10), h+5, parseInt(mi,10), 0);
+          var offsetH = _etOffset(year, month, day);
+          var utcMs = Date.UTC(year, month, day, h+offsetH, parseInt(mi,10), 0);
           var phtMs = utcMs + 8*3600*1000;
           var p = new Date(phtMs);
           var ph = p.getUTCHours(), pm2 = p.getUTCMinutes();

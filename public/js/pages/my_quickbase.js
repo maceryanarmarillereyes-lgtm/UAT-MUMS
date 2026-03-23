@@ -563,15 +563,35 @@
   const _MONTH_NAMES_CN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   const _PHT_OFFSET_MS  = 13 * 60 * 60 * 1000; // EST(UTC-5) → PHT(UTC+8) = +13h
 
+  // QB stores timestamps in Eastern Time (ET) which observes US DST:
+  //   EDT (UTC-4): 2nd Sunday March → 1st Sunday November
+  //   EST (UTC-5): rest of year
+  // We must use the correct offset for the timestamp's date.
+  function _getEasternOffsetH(year, month, day) {
+    // month is 0-indexed (JS style): 2=March, 10=November
+    if (month > 2 && month < 10) return 4; // Apr-Oct: EDT (UTC-4)
+    if (month === 2) { // March: DST starts 2nd Sunday
+      const d = new Date(year, 2, 1);
+      const secondSun = ((7 - d.getDay()) % 7) + 8;
+      return day >= secondSun ? 4 : 5;
+    }
+    if (month === 10) { // November: DST ends 1st Sunday
+      const d = new Date(year, 10, 1);
+      const firstSun = ((7 - d.getDay()) % 7) + 1;
+      return day < firstSun ? 4 : 5;
+    }
+    return 5; // Dec, Jan, Feb: EST (UTC-5)
+  }
+
   function _cnDateToEST(mon, dd, yy, hh, mi, ap) {
-    // Parse as if it were UTC then apply EST offset to get true UTC
-    // QB times are in EST (UTC-5), so add 5h to get UTC
     const year = (yy < 50 ? 2000 : 1900) + yy;
+    const month = _MONTH_MAP_CN[mon];
     let h = hh;
     if (ap === 'PM' && h < 12) h += 12;
     if (ap === 'AM' && h === 12) h = 0;
-    // Create date treating input as EST (UTC-5) → add 5h for UTC
-    return new Date(Date.UTC(year, _MONTH_MAP_CN[mon], dd, h + 5, mi, 0, 0));
+    // Use DST-aware Eastern Time offset
+    const offsetH = _getEasternOffsetH(year, month, dd);
+    return new Date(Date.UTC(year, month, dd, h + offsetH, mi, 0, 0));
   }
 
   function _fmtPHT(utcDate) {

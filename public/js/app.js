@@ -3588,8 +3588,8 @@ function updateClocksPreviewTimes(){
       const ap = (m[2].match(/PM/i) ? 'PM' : (m[2].match(/AM/i) ? 'AM' : ''));
       if (ap === 'PM' && hh < 12) hh += 12;
       if (ap === 'AM' && hh === 12) hh = 0;
-      // Timestamps are already PHT — interpret as UTC+8 for accurate absolute time
-      const dateObj = new Date(Date.UTC(year, MMAP[mon], dd, hh - 8, mi, 0)); // PHT(UTC+8) → UTC
+      // Timestamps are already PHT (UTC+8) — convert to UTC for accurate sorting
+      const dateObj = new Date(Date.UTC(year, MMAP[mon], dd, hh - 8, mi, 0)); // PHT → UTC
       return { dateStr: m[1], timeStr: m[2].trim(), who: m[3].trim(), dateObj, bracketDateToken: m[1] };
     }
 
@@ -3621,6 +3621,14 @@ function updateClocksPreviewTimes(){
     // IMPORTANT: QB stores case note timestamps in EST (UTC-5).
     // We must convert them to PHT (UTC+8) before comparing against Manila today.
     // _convertCNtoPHT mirrors the logic in my_quickbase.js _convertNotesESTtoPHT.
+    // DST-aware Eastern Time → PHT converter for notification system
+    // QB uses Eastern Time (ET): EDT(UTC-4) Mar-Nov, EST(UTC-5) Dec-Feb
+    function _etOffsetH(year, month, day) {
+      if (month > 2 && month < 10) return 4;
+      if (month === 2) { const d = new Date(year,2,1); const s2 = ((7-d.getDay())%7)+8; return day>=s2?4:5; }
+      if (month === 10) { const d = new Date(year,10,1); const s1 = ((7-d.getDay())%7)+1; return day<s1?4:5; }
+      return 5;
+    }
     function _convertCNtoPHT(text) {
       if (!text) return text;
       const _MMAP = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
@@ -3632,11 +3640,12 @@ function updateClocksPreviewTimes(){
             const monU = mon.toUpperCase();
             if (!(_MMAP[monU] !== undefined)) return full;
             const year = parseInt(yy) < 50 ? 2000+parseInt(yy) : 1900+parseInt(yy);
+            const month = _MMAP[monU], day = parseInt(dd);
             let h = parseInt(hh);
             if (ap.toUpperCase()==='PM' && h<12) h+=12;
             if (ap.toUpperCase()==='AM' && h===12) h=0;
-            // EST = UTC-5: add 5h to get UTC, then add 8h for PHT
-            const utcMs = Date.UTC(year, _MMAP[monU], parseInt(dd), h+5, parseInt(mi), 0);
+            const offsetH = _etOffsetH(year, month, day);
+            const utcMs = Date.UTC(year, month, day, h+offsetH, parseInt(mi), 0);
             const phtMs = utcMs + 8*3600*1000;
             const p     = new Date(phtMs);
             const ph    = p.getUTCHours(), pm2 = p.getUTCMinutes();
@@ -3943,6 +3952,47 @@ ${idx < toShow.length - 1 ? '<div class="mnp-divider"></div>' : ''}`;
     setTimeout(function() {
       if (window.__mumsBindReleaseNotes) window.__mumsBindReleaseNotes();
     }, 900);
+
+    // ── AUTO-FETCH QB records for notifications on login ───────────────────
+    // Fetches latest QB records in the background so notification bell works
+    // WITHOUT requiring the user to open My Quickbase first.
+    // Runs once on boot after auth is ready, then every 5 minutes.
+    function _autoFetchQBForNotif() {
+      try {
+        const tok = (window.CloudAuth && typeof CloudAuth.accessToken === 'function')
+          ? CloudAuth.accessToken() : '';
+        if (!tok) return; // not authenticated yet
+
+        fetch('/api/quickbase/monitoring', {
+          headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' }
+        })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) {
+          if (!d || !d.ok) return;
+          const records = Array.isArray(d.records) ? d.records : [];
+          const columns = Array.isArray(d.columns) ? d.columns : [];
+          if (records.length && columns.length) {
+            // Store globally so My Quickbase page can use the cache too
+            window.__mumsQbRecords = {
+              records: records,
+              columns: columns,
+              loadedAt: Date.now(),
+            };
+            // Update notification bell
+            if (typeof window.__mumsNotifRefresh === 'function') {
+              window.__mumsNotifRefresh(records, columns);
+            }
+          }
+        })
+        .catch(function() {}); // silent fail — bell will update when QB page opens
+      } catch(_) {}
+    }
+
+    // Run after auth hydration (wait for token to be available)
+    setTimeout(function() { _autoFetchQBForNotif(); }, 3000);
+    // Refresh every 5 minutes
+    setInterval(_autoFetchQBForNotif, 5 * 60 * 1000);
+
   })();
   // ══════════════════════════════════════════════════════════════════════════
   // END NOTIFICATION SYSTEM
