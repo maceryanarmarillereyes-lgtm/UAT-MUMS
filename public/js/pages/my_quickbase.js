@@ -1023,7 +1023,7 @@
     if (todayStr) {
       // Also pass myQbName for consistent gray-glass on own entries in tooltip
       const highlighted = (typeof _highlightTodayInNotes === 'function')
-        ? _highlightTodayInNotes(full, todayStr, opts && opts.myQbName || window._qbMyNameCache || '')
+        ? _highlightTodayInNotes(full, todayStr, window._qbMyNameCache || '')
         : null;
       if (highlighted) {
         tip.innerHTML = highlighted.replace(/\n/g,'<br>').replace(/\r/g,'');
