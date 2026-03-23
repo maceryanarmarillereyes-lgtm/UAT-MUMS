@@ -17,11 +17,21 @@ function normalizeThemeId(raw) {
   return id;
 }
 
+function clamp(val, min, max, def) {
+  const n = Number(val);
+  if (!Number.isFinite(n)) return def;
+  return Math.max(min, Math.min(max, n));
+}
+
 function normalizeThemePayload(raw) {
   const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const themeId = normalizeThemeId(src.defaultTheme);
   return {
-    defaultTheme: themeId || DEFAULT_THEME_ID
+    defaultTheme:    themeId || DEFAULT_THEME_ID,
+    brightness:      clamp(src.brightness,      40,  130, 100),
+    contrast:        clamp(src.contrast,        60,  140, 100),
+    scale:           clamp(src.scale,           80,  120, 100),
+    sidebarOpacity:  clamp(src.sidebarOpacity,  30,  100, 100),
   };
 }
 

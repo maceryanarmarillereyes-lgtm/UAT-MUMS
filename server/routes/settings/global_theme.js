@@ -49,10 +49,13 @@ module.exports = async (req, res) => {
       }
       return sendJson(res, 200, {
         ok: true,
-        defaultTheme: out.settings.defaultTheme || DEFAULT_THEME_ID,
-        updatedAt: out.row && out.row.updated_at ? out.row.updated_at : null,
-        updatedByName: out.row && out.row.updated_by_name ? out.row.updated_by_name : null,
-        updatedByUserId: out.row && out.row.updated_by_user_id ? out.row.updated_by_user_id : null
+        defaultTheme:   out.settings.defaultTheme   || DEFAULT_THEME_ID,
+        brightness:     out.settings.brightness      ?? 100,
+        contrast:       out.settings.contrast        ?? 100,
+        scale:          out.settings.scale           ?? 100,
+        sidebarOpacity: out.settings.sidebarOpacity  ?? 100,
+        updatedAt:      out.row && out.row.updated_at    ? out.row.updated_at    : null,
+        updatedByName:  out.row && out.row.updated_by_name ? out.row.updated_by_name : null,
       });
     }
 
@@ -63,12 +66,21 @@ module.exports = async (req, res) => {
       }
 
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      const themeId = normalizeThemeId(body && body.themeId);
-      if (!themeId) {
-        return sendJson(res, 400, { ok: false, error: 'bad_request', message: 'Invalid themeId.' });
-      }
+      const themeId = normalizeThemeId(body && body.themeId || body && body.defaultTheme);
 
-      const out = await writeGlobalThemeSettings({ defaultTheme: themeId }, {
+      const payload = {
+        defaultTheme:   themeId || DEFAULT_THEME_ID,
+        brightness:     body.brightness     !== undefined ? body.brightness     : undefined,
+        contrast:       body.contrast       !== undefined ? body.contrast       : undefined,
+        scale:          body.scale          !== undefined ? body.scale          : undefined,
+        sidebarOpacity: body.sidebarOpacity !== undefined ? body.sidebarOpacity : undefined,
+      };
+
+      // Merge with existing so a partial update doesn't wipe other fields
+      const existing = await readGlobalThemeSettings();
+      const merged = Object.assign({}, existing.ok ? existing.settings : {}, payload);
+
+      const out = await writeGlobalThemeSettings(merged, {
         userId: user.id,
         name: profile && profile.name ? profile.name : null
       });
@@ -77,15 +89,19 @@ module.exports = async (req, res) => {
         return sendJson(res, out.status || 500, {
           ok: false,
           error: 'db_error',
-          message: 'Failed to save global theme settings.',
+          message: 'Failed to save global appearance settings.',
           details: out.details
         });
       }
 
       return sendJson(res, 200, {
         ok: true,
-        defaultTheme: out.settings.defaultTheme || DEFAULT_THEME_ID,
-        message: 'Global default theme updated.'
+        defaultTheme:   out.settings.defaultTheme   || DEFAULT_THEME_ID,
+        brightness:     out.settings.brightness      ?? 100,
+        contrast:       out.settings.contrast        ?? 100,
+        scale:          out.settings.scale           ?? 100,
+        sidebarOpacity: out.settings.sidebarOpacity  ?? 100,
+        message: 'Global appearance settings updated.'
       });
     }
 

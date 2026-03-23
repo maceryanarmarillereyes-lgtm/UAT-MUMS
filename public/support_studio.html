@@ -1234,7 +1234,7 @@
           <button class="ss-settings-nav-btn" data-settings-section="studio-appearance"
             style="width:100%;padding:10px 16px;background:transparent;border:none;border-left:3px solid transparent;color:var(--ss-muted);cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;font-family:var(--ss-font);font-weight:600;text-align:left;transition:all .15s;">
             <span style="width:26px;height:26px;border-radius:7px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <i class="fas fa-paint-brush" style="font-size:11px;color:#a78bfa;"></i>
+              <i class="fas fa-sliders-h" style="font-size:11px;color:#0ea5e9;"></i>
             </span>
             <span>Appearance</span>
           </button>
@@ -1697,143 +1697,184 @@
                Accent color: #a78bfa (violet)
           ════════════════════════════════════════════════════════ -->
           <div id="settings-section-studio-appearance" style="display:none;">
-            <div style="display:flex;align-items:center;gap:14px;margin-bottom:0;">
-              <div style="width:44px;height:44px;border-radius:12px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                <i class="fas fa-paint-brush" style="color:#a78bfa;font-size:18px;"></i>
+
+            <!-- Header -->
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:0;">
+              <div style="width:46px;height:46px;border-radius:12px;background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <i class="fas fa-sliders-h" style="color:#0ea5e9;font-size:17px;"></i>
               </div>
               <div>
-                <div style="font-size:17px;font-weight:900;color:#e6edf3;letter-spacing:-.01em;">Appearance</div>
-                <div style="font-size:11px;color:var(--ss-muted);margin-top:2px;">Adjust brightness, contrast, and visual comfort settings for the Support Studio.</div>
+                <div style="font-size:17px;font-weight:900;color:#e6edf3;letter-spacing:-.02em;">Appearance</div>
+                <div style="font-size:11px;color:var(--ss-muted);margin-top:2px;">Display calibration &amp; theme settings for the Support Studio.</div>
+              </div>
+              <div id="app-global-badge" style="margin-left:auto;display:none;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border-radius:4px;background:rgba(14,165,233,.12);color:#0ea5e9;border:1px solid rgba(14,165,233,.25);">
+                <i class="fas fa-globe" style="margin-right:4px;"></i>Global Override Active
               </div>
             </div>
-            <div style="height:1px;background:linear-gradient(90deg,rgba(167,139,250,.3),transparent);margin:18px 0 0;"></div>
+            <div style="height:1px;background:linear-gradient(90deg,rgba(14,165,233,.3),transparent);margin:18px 0 0;"></div>
 
             <!-- Tab bar -->
             <div style="display:flex;gap:0;border-bottom:1px solid var(--ss-border);margin-bottom:0;">
               <button class="app-tab active" data-app-tab="display"
                 onclick="window._appSwitchTab('display')"
-                style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid #a78bfa;color:#a78bfa;white-space:nowrap;font-family:var(--ss-font);">
-                Display
+                style="padding:10px 18px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid #0ea5e9;color:#0ea5e9;white-space:nowrap;font-family:var(--ss-font);">
+                <i class="fas fa-sliders-h" style="margin-right:6px;font-size:10px;"></i>Display
               </button>
               <button class="app-tab" data-app-tab="theme"
                 onclick="window._appSwitchTab('theme')"
-                style="padding:10px 16px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--ss-muted);white-space:nowrap;font-family:var(--ss-font);">
-                Theme
+                style="padding:10px 18px;font-size:12px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--ss-muted);white-space:nowrap;font-family:var(--ss-font);">
+                <i class="fas fa-palette" style="margin-right:6px;font-size:10px;"></i>Theme
               </button>
             </div>
 
             <!-- Panel: Display -->
-            <div id="app-panel-display" style="padding:20px 0;max-width:660px;">
+            <div id="app-panel-display" style="padding:24px 0;max-width:640px;">
 
-              <!-- Brightness control -->
-              <div style="margin-bottom:24px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                  <div>
-                    <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);">Brightness</label>
-                    <div style="font-size:10px;color:var(--ss-muted);margin-top:2px;">Adjust overall screen brightness</div>
-                  </div>
-                  <span id="app-brightness-val" style="font-size:13px;font-weight:800;color:#a78bfa;min-width:40px;text-align:right;">100%</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:12px;">
-                  <i class="fas fa-sun" style="color:var(--ss-muted);font-size:10px;opacity:.5;"></i>
-                  <input type="range" id="app-brightness" min="40" max="130" value="100" step="5"
-                    style="flex:1;accent-color:#a78bfa;height:4px;cursor:pointer;"
-                    oninput="window._appApplyDisplay()">
-                  <i class="fas fa-sun" style="color:#a78bfa;font-size:14px;"></i>
-                </div>
-              </div>
-
-              <!-- Contrast control -->
-              <div style="margin-bottom:24px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                  <div>
-                    <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);">Contrast</label>
-                    <div style="font-size:10px;color:var(--ss-muted);margin-top:2px;">Increase for sharper text and UI edges</div>
-                  </div>
-                  <span id="app-contrast-val" style="font-size:13px;font-weight:800;color:#a78bfa;min-width:40px;text-align:right;">100%</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:12px;">
-                  <i class="fas fa-adjust" style="color:var(--ss-muted);font-size:11px;opacity:.5;"></i>
-                  <input type="range" id="app-contrast" min="60" max="140" value="100" step="5"
-                    style="flex:1;accent-color:#a78bfa;height:4px;cursor:pointer;"
-                    oninput="window._appApplyDisplay()">
-                  <i class="fas fa-adjust" style="color:#a78bfa;font-size:14px;"></i>
-                </div>
-              </div>
-
-              <!-- Text size -->
-              <div style="margin-bottom:24px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                  <div>
-                    <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);">UI Scale / Text Size</label>
-                    <div style="font-size:10px;color:var(--ss-muted);margin-top:2px;">Scale the entire interface up or down</div>
-                  </div>
-                  <span id="app-scale-val" style="font-size:13px;font-weight:800;color:#a78bfa;min-width:40px;text-align:right;">100%</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:12px;">
-                  <span style="color:var(--ss-muted);font-size:9px;font-weight:800;">A</span>
-                  <input type="range" id="app-scale" min="80" max="120" value="100" step="5"
-                    style="flex:1;accent-color:#a78bfa;height:4px;cursor:pointer;"
-                    oninput="window._appApplyDisplay()">
-                  <span style="color:#a78bfa;font-size:14px;font-weight:800;">A</span>
-                </div>
-              </div>
-
-              <!-- Sidebar opacity -->
+              <!-- Brightness -->
               <div style="margin-bottom:28px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
                   <div>
-                    <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);">Sidebar Opacity</label>
-                    <div style="font-size:10px;color:var(--ss-muted);margin-top:2px;">Reduce to make the sidebar less prominent</div>
+                    <label style="font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ss-muted);">Brightness</label>
+                    <div style="font-size:10px;color:var(--ss-muted);margin-top:3px;opacity:.7;">Dim or boost overall screen luminance</div>
                   </div>
-                  <span id="app-sidebar-opacity-val" style="font-size:13px;font-weight:800;color:#a78bfa;min-width:40px;text-align:right;">100%</span>
+                  <span id="app-brightness-val" style="font-size:13px;font-weight:800;color:#e6edf3;font-variant-numeric:tabular-nums;min-width:44px;text-align:right;">100%</span>
+                </div>
+                <!-- Preset quick-picks -->
+                <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+                  <button onclick="document.getElementById('app-brightness').value=60;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);cursor:pointer;font-family:var(--ss-font);">60% Dim</button>
+                  <button onclick="document.getElementById('app-brightness').value=80;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);cursor:pointer;font-family:var(--ss-font);">80% Low</button>
+                  <button onclick="document.getElementById('app-brightness').value=100;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.25);color:#0ea5e9;cursor:pointer;font-family:var(--ss-font);">100% Default</button>
+                  <button onclick="document.getElementById('app-brightness').value=115;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);cursor:pointer;font-family:var(--ss-font);">115% Bright</button>
                 </div>
                 <div style="display:flex;align-items:center;gap:12px;">
-                  <i class="fas fa-columns" style="color:var(--ss-muted);font-size:11px;opacity:.3;"></i>
-                  <input type="range" id="app-sidebar-opacity" min="30" max="100" value="100" step="5"
-                    style="flex:1;accent-color:#a78bfa;height:4px;cursor:pointer;"
+                  <i class="fas fa-moon" style="color:var(--ss-muted);font-size:11px;opacity:.4;"></i>
+                  <input type="range" id="app-brightness" min="40" max="130" value="100" step="5"
+                    style="flex:1;accent-color:#0ea5e9;height:3px;cursor:pointer;"
                     oninput="window._appApplyDisplay()">
-                  <i class="fas fa-columns" style="color:#a78bfa;font-size:11px;"></i>
+                  <i class="fas fa-sun" style="color:#0ea5e9;font-size:13px;"></i>
                 </div>
               </div>
 
-              <!-- Preview box -->
-              <div style="padding:14px;background:rgba(167,139,250,.05);border:1px solid rgba(167,139,250,.15);border-radius:10px;margin-bottom:20px;">
-                <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:8px;">Live Preview</div>
-                <div style="display:flex;align-items:center;gap:10px;">
-                  <div style="width:32px;height:32px;border-radius:8px;background:rgba(167,139,250,.15);border:1px solid rgba(167,139,250,.3);display:flex;align-items:center;justify-content:center;">
-                    <i class="fas fa-paint-brush" style="color:#a78bfa;font-size:12px;"></i>
-                  </div>
+              <!-- Contrast -->
+              <div style="margin-bottom:28px;">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
                   <div>
-                    <div style="font-size:12px;font-weight:700;color:#e6edf3;">MUMS Support Studio</div>
-                    <div style="font-size:10px;color:var(--ss-muted);">Brightness · Contrast · Scale applied live</div>
+                    <label style="font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ss-muted);">Contrast</label>
+                    <div style="font-size:10px;color:var(--ss-muted);margin-top:3px;opacity:.7;">Sharpen or soften text and UI edge definition</div>
                   </div>
+                  <span id="app-contrast-val" style="font-size:13px;font-weight:800;color:#e6edf3;font-variant-numeric:tabular-nums;min-width:44px;text-align:right;">100%</span>
+                </div>
+                <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+                  <button onclick="document.getElementById('app-contrast').value=80;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);cursor:pointer;font-family:var(--ss-font);">80% Soft</button>
+                  <button onclick="document.getElementById('app-contrast').value=100;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.25);color:#0ea5e9;cursor:pointer;font-family:var(--ss-font);">100% Default</button>
+                  <button onclick="document.getElementById('app-contrast').value=120;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);cursor:pointer;font-family:var(--ss-font);">120% Sharp</button>
+                  <button onclick="document.getElementById('app-contrast').value=135;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);cursor:pointer;font-family:var(--ss-font);">135% Max</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <i class="fas fa-circle-half-stroke" style="color:var(--ss-muted);font-size:11px;opacity:.4;" title="Low contrast"></i>
+                  <input type="range" id="app-contrast" min="60" max="140" value="100" step="5"
+                    style="flex:1;accent-color:#0ea5e9;height:3px;cursor:pointer;"
+                    oninput="window._appApplyDisplay()">
+                  <i class="fas fa-adjust" style="color:#0ea5e9;font-size:13px;" title="High contrast"></i>
                 </div>
               </div>
 
-              <!-- Actions row -->
-              <div style="display:flex;align-items:center;gap:10px;padding-top:16px;border-top:1px solid var(--ss-border2);">
+              <!-- UI Scale -->
+              <div style="margin-bottom:28px;">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+                  <div>
+                    <label style="font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ss-muted);">UI Scale / Text Size</label>
+                    <div style="font-size:10px;color:var(--ss-muted);margin-top:3px;opacity:.7;">Zoom entire interface proportionally</div>
+                  </div>
+                  <span id="app-scale-val" style="font-size:13px;font-weight:800;color:#e6edf3;font-variant-numeric:tabular-nums;min-width:44px;text-align:right;">100%</span>
+                </div>
+                <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+                  <button onclick="document.getElementById('app-scale').value=85;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);cursor:pointer;font-family:var(--ss-font);">85% Compact</button>
+                  <button onclick="document.getElementById('app-scale').value=100;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.25);color:#0ea5e9;cursor:pointer;font-family:var(--ss-font);">100% Default</button>
+                  <button onclick="document.getElementById('app-scale').value=110;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);cursor:pointer;font-family:var(--ss-font);">110% Large</button>
+                  <button onclick="document.getElementById('app-scale').value=120;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);cursor:pointer;font-family:var(--ss-font);">120% XL</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <span style="color:var(--ss-muted);font-size:8px;font-weight:800;opacity:.5;">A</span>
+                  <input type="range" id="app-scale" min="80" max="120" value="100" step="5"
+                    style="flex:1;accent-color:#0ea5e9;height:3px;cursor:pointer;"
+                    oninput="window._appApplyDisplay()">
+                  <span style="color:#0ea5e9;font-size:14px;font-weight:800;">A</span>
+                </div>
+              </div>
+
+              <!-- Sidebar Opacity -->
+              <div style="margin-bottom:28px;">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+                  <div>
+                    <label style="font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ss-muted);">Sidebar Opacity</label>
+                    <div style="font-size:10px;color:var(--ss-muted);margin-top:3px;opacity:.7;">Reduce sidebar presence for a cleaner canvas</div>
+                  </div>
+                  <span id="app-sidebar-opacity-val" style="font-size:13px;font-weight:800;color:#e6edf3;font-variant-numeric:tabular-nums;min-width:44px;text-align:right;">100%</span>
+                </div>
+                <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+                  <button onclick="document.getElementById('app-sidebar-opacity').value=50;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);cursor:pointer;font-family:var(--ss-font);">50% Ghost</button>
+                  <button onclick="document.getElementById('app-sidebar-opacity').value=75;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);cursor:pointer;font-family:var(--ss-font);">75% Subtle</button>
+                  <button onclick="document.getElementById('app-sidebar-opacity').value=100;window._appApplyDisplay();" style="font-size:9px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(14,165,233,.1);border:1px solid rgba(14,165,233,.25);color:#0ea5e9;cursor:pointer;font-family:var(--ss-font);">100% Full</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <i class="fas fa-columns" style="color:var(--ss-muted);font-size:11px;opacity:.25;"></i>
+                  <input type="range" id="app-sidebar-opacity" min="30" max="100" value="100" step="5"
+                    style="flex:1;accent-color:#0ea5e9;height:3px;cursor:pointer;"
+                    oninput="window._appApplyDisplay()">
+                  <i class="fas fa-columns" style="color:#0ea5e9;font-size:11px;"></i>
+                </div>
+              </div>
+
+              <!-- Live Preview strip -->
+              <div style="padding:14px 16px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:10px;margin-bottom:24px;display:flex;align-items:center;gap:14px;">
+                <div style="width:36px;height:36px;border-radius:9px;background:rgba(14,165,233,.12);border:1px solid rgba(14,165,233,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                  <i class="fas fa-desktop" style="color:#0ea5e9;font-size:13px;"></i>
+                </div>
+                <div>
+                  <div style="font-size:11px;font-weight:700;color:#e6edf3;">Live Preview</div>
+                  <div style="font-size:10px;color:var(--ss-muted);margin-top:1px;">Changes apply to the interface in real-time as you adjust sliders.</div>
+                </div>
+                <div style="margin-left:auto;display:flex;gap:5px;">
+                  <div style="width:10px;height:10px;border-radius:50%;background:#3fb950;"></div>
+                  <div style="width:10px;height:10px;border-radius:50%;background:#0ea5e9;"></div>
+                  <div style="width:10px;height:10px;border-radius:50%;background:#d29922;"></div>
+                </div>
+              </div>
+
+              <!-- Global admin note (shown only for super admin) -->
+              <div id="app-global-note" style="display:none;padding:12px 14px;background:rgba(14,165,233,.06);border:1px solid rgba(14,165,233,.18);border-radius:8px;margin-bottom:20px;font-size:10px;color:#0ea5e9;line-height:1.6;">
+                <i class="fas fa-globe" style="margin-right:6px;"></i>
+                <strong>Super Admin:</strong> Saving appearance will apply these settings as the <strong>global default for all users</strong>. Individual users can still override locally.
+              </div>
+
+              <!-- Actions -->
+              <div style="display:flex;align-items:center;gap:10px;padding-top:18px;border-top:1px solid var(--ss-border2);">
                 <button onclick="window._appSaveDisplay()"
-                  style="background:linear-gradient(135deg,#7c3aed,#6d28d9);border:1px solid rgba(167,139,250,.4);color:#fff;padding:10px 24px;border-radius:9px;font-size:12px;font-weight:800;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(109,40,217,.3);transition:all .2s;">
+                  style="background:linear-gradient(135deg,#0284c7,#0369a1);border:1px solid rgba(14,165,233,.35);color:#fff;padding:10px 26px;border-radius:9px;font-size:12px;font-weight:800;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 4px 18px rgba(2,132,199,.3);transition:all .18s;">
                   <i class="fas fa-save"></i> Save Appearance
                 </button>
                 <button onclick="window._appResetDisplay()"
                   style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:10px 18px;border-radius:9px;font-size:12px;font-weight:600;font-family:var(--ss-font);cursor:pointer;transition:all .18s;">
-                  <i class="fas fa-undo"></i> Reset to Default
+                  <i class="fas fa-undo"></i> Reset
                 </button>
                 <span id="app-display-msg" style="font-size:11px;opacity:0;font-weight:600;transition:opacity .3s;"></span>
               </div>
             </div>
 
             <!-- Panel: Theme -->
-            <div id="app-panel-theme" style="display:none;padding:20px 0;max-width:660px;">
-              <div style="font-size:12px;color:var(--ss-muted);margin-bottom:16px;line-height:1.6;">
-                Choose a preset colour theme for the Support Studio interface.
+            <div id="app-panel-theme" style="display:none;padding:24px 0;max-width:640px;">
+              <div style="font-size:11px;color:var(--ss-muted);margin-bottom:20px;line-height:1.7;">
+                Choose a colour theme for the Support Studio interface. Themes change the background, surface, and accent colours.
               </div>
-              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:24px;" id="app-theme-grid"></div>
-              <div style="display:flex;align-items:center;gap:10px;padding-top:16px;border-top:1px solid var(--ss-border2);">
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:24px;" id="app-theme-grid"></div>
+              <div id="app-global-note-theme" style="display:none;padding:12px 14px;background:rgba(14,165,233,.06);border:1px solid rgba(14,165,233,.18);border-radius:8px;margin-bottom:20px;font-size:10px;color:#0ea5e9;line-height:1.6;">
+                <i class="fas fa-globe" style="margin-right:6px;"></i>
+                <strong>Super Admin:</strong> Saving theme will set it as the <strong>global default for all users</strong>.
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;padding-top:18px;border-top:1px solid var(--ss-border2);">
                 <button onclick="window._appSaveDisplay()"
-                  style="background:linear-gradient(135deg,#7c3aed,#6d28d9);border:1px solid rgba(167,139,250,.4);color:#fff;padding:10px 24px;border-radius:9px;font-size:12px;font-weight:800;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(109,40,217,.3);">
+                  style="background:linear-gradient(135deg,#0284c7,#0369a1);border:1px solid rgba(14,165,233,.35);color:#fff;padding:10px 26px;border-radius:9px;font-size:12px;font-weight:800;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 4px 18px rgba(2,132,199,.3);">
                   <i class="fas fa-save"></i> Save Theme
                 </button>
                 <span id="app-theme-msg" style="font-size:11px;opacity:0;font-weight:600;transition:opacity .3s;"></span>
@@ -1843,7 +1884,7 @@
           </div>
 
 
-          <!-- ════════════════════════════════════════════════════════
+          <!-- ════          <!-- ════════════════════════════════════════════════════════
                SECTION: Integrations  [PLACEHOLDER — coming soon]
                section-id: studio-integrations
                Accent color: #3fb950 (green)
@@ -2998,9 +3039,9 @@
     tab.addEventListener('click', () => activateTab(tab.dataset.tab));
   });
 
-  // Default to config tab on load — avoids dependency on _qbsInit which is
-  // defined in a later script block. QBS tab init happens on first click.
-  activateTab('config');
+  // Default landing: QuickBase_S tab. _qbsInit guard is already in activateTab().
+  // Config tab is gated to SUPER_ADMIN; this default works for all roles.
+  activateTab('qbs');
 
   // ── Live clock ──────────────────────────────────────────────────
   const clockEl = document.getElementById('ss-clock');
@@ -3285,7 +3326,7 @@
   var SECTION_COLORS = {
     'studio-qb':              { fg: '#58a6ff', bg: 'rgba(88,166,255,.1)',  border: '#58a6ff' },
     'connectplus-settings':   { fg: '#22d3ee', bg: 'rgba(34,211,238,.1)',  border: '#22d3ee' },
-    'studio-appearance':      { fg: '#a78bfa', bg: 'rgba(167,139,250,.1)', border: '#a78bfa' },
+    'studio-appearance':      { fg: '#0ea5e9', bg: 'rgba(14,165,233,.1)',  border: '#0ea5e9' },
     'studio-integrations':    { fg: '#3fb950', bg: 'rgba(63,185,80,.1)',   border: '#3fb950' },
   };
 
@@ -4024,7 +4065,202 @@
     });
   });
 
-  // ── Export ALL QB records (server-side paginated) ─────────────────
+  // ── Deep Search — searches ALL QB records via /api/studio/qb_search ──
+  // Results sorted by Case # DESCENDING (highest = newest case first).
+  // Renders clickable cards in #qbs-search-results.
+  window._qbsDeepSearch = function(term, skip) {
+    term = String(term || '').trim();
+    if (!term) {
+      document.getElementById('qbs-search-status').textContent = '';
+      document.getElementById('qbs-search-results').innerHTML = '';
+      return;
+    }
+    skip = Math.max(0, Number(skip || 0));
+    var TOP = 50;
+
+    var statusEl  = document.getElementById('qbs-search-status');
+    var resultsEl = document.getElementById('qbs-search-results');
+    var qfEl      = document.getElementById('qbs-quick-filters');
+    var btn       = document.getElementById('qbs-deep-search-btn');
+
+    if (statusEl) statusEl.textContent = 'Searching…';
+    if (resultsEl && skip === 0) resultsEl.innerHTML = '<div style="color:var(--ss-muted);font-size:11px;padding:12px 0;display:flex;align-items:center;gap:8px;"><i class="fas fa-spinner fa-spin"></i> Searching all records…</div>';
+    if (qfEl) qfEl.style.display = 'none';
+    if (btn) btn.disabled = true;
+
+    // Auth token
+    var tok = '';
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) { var p = JSON.parse(raw); if (p && p.access_token) tok = p.access_token; }
+      if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken() || '';
+    } catch(_) {}
+
+    var headers = { 'Content-Type': 'application/json' };
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
+
+    var url = '/api/studio/qb_search?q=' + encodeURIComponent(term) + '&skip=' + skip + '&top=' + TOP;
+
+    fetch(url, { headers: headers })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (btn) btn.disabled = false;
+
+        // Not configured
+        if (d.warning === 'studio_qb_not_configured') {
+          if (statusEl) statusEl.textContent = '';
+          if (resultsEl) resultsEl.innerHTML =
+            '<div style="padding:16px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:8px;font-size:11px;color:#f85149;line-height:1.6;">' +
+            '<i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>' +
+            'QB not configured. Go to <strong>General Settings → Studio Quickbase Settings</strong>.</div>';
+          return;
+        }
+
+        if (!d.ok) {
+          if (statusEl) statusEl.textContent = 'Search failed.';
+          if (resultsEl) resultsEl.innerHTML =
+            '<div style="padding:12px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:8px;font-size:11px;color:#f85149;">' +
+            '<i class="fas fa-times-circle" style="margin-right:6px;"></i>' + _dsEsc(d.message || 'Unknown error') + '</div>';
+          return;
+        }
+
+        var records = Array.isArray(d.records) ? d.records : [];
+        var cols    = Array.isArray(d.columns) ? d.columns : [];
+        var total   = typeof d.total === 'number' ? d.total : null;
+
+        // Sort by Case # (field 3) DESCENDING — highest number = newest case
+        records.sort(function(a, b) {
+          var aId = Number(a.qbRecordId) || 0;
+          var bId = Number(b.qbRecordId) || 0;
+          return bId - aId; // descending
+        });
+
+        // Build column label map
+        var labelMap = {};
+        cols.forEach(function(c) { labelMap[String(c.id)] = c.label; });
+
+        // Key fields we want to surface in cards
+        var PRIORITY_KEYS = ['case status','short description','assigned to','contact','type','latest update','end user','age','last update'];
+
+        function getFieldValue(fields, labelHint) {
+          if (!fields) return '';
+          var keys = Object.keys(fields);
+          // Try to find by label hint
+          var matched = keys.find(function(k) {
+            var lbl = (labelMap[k] || '').toLowerCase();
+            return PRIORITY_KEYS.some(function(h) { return lbl.includes(h); }) &&
+              lbl.includes(labelHint.toLowerCase());
+          });
+          if (!matched) matched = keys.find(function(k) { return (labelMap[k]||'').toLowerCase().includes(labelHint.toLowerCase()); });
+          if (!matched) return '';
+          var v = fields[matched];
+          return v && typeof v === 'object' ? String(v.value || '') : String(v || '');
+        }
+
+        function _dsEsc2(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+        // Render result cards
+        var html = '';
+        if (!records.length) {
+          html = '<div style="padding:20px 0;text-align:center;color:var(--ss-muted);font-size:11px;">' +
+            '<i class="fas fa-search" style="font-size:20px;opacity:.3;display:block;margin-bottom:8px;"></i>' +
+            'No results for <strong>' + _dsEsc2(term) + '</strong></div>';
+        } else {
+          records.forEach(function(rec) {
+            var caseNum   = rec.qbRecordId || '—';
+            var status    = getFieldValue(rec.fields, 'case status') || getFieldValue(rec.fields, 'status');
+            var desc      = getFieldValue(rec.fields, 'short description') || getFieldValue(rec.fields, 'description') || getFieldValue(rec.fields, 'latest update') || '';
+            var assignee  = getFieldValue(rec.fields, 'assigned') || '';
+            var contact   = getFieldValue(rec.fields, 'contact') || getFieldValue(rec.fields, 'full name') || '';
+            var caseType  = getFieldValue(rec.fields, 'type') || '';
+            var age       = getFieldValue(rec.fields, 'age') || getFieldValue(rec.fields, 'last update days') || '';
+
+            // Status badge color
+            var statusColor = '#58a6ff';
+            var sl = status.toLowerCase();
+            if (sl.includes('resolv') || sl.includes('closed') || sl.startsWith('c -')) statusColor = '#3fb950';
+            else if (sl.includes('investigat') || sl.includes('waiting') || sl.startsWith('o -')) statusColor = '#d29922';
+
+            var descTrunc = desc.length > 110 ? desc.slice(0, 107) + '…' : desc;
+
+            html += '<div onclick="window._qbsOpenDeepResult(\'' + _dsEsc2(caseNum) + '\')" ' +
+              'style="padding:10px 11px;margin-bottom:6px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:7px;cursor:pointer;transition:background .12s,border-color .12s;" ' +
+              'onmouseover="this.style.background=\'rgba(88,166,255,.07)\';this.style.borderColor=\'rgba(88,166,255,.25)\';" ' +
+              'onmouseout="this.style.background=\'rgba(255,255,255,.03)\';this.style.borderColor=\'rgba(255,255,255,.07)\';">' +
+
+              '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+                '<span style="font-size:11px;font-weight:900;color:#e6edf3;letter-spacing:-.01em;">#' + _dsEsc2(String(caseNum)) + '</span>' +
+                '<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;background:' + statusColor + '18;color:' + statusColor + ';border:1px solid ' + statusColor + '30;">' + _dsEsc2(status || 'Open') + '</span>' +
+              '</div>' +
+
+              (caseType || contact || age ? '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">' +
+                (caseType ? '<span style="font-size:9px;color:var(--ss-muted);background:rgba(255,255,255,.05);padding:1px 6px;border-radius:3px;">' + _dsEsc2(caseType) + '</span>' : '') +
+                (contact  ? '<span style="font-size:9px;color:var(--ss-muted);"><i class="fas fa-user" style="margin-right:3px;opacity:.5;"></i>' + _dsEsc2(contact) + '</span>' : '') +
+                (age      ? '<span style="font-size:9px;color:var(--ss-muted);margin-left:auto;opacity:.7;">' + _dsEsc2(age) + '</span>' : '') +
+              '</div>' : '') +
+
+              (descTrunc ? '<div style="font-size:10px;color:var(--ss-muted);line-height:1.5;opacity:.85;">' + _dsEsc2(descTrunc) + '</div>' : '') +
+
+              '</div>';
+          });
+        }
+
+        // Pagination controls
+        var paginationHtml = '';
+        if (records.length === TOP || skip > 0) {
+          paginationHtml = '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--ss-border);">' +
+            (skip > 0 ? '<button onclick="window._qbsDeepSearch(\'' + _dsEsc2(term) + '\',' + Math.max(0, skip - TOP) + ')" style="font-size:10px;font-weight:700;color:#58a6ff;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2);border-radius:5px;padding:5px 10px;cursor:pointer;font-family:var(--ss-font);">← Prev</button>' : '<span></span>') +
+            (records.length === TOP ? '<button onclick="window._qbsDeepSearch(\'' + _dsEsc2(term) + '\',' + (skip + TOP) + ')" style="font-size:10px;font-weight:700;color:#58a6ff;background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2);border-radius:5px;padding:5px 10px;cursor:pointer;font-family:var(--ss-font);">Next →</button>' : '<span style="font-size:9px;color:var(--ss-muted);">End of results</span>') +
+          '</div>';
+        }
+
+        var countText = total !== null
+          ? records.length + ' of ' + total.toLocaleString() + ' total'
+          : records.length + ' results';
+        if (skip > 0) countText = 'Showing ' + (skip + 1) + '–' + (skip + records.length);
+
+        if (statusEl) statusEl.textContent = countText;
+        if (resultsEl) resultsEl.innerHTML = html + paginationHtml;
+      })
+      .catch(function(err) {
+        if (btn) btn.disabled = false;
+        if (statusEl) statusEl.textContent = 'Search error.';
+        if (resultsEl) resultsEl.innerHTML =
+          '<div style="font-size:11px;color:#f85149;padding:8px 0;">' +
+          '<i class="fas fa-times-circle" style="margin-right:6px;"></i>' + String(err && err.message || 'Network error') + '</div>';
+      });
+  };
+
+  // Helper: open a deep search result as a case detail
+  window._qbsOpenDeepResult = function(caseNum) {
+    // Try to find the case in the currently loaded records first
+    var root = document.getElementById('qbs-root');
+    if (root && typeof root._searchByCaseNum === 'function') {
+      root._searchByCaseNum(String(caseNum));
+      return;
+    }
+    // Fallback: put the case number into the main search box and trigger search
+    var mainSearch = root && root.querySelector('input[type="text"]');
+    if (mainSearch) {
+      mainSearch.value = '#' + caseNum;
+      mainSearch.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  };
+
+  // Escape helper for deep search HTML interpolation
+  function _dsEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // Wire Enter key on the deep search input
+  (function() {
+    var inp = document.getElementById('qbs-search-input');
+    if (inp) {
+      inp.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') window._qbsDeepSearch(inp.value, 0);
+      });
+    }
+  })();
+
+
   // Calls /api/studio/qb_export which paginates through all QB records
   // server-side and returns a full CSV or XLS file.
   // No record limit — fetches all 22,000+ cases.
@@ -4965,48 +5201,73 @@
 /* ═══════════════════════════════════════════════════════════════════
    APPEARANCE SETTINGS — General Settings > Appearance
    ═══════════════════════════════════════════════════════════════════
-   Storage: localStorage key 'ss_appearance_settings'
+   Storage (local):  localStorage key 'ss_appearance_settings'
+   Storage (global): /api/settings/global_theme  (Super Admin → all users)
    Shape: { brightness, contrast, scale, sidebarOpacity, theme }
-   - brightness: 40–130 (default 100)
-   - contrast:   60–140 (default 100)
-   - scale:      80–120 (default 100) — applied as font-size on :root
-   - sidebarOpacity: 30–100 (default 100)
-   - theme: string — preset theme name (default 'default')
-
-   NOTE FOR AI: To add a new display control:
-   1. Add a <input type="range"> in settings-section-studio-appearance
-   2. Call window._appApplyDisplay() on oninput
-   3. Read the value in _appApplyDisplay() and apply it to the DOM
-   4. Save/restore in _appSaveDisplay() / _appLoadDisplay()
-   DO NOT modify app.js — all appearance is scoped to support_studio.html only.
+   Global apply: on page load, fetch /api/settings/global_theme.
+     If user has a local override it wins; otherwise global default wins.
 ═══════════════════════════════════════════════════════════════════ */
 (function() {
   'use strict';
 
-  var LS_KEY = 'ss_appearance_settings';
+  var LS_KEY      = 'ss_appearance_settings';
+  var LS_OVERRIDE = 'ss_appearance_user_override'; // true = user chose to override global
 
-  // ── Preset themes ─────────────────────────────────────────────────
+  // ── Premium theme palette (no purple) ────────────────────────────
   var THEMES = [
-    { id:'default',  name:'Void',       bg:'#010409', surface:'#0d1117', accent:'#58a6ff' },
-    { id:'midnight', name:'Midnight',   bg:'#050a0f', surface:'#0a1628', accent:'#60a5fa' },
-    { id:'slate',    name:'Slate',      bg:'#0a0c10', surface:'#13161d', accent:'#818cf8' },
-    { id:'onyx',     name:'Onyx',       bg:'#080808', surface:'#111111', accent:'#a78bfa' },
-    { id:'deep',     name:'Deep Ocean', bg:'#00050f', surface:'#071020', accent:'#22d3ee' },
-    { id:'forest',   name:'Forest',     bg:'#030a05', surface:'#0b1a0e', accent:'#4ade80' },
+    { id:'default',    name:'Obsidian',    bg:'#010409', surface:'#0d1117', accent:'#58a6ff',  tag:'Default'  },
+    { id:'midnight',   name:'Midnight',    bg:'#040c18', surface:'#071428', accent:'#60a5fa',  tag:''         },
+    { id:'carbon',     name:'Carbon',      bg:'#080808', surface:'#111111', accent:'#e6edf3',  tag:''         },
+    { id:'onyx',       name:'Onyx Steel',  bg:'#09090b', surface:'#18181b', accent:'#94a3b8',  tag:''         },
+    { id:'deep',       name:'Deep Ocean',  bg:'#00050f', surface:'#071020', accent:'#22d3ee',  tag:'Cool'     },
+    { id:'arctic',     name:'Arctic',      bg:'#020c12', surface:'#0c1f2b', accent:'#38bdf8',  tag:''         },
+    { id:'forest',     name:'Forest',      bg:'#030a05', surface:'#0b1a0e', accent:'#4ade80',  tag:''         },
+    { id:'ember',      name:'Ember',       bg:'#0c0700', surface:'#1a1000', accent:'#f97316',  tag:'Warm'     },
+    { id:'crimson',    name:'Crimson',     bg:'#0c0005', surface:'#1a000c', accent:'#fb7185',  tag:''         },
+    { id:'aurora',     name:'Aurora',      bg:'#010509', surface:'#0a1520', accent:'#2dd4bf',  tag:'Premium'  },
   ];
 
+  // ── Auth token helper ─────────────────────────────────────────────
+  function _getToken() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) { var p = JSON.parse(raw); if (p && p.access_token) return p.access_token; }
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken() || '';
+    } catch(_) {}
+    return '';
+  }
+
+  // ── Super Admin check ─────────────────────────────────────────────
+  function _isSuperAdmin() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) {
+        var s = JSON.parse(raw);
+        var role = (s && (s.role || (s.user && s.user.role) || (s.session && s.session.user && s.session.user.role))) || '';
+        if (String(role).trim().toUpperCase().replace(/\s+/g,'_') === 'SUPER_ADMIN') return true;
+      }
+      if (window.Auth && typeof window.Auth.getUser === 'function') {
+        var u = window.Auth.getUser();
+        if (u && String(u.role||'').trim().toUpperCase().replace(/\s+/g,'_') === 'SUPER_ADMIN') return true;
+      }
+    } catch(_) {}
+    return false;
+  }
+
+  // ── Local storage helpers ─────────────────────────────────────────
   function loadStored() {
     try { var r = localStorage.getItem(LS_KEY); if (r) return JSON.parse(r); } catch(_) {}
     return { brightness: 100, contrast: 100, scale: 100, sidebarOpacity: 100, theme: 'default' };
   }
   function saveStored(obj) { try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch(_) {} }
 
-  // ── Tab switcher (Display / Theme) ───────────────────────────────
+  // ── Tab switcher ──────────────────────────────────────────────────
   window._appSwitchTab = function(tabId) {
+    var ACCENT = '#0ea5e9';
     document.querySelectorAll('.app-tab').forEach(function(b) {
       var active = b.dataset.appTab === tabId;
-      b.style.borderBottomColor = active ? '#a78bfa' : 'transparent';
-      b.style.color = active ? '#a78bfa' : 'var(--ss-muted)';
+      b.style.borderBottomColor = active ? ACCENT : 'transparent';
+      b.style.color = active ? ACCENT : 'var(--ss-muted)';
     });
     ['display','theme'].forEach(function(id) {
       var el = document.getElementById('app-panel-' + id);
@@ -5015,36 +5276,28 @@
     if (tabId === 'theme') _appRenderThemes();
   };
 
-  // ── Apply display settings live ──────────────────────────────────
+  // ── Apply display settings live to DOM ───────────────────────────
   window._appApplyDisplay = function() {
-    var brightness    = Number(document.getElementById('app-brightness')?.value    || 100);
-    var contrast      = Number(document.getElementById('app-contrast')?.value      || 100);
-    var scale         = Number(document.getElementById('app-scale')?.value         || 100);
-    var sidebarOp     = Number(document.getElementById('app-sidebar-opacity')?.value || 100);
+    var brightness = Number(document.getElementById('app-brightness')?.value    || 100);
+    var contrast   = Number(document.getElementById('app-contrast')?.value      || 100);
+    var scale      = Number(document.getElementById('app-scale')?.value         || 100);
+    var sidebarOp  = Number(document.getElementById('app-sidebar-opacity')?.value || 100);
 
-    // Update label values
-    var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v + '%'; };
-    set('app-brightness-val',    brightness);
-    set('app-contrast-val',      contrast);
-    set('app-scale-val',         scale);
+    function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v + '%'; }
+    set('app-brightness-val',      brightness);
+    set('app-contrast-val',        contrast);
+    set('app-scale-val',           scale);
     set('app-sidebar-opacity-val', sidebarOp);
 
-    // Apply CSS filter to entire body
     document.body.style.filter = 'brightness(' + (brightness/100) + ') contrast(' + (contrast/100) + ')';
-
-    // Apply font-size scale to root element
     document.documentElement.style.fontSize = (scale / 100 * 16) + 'px';
-
-    // Apply sidebar opacity
-    var sidebar = document.getElementById('ss-left-sidebar');
-    if (sidebar) sidebar.style.opacity = (sidebarOp / 100).toString();
-
-    // Apply right sidebar opacity too
+    var sidebar  = document.getElementById('ss-left-sidebar');
+    if (sidebar)  sidebar.style.opacity = (sidebarOp / 100).toString();
     var rsidebar = document.querySelector('.ss-right-panel');
     if (rsidebar) rsidebar.style.opacity = (sidebarOp / 100).toString();
   };
 
-  // ── Save display settings ────────────────────────────────────────
+  // ── Save: local + (Super Admin) → global API ─────────────────────
   window._appSaveDisplay = function() {
     var stored = loadStored();
     stored.brightness    = Number(document.getElementById('app-brightness')?.value    || 100);
@@ -5053,64 +5306,140 @@
     stored.sidebarOpacity = Number(document.getElementById('app-sidebar-opacity')?.value || 100);
     saveStored(stored);
     _appApplyDisplay();
-    var msg = document.getElementById('app-display-msg') || document.getElementById('app-theme-msg');
-    if (msg) {
-      msg.textContent = '✓ Appearance saved!';
-      msg.style.cssText = 'font-size:11px;opacity:1;color:#3fb950;font-weight:600;transition:opacity .3s;';
-      clearTimeout(msg._t); msg._t = setTimeout(function() { msg.style.opacity = '0'; }, 3000);
+
+    var msgId = document.querySelector('#app-panel-display') && document.querySelector('#app-panel-display').style.display !== 'none'
+      ? 'app-display-msg' : 'app-theme-msg';
+    var msg = document.getElementById(msgId) || document.getElementById('app-display-msg');
+
+    // Super Admin: also push to global API so all users get it
+    if (_isSuperAdmin()) {
+      var tok = _getToken();
+      var payload = {
+        defaultTheme:   stored.theme    || 'default',
+        brightness:     stored.brightness,
+        contrast:       stored.contrast,
+        scale:          stored.scale,
+        sidebarOpacity: stored.sidebarOpacity,
+      };
+      fetch('/api/settings/global_theme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+        body: JSON.stringify(payload),
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (msg) {
+          msg.textContent = d.ok ? '✓ Saved & applied globally to all users!' : '⚠ Saved locally; global push failed.';
+          msg.style.cssText = 'font-size:11px;opacity:1;color:' + (d.ok ? '#3fb950' : '#d29922') + ';font-weight:600;transition:opacity .3s;';
+          clearTimeout(msg._t); msg._t = setTimeout(function() { msg.style.opacity = '0'; }, 4000);
+        }
+      })
+      .catch(function() {
+        if (msg) {
+          msg.textContent = '⚠ Saved locally; network error.';
+          msg.style.cssText = 'font-size:11px;opacity:1;color:#d29922;font-weight:600;';
+        }
+      });
+    } else {
+      if (msg) {
+        msg.textContent = '✓ Appearance saved!';
+        msg.style.cssText = 'font-size:11px;opacity:1;color:#3fb950;font-weight:600;transition:opacity .3s;';
+        clearTimeout(msg._t); msg._t = setTimeout(function() { msg.style.opacity = '0'; }, 3000);
+      }
     }
   };
 
-  // ── Reset to defaults ────────────────────────────────────────────
+  // ── Reset to defaults ─────────────────────────────────────────────
   window._appResetDisplay = function() {
     var defaults = { brightness: 100, contrast: 100, scale: 100, sidebarOpacity: 100 };
+    var map = { brightness:'app-brightness', contrast:'app-contrast', scale:'app-scale', sidebarOpacity:'app-sidebar-opacity' };
     Object.keys(defaults).forEach(function(k) {
-      var map = { brightness:'app-brightness', contrast:'app-contrast', scale:'app-scale', sidebarOpacity:'app-sidebar-opacity' };
       var el = document.getElementById(map[k]);
       if (el) el.value = defaults[k];
     });
     _appApplyDisplay();
     var stored = loadStored();
-    stored.brightness = 100; stored.contrast = 100; stored.scale = 100; stored.sidebarOpacity = 100;
+    Object.assign(stored, defaults);
     saveStored(stored);
     var msg = document.getElementById('app-display-msg');
     if (msg) {
       msg.textContent = '↺ Reset to defaults';
-      msg.style.cssText = 'font-size:11px;opacity:1;color:#58a6ff;font-weight:600;';
+      msg.style.cssText = 'font-size:11px;opacity:1;color:#0ea5e9;font-weight:600;';
       clearTimeout(msg._t); msg._t = setTimeout(function() { msg.style.opacity = '0'; }, 2500);
     }
   };
 
-  // ── Load settings into sliders ───────────────────────────────────
-  window._appLoadDisplay = function() {
-    var s = loadStored();
+  // ── Load sliders from stored values ──────────────────────────────
+  function _applyToSliders(s) {
     function setSlider(id, val) { var e = document.getElementById(id); if (e) e.value = val; }
-    setSlider('app-brightness',    s.brightness    || 100);
-    setSlider('app-contrast',      s.contrast      || 100);
-    setSlider('app-scale',         s.scale         || 100);
+    setSlider('app-brightness',      s.brightness     || 100);
+    setSlider('app-contrast',        s.contrast       || 100);
+    setSlider('app-scale',           s.scale          || 100);
     setSlider('app-sidebar-opacity', s.sidebarOpacity || 100);
     _appApplyDisplay();
     _appRenderThemes(s.theme);
+  }
+
+  window._appLoadDisplay = function() {
+    var stored = loadStored();
+
+    // Show/hide Super Admin global note
+    var isSA = _isSuperAdmin();
+    var noteD = document.getElementById('app-global-note');
+    var noteT = document.getElementById('app-global-note-theme');
+    var badge = document.getElementById('app-global-badge');
+    if (noteD) noteD.style.display = isSA ? 'block' : 'none';
+    if (noteT) noteT.style.display = isSA ? 'block' : 'none';
+
+    // Fetch global settings from API (all users get this on load)
+    var tok = _getToken();
+    var headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+    fetch('/api/settings/global_theme', { headers: headers })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok) { _applyToSliders(stored); return; }
+        // Global settings exist — merge with local stored
+        // Local stored takes priority (user can override), but if not set, use global
+        var merged = {
+          brightness:    stored.brightness    !== 100 ? stored.brightness    : (d.brightness    ?? 100),
+          contrast:      stored.contrast      !== 100 ? stored.contrast      : (d.contrast      ?? 100),
+          scale:         stored.scale         !== 100 ? stored.scale         : (d.scale         ?? 100),
+          sidebarOpacity: stored.sidebarOpacity !== 100 ? stored.sidebarOpacity : (d.sidebarOpacity ?? 100),
+          theme:         stored.theme !== 'default' ? stored.theme : (d.defaultTheme || 'default'),
+        };
+        _applyToSliders(merged);
+        // Show global badge if Super Admin has set non-default values
+        var hasGlobal = d.brightness !== 100 || d.contrast !== 100 || d.scale !== 100 ||
+                        d.sidebarOpacity !== 100 || (d.defaultTheme && d.defaultTheme !== 'default');
+        if (badge) badge.style.display = hasGlobal ? '' : 'none';
+      })
+      .catch(function() { _applyToSliders(stored); });
   };
 
-  // ── Theme renderer ───────────────────────────────────────────────
+  // ── Theme renderer ────────────────────────────────────────────────
   function _appRenderThemes(activeTheme) {
     var grid = document.getElementById('app-theme-grid');
     if (!grid) return;
-    var stored = loadStored();
+    var stored  = loadStored();
     var current = activeTheme || stored.theme || 'default';
+    var ACCENT  = '#0ea5e9';
+
     grid.innerHTML = THEMES.map(function(t) {
       var isActive = t.id === current;
       return '<div onclick="window._appSelectTheme(\'' + t.id + '\')" ' +
-        'style="padding:12px;background:' + (isActive ? 'rgba(167,139,250,.12)' : 'rgba(255,255,255,.03)') + ';border:2px solid ' +
-        (isActive ? '#a78bfa' : 'rgba(255,255,255,.08)') + ';border-radius:10px;cursor:pointer;transition:all .15s;">' +
-        '<div style="display:flex;gap:4px;margin-bottom:8px;">' +
-          '<div style="width:20px;height:20px;border-radius:4px;background:' + t.bg + ';border:1px solid rgba(255,255,255,.1);"></div>' +
-          '<div style="width:20px;height:20px;border-radius:4px;background:' + t.surface + ';border:1px solid rgba(255,255,255,.1);"></div>' +
-          '<div style="width:20px;height:20px;border-radius:4px;background:' + t.accent + ';"></div>' +
+        'style="padding:14px;background:' + (isActive ? 'rgba(14,165,233,.1)' : 'rgba(255,255,255,.03)') + ';border:2px solid ' +
+        (isActive ? ACCENT : 'rgba(255,255,255,.07)') + ';border-radius:10px;cursor:pointer;transition:all .15s;position:relative;" ' +
+        'onmouseover="if(\'' + t.id + '\'!==\'' + current + '\'){this.style.background=\'rgba(255,255,255,.06)\';this.style.borderColor=\'rgba(255,255,255,.18)\';}" ' +
+        'onmouseout="if(\'' + t.id + '\'!==\'' + current + '\'){this.style.background=\'rgba(255,255,255,.03)\';this.style.borderColor=\'rgba(255,255,255,.07)\';}"> ' +
+        // Color swatches
+        '<div style="display:flex;gap:5px;margin-bottom:10px;">' +
+          '<div style="width:22px;height:22px;border-radius:5px;background:' + t.bg + ';border:1px solid rgba(255,255,255,.12);"></div>' +
+          '<div style="width:22px;height:22px;border-radius:5px;background:' + t.surface + ';border:1px solid rgba(255,255,255,.08);"></div>' +
+          '<div style="width:22px;height:22px;border-radius:5px;background:' + t.accent + ';"></div>' +
         '</div>' +
-        '<div style="font-size:11px;font-weight:700;color:' + (isActive ? '#a78bfa' : '#e6edf3') + ';">' + t.name + '</div>' +
-        (isActive ? '<div style="font-size:9px;color:#a78bfa;margin-top:2px;font-weight:800;">ACTIVE</div>' : '') +
+        '<div style="font-size:11px;font-weight:700;color:' + (isActive ? ACCENT : '#c9d1d9') + ';margin-bottom:2px;">' + t.name + '</div>' +
+        (t.tag ? '<div style="font-size:8px;font-weight:800;letter-spacing:.08em;color:' + (isActive ? ACCENT : 'var(--ss-muted)') + ';opacity:.7;">' + t.tag + '</div>' : '') +
+        (isActive ? '<div style="position:absolute;top:8px;right:8px;font-size:8px;font-weight:900;color:' + ACCENT + ';letter-spacing:.06em;">✓ ACTIVE</div>' : '') +
         '</div>';
     }).join('');
   }
@@ -5118,31 +5447,32 @@
   window._appSelectTheme = function(themeId) {
     var t = THEMES.find(function(x) { return x.id === themeId; });
     if (!t) return;
-    document.documentElement.style.setProperty('--ss-bg',       t.bg);
-    document.documentElement.style.setProperty('--ss-surface',  t.surface);
-    document.documentElement.style.setProperty('--ss-accent',   t.accent);
+    document.documentElement.style.setProperty('--ss-bg',      t.bg);
+    document.documentElement.style.setProperty('--ss-surface', t.surface);
+    document.documentElement.style.setProperty('--ss-accent',  t.accent);
     var stored = loadStored();
     stored.theme = themeId;
     saveStored(stored);
     _appRenderThemes(themeId);
     var msg = document.getElementById('app-theme-msg');
     if (msg) {
-      msg.textContent = '✓ Theme applied!';
+      msg.textContent = '✓ Theme applied — click Save to push globally.';
       msg.style.cssText = 'font-size:11px;opacity:1;color:#3fb950;font-weight:600;';
-      clearTimeout(msg._t); msg._t = setTimeout(function() { msg.style.opacity = '0'; }, 2500);
+      clearTimeout(msg._t); msg._t = setTimeout(function() { msg.style.opacity = '0'; }, 3500);
     }
   };
 
-  // ── Load on settings nav click ───────────────────────────────────
+  // ── Wire nav click ────────────────────────────────────────────────
   document.querySelectorAll('.ss-settings-nav-btn').forEach(function(btn) {
     if (btn.dataset.settingsSection === 'studio-appearance') {
       btn.addEventListener('click', window._appLoadDisplay);
     }
   });
 
-  // ── Apply saved settings immediately on page load ─────────────────
+  // ── Apply on page load (for all users) — pull global, apply ───────
   (function applyOnLoad() {
     var s = loadStored();
+    // Apply local immediately (no flash)
     if (s.brightness !== 100 || s.contrast !== 100) {
       document.body.style.filter = 'brightness(' + ((s.brightness||100)/100) + ') contrast(' + ((s.contrast||100)/100) + ')';
     }
@@ -5161,6 +5491,45 @@
         document.documentElement.style.setProperty('--ss-accent',  t.accent);
       }
     }
+
+    // Then fetch global settings and apply if user has no local overrides
+    try {
+      var tok = '';
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) { var p = JSON.parse(raw); if (p && p.access_token) tok = p.access_token; }
+      var headers = tok ? { 'Authorization': 'Bearer ' + tok } : {};
+      fetch('/api/settings/global_theme', { headers: headers })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (!d.ok) return;
+          // Only apply global values where user has NOT set a local override (i.e. still at default 100 / 'default')
+          var changed = false;
+          var filter = '';
+          var bright = (s.brightness === 100 && d.brightness !== undefined) ? d.brightness : s.brightness || 100;
+          var contr  = (s.contrast   === 100 && d.contrast   !== undefined) ? d.contrast   : s.contrast   || 100;
+          var sc     = (s.scale      === 100 && d.scale      !== undefined) ? d.scale      : s.scale      || 100;
+          var sop    = (s.sidebarOpacity === 100 && d.sidebarOpacity !== undefined) ? d.sidebarOpacity : s.sidebarOpacity || 100;
+          var theme  = ((!s.theme || s.theme === 'default') && d.defaultTheme) ? d.defaultTheme : s.theme || 'default';
+
+          if (bright !== 100 || contr !== 100) {
+            document.body.style.filter = 'brightness(' + (bright/100) + ') contrast(' + (contr/100) + ')';
+          }
+          if (sc !== 100) document.documentElement.style.fontSize = (sc/100 * 16) + 'px';
+          if (sop !== 100) {
+            var sb2 = document.getElementById('ss-left-sidebar');
+            if (sb2) sb2.style.opacity = (sop/100).toString();
+          }
+          if (theme && theme !== 'default') {
+            var t2 = THEMES.find(function(x) { return x.id === theme; });
+            if (t2) {
+              document.documentElement.style.setProperty('--ss-bg',      t2.bg);
+              document.documentElement.style.setProperty('--ss-surface', t2.surface);
+              document.documentElement.style.setProperty('--ss-accent',  t2.accent);
+            }
+          }
+        })
+        .catch(function() {});
+    } catch(_) {}
   })();
 
 })();
