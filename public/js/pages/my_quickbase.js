@@ -660,10 +660,13 @@
     } catch(_) { return ''; }
   }
 
-  // Wraps [MON-DD-YY ...] that match todayStr with <mark class="qb-date-today">
-  // Returns highlighted HTML string, or null if today not found in text
-  function _highlightTodayInNotes(rawText, todayStr) {
+  // Wraps [MON-DD-YY ...] that match todayStr with <mark class="qb-date-today">.
+  // If myQbName is provided and the bracket name matches the current user,
+  // uses <mark class="qb-date-today qb-date-mine"> (Premium Gray Glass) instead.
+  // Returns highlighted HTML string, or null if today not found in text.
+  function _highlightTodayInNotes(rawText, todayStr, myQbName) {
     if (!todayStr || !rawText) return null;
+    const myNameLower = String(myQbName || '').trim().toLowerCase();
     const escapedSafe = rawText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const re = /\[([A-Z]{3}-\d{1,2}-\d{2}\s[^\]]*)\]/g;
     let hasHighlight = false;
@@ -671,6 +674,11 @@
       const tok = inner.trim().split(/\s/)[0];
       if (tok === todayStr) {
         hasHighlight = true;
+        // Check if this bracket belongs to the current user
+        const isMine = myNameLower && inner.toLowerCase().includes(myNameLower);
+        if (isMine) {
+          return '<mark class="qb-date-today qb-date-mine">[' + inner + ']<span class="qb-date-mine-badge">me</span></mark>';
+        }
         return '<mark class="qb-date-today">[' + inner + ']</mark>';
       }
       return '[' + inner + ']';
@@ -861,7 +869,8 @@
         if (isCaseNotes && rawStr.length > 0) {
           // Convert EST timestamps → PHT before highlighting/rendering
           const phtStr  = _convertNotesESTtoPHT(rawStr);
-          const highlighted = _highlightTodayInNotes(phtStr, _CN_TODAY);
+          // Pass myQbName so own entries get gray-glass highlight
+          const highlighted = _highlightTodayInNotes(phtStr, _CN_TODAY, opts.myQbName || '');
           if (highlighted) {
             return `<td class="qb-col-clamped qb-col-hasnew qb-cn-col"${tdStyle}><div class="qb-cell-clamp qb-cell-hasnew" data-full="${esc(phtStr)}"><span class="qb-cell-text qb-notes-html">${highlighted}</span></div></td>`;
           }
@@ -1012,8 +1021,9 @@
     // For Case Notes cells: highlight today's Manila dates in the tooltip too
     const todayStr = (typeof _getManilaToday === 'function') ? _getManilaToday() : '';
     if (todayStr) {
+      // Also pass myQbName for consistent gray-glass on own entries in tooltip
       const highlighted = (typeof _highlightTodayInNotes === 'function')
-        ? _highlightTodayInNotes(full, todayStr)
+        ? _highlightTodayInNotes(full, todayStr, opts && opts.myQbName || window._qbMyNameCache || '')
         : null;
       if (highlighted) {
         tip.innerHTML = highlighted.replace(/\n/g,'<br>').replace(/\r/g,'');
@@ -1365,6 +1375,8 @@
     // Without this guard the monitoring API returns all records for SUPER_ADMIN
     // (data leak). The correct fix is on the frontend: block the call entirely.
     const _userQbName = String(profile.qb_name || '').trim();
+    // Cache globally so tooltip handler can access it without re-reading profile
+    try { window._qbMyNameCache = _userQbName; } catch(_) {}
     if (!_userQbName) {
       root.classList.add('page-qb');
       root.style.padding  = '0';
@@ -3518,7 +3530,9 @@
       const _vcSettings = state.virtualColumn && state.virtualColumn.enabled ? state.virtualColumn : null;
       const _vcValues = _vcSettings ? _loadVcValues(_vcActiveTabId) : {};
 
+      // Pass current user's QB name so own case note entries get gray-glass highlight
       renderRecords(root, state.currentPayload, {
+        myQbName: _userQbName,
         userInitiatedSearch: !!getActiveUserSearched() && !!normalizedSearch.length,
         page: state.currentPage,
         pageSize: state.pageSize,

@@ -3605,7 +3605,8 @@ function updateClocksPreviewTimes(){
       } catch(_) { return ''; }
     }
 
-    // ── Colour index for case icon ────────────────────────────────────────
+    // ── Colour index for avatar — keyed on reporter NAME (not case ID) ────
+    // Same person always gets the same colour across all notifications.
     function _colIdx(str) {
       let h = 0;
       for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffffffff;
@@ -3758,7 +3759,7 @@ function updateClocksPreviewTimes(){
           dateToken: today,
           dateObj: newest.dateObj,
           noteLine,
-          colIdx: _colIdx(caseId),
+          colIdx: _colIdx(newest.who), // keyed on name: same person = same color
         });
       });
 
@@ -3822,6 +3823,7 @@ function updateClocksPreviewTimes(){
       let html = '';
       toShow.forEach((item, idx) => {
         const isUnread = !_readSet.has(item.caseId);
+        // Color is keyed on reporter name — same person = same color always
         const c = 'mnp-c' + item.colIdx;
         const avatarInitials = _initials(item.who);
         html += `

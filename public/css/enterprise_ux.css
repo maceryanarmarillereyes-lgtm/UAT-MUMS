@@ -6935,6 +6935,32 @@ mark.qb-date-today {
   white-space: nowrap;
 }
 
+/* Premium Gray Glass — current user's own case note entries */
+/* Distinct from cyan (others) so user knows it's their own update */
+mark.qb-date-today.qb-date-mine {
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #94a3b8;
+  box-shadow: none;
+}
+
+/* "me" badge appended inside the mine mark */
+mark.qb-date-mine .qb-date-mine-badge {
+  display: inline-block;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  background: rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #94a3b8;
+  border-radius: 3px;
+  padding: 0px 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+  line-height: 1.6;
+}
+
 /* Pulsing left border on rows with today's Case Notes date */
 .qb-data-table td.qb-col-hasnew {
   position: relative;
@@ -6977,6 +7003,12 @@ mark.qb-date-today {
   padding: 1px 5px;
   border-radius: 4px;
   box-shadow: 0 0 6px rgba(34, 211, 238, 0.2);
+}
+.qb-cell-tooltip mark.qb-date-today.qb-date-mine {
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #94a3b8;
+  box-shadow: none;
 }
 /* ── END CASE NOTES HIGHLIGHT ────────────────────────────────────────────── */
 /* Row expand on hover removed v3.9.28 — hover uses tooltip dialog instead */
