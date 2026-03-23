@@ -2208,40 +2208,57 @@
 
       <!-- Connect+ left panel -->
 
-      <!-- ═══════ SUPPORT RECORDS — Left Sidebar ═══════ -->
+      <!-- ═══════ SUPPORT RECORDS — Left Sidebar (Redesigned) ═══════ -->
       <div id="left-panel-support_records" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
-        <div style="padding:14px 12px 10px;border-bottom:1px solid rgba(255,255,255,.06);">
-          <div style="font-size:10px;font-weight:700;color:var(--ss-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;">
-            <i class="fas fa-filter" style="margin-right:5px;opacity:.6;"></i>Filter by Category
-          </div>
-          <div id="sr-cat-filter" style="display:flex;flex-direction:column;gap:2px;"></div>
-        </div>
-        <div style="padding:12px;border-bottom:1px solid rgba(255,255,255,.06);">
-          <div style="font-size:10px;font-weight:700;color:var(--ss-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">
-            <i class="fas fa-chart-bar" style="margin-right:5px;opacity:.6;"></i>Stats
-          </div>
-          <div id="sr-stats" style="display:flex;flex-direction:column;gap:5px;"></div>
-        </div>
-        <div style="padding:12px;overflow-y:auto;flex:1;">
-          <div style="font-size:10px;font-weight:700;color:var(--ss-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;">
-            <i class="fas fa-lightbulb" style="margin-right:5px;opacity:.6;"></i>Quick Search Tips
-          </div>
-          <div style="font-size:11px;color:var(--ss-muted);line-height:1.8;">
-            <div>🔍 Type any root word to search</div>
-            <div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">
-              <code onclick="window._srQuickSearch('E2 firmware')" style="background:rgba(255,255,255,.05);padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;display:block;" onmouseover="this.style.background='rgba(168,85,247,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">E2 firmware</code>
-              <code onclick="window._srQuickSearch('connect+ offline')" style="background:rgba(255,255,255,.05);padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;display:block;" onmouseover="this.style.background='rgba(168,85,247,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">connect+ offline</code>
-              <code onclick="window._srQuickSearch('daily password')" style="background:rgba(255,255,255,.05);padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;display:block;" onmouseover="this.style.background='rgba(168,85,247,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">daily password</code>
-              <code onclick="window._srQuickSearch('solenoid reverse')" style="background:rgba(255,255,255,.05);padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;display:block;" onmouseover="this.style.background='rgba(168,85,247,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">solenoid reverse</code>
-              <code onclick="window._srQuickSearch('floor plan reset')" style="background:rgba(255,255,255,.05);padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;display:block;" onmouseover="this.style.background='rgba(168,85,247,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">floor plan reset</code>
-              <code onclick="window._srQuickSearch('pcr setpoint')" style="background:rgba(255,255,255,.05);padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;display:block;" onmouseover="this.style.background='rgba(168,85,247,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">pcr setpoint</code>
-              <code onclick="window._srQuickSearch('haccp temperature')" style="background:rgba(255,255,255,.05);padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;display:block;" onmouseover="this.style.background='rgba(168,85,247,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">haccp temperature</code>
-              <code onclick="window._srQuickSearch('vpn tunnel inactive')" style="background:rgba(255,255,255,.05);padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;display:block;" onmouseover="this.style.background='rgba(168,85,247,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">vpn tunnel inactive</code>
+
+        <!-- Header / identity -->
+        <div style="padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;">
+            <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#7c3aed,#a855f7);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="fas fa-book-open" style="color:#fff;font-size:11px;"></i>
+            </div>
+            <div>
+              <div style="font-size:12px;font-weight:800;color:#fff;line-height:1;">Support Records</div>
+              <div style="font-size:9px;color:var(--ss-muted);margin-top:2px;font-weight:500;">Knowledge Base</div>
             </div>
           </div>
+          <!-- KB Stats mini bar -->
+          <div id="sr-stats-mini" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;"></div>
+        </div>
+
+        <!-- Search box in sidebar -->
+        <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
+          <div style="position:relative;">
+            <i class="fas fa-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--ss-muted);font-size:11px;pointer-events:none;"></i>
+            <input id="sr-search-input" type="text"
+              placeholder="Search keyword…"
+              style="width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 28px 7px 28px;color:#fff;font-size:11px;font-family:var(--ss-font);outline:none;transition:border-color .18s;"
+              onfocus="this.style.borderColor='rgba(168,85,247,.5)'"
+              onblur="this.style.borderColor='rgba(255,255,255,.1)'" />
+            <button id="sr-clear-btn" onclick="window._srClear()"
+              style="display:none;position:absolute;right:7px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ss-muted);cursor:pointer;font-size:10px;padding:0;line-height:1;">✕</button>
+          </div>
+        </div>
+
+        <!-- Active filter badge -->
+        <div id="sr-active-filter" style="display:none;margin:8px 12px 0;align-items:center;gap:6px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);border-radius:6px;padding:5px 9px;font-size:10px;color:#c084fc;">
+          <i class="fas fa-filter" style="font-size:9px;opacity:.7;"></i>
+          <span id="sr-filter-label" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          <button onclick="window._srClearFilter()" style="background:none;border:none;color:#c084fc;cursor:pointer;font-size:10px;padding:0;flex-shrink:0;opacity:.8;">✕</button>
+        </div>
+
+        <!-- Category filter list -->
+        <div style="padding:10px 12px 6px;flex-shrink:0;">
+          <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.25);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px;">CATEGORIES</div>
+        </div>
+        <div id="sr-cat-filter" style="flex:1;overflow-y:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:1px;"></div>
+
+        <!-- Quick searches at bottom -->
+        <div style="border-top:1px solid rgba(255,255,255,.06);padding:10px 12px;flex-shrink:0;">
+          <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.25);letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px;">QUICK SEARCH</div>
+          <div id="sr-quick-list" style="display:flex;flex-direction:column;gap:2px;"></div>
         </div>
       </div>
-
       <div id="left-panel-connectplus" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
         <div class="ss-panel" style="flex-shrink:0;">
           <div class="ss-panel-title"><i class="fas fa-plug" style="color:#22d3ee;"></i> Connect+</div>
@@ -2358,291 +2375,435 @@
 
 
       <!-- ═══════════════════════════════════════════════════════════════
-           SUPPORT RECORDS TAB — Full KB of 8,876 resolved case entries
-           Fetches /support_records_kb.json on first activation
+           SUPPORT RECORDS TAB — Full KB, redesigned for frontline tech support
       ═══════════════════════════════════════════════════════════════ -->
       <div id="canvas-support_records" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
 
         <!-- Toolbar -->
         <div class="ss-canvas-toolbar" style="flex-shrink:0;">
-          <div class="ss-canvas-toolbar-left">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <div style="width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#7c3aed,#a855f7);display:flex;align-items:center;justify-content:center;">
-                <i class="fas fa-book-open" style="color:#fff;font-size:12px;"></i>
-              </div>
-              <span style="font-weight:800;font-size:14px;color:#fff;">Support Records</span>
-            </div>
+          <div class="ss-canvas-toolbar-left" style="gap:10px;">
             <span id="sr-result-count" style="font-size:11px;color:var(--ss-muted);background:rgba(255,255,255,.06);padding:3px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.08);">Loading…</span>
+            <div id="sr-breadcrumb" style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ss-muted);"></div>
           </div>
-          <div class="ss-canvas-path"><i class="fas fa-book-open"></i> Support Studio / Support Records</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <!-- View toggle -->
+            <div style="display:flex;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:2px;">
+              <button id="sr-view-compact" onclick="window._srSetView('compact')" title="Compact view"
+                style="background:rgba(168,85,247,.2);border:none;color:#c084fc;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:10px;transition:all .15s;">
+                <i class="fas fa-list"></i>
+              </button>
+              <button id="sr-view-detailed" onclick="window._srSetView('detailed')" title="Detailed view"
+                style="background:transparent;border:none;color:var(--ss-muted);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:10px;transition:all .15s;">
+                <i class="fas fa-th-list"></i>
+              </button>
+            </div>
+            <div class="ss-canvas-path"><i class="fas fa-book-open"></i> Support Records</div>
+          </div>
         </div>
 
-        <!-- Search hero -->
-        <div id="sr-search-hero" style="flex-shrink:0;padding:14px 20px 10px;background:var(--ss-surface);border-bottom:1px solid var(--ss-border);">
-          <div style="display:flex;gap:10px;align-items:center;">
-            <div style="flex:1;position:relative;">
-              <i class="fas fa-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--ss-muted);font-size:13px;pointer-events:none;"></i>
-              <input id="sr-search-input" type="text"
-                placeholder="Search by keyword… e.g.  E2 firmware   solenoid reverse   daily password   pcr setpoint   floor plan"
-                style="width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 34px 10px 36px;color:#fff;font-size:13px;font-family:var(--ss-font);outline:none;transition:border-color .18s;"
-                onfocus="this.style.borderColor='rgba(168,85,247,.5)'"
-                onblur="this.style.borderColor='rgba(255,255,255,.12)'" />
-              <button id="sr-clear-btn" onclick="window._srClear()"
-                style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.1);border:none;color:var(--ss-muted);cursor:pointer;width:20px;height:20px;border-radius:50%;font-size:10px;">✕</button>
-            </div>
-            <div id="sr-active-filter" style="display:none;align-items:center;gap:6px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);border-radius:6px;padding:6px 10px;font-size:11px;color:#c084fc;white-space:nowrap;">
-              <span id="sr-filter-label"></span>
-              <button onclick="window._srClearFilter()" style="background:none;border:none;color:#c084fc;cursor:pointer;font-size:11px;padding:0;opacity:.7;">✕</button>
-            </div>
-          </div>
-          <!-- Pagination info -->
-          <div id="sr-pagination-bar" style="display:none;margin-top:8px;display:flex;align-items:center;gap:10px;">
-            <span id="sr-page-info" style="font-size:11px;color:var(--ss-muted);flex:1;"></span>
-            <button id="sr-prev-btn" onclick="window._srPrevPage()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-family:var(--ss-font);">◀ Prev</button>
-            <button id="sr-next-btn" onclick="window._srNextPage()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-family:var(--ss-font);">Next ▶</button>
-          </div>
-          <!-- Quick tags -->
-          <div id="sr-tag-bar" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;"></div>
+        <!-- Quick tag pills bar -->
+        <div id="sr-tag-bar" style="flex-shrink:0;padding:8px 16px;background:var(--ss-surface);border-bottom:1px solid var(--ss-border);display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
+          <span style="font-size:10px;color:rgba(255,255,255,.25);font-weight:600;white-space:nowrap;margin-right:2px;">COMMON:</span>
+        </div>
+
+        <!-- Pagination bar (top) -->
+        <div id="sr-pagination-bar" style="display:none;flex-shrink:0;padding:6px 16px;background:var(--ss-surface2);border-bottom:1px solid rgba(255,255,255,.04);align-items:center;gap:8px;">
+          <span id="sr-page-info" style="font-size:10px;color:var(--ss-muted);flex:1;"></span>
+          <button id="sr-prev-btn" onclick="window._srPrevPage()"
+            style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--ss-muted);padding:3px 10px;border-radius:5px;font-size:10px;cursor:pointer;font-family:var(--ss-font);">◀ Prev</button>
+          <button id="sr-next-btn" onclick="window._srNextPage()"
+            style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--ss-muted);padding:3px 10px;border-radius:5px;font-size:10px;cursor:pointer;font-family:var(--ss-font);">Next ▶</button>
         </div>
 
         <!-- Loading state -->
         <div id="sr-loading" style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;">
-          <div style="width:36px;height:36px;border:3px solid rgba(168,85,247,.2);border-top-color:#a855f7;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
-          <div style="font-size:13px;color:var(--ss-muted);">Loading Support Records…</div>
+          <div style="width:36px;height:36px;border:3px solid rgba(168,85,247,.15);border-top-color:#a855f7;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+          <div style="font-size:12px;color:var(--ss-muted);">Loading Support Records…</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.2);">Fetching 13,925 KB entries</div>
         </div>
 
-        <!-- Content area -->
-        <div id="sr-content" style="flex:1;overflow-y:auto;padding:16px 20px;min-height:0;display:none;">
-          <div id="sr-categories" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;"></div>
-          <div id="sr-results" style="display:none;flex-direction:column;gap:8px;"></div>
-          <div id="sr-empty" style="display:none;text-align:center;padding:60px 20px;">
-            <i class="fas fa-search" style="font-size:36px;color:rgba(255,255,255,.1);margin-bottom:12px;display:block;"></i>
-            <div style="font-size:14px;color:var(--ss-muted);font-weight:600;">No matching records found</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.3);margin-top:6px;">Try a shorter or different keyword</div>
+        <!-- Welcome / landing state (no search, no filter) -->
+        <div id="sr-welcome" style="flex:1;overflow-y:auto;padding:20px 20px;min-height:0;display:none;">
+          <div style="max-width:700px;margin:0 auto;">
+            <div style="text-align:center;padding:20px 0 28px;">
+              <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+                <i class="fas fa-book-open" style="color:#fff;font-size:20px;"></i>
+              </div>
+              <div style="font-size:18px;font-weight:800;color:#fff;margin-bottom:6px;">Support Records KB</div>
+              <div style="font-size:12px;color:var(--ss-muted);">Search or select a category from the left panel to find resolved case resolutions</div>
+            </div>
+            <!-- Stats grid -->
+            <div id="sr-welcome-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px;"></div>
+            <!-- Category overview cards -->
+            <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;">ALL CATEGORIES</div>
+            <div id="sr-welcome-cats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;"></div>
           </div>
         </div>
+
+        <!-- Results area -->
+        <div id="sr-content" style="flex:1;overflow-y:auto;padding:12px 16px;min-height:0;display:none;flex-direction:column;gap:6px;">
+          <div id="sr-results" style="display:flex;flex-direction:column;gap:6px;"></div>
+          <div id="sr-empty" style="display:none;text-align:center;padding:60px 20px;">
+            <i class="fas fa-search" style="font-size:36px;color:rgba(255,255,255,.08);margin-bottom:12px;display:block;"></i>
+            <div style="font-size:14px;color:var(--ss-muted);font-weight:600;">No matching records found</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.25);margin-top:5px;">Try a shorter or different keyword</div>
+          </div>
+        </div>
+
       </div><!-- /canvas-support_records -->
 
       <style>
         @keyframes spin { to { transform: rotate(360deg); } }
       </style>
 
+      <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        /* SR result card hover */
+        .sr-card { transition: border-color .15s, background .15s; }
+        .sr-card:hover { border-color: var(--sr-card-accent) !important; }
+        /* Compact vs detailed */
+        .sr-res-full { display: block; }
+        .sr-res-short { display: none; }
+        body.sr-compact .sr-res-full  { display: none; }
+        body.sr-compact .sr-res-short { display: block; }
+        body.sr-compact .sr-card { padding: 8px 12px !important; }
+        /* Sidebar category active */
+        .sr-cat-btn.active-cat { font-weight: 700 !important; }
+        /* Scrollbar for cat filter */
+        #sr-cat-filter::-webkit-scrollbar { width: 3px; }
+        #sr-cat-filter::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+      </style>
+
       <script>
       (function() {
         'use strict';
 
-        // ── Category metadata (lightweight — no entries yet) ────────────
-        const SR_CATS_INIT = [{"id":"e2e3_gateway","label":"E2 / E3 Gateway","icon":"fa-server","color":"#58a6ff","tags":["E2","E3","E300","Gateway","Onboarding"],"count":2471,"resolved":2258,"entries":1311},{"id":"connect_plus","label":"Connect+ / Network","icon":"fa-wifi","color":"#22d3ee","tags":["Connect+","VPN","Network","Offline","IP"],"count":1192,"resolved":1162,"entries":766},{"id":"programming","label":"Programming & Configuration","icon":"fa-code","color":"#a78bfa","tags":["Programming","PCR","Circuit","XR75"],"count":1940,"resolved":1771,"entries":1111},{"id":"temperature_haccp","label":"Temperature & HACCP","icon":"fa-thermometer-half","color":"#f97316","tags":["Temperature","HACCP","Probe","Food Safety"],"count":560,"resolved":554,"entries":466},{"id":"alarms","label":"Alarms & Alerts","icon":"fa-bell","color":"#f85149","tags":["Alarm","Alert","Azure","Proof Failure"],"count":1176,"resolved":1160,"entries":582},{"id":"floorplan_screens","label":"Floor Plans & Custom Screens","icon":"fa-layer-group","color":"#3fb950","tags":["Floor Plan","Custom Screen","Remapping","Widget"],"count":938,"resolved":866,"entries":730},{"id":"firmware","label":"Firmware & Software Updates","icon":"fa-microchip","color":"#d29922","tags":["Firmware","Software","Upgrade","Version"],"count":330,"resolved":327,"entries":266},{"id":"refrigeration","label":"Refrigeration & HVAC","icon":"fa-snowflake","color":"#60a5fa","tags":["Refrigeration","Rack","Compressor","Solenoid"],"count":1647,"resolved":1418,"entries":995},{"id":"password_credentials","label":"Passwords & Credentials","icon":"fa-key","color":"#fbbf24","tags":["Password","Daily Password","XWEB","Wizmate"],"count":424,"resolved":417,"entries":293},{"id":"controller_hardware","label":"Controllers & Hardware","icon":"fa-cogs","color":"#6ee7b7","tags":["Controller","License Key","XR75","CC200"],"count":2611,"resolved":2389,"entries":1557},{"id":"site_supervisor","label":"Site Supervisor","icon":"fa-desktop","color":"#e879f9","tags":["Site Supervisor","SS300","HMI","Display"],"count":736,"resolved":643,"entries":495},{"id":"data_reports","label":"Data, Reports & Exports","icon":"fa-chart-bar","color":"#818cf8","tags":["Reports","Data Export","API","Logs"],"count":371,"resolved":367,"entries":304},{"id":"parts_products","label":"Parts & Product Inquiries","icon":"fa-boxes","color":"#fb923c","tags":["Part Numbers","License Keys","XR75","CC200","XM679","RGA","Warranty"],"count":7502,"resolved":7502,"entries":5049,"subcats":[{"id":"parts_xr_controllers","label":"XR Case Controllers","icon":"fa-microchip","color":"#f97316","tags":["XR75","XR35","XR77","XR20","XR170","Dixell","Replacement"],"keywords":["xr75","xr35","xr77","xr20","xr170","xr60","dixell xr"],"count":490,"resolved":490,"entries":378},{"id":"parts_xm_controllers","label":"XM Controllers","icon":"fa-microchip","color":"#a78bfa","tags":["XM679","XM678","XM660","XM452","ADF File","Wiring"],"keywords":["xm679","xm678","xm660","xm452","xm67"],"count":245,"resolved":245,"entries":216},{"id":"parts_cc200","label":"CC200 Case Controllers","icon":"fa-th","color":"#22d3ee","tags":["CC200","CC100","PWM","BACnet","Solenoid","Relay"],"keywords":["cc200","cc100"],"count":569,"resolved":569,"entries":421},{"id":"parts_license_keys","label":"License Keys","icon":"fa-key","color":"#fbbf24","tags":["License Key","E2","E3","Sporlan","MAC Address","Job#"],"keywords":["license key","licence key","licensing key"],"count":1838,"resolved":1838,"entries":1134},{"id":"parts_rga_warranty","label":"RGA & Warranty Returns","icon":"fa-undo-alt","color":"#f85149","tags":["RGA","Warranty","Defective","Replacement","Credit Memo","Return"],"keywords":["rga","warranty","defective","replacement part","credit memo","return auth"],"count":728,"resolved":728,"entries":478},{"id":"parts_probes_sensors","label":"Probes, Sensors & Thermometers","icon":"fa-thermometer-half","color":"#3fb950","tags":["Probe","Sensor","Cooper-Atkins","HACCP","55032","37100","Defective"],"keywords":["probe","sensor","thermometer","cooper-atkins","cooper atkins","haccp manager","50014","55032","37100","50004"],"count":1106,"resolved":1106,"entries":845},{"id":"parts_sporlan_danfoss","label":"Sporlan / Danfoss / Alco Valves","icon":"fa-cog","color":"#60a5fa","tags":["Sporlan","Danfoss","Alco","EEV","Transducer","ESR Board"],"keywords":["sporlan","danfoss","alco","esr board","eev"],"count":331,"resolved":331,"entries":225},{"id":"parts_site_supervisor","label":"Site Supervisor Parts & Docs","icon":"fa-desktop","color":"#e879f9","tags":["SS300","818-7240","Display","HMI","Manual","Replacement"],"keywords":["site supervisor","ss300","ss1 ","818-7240","818-"],"count":418,"resolved":418,"entries":362},{"id":"parts_walmart_jobs","label":"Walmart Job Numbers (WM-NHM / WM-SUP)","icon":"fa-briefcase","color":"#6ee7b7","tags":["WM-NHM","WM-SUP","Job#","PCR","Programming","New Installation"],"keywords":["wm-nhm","wm-sup","job#","job #"],"count":951,"resolved":951,"entries":362},{"id":"parts_part_number_inquiry","label":"Part Number & Product Inquiry","icon":"fa-search","color":"#818cf8","tags":["Part Number","Model Number","P&A","Quote","SKU","Catalog"],"keywords":["part number","part no","p/n","model number","p & a","p&a","quote request","catalog number","ordering"],"count":826,"resolved":826,"entries":628}]}]
+        // ── Category metadata (loaded immediately, entries lazy) ──────
+        const SR_CATS_INIT = [{"id":"e2e3_gateway","label":"E2 / E3 Gateway","icon":"fa-server","color":"#58a6ff","tags":["E2","E3","E300","Gateway","Onboarding"],"count":2471,"resolved":2258,"entries":1311},{"id":"connect_plus","label":"Connect+ / Network","icon":"fa-wifi","color":"#22d3ee","tags":["Connect+","VPN","Network","Offline","IP"],"count":1192,"resolved":1162,"entries":766},{"id":"programming","label":"Programming & Configuration","icon":"fa-code","color":"#a78bfa","tags":["Programming","PCR","Circuit","XR75"],"count":1940,"resolved":1771,"entries":1111},{"id":"temperature_haccp","label":"Temperature & HACCP","icon":"fa-thermometer-half","color":"#f97316","tags":["Temperature","HACCP","Probe","Food Safety"],"count":560,"resolved":554,"entries":466},{"id":"alarms","label":"Alarms & Alerts","icon":"fa-bell","color":"#f85149","tags":["Alarm","Alert","Azure","Proof Failure"],"count":1176,"resolved":1160,"entries":582},{"id":"floorplan_screens","label":"Floor Plans & Custom Screens","icon":"fa-layer-group","color":"#3fb950","tags":["Floor Plan","Custom Screen","Remapping","Widget"],"count":938,"resolved":866,"entries":730},{"id":"firmware","label":"Firmware & Software Updates","icon":"fa-microchip","color":"#d29922","tags":["Firmware","Software","Upgrade","Version"],"count":330,"resolved":327,"entries":266},{"id":"refrigeration","label":"Refrigeration & HVAC","icon":"fa-snowflake","color":"#60a5fa","tags":["Refrigeration","Rack","Compressor","Solenoid"],"count":1647,"resolved":1418,"entries":995},{"id":"password_credentials","label":"Passwords & Credentials","icon":"fa-key","color":"#fbbf24","tags":["Password","Daily Password","XWEB","Wizmate"],"count":424,"resolved":417,"entries":293},{"id":"controller_hardware","label":"Controllers & Hardware","icon":"fa-cogs","color":"#6ee7b7","tags":["Controller","License Key","XR75","CC200"],"count":2611,"resolved":2389,"entries":1557},{"id":"site_supervisor","label":"Site Supervisor","icon":"fa-desktop","color":"#e879f9","tags":["Site Supervisor","SS300","HMI","Display"],"count":736,"resolved":643,"entries":495},{"id":"data_reports","label":"Data, Reports & Exports","icon":"fa-chart-bar","color":"#818cf8","tags":["Reports","Data Export","API","Logs"],"count":371,"resolved":367,"entries":304},{"id":"parts_products","label":"Parts & Product Inquiries","icon":"fa-boxes","color":"#fb923c","tags":["Part Numbers","License Keys","XR75","CC200","XM679","RGA","Warranty"],"count":7502,"resolved":7502,"entries":5049,"subcats":[{"id":"parts_xr_controllers","label":"XR Case Controllers","icon":"fa-microchip","color":"#f97316","tags":["XR75","XR35","XR77","XR20","XR170","Dixell","Replacement"],"keywords":["xr75","xr35","xr77","xr20","xr170","xr60","dixell xr"],"count":490,"resolved":490,"entries":378},{"id":"parts_xm_controllers","label":"XM Controllers","icon":"fa-microchip","color":"#a78bfa","tags":["XM679","XM678","XM660","XM452","ADF File","Wiring"],"keywords":["xm679","xm678","xm660","xm452","xm67"],"count":245,"resolved":245,"entries":216},{"id":"parts_cc200","label":"CC200 Case Controllers","icon":"fa-th","color":"#22d3ee","tags":["CC200","CC100","PWM","BACnet","Solenoid","Relay"],"keywords":["cc200","cc100"],"count":569,"resolved":569,"entries":421},{"id":"parts_license_keys","label":"License Keys","icon":"fa-key","color":"#fbbf24","tags":["License Key","E2","E3","Sporlan","MAC Address","Job#"],"keywords":["license key","licence key","licensing key"],"count":1838,"resolved":1838,"entries":1134},{"id":"parts_rga_warranty","label":"RGA & Warranty Returns","icon":"fa-undo-alt","color":"#f85149","tags":["RGA","Warranty","Defective","Replacement","Credit Memo","Return"],"keywords":["rga","warranty","defective","replacement part","credit memo","return auth"],"count":728,"resolved":728,"entries":478},{"id":"parts_probes_sensors","label":"Probes, Sensors & Thermometers","icon":"fa-thermometer-half","color":"#3fb950","tags":["Probe","Sensor","Cooper-Atkins","HACCP","55032","37100","Defective"],"keywords":["probe","sensor","thermometer","cooper-atkins","cooper atkins","haccp manager","50014","55032","37100","50004"],"count":1106,"resolved":1106,"entries":845},{"id":"parts_sporlan_danfoss","label":"Sporlan / Danfoss / Alco Valves","icon":"fa-cog","color":"#60a5fa","tags":["Sporlan","Danfoss","Alco","EEV","Transducer","ESR Board"],"keywords":["sporlan","danfoss","alco","esr board","eev"],"count":331,"resolved":331,"entries":225},{"id":"parts_site_supervisor","label":"Site Supervisor Parts & Docs","icon":"fa-desktop","color":"#e879f9","tags":["SS300","818-7240","Display","HMI","Manual","Replacement"],"keywords":["site supervisor","ss300","ss1 ","818-7240","818-"],"count":418,"resolved":418,"entries":362},{"id":"parts_walmart_jobs","label":"Walmart Job Numbers (WM-NHM / WM-SUP)","icon":"fa-briefcase","color":"#6ee7b7","tags":["WM-NHM","WM-SUP","Job#","PCR","Programming","New Installation"],"keywords":["wm-nhm","wm-sup","job#","job #"],"count":951,"resolved":951,"entries":362},{"id":"parts_part_number_inquiry","label":"Part Number & Product Inquiry","icon":"fa-search","color":"#818cf8","tags":["Part Number","Model Number","P&A","Quote","SKU","Catalog"],"keywords":["part number","part no","p/n","model number","p & a","p&a","quote request","catalog number","ordering"],"count":826,"resolved":826,"entries":628}]}];
 
-        let srFlat = null;   // loaded lazily
-        let srCats = SR_CATS_INIT;
-        let srActiveFilter = null;
-        let srQuery = '';
-        let srPage = 0;
-        const SR_PAGE_SIZE = 50;
-        let srFilteredCache = [];
-        let srLoaded = false;
+        let srFlat  = null;
+        let srCats  = SR_CATS_INIT;
+        let srLoaded   = false;
+        let srQuery    = '';
+        let srFilter   = null;   // active category id
+        let srPage     = 0;
+        let srView     = 'compact'; // 'compact' | 'detailed'
+        const PAGE_SZ  = 50;
+        let srCache    = [];     // filtered results cache
 
-        function $(id) { return document.getElementById(id); }
+        const $ = id => document.getElementById(id);
 
-        // ── Init — called when tab activated ────────────────────────────
+        // ── INIT ───────────────────────────────────────────────────────
         window._srInit = function() {
-          _srBuildCatFilter(SR_CATS_INIT);
+          _srBuildSidebar(SR_CATS_INIT);
+          _srBuildQuickList();
           _srBuildTagBar();
-          _srUpdateStats(SR_CATS_INIT);
+          _srShowWelcome(SR_CATS_INIT);
 
-          if (srLoaded) {
-            $('sr-loading').style.display = 'none';
-            $('sr-content').style.display = 'flex';
-            _srRender();
-            return;
+          const inp = $('sr-search-input');
+          if (inp) {
+            let timer;
+            inp.addEventListener('input', function() {
+              clearTimeout(timer);
+              timer = setTimeout(() => {
+                srQuery = this.value.trim();
+                srPage  = 0;
+                $('sr-clear-btn').style.display = srQuery ? 'block' : 'none';
+                _srRender();
+              }, 120);
+            });
+            inp.addEventListener('keydown', e => { if (e.key === 'Escape') window._srClear(); });
+            setTimeout(() => inp.focus(), 80);
           }
 
-          // Fetch the KB JSON
+          if (srLoaded) { _srRender(); return; }
+
+          // Lazy load KB JSON
           fetch('/support_records_kb.json')
-            .then(r => {
-              if (!r.ok) throw new Error('HTTP ' + r.status);
-              return r.json();
-            })
+            .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
             .then(data => {
-              srFlat = data.flat;
-              srCats = data.cats;
+              srFlat  = data.flat;
+              srCats  = data.cats;
               srLoaded = true;
-              $('sr-loading').style.display = 'none';
-              $('sr-content').style.display = 'flex';
-              _srBuildCatFilter(srCats);
-              _srBuildCategoryGrid(srCats);
-              _srUpdateStats(srCats);
+              _srBuildSidebar(srCats);
+              _srShowWelcome(srCats);
               _srRender();
-              setTimeout(() => { const inp = $('sr-search-input'); if(inp) inp.focus(); }, 80);
             })
             .catch(err => {
               $('sr-loading').innerHTML = `
-                <i class="fas fa-exclamation-circle" style="font-size:28px;color:#f85149;margin-bottom:8px;"></i>
-                <div style="font-size:13px;color:var(--ss-muted);">Could not load Support Records</div>
-                <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:4px;">Make sure <code style="font-family:monospace;">support_records_kb.json</code> is in <code style="font-family:monospace;">/public/</code></div>
-                <button onclick="window._srInit()" style="margin-top:12px;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.35);color:#c084fc;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-family:var(--ss-font);">Retry</button>`;
+                <i class="fas fa-exclamation-circle" style="font-size:28px;color:#f85149;margin-bottom:10px;"></i>
+                <div style="font-size:13px;color:var(--ss-muted);font-weight:600;">Could not load Support Records</div>
+                <div style="font-size:11px;color:rgba(255,255,255,.25);margin-top:4px;">Place <code style="font-family:monospace;font-size:10px;">support_records_kb.json</code> in <code style="font-family:monospace;font-size:10px;">/public/</code></div>
+                <button onclick="window._srInit()" style="margin-top:14px;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.35);color:#c084fc;padding:7px 18px;border-radius:6px;cursor:pointer;font-size:12px;font-family:var(--ss-font);">
+                  <i class="fas fa-redo" style="margin-right:6px;"></i>Retry
+                </button>`;
             });
         };
 
-        // ── Category filter sidebar ──────────────────────────────────────
-        function _srBuildCatFilter(cats) {
-          const el = $('sr-cat-filter');
-          if (!el) return;
-          el.innerHTML = '';
-          const allBtn = document.createElement('button');
-          allBtn.dataset.cat = '';
-          allBtn.innerHTML = '<i class="fas fa-th-large" style="margin-right:6px;opacity:.6;"></i>All Categories';
-          allBtn.style.cssText = 'width:100%;text-align:left;background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);color:#c084fc;padding:6px 10px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;font-family:var(--ss-font);margin-bottom:3px;transition:all .15s;';
-          allBtn.onclick = () => window._srClearFilter();
-          el.appendChild(allBtn);
+        // ── SIDEBAR ────────────────────────────────────────────────────
+        function _srBuildSidebar(cats) {
+          // Stats mini
+          const sm = $('sr-stats-mini');
+          if (sm) {
+            const total    = cats.reduce((a,c) => a + c.count, 0);
+            const resolved = cats.reduce((a,c) => a + c.resolved, 0);
+            const entries  = cats.reduce((a,c) => a + c.entries, 0);
+            const pct      = Math.round(resolved/total*100);
+            sm.innerHTML = `
+              <div style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.15);border-radius:6px;padding:6px 8px;text-align:center;">
+                <div style="font-size:14px;font-weight:800;color:#3fb950;">${pct}%</div>
+                <div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:1px;">Resolution</div>
+              </div>
+              <div style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.15);border-radius:6px;padding:6px 8px;text-align:center;">
+                <div style="font-size:14px;font-weight:800;color:#a78bfa;">${entries.toLocaleString()}</div>
+                <div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:1px;">KB Entries</div>
+              </div>`;
+          }
 
+          // Category filter list
+          const cf = $('sr-cat-filter');
+          if (!cf) return;
+          cf.innerHTML = '';
+
+          // All button
+          const allBtn = document.createElement('button');
+          allBtn.className = 'sr-cat-btn';
+          allBtn.dataset.cat = '';
+          allBtn.innerHTML = `
+            <span style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+              <span style="width:20px;height:20px;border-radius:5px;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <i class="fas fa-th-large" style="font-size:9px;color:#a78bfa;"></i>
+              </span>
+              <span style="font-size:11px;color:#c084fc;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">All Categories</span>
+            </span>
+            <span style="font-size:9px;font-weight:700;color:#a78bfa;background:rgba(168,85,247,.12);border-radius:8px;padding:1px 6px;flex-shrink:0;">${cats.reduce((a,c)=>a+c.entries,0).toLocaleString()}</span>`;
+          _styleAllBtn(allBtn, true);
+          allBtn.onclick = () => window._srClearFilter();
+          cf.appendChild(allBtn);
+
+          // Separator
+          const sep = document.createElement('div');
+          sep.style.cssText = 'height:1px;background:rgba(255,255,255,.04);margin:4px 0;';
+          cf.appendChild(sep);
+
+          // Category buttons
           cats.forEach(cat => {
             const btn = document.createElement('button');
+            btn.className = 'sr-cat-btn';
             btn.dataset.cat = cat.id;
-            btn.innerHTML = `<i class="fas ${cat.icon}" style="margin-right:6px;color:${cat.color};opacity:.8;"></i>${cat.label}<span style="float:right;background:rgba(255,255,255,.07);border-radius:9px;padding:1px 6px;font-size:9px;font-weight:700;color:var(--ss-muted);">${cat.entries}</span>`;
-            btn.style.cssText = `width:100%;text-align:left;background:transparent;border:1px solid transparent;color:var(--ss-muted);padding:6px 10px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:500;font-family:var(--ss-font);margin-bottom:1px;transition:all .15s;`;
-            btn.onmouseover = () => { if (srActiveFilter !== cat.id) btn.style.background = 'rgba(255,255,255,.04)'; };
-            btn.onmouseout  = () => { if (srActiveFilter !== cat.id) btn.style.background = 'transparent'; };
+            btn.innerHTML = `
+              <span style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+                <span style="width:20px;height:20px;border-radius:5px;background:${cat.color}15;border:1px solid ${cat.color}28;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                  <i class="fas ${cat.icon}" style="font-size:9px;color:${cat.color};"></i>
+                </span>
+                <span style="font-size:11px;color:var(--ss-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${cat.label}</span>
+              </span>
+              <span class="sr-cat-count" style="font-size:9px;font-weight:600;color:rgba(255,255,255,.25);background:rgba(255,255,255,.05);border-radius:8px;padding:1px 5px;flex-shrink:0;">${cat.entries}</span>`;
+            btn.style.cssText = `width:100%;display:flex;align-items:center;justify-content:space-between;background:transparent;border:1px solid transparent;border-radius:6px;padding:5px 8px;cursor:pointer;font-family:var(--ss-font);transition:all .12s;text-align:left;`;
+            btn.onmouseover = () => { if (srFilter !== cat.id) { btn.style.background='rgba(255,255,255,.04)'; btn.querySelector('.sr-cat-count').style.color='rgba(255,255,255,.5)'; } };
+            btn.onmouseout  = () => { if (srFilter !== cat.id) { btn.style.background='transparent'; btn.querySelector('.sr-cat-count').style.color='rgba(255,255,255,.25)'; } };
             btn.onclick = () => window._srSetFilter(cat.id, cat.label, cat.color);
-            el.appendChild(btn);
+            cf.appendChild(btn);
           });
+
+          // Update result count
+          const countEl = $('sr-result-count');
+          if (countEl && !srFilter && !srQuery) {
+            const total = cats.reduce((a,c)=>a+c.entries,0);
+            countEl.textContent = total.toLocaleString() + ' Records';
+          }
         }
 
-        // ── Stats ────────────────────────────────────────────────────────
-        function _srUpdateStats(cats) {
-          const el = $('sr-stats');
+        function _styleAllBtn(btn, active) {
+          btn.style.cssText = `width:100%;display:flex;align-items:center;justify-content:space-between;background:${active?'rgba(168,85,247,.1)':'transparent'};border:1px solid ${active?'rgba(168,85,247,.25)':'transparent'};border-radius:6px;padding:5px 8px;cursor:pointer;font-family:var(--ss-font);transition:all .12s;text-align:left;`;
+        }
+
+        // ── QUICK SEARCHES ─────────────────────────────────────────────
+        function _srBuildQuickList() {
+          const el = $('sr-quick-list');
           if (!el) return;
-          const total    = cats.reduce((a,c) => a + c.count, 0);
-          const resolved = cats.reduce((a,c) => a + c.resolved, 0);
-          const entries  = cats.reduce((a,c) => a + c.entries, 0);
-          const pct      = Math.round(resolved / total * 100);
-          el.innerHTML = `
-            <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--ss-muted);">Total Cases</span><span style="color:#fff;font-weight:700;">${total.toLocaleString()}</span></div>
-            <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--ss-muted);">Resolved</span><span style="color:#3fb950;font-weight:700;">${resolved.toLocaleString()}</span></div>
-            <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--ss-muted);">KB Entries</span><span style="color:#a78bfa;font-weight:700;">${entries.toLocaleString()}</span></div>
-            <div style="display:flex;justify-content:space-between;font-size:11px;"><span style="color:var(--ss-muted);">Categories</span><span style="color:#22d3ee;font-weight:700;">${cats.length}</span></div>
-            <div style="margin-top:6px;background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.15);border-radius:5px;padding:5px 8px;font-size:10px;color:#3fb950;">
-              <i class="fas fa-check-circle" style="margin-right:4px;"></i>${pct}% resolution rate
-            </div>`;
+          const searches = [
+            { q: 'E2 firmware', icon: 'fa-server',        color: '#58a6ff' },
+            { q: 'E3 onboarding', icon: 'fa-server',      color: '#58a6ff' },
+            { q: 'connect+ offline', icon: 'fa-wifi',     color: '#22d3ee' },
+            { q: 'daily password', icon: 'fa-key',        color: '#fbbf24' },
+            { q: 'solenoid reverse', icon: 'fa-cog',      color: '#60a5fa' },
+            { q: 'custom screen remap', icon: 'fa-layer-group', color: '#3fb950' },
+            { q: 'vpn tunnel inactive', icon: 'fa-wifi',  color: '#22d3ee' },
+            { q: 'pcr setpoint', icon: 'fa-code',         color: '#a78bfa' },
+            { q: 'floor plan reset', icon: 'fa-layer-group', color: '#3fb950' },
+            { q: 'license key', icon: 'fa-key',           color: '#fbbf24' },
+            { q: 'XR75 replacement', icon: 'fa-microchip','color': '#f97316' },
+            { q: 'CC200 solenoid', icon: 'fa-th',         color: '#22d3ee' },
+            { q: 'proof failure alarm', icon: 'fa-bell',  color: '#f85149' },
+            { q: 'RGA defective', icon: 'fa-undo-alt',    color: '#f85149' },
+            { q: 'haccp temperature', icon: 'fa-thermometer-half', color: '#f97316' },
+            { q: 'xweb password', icon: 'fa-key',         color: '#fbbf24' },
+          ];
+          el.innerHTML = searches.map(s => `
+            <button onclick="window._srQuickSearch('${s.q}')"
+              style="display:flex;align-items:center;gap:7px;width:100%;background:transparent;border:1px solid transparent;border-radius:5px;padding:4px 6px;cursor:pointer;font-family:var(--ss-font);transition:all .12s;text-align:left;"
+              onmouseover="this.style.background='rgba(255,255,255,.04)';this.style.borderColor='rgba(255,255,255,.07)';"
+              onmouseout="this.style.background='transparent';this.style.borderColor='transparent';">
+              <i class="fas ${s.icon}" style="font-size:9px;color:${s.color};opacity:.7;width:12px;flex-shrink:0;"></i>
+              <span style="font-size:10px;color:var(--ss-muted);">${s.q}</span>
+            </button>`).join('');
         }
 
-        // ── Tag bar ────────────────────────────────────────────────────
+        // ── TAG BAR ────────────────────────────────────────────────────
         function _srBuildTagBar() {
           const el = $('sr-tag-bar');
           if (!el) return;
+          const existingLabel = el.querySelector('span');
           const tags = [
-            'E2 firmware','E3 onboarding','connect+ latency','connect+ offline',
-            'daily password','custom screen remap','solenoid reverse',
-            'vpn tunnel','floor plan','pcr setpoint','haccp','site supervisor',
-            'license key','offline manager','proof failure','oil failure',
-            'xweb','wizmate','tomcat restart','rack controller',
-            'XR75 replacement','CC200 solenoid','XM679 wiring','RGA defective',
-            'probe defective','warranty claim','part number inquiry','job# license',
+            'E2 firmware','E3 offline manager','connect+ latency','daily password',
+            'solenoid reverse','custom screen','floor plan','pcr setpoint',
+            'license key','vpn tunnel','proof failure','haccp',
+            'XR75','CC200','XM679 wiring','RGA warranty',
           ];
-          el.innerHTML = tags.map(t =>
-            `<button onclick="window._srQuickSearch('${t}')"
-              style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--ss-muted);padding:3px 9px;border-radius:12px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--ss-font);transition:all .15s;white-space:nowrap;"
+          const pills = tags.map(t => `
+            <button onclick="window._srQuickSearch('${t}')"
+              style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--ss-muted);padding:3px 9px;border-radius:12px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--ss-font);transition:all .12s;white-space:nowrap;"
               onmouseover="this.style.background='rgba(168,85,247,.12)';this.style.borderColor='rgba(168,85,247,.3)';this.style.color='#c084fc';"
               onmouseout="this.style.background='rgba(255,255,255,.05)';this.style.borderColor='rgba(255,255,255,.08)';this.style.color='var(--ss-muted)';"
-            >${t}</button>`
-          ).join('');
+            >${t}</button>`).join('');
+          el.innerHTML = (existingLabel ? existingLabel.outerHTML : '') + pills;
         }
 
         window._srQuickSearch = function(q) {
           const inp = $('sr-search-input');
-          if (inp) { inp.value = q; srQuery = q; $('sr-clear-btn').style.display = 'block'; srPage = 0; _srRender(); inp.focus(); }
+          if (inp) { inp.value = q; srQuery = q; srPage = 0; $('sr-clear-btn').style.display='block'; _srRender(); inp.focus(); }
         };
 
-        // ── Category Grid ──────────────────────────────────────────────
-        function _srBuildCategoryGrid(cats) {
-          const el = $('sr-categories');
-          if (!el) return;
-          el.innerHTML = cats.map(cat => {
-            const pct = Math.round(cat.resolved / cat.count * 100);
-            return `
-              <div onclick="window._srCatClick('${cat.id}','${cat.label}','${cat.color}')"
-                style="background:var(--ss-surface2);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden;"
-                onmouseover="this.style.borderColor='${cat.color}55';this.style.background='rgba(255,255,255,.04)';"
-                onmouseout="this.style.borderColor='rgba(255,255,255,.07)';this.style.background='var(--ss-surface2)';">
-                <div style="position:absolute;top:0;left:0;right:0;height:2px;background:${cat.color};opacity:.45;border-radius:10px 10px 0 0;"></div>
-                <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
-                  <div style="width:34px;height:34px;border-radius:8px;background:${cat.color}18;border:1px solid ${cat.color}33;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                    <i class="fas ${cat.icon}" style="color:${cat.color};font-size:13px;"></i>
+        // ── WELCOME ────────────────────────────────────────────────────
+        function _srShowWelcome(cats) {
+          const ws = $('sr-welcome-stats');
+          if (ws) {
+            const total    = cats.reduce((a,c)=>a+c.count,0);
+            const resolved = cats.reduce((a,c)=>a+c.resolved,0);
+            const entries  = cats.reduce((a,c)=>a+c.entries,0);
+            const pct      = Math.round(resolved/total*100);
+            ws.innerHTML = [
+              { label:'Total Cases', val:total.toLocaleString(), color:'#58a6ff' },
+              { label:'Resolved',    val:resolved.toLocaleString(), color:'#3fb950' },
+              { label:'KB Entries',  val:entries.toLocaleString(), color:'#a78bfa' },
+              { label:'Resolution Rate', val:pct+'%', color:'#fbbf24' },
+            ].map(s => `
+              <div style="background:var(--ss-surface2);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px;text-align:center;">
+                <div style="font-size:20px;font-weight:800;color:${s.color};margin-bottom:3px;">${s.val}</div>
+                <div style="font-size:10px;color:var(--ss-muted);">${s.label}</div>
+              </div>`).join('');
+          }
+          const wc = $('sr-welcome-cats');
+          if (wc) {
+            wc.innerHTML = cats.map(cat => {
+              const pct = Math.round(cat.resolved/(cat.count||1)*100);
+              return `
+                <div onclick="window._srSetFilter('${cat.id}','${cat.label}','${cat.color}')"
+                  style="background:var(--ss-surface2);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;"
+                  onmouseover="this.style.borderColor='${cat.color}44';this.style.background='rgba(255,255,255,.03)';"
+                  onmouseout="this.style.borderColor='rgba(255,255,255,.07)';this.style.background='var(--ss-surface2)';">
+                  <div style="position:absolute;top:0;left:0;right:0;height:2px;background:${cat.color};opacity:.4;"></div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                    <div style="width:28px;height:28px;border-radius:7px;background:${cat.color}15;border:1px solid ${cat.color}28;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                      <i class="fas ${cat.icon}" style="color:${cat.color};font-size:11px;"></i>
+                    </div>
+                    <div style="min-width:0;">
+                      <div style="font-size:11px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cat.label}</div>
+                      <div style="font-size:9px;color:var(--ss-muted);">${cat.entries} entries · ${pct}% resolved</div>
+                    </div>
                   </div>
-                  <div style="flex:1;min-width:0;">
-                    <div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:1px;">${cat.label}</div>
-                    <div style="font-size:10px;color:var(--ss-muted);">${cat.count.toLocaleString()} cases · <span style="color:${cat.color};font-weight:600;">${cat.entries} KB entries</span></div>
+                  <div style="height:2px;background:rgba(255,255,255,.05);border-radius:1px;overflow:hidden;">
+                    <div style="height:100%;width:${pct}%;background:${cat.color};opacity:.5;"></div>
                   </div>
-                </div>
-                <div style="margin-bottom:8px;">
-                  <div style="height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;">
-                    <div style="height:100%;width:${pct}%;background:${cat.color};border-radius:2px;opacity:.65;"></div>
-                  </div>
-                  <div style="display:flex;justify-content:space-between;margin-top:3px;">
-                    <span style="font-size:10px;color:rgba(255,255,255,.3);">Resolution rate</span>
-                    <span style="font-size:10px;color:${cat.color};font-weight:700;">${pct}%</span>
-                  </div>
-                </div>
-                <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                  ${cat.tags.slice(0,4).map(t => `<span style="background:${cat.color}14;border:1px solid ${cat.color}25;color:${cat.color};padding:2px 6px;border-radius:7px;font-size:9px;font-weight:600;">${t}</span>`).join('')}
-                </div>
-              </div>`;
-          }).join('');
+                </div>`;
+            }).join('');
+          }
         }
 
-        // ── Filter ─────────────────────────────────────────────────────
+        // ── FILTER ─────────────────────────────────────────────────────
         window._srSetFilter = function(catId, catLabel, catColor) {
-          srActiveFilter = catId; srPage = 0;
-          const fe = $('sr-active-filter'), fl = $('sr-filter-label');
-          if (fe && fl) {
-            fe.style.display = 'flex'; fe.style.background = catColor+'18';
-            fe.style.borderColor = catColor+'55'; fe.style.color = catColor;
-            fl.innerHTML = `<i class="fas fa-filter" style="margin-right:5px;"></i>${catLabel}`;
+          srFilter = catId; srPage = 0;
+          // Active filter badge
+          const af = $('sr-active-filter'), fl = $('sr-filter-label');
+          if (af && fl) {
+            af.style.display = 'flex';
+            af.style.background = catColor + '15';
+            af.style.borderColor = catColor + '40';
+            af.style.color = catColor;
+            fl.textContent = catLabel;
           }
-          document.querySelectorAll('#sr-cat-filter button[data-cat]').forEach(b => {
-            if (b.dataset.cat === catId) {
-              b.style.background = catColor+'18'; b.style.borderColor = catColor+'33'; b.style.color = catColor;
+          // Breadcrumb
+          const bc = $('sr-breadcrumb');
+          if (bc) bc.innerHTML = `<span style="color:rgba(255,255,255,.2);">›</span><span style="color:${catColor};font-weight:600;">${catLabel}</span>`;
+          // Highlight sidebar button
+          document.querySelectorAll('#sr-cat-filter .sr-cat-btn').forEach(b => {
+            const isActive = b.dataset.cat === catId;
+            if (isActive) {
+              b.style.background = catColor + '15';
+              b.style.borderColor = catColor + '30';
+              b.querySelector('span span:last-child,span').style && (b.querySelector('.sr-cat-count').style.color = catColor);
+              const lbl = b.querySelectorAll('span')[2];
+              if (lbl) lbl.style.color = catColor;
+              b.classList.add('active-cat');
             } else if (!b.dataset.cat) {
-              b.style.background = 'rgba(255,255,255,.04)'; b.style.borderColor = 'rgba(255,255,255,.1)'; b.style.color = 'var(--ss-muted)';
+              _styleAllBtn(b, false);
             } else {
-              b.style.background = 'transparent'; b.style.borderColor = 'transparent'; b.style.color = 'var(--ss-muted)';
+              b.style.background = 'transparent';
+              b.style.borderColor = 'transparent';
+              b.classList.remove('active-cat');
+              const lbl = b.querySelectorAll('span')[2];
+              if (lbl) lbl.style.color = 'var(--ss-muted)';
             }
           });
           _srRender();
         };
 
         window._srClearFilter = function() {
-          srActiveFilter = null; srPage = 0;
-          const fe = $('sr-active-filter'); if(fe) fe.style.display = 'none';
-          document.querySelectorAll('#sr-cat-filter button[data-cat]').forEach(b => {
-            if (!b.dataset.cat) {
-              b.style.background='rgba(168,85,247,.12)'; b.style.borderColor='rgba(168,85,247,.3)'; b.style.color='#c084fc';
-            } else {
-              b.style.background='transparent'; b.style.borderColor='transparent'; b.style.color='var(--ss-muted)';
+          srFilter = null; srPage = 0;
+          const af = $('sr-active-filter'); if (af) af.style.display = 'none';
+          const bc = $('sr-breadcrumb'); if (bc) bc.innerHTML = '';
+          document.querySelectorAll('#sr-cat-filter .sr-cat-btn').forEach(b => {
+            if (!b.dataset.cat) { _styleAllBtn(b, true); }
+            else {
+              b.style.background = 'transparent'; b.style.borderColor = 'transparent';
+              b.classList.remove('active-cat');
+              const lbl = b.querySelectorAll('span')[2];
+              if (lbl) lbl.style.color = 'var(--ss-muted)';
             }
           });
           _srRender();
         };
 
         window._srClear = function() {
-          const inp = $('sr-search-input'); if(inp) inp.value='';
-          srQuery=''; srPage=0; $('sr-clear-btn').style.display='none'; _srRender();
+          const inp = $('sr-search-input'); if (inp) inp.value = '';
+          srQuery = ''; srPage = 0; $('sr-clear-btn').style.display = 'none'; _srRender();
         };
 
+        window._srSetView = function(v) {
+          srView = v;
+          document.body.classList.toggle('sr-compact', v === 'compact');
+          $('sr-view-compact').style.background  = v==='compact' ? 'rgba(168,85,247,.2)' : 'transparent';
+          $('sr-view-compact').style.color       = v==='compact' ? '#c084fc' : 'var(--ss-muted)';
+          $('sr-view-detailed').style.background = v==='detailed' ? 'rgba(168,85,247,.2)' : 'transparent';
+          $('sr-view-detailed').style.color      = v==='detailed' ? '#c084fc' : 'var(--ss-muted)';
+        };
+        window._srSetView('compact'); // default
+
+        // ── PAGINATION ─────────────────────────────────────────────────
         window._srNextPage = function() {
-          const maxPage = Math.ceil(srFilteredCache.length / SR_PAGE_SIZE) - 1;
-          if (srPage < maxPage) { srPage++; _srRenderResults(); _scrollTop(); }
+          const max = Math.ceil(srCache.length/PAGE_SZ)-1;
+          if (srPage < max) { srPage++; _srRenderCards(); _scrollTop(); }
         };
         window._srPrevPage = function() {
-          if (srPage > 0) { srPage--; _srRenderResults(); _scrollTop(); }
+          if (srPage > 0) { srPage--; _srRenderCards(); _scrollTop(); }
         };
-        function _scrollTop() { const c = $('sr-content'); if(c) c.scrollTop = 0; }
+        function _scrollTop() { const c=$('sr-content'); if(c) c.scrollTop=0; }
 
-        // ── Search ─────────────────────────────────────────────────────
-        function _srDoSearch(q, catFilter) {
+        // ── SEARCH ─────────────────────────────────────────────────────
+        function _srSearch(q, cat) {
           if (!srFlat) return [];
-          let pool = catFilter ? srFlat.filter(e => e.id === catFilter) : srFlat;
+          let pool = cat ? srFlat.filter(e => e.id === cat) : srFlat;
           if (!q || q.length < 1) return pool;
           const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
           return pool.filter(e => {
@@ -2657,175 +2818,158 @@
           let r = text;
           terms.forEach(t => {
             const re = new RegExp('(' + t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi');
-            r = r.replace(re, '<mark style="background:rgba(168,85,247,.35);color:#e9d5ff;border-radius:2px;padding:0 1px;">$1</mark>');
+            r = r.replace(re, '<mark style="background:rgba(168,85,247,.3);color:#e9d5ff;border-radius:2px;padding:0 1px;">$1</mark>');
           });
           return r;
         }
 
-        // ── Render ─────────────────────────────────────────────────────
-        function _srRenderResults() {
-          const resArea = $('sr-results');
-          const q = srQuery;
-          const pageData = srFilteredCache.slice(srPage * SR_PAGE_SIZE, (srPage+1) * SR_PAGE_SIZE);
+        // ── RENDER MAIN ────────────────────────────────────────────────
+        function _srRender() {
+          const loading  = $('sr-loading');
+          const welcome  = $('sr-welcome');
+          const content  = $('sr-content');
+          const pBar     = $('sr-pagination-bar');
+          const countEl  = $('sr-result-count');
 
-          resArea.innerHTML = pageData.map(e => {
-            const tHL  = _hl(e.title, q);
-            const resShort = e.res.length > 450 ? e.res.slice(0,450)+'…' : e.res;
+          const hasQ = srQuery.length >= 1;
+          const hasF = !!srFilter;
+
+          // Show welcome when nothing active and loaded
+          if (!hasQ && !hasF) {
+            if (loading)  loading.style.display  = srLoaded ? 'none' : 'flex';
+            if (welcome)  welcome.style.display   = srLoaded ? 'block' : 'none';
+            if (content)  content.style.display   = 'none';
+            if (pBar)     pBar.style.display       = 'none';
+            if (countEl)  countEl.textContent = srLoaded ? (srFlat ? srFlat.length.toLocaleString() : '—') + ' Records' : 'Loading…';
+            return;
+          }
+
+          if (!srLoaded) {
+            if (loading) loading.style.display = 'flex';
+            if (welcome) welcome.style.display = 'none';
+            if (content) content.style.display = 'none';
+            return;
+          }
+
+          if (loading) loading.style.display = 'none';
+          if (welcome) welcome.style.display = 'none';
+          if (content) content.style.display = 'flex';
+
+          srCache = _srSearch(srQuery, srFilter);
+
+          if (countEl) countEl.textContent = srCache.length.toLocaleString() + ' Result' + (srCache.length !== 1 ? 's' : '');
+          _srRenderCards();
+        }
+
+        // ── RENDER RESULT CARDS ─────────────────────────────────────────
+        function _srRenderCards() {
+          const resArea = $('sr-results');
+          const emptyEl = $('sr-empty');
+          const pBar    = $('sr-pagination-bar');
+          const pInfo   = $('sr-page-info');
+          const prevBtn = $('sr-prev-btn');
+          const nextBtn = $('sr-next-btn');
+          const q       = srQuery;
+
+          if (srCache.length === 0) {
+            if (resArea) resArea.innerHTML = '';
+            if (emptyEl) emptyEl.style.display = 'block';
+            if (pBar)    pBar.style.display = 'none';
+            return;
+          }
+          if (emptyEl) emptyEl.style.display = 'none';
+
+          const pageData = srCache.slice(srPage*PAGE_SZ, (srPage+1)*PAGE_SZ);
+          const maxPage  = Math.ceil(srCache.length/PAGE_SZ)-1;
+
+          if (pBar) pBar.style.display = srCache.length > PAGE_SZ ? 'flex' : 'none';
+          if (pInfo) pInfo.textContent = `Showing ${srPage*PAGE_SZ+1}–${Math.min((srPage+1)*PAGE_SZ,srCache.length)} of ${srCache.length.toLocaleString()}`;
+          if (prevBtn) { prevBtn.disabled = srPage===0; prevBtn.style.opacity = srPage===0?'.35':'1'; }
+          if (nextBtn) { nextBtn.disabled = srPage>=maxPage; nextBtn.style.opacity = srPage>=maxPage?'.35':'1'; }
+
+          resArea.innerHTML = pageData.map((e,i) => {
+            const tHL = _hl(e.title, q);
+            const resShort = e.res.length > 220 ? e.res.slice(0,220)+'…' : e.res;
             const rHL  = _hl(resShort, q);
+            const rHLFull = _hl(e.res.length > 500 ? e.res.slice(0,500)+'…' : e.res, q);
             return `
-              <div style="background:var(--ss-surface2);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 16px;transition:border-color .15s;"
-                onmouseover="this.style.borderColor='${e.color}44'" onmouseout="this.style.borderColor='rgba(255,255,255,.07)'">
-                <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;flex-wrap:wrap;">
-                  <span style="background:${e.color}18;border:1px solid ${e.color}30;color:${e.color};padding:2px 8px;border-radius:7px;font-size:10px;font-weight:700;display:flex;align-items:center;gap:4px;flex-shrink:0;">
-                    <i class="fas ${e.icon}" style="font-size:9px;"></i>${e.cat}
+              <div class="sr-card" style="--sr-card-accent:${e.color};background:var(--ss-surface2);border:1px solid rgba(255,255,255,.06);border-radius:9px;padding:11px 14px;cursor:default;"
+                onmouseover="this.style.borderColor='${e.color}44';this.style.background='rgba(255,255,255,.025)'"
+                onmouseout="this.style.borderColor='rgba(255,255,255,.06)';this.style.background='var(--ss-surface2)'">
+                <!-- Card header -->
+                <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;flex-wrap:wrap;">
+                  <span style="background:${e.color}18;border:1px solid ${e.color}30;color:${e.color};padding:2px 8px;border-radius:7px;font-size:9px;font-weight:700;display:inline-flex;align-items:center;gap:4px;flex-shrink:0;letter-spacing:.02em;">
+                    <i class="fas ${e.icon}" style="font-size:8px;"></i>${e.cat}
                   </span>
-                  ${e.eu ? `<span style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:var(--ss-muted);padding:2px 7px;border-radius:7px;font-size:10px;font-weight:600;">${e.eu}</span>` : ''}
-                  <span style="margin-left:auto;font-size:9px;color:rgba(255,255,255,.2);font-family:var(--ss-mono);">#${e.case}</span>
+                  ${e.eu ? `<span style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.4);padding:2px 7px;border-radius:7px;font-size:9px;font-weight:600;">${e.eu}</span>` : ''}
+                  <span style="margin-left:auto;font-size:9px;color:rgba(255,255,255,.18);font-family:var(--ss-mono);letter-spacing:.02em;">#${e.case}</span>
                 </div>
-                <div style="font-size:12px;font-weight:700;color:#e6edf3;margin-bottom:7px;line-height:1.45;">${tHL}</div>
-                <div style="font-size:11px;color:#8b949e;line-height:1.65;padding:9px 12px;background:rgba(0,0,0,.22);border-radius:6px;border-left:3px solid ${e.color};">
-                  <i class="fas fa-check-circle" style="color:#3fb950;margin-right:5px;font-size:9px;opacity:.7;"></i>${rHL}
+                <!-- Title -->
+                <div style="font-size:12px;font-weight:700;color:#e6edf3;margin-bottom:7px;line-height:1.4;">${tHL}</div>
+                <!-- Resolution — compact view -->
+                <div class="sr-res-short" style="font-size:11px;color:#8b949e;line-height:1.55;padding:7px 11px;background:rgba(0,0,0,.2);border-radius:6px;border-left:2px solid ${e.color}60;">
+                  <span style="display:inline-block;width:7px;height:7px;background:#3fb950;border-radius:50%;margin-right:6px;flex-shrink:0;vertical-align:middle;opacity:.8;"></span>${rHL}
+                </div>
+                <!-- Resolution — detailed view -->
+                <div class="sr-res-full" style="font-size:11px;color:#8b949e;line-height:1.65;padding:9px 12px;background:rgba(0,0,0,.22);border-radius:6px;border-left:3px solid ${e.color};">
+                  <div style="display:flex;align-items:center;gap:5px;margin-bottom:5px;">
+                    <span style="display:inline-block;width:7px;height:7px;background:#3fb950;border-radius:50%;flex-shrink:0;opacity:.8;"></span>
+                    <span style="font-size:9px;font-weight:700;color:rgba(255,255,255,.25);letter-spacing:.06em;text-transform:uppercase;">Resolution</span>
+                  </div>
+                  <span style="color:#adbac7;">${rHLFull}</span>
                 </div>
               </div>`;
           }).join('');
-
-          // Pagination bar
-          const pBar = $('sr-pagination-bar');
-          const pInfo = $('sr-page-info');
-          const prevBtn = $('sr-prev-btn');
-          const nextBtn = $('sr-next-btn');
-          const total = srFilteredCache.length;
-          const maxPage = Math.ceil(total / SR_PAGE_SIZE) - 1;
-
-          if (total > SR_PAGE_SIZE) {
-            if (pBar) pBar.style.display = 'flex';
-            if (pInfo) pInfo.textContent = `Showing ${srPage*SR_PAGE_SIZE+1}–${Math.min((srPage+1)*SR_PAGE_SIZE, total)} of ${total.toLocaleString()} results`;
-            if (prevBtn) prevBtn.disabled = srPage === 0;
-            if (nextBtn) nextBtn.disabled = srPage >= maxPage;
-          } else {
-            if (pBar) pBar.style.display = 'none';
-          }
         }
 
+        window._srRender = _srRender;
         window._srCatClick = function(catId, catLabel, catColor) {
-          // Check if this category has subcategories
           const cat = srCats.find(c => c.id === catId);
           if (cat && cat.subcats && cat.subcats.length > 0) {
-            _srShowSubcats(cat);
+            _srShowSubcatWelcome(cat);
           } else {
             window._srSetFilter(catId, catLabel, catColor);
           }
         };
 
-        function _srShowSubcats(cat) {
-          const catGrid = document.getElementById('sr-categories');
-          const resArea = document.getElementById('sr-results');
-          const emptyEl = document.getElementById('sr-empty');
-          const countEl = document.getElementById('sr-result-count');
-          const pBar    = document.getElementById('sr-pagination-bar');
-
-          if (catGrid) {
-            catGrid.style.display = 'grid';
-            catGrid.innerHTML = `
-              <div style="grid-column:1/-1;margin-bottom:4px;">
-                <button onclick="window._srClearFilter()" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:5px 12px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--ss-font);display:flex;align-items:center;gap:6px;">
-                  <i class="fas fa-arrow-left" style="font-size:10px;"></i> Back to All Categories
-                </button>
-                <div style="margin-top:10px;margin-bottom:2px;">
-                  <span style="font-size:11px;font-weight:700;color:${cat.color};">
-                    <i class="fas ${cat.icon}" style="margin-right:5px;"></i>${cat.label}
-                  </span>
-                  <span style="font-size:10px;color:var(--ss-muted);margin-left:8px;">— Select a sub-category</span>
+        function _srShowSubcatWelcome(cat) {
+          const welcome = $('sr-welcome');
+          const wc      = $('sr-welcome-cats');
+          const content = $('sr-content');
+          const pBar    = $('sr-pagination-bar');
+          const countEl = $('sr-result-count');
+          const bc      = $('sr-breadcrumb');
+          if (content) content.style.display = 'none';
+          if (pBar)    pBar.style.display = 'none';
+          if (welcome) welcome.style.display = 'block';
+          if (bc) bc.innerHTML = `<span style="color:rgba(255,255,255,.2);">›</span><span style="color:${cat.color};font-weight:600;">${cat.label}</span>`;
+          if (countEl) countEl.textContent = cat.label;
+          const ws = $('sr-welcome-stats');
+          if (ws) ws.innerHTML = cat.subcats.map(s => `
+            <div style="background:var(--ss-surface2);border:1px solid ${s.color}20;border-radius:8px;padding:10px;text-align:center;">
+              <div style="font-size:16px;font-weight:800;color:${s.color};">${s.entries}</div>
+              <div style="font-size:9px;color:var(--ss-muted);margin-top:2px;">${s.label}</div>
+            </div>`).join('');
+          if (wc) wc.innerHTML = cat.subcats.map(sub => `
+            <div onclick="window._srSetFilter('${sub.id}','${sub.label}','${sub.color}')"
+              style="background:var(--ss-surface2);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:12px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;"
+              onmouseover="this.style.borderColor='${sub.color}44';this.style.background='rgba(255,255,255,.03)';"
+              onmouseout="this.style.borderColor='rgba(255,255,255,.07)';this.style.background='var(--ss-surface2)';">
+              <div style="position:absolute;top:0;left:0;right:0;height:2px;background:${sub.color};opacity:.4;"></div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <div style="width:28px;height:28px;border-radius:7px;background:${sub.color}15;border:1px solid ${sub.color}28;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                  <i class="fas ${sub.icon}" style="color:${sub.color};font-size:11px;"></i>
+                </div>
+                <div>
+                  <div style="font-size:11px;font-weight:700;color:#fff;">${sub.label}</div>
+                  <div style="font-size:9px;color:var(--ss-muted);">${sub.entries} KB entries</div>
                 </div>
               </div>
-              ${cat.subcats.map(sub => {
-                const pct = Math.round(sub.resolved / (sub.count || 1) * 100);
-                return `
-                <div onclick="window._srSetFilter('${sub.id}','${sub.label}','${sub.color}')"
-                  style="background:var(--ss-surface2);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden;"
-                  onmouseover="this.style.borderColor='${sub.color}55';this.style.background='rgba(255,255,255,.04)';"
-                  onmouseout="this.style.borderColor='rgba(255,255,255,.07)';this.style.background='var(--ss-surface2)';">
-                  <div style="position:absolute;top:0;left:0;right:0;height:2px;background:${sub.color};opacity:.45;border-radius:10px 10px 0 0;"></div>
-                  <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;">
-                    <div style="width:30px;height:30px;border-radius:7px;background:${sub.color}18;border:1px solid ${sub.color}33;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                      <i class="fas ${sub.icon}" style="color:${sub.color};font-size:12px;"></i>
-                    </div>
-                    <div>
-                      <div style="font-size:12px;font-weight:700;color:#fff;">${sub.label}</div>
-                      <div style="font-size:10px;color:var(--ss-muted);">${sub.entries} KB entries</div>
-                    </div>
-                  </div>
-                  <div style="display:flex;gap:4px;flex-wrap:wrap;">
-                    ${sub.tags.slice(0,4).map(t => `<span style="background:${sub.color}14;border:1px solid ${sub.color}25;color:${sub.color};padding:2px 6px;border-radius:7px;font-size:9px;font-weight:600;">${t}</span>`).join('')}
-                  </div>
-                </div>`;
-              }).join('')}
-            `;
-          }
-          if (pBar) pBar.style.display = 'none';
-          if (countEl) countEl.textContent = cat.label;
-          if (resArea) resArea.style.display = 'none';
-          if (emptyEl) emptyEl.style.display = 'none';
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                ${sub.tags.slice(0,4).map(t=>`<span style="background:${sub.color}14;border:1px solid ${sub.color}22;color:${sub.color};padding:2px 6px;border-radius:6px;font-size:8px;font-weight:600;">${t}</span>`).join('')}
+              </div>
+            </div>`).join('');
         }
-
-        function _srRender() {
-          if (!srLoaded) return;
-          const q = srQuery;
-          const catFilter = srActiveFilter;
-          const hasSearch = q.length >= 1;
-          const hasFilter = !!catFilter;
-
-          const catGrid = $('sr-categories');
-          const resArea = $('sr-results');
-          const emptyEl = $('sr-empty');
-          const countEl = $('sr-result-count');
-          const pBar    = $('sr-pagination-bar');
-
-          if (!hasSearch && !hasFilter) {
-            catGrid.style.display = 'grid';
-            resArea.style.display = 'none';
-            emptyEl.style.display = 'none';
-            if (pBar) pBar.style.display = 'none';
-            if (countEl) countEl.textContent = srFlat.length.toLocaleString() + ' Records';
-            _srBuildCategoryGrid(srCats);
-            return;
-          }
-
-          catGrid.style.display = 'none';
-          srFilteredCache = _srDoSearch(q, catFilter);
-
-          if (countEl) countEl.textContent = srFilteredCache.length.toLocaleString() + ' Result' + (srFilteredCache.length !== 1 ? 's' : '');
-
-          if (srFilteredCache.length === 0) {
-            resArea.style.display = 'none';
-            emptyEl.style.display = 'block';
-            if (pBar) pBar.style.display = 'none';
-            return;
-          }
-
-          emptyEl.style.display = 'none';
-          resArea.style.display = 'flex';
-          _srRenderResults();
-        }
-
-        // ── Search input binding ─────────────────────────────────────
-        document.addEventListener('DOMContentLoaded', function() {
-          const inp = document.getElementById('sr-search-input');
-          if (inp) {
-            let debounceTimer;
-            inp.addEventListener('input', function() {
-              clearTimeout(debounceTimer);
-              debounceTimer = setTimeout(() => {
-                srQuery = this.value.trim(); srPage = 0;
-                document.getElementById('sr-clear-btn').style.display = srQuery ? 'block' : 'none';
-                _srRender();
-              }, 120);
-            });
-            inp.addEventListener('keydown', e => { if(e.key==='Escape') window._srClear(); });
-          }
-        });
-
-        window._srRender = _srRender;
 
       })();
       </script>
