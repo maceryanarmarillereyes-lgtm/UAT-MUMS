@@ -3617,6 +3617,39 @@ function updateClocksPreviewTimes(){
       return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    // ── Include me preference ─────────────────────────────────────────────
+    // LS key: mums_notif_include_me — 'true' = include own updates in notifications
+    // Default: 'false' (exclude own updates — original behaviour)
+    var LS_INCLUDE_ME = 'mums_notif_include_me';
+
+    function _isIncludeMeOn() {
+      try { return localStorage.getItem(LS_INCLUDE_ME) === 'true'; } catch(_) { return false; }
+    }
+
+    function _syncIncludeMeCheckbox() {
+      var cb = document.getElementById('mnpIncludeMe');
+      var hint = document.getElementById('mnpIncludeMeHint');
+      if (!cb) return;
+      var on = _isIncludeMeOn();
+      cb.checked = on;
+      if (hint) hint.textContent = on
+        ? 'Your own case note updates are included'
+        : 'Your own updates are excluded by default';
+    }
+
+    window.__mumsNotifToggleIncludeMe = function(checked) {
+      try { localStorage.setItem(LS_INCLUDE_ME, checked ? 'true' : 'false'); } catch(_) {}
+      var hint = document.getElementById('mnpIncludeMeHint');
+      if (hint) hint.textContent = checked
+        ? 'Your own case note updates are included'
+        : 'Your own updates are excluded by default';
+      // Re-build notifications with new preference
+      const qb = window.__mumsQbRecords;
+      if (qb && Array.isArray(qb.records)) {
+        window.__mumsNotifRefresh(qb.records, qb.columns);
+      }
+    };
+
     // ── Core: scan records and build notification items ───────────────────
     // IMPORTANT: QB stores case note timestamps in EST (UTC-5).
     // We must convert them to PHT (UTC+8) before comparing against Manila today.
@@ -3692,10 +3725,15 @@ function updateClocksPreviewTimes(){
         while ((m = re.exec(cnVal)) !== null) {
           const parsed = _parseBracket(m[1]);
           if (!parsed) continue;
-          // Exclude if WHO matches current user's QB name
-          if (myQb && parsed.who.toLowerCase().includes(myQb) || (myQb && myQb.includes(parsed.who.toLowerCase()))) continue;
-          // Also exclude if myQb name appears anywhere in the who field (partial match, at least 4 chars)
-          if (myQb && myQb.length >= 4 && parsed.who.toLowerCase().split(' ').some(part => part.length >= 4 && myQb.includes(part))) continue;
+          // Check include-me preference:
+          // - includeMeOn=false (default): exclude entries where WHO matches current user → they wrote it
+          // - includeMeOn=true: include ALL entries (user wants to see their own updates too)
+          const includeMeOn = _isIncludeMeOn();
+          if (!includeMeOn && myQb) {
+            if (parsed.who.toLowerCase().includes(myQb) || myQb.includes(parsed.who.toLowerCase())) continue;
+            // Partial word match (at least 4 chars)
+            if (myQb.length >= 4 && parsed.who.toLowerCase().split(' ').some(part => part.length >= 4 && myQb.includes(part))) continue;
+          }
           matches.push(parsed);
         }
         if (!matches.length) return;
@@ -3770,16 +3808,25 @@ function updateClocksPreviewTimes(){
       }
       if (empty) empty.style.display = 'none';
 
+      // ── Avatar initials from reporter name ───────────────────────────────
+      // Generates 1-2 letter initials from a "First Last" name string.
+      // Falls back to first 2 chars if name has only one word.
+      function _initials(name) {
+        const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+        if (!parts.length) return '?';
+        if (parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+        return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+      }
+
       // Build HTML
       let html = '';
       toShow.forEach((item, idx) => {
         const isUnread = !_readSet.has(item.caseId);
         const c = 'mnp-c' + item.colIdx;
-        const shortId = item.caseId.length > 6 ? item.caseId.slice(-6) : item.caseId;
-        const iconLines = shortId.match(/.{1,3}/g) || [shortId];
+        const avatarInitials = _initials(item.who);
         html += `
 <div class="mnp-item${isUnread ? ' mnp-unread' : ''}" data-case="${_esc(item.caseId)}" onclick="window.__mumsNotifOpenCase('${_esc(item.caseId)}')">
-  <div class="mnp-icon ${c}">${iconLines.map(s => _esc(s)).join('<br>')}</div>
+  <div class="mnp-icon ${c}" title="${_esc(item.who)}" style="font-family:inherit;font-size:12px;font-weight:700;letter-spacing:-.01em;">${_esc(avatarInitials)}</div>
   <div class="mnp-body">
     <div class="mnp-row">
       <span class="mnp-casenum">CASE #${_esc(item.caseId)}</span>
@@ -3847,6 +3894,8 @@ ${idx < toShow.length - 1 ? '<div class="mnp-divider"></div>' : ''}`;
       panel.style.display = '';
       panel.style.animation = 'mnpPanelIn .25s cubic-bezier(.34,1.2,.64,1) both';
       document.getElementById('mumsNotifBtn').setAttribute('aria-expanded','true');
+      // Sync include-me checkbox state
+      _syncIncludeMeCheckbox();
       _render(_activeTab);
       setTimeout(() => document.addEventListener('click', _closeOnOutside), 10);
     }

@@ -83,8 +83,7 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             <span class="mums-notif-badge" id="mumsNotifBadge" style="display:none">0</span>
           </button>
-          <!-- Notification Panel -->
-          <div class="mums-notif-panel" id="mumsNotifPanel" style="display:none" role="dialog" aria-label="Notifications">
+          <!-- Notification Panel -->\n          <div class="mums-notif-panel" id="mumsNotifPanel" style="display:none" role="dialog" aria-label="Notifications">
             <div class="mnp-head">
               <div class="mnp-title">Notifications</div>
               <div class="mnp-meta" id="mnpMeta">0 UNREAD</div>
@@ -93,6 +92,16 @@
               <button class="mnp-tab mnp-tab-on" id="mnpTabAll" onclick="window.__mumsNotifTabAll()">All</button>
               <button class="mnp-tab" id="mnpTabUnread" onclick="window.__mumsNotifTabUnread()">Unread <span class="mnp-tab-ct" id="mnpTabCt" style="display:none">0</span></button>
               <button class="mnp-tab-action" id="mnpMarkAll" onclick="window.__mumsNotifMarkAll()">Mark all read</button>
+            </div>
+            <!-- Include me on notifications toggle -->
+            <div id="mnpIncludeMeRow" style="display:flex;align-items:center;gap:8px;padding:8px 14px 6px;border-bottom:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);">
+              <input type="checkbox" id="mnpIncludeMe"
+                style="width:14px;height:14px;accent-color:#58a6ff;cursor:pointer;flex-shrink:0;"
+                onchange="window.__mumsNotifToggleIncludeMe(this.checked)">
+              <label for="mnpIncludeMe" style="font-size:11px;color:rgba(255,255,255,.6);cursor:pointer;user-select:none;line-height:1.4;">
+                Include me on notifications
+                <span style="display:block;font-size:9px;color:rgba(255,255,255,.35);margin-top:1px;" id="mnpIncludeMeHint">Your own updates are excluded by default</span>
+              </label>
             </div>
             <div class="mnp-list" id="mnpList">
               <div class="mnp-empty" id="mnpEmpty">
