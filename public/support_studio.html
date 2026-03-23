@@ -1103,6 +1103,93 @@
     .ci-note-caller { font-weight: 700; color: #58a6ff; }
     .sqb-col-item:hover { background: rgba(88,166,255,.08) !important; }
     .sqb-col-item { transition: background .12s; }
+
+    /* ── Cache Pulse Beacon Icon ─────────────────────────────── */
+    @keyframes pulse         { 0%,100%{opacity:1} 50%{opacity:.35} }
+    @keyframes beacon-expand { 0%{transform:scale(1);opacity:.7} 100%{transform:scale(2.2);opacity:0} }
+    @keyframes beacon-spin   { to{transform:rotate(360deg)} }
+    @keyframes beacon-blink  { 0%,100%{opacity:1} 50%{opacity:.2} }
+    @keyframes beacon-pop    { 0%{opacity:0;transform:translateY(-6px) scale(.96)} 100%{opacity:1;transform:none} }
+
+    .ss-beacon { position:relative; width:32px; height:32px; cursor:pointer; flex-shrink:0; }
+    .ss-beacon-circle {
+      width:32px; height:32px; border-radius:50%;
+      background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1);
+      display:flex; align-items:center; justify-content:center;
+      position:relative; z-index:1; transition:background .2s,border-color .2s;
+    }
+    .ss-beacon-circle i { font-size:11px; color:var(--ss-muted,#7d8590); transition:color .2s; }
+    .ss-beacon-dot {
+      position:absolute; top:0; right:0; z-index:2;
+      width:9px; height:9px; border-radius:50%;
+      border:2px solid var(--ss-bg,#010409);
+      background:var(--ss-muted,#7d8590); display:none;
+    }
+    .ss-beacon-ring {
+      position:absolute; inset:-4px; border-radius:50%;
+      border:2px solid transparent; display:none; z-index:0;
+    }
+    /* idle */
+    .ss-beacon[data-state="idle"] .ss-beacon-circle i { color:#7d8590; }
+    /* fresh */
+    .ss-beacon[data-state="fresh"] .ss-beacon-circle { background:rgba(63,185,80,.07); border-color:rgba(63,185,80,.2); }
+    .ss-beacon[data-state="fresh"] .ss-beacon-circle i { color:#3fb950; }
+    .ss-beacon[data-state="fresh"] .ss-beacon-dot { display:block; background:#3fb950; box-shadow:0 0 5px #3fb950; }
+    /* stale */
+    .ss-beacon[data-state="stale"] .ss-beacon-circle { background:rgba(210,153,34,.08); border-color:rgba(210,153,34,.3); animation:beacon-blink 1.6s ease-in-out infinite; }
+    .ss-beacon[data-state="stale"] .ss-beacon-circle i { color:#d29922; animation:beacon-blink 1.6s ease-in-out infinite; }
+    .ss-beacon[data-state="stale"] .ss-beacon-dot { display:block; background:#d29922; animation:beacon-blink 1.6s ease-in-out infinite; }
+    .ss-beacon[data-state="stale"] .ss-beacon-ring { display:block; border-color:rgba(210,153,34,.5); animation:beacon-expand 1.6s ease-out infinite; }
+    /* syncing */
+    .ss-beacon[data-state="syncing"] .ss-beacon-circle { background:rgba(88,166,255,.08); border-color:rgba(88,166,255,.25); }
+    .ss-beacon[data-state="syncing"] .ss-beacon-circle i { color:#58a6ff; animation:beacon-spin 1.2s linear infinite; }
+    .ss-beacon[data-state="syncing"] .ss-beacon-dot { display:block; background:#58a6ff; animation:beacon-blink .9s ease-in-out infinite; }
+    .ss-beacon[data-state="syncing"] .ss-beacon-ring { display:block; border-color:rgba(88,166,255,.4); animation:beacon-expand 1.1s ease-out infinite; }
+    /* critical */
+    .ss-beacon[data-state="critical"] .ss-beacon-circle { background:rgba(248,81,73,.1); border-color:rgba(248,81,73,.4); animation:beacon-blink .65s ease-in-out infinite; }
+    .ss-beacon[data-state="critical"] .ss-beacon-circle i { color:#f85149; animation:beacon-blink .65s ease-in-out infinite; }
+    .ss-beacon[data-state="critical"] .ss-beacon-dot { display:block; background:#f85149; animation:beacon-blink .65s ease-in-out infinite; }
+    .ss-beacon[data-state="critical"] .ss-beacon-ring { display:block; border-color:rgba(248,81,73,.6); animation:beacon-expand .75s ease-out infinite; }
+    /* popup */
+    #ss-beacon-popup {
+      position:fixed; z-index:9998; top:52px; right:16px; width:276px;
+      background:#0d1117; border:1px solid rgba(255,255,255,.1);
+      border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.04);
+      display:none; overflow:hidden;
+    }
+    #ss-beacon-popup.open { display:block; animation:beacon-pop .18s ease; }
+    .bp-head { padding:13px 15px 11px; background:rgba(255,255,255,.02); border-bottom:1px solid rgba(255,255,255,.07); display:flex; align-items:center; gap:10px; }
+    .bp-head-ico { width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .bp-title { font-size:12px; font-weight:800; color:#e6edf3; }
+    .bp-sub   { font-size:10px; color:#7d8590; margin-top:1px; }
+    .bp-row { padding:9px 13px; display:flex; align-items:center; gap:9px; border-bottom:1px solid rgba(255,255,255,.05); transition:background .12s; }
+    .bp-row:last-child { border-bottom:none; }
+    .bp-row:hover { background:rgba(255,255,255,.02); }
+    .bp-ico { width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .bp-name { font-size:11px; font-weight:700; color:#e6edf3; }
+    .bp-meta { font-size:9px; color:#7d8590; margin-top:1px; }
+    .bp-tag  { margin-left:auto; font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; flex-shrink:0; }
+    .bp-tag-fresh    { background:rgba(63,185,80,.1);  color:#3fb950; }
+    .bp-tag-stale    { background:rgba(210,153,34,.1); color:#d29922; }
+    .bp-tag-critical { background:rgba(248,81,73,.1);  color:#f85149; }
+    .bp-tag-syncing  { background:rgba(88,166,255,.1); color:#58a6ff; }
+    .bp-tag-none     { background:rgba(255,255,255,.05); color:#7d8590; }
+    .bp-footer { padding:10px 13px 13px; display:flex; gap:7px; }
+    .bp-btn-sync {
+      flex:1; padding:9px; border-radius:7px;
+      background:rgba(88,166,255,.1); border:1px solid rgba(88,166,255,.25);
+      color:#58a6ff; font-size:11px; font-weight:800; font-family:inherit; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; gap:6px; transition:background .15s;
+    }
+    .bp-btn-sync:hover { background:rgba(88,166,255,.2); }
+    .bp-btn-sync:disabled { opacity:.5; cursor:not-allowed; }
+    .bp-btn-close {
+      padding:9px 11px; border-radius:7px;
+      background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1);
+      color:#7d8590; font-size:11px; font-weight:600; font-family:inherit; cursor:pointer;
+    }
+    .bp-btn-close:hover { background:rgba(255,255,255,.08); color:#e6edf3; }
+    /* ── END Cache Pulse Beacon ─────────────────────────────── */
   </style>
 </head>
 <body>
@@ -1157,6 +1244,69 @@
 
     <!-- Right controls — General Settings pinned to upper-right corner -->
     <div class="ss-header-right">
+
+      <!-- ── Cache Pulse Beacon ── accessible to ALL users ── -->
+      <div class="ss-beacon" id="ss-cache-beacon" data-state="idle"
+           onclick="window._beaconToggle()" title="Resource Cache">
+        <div class="ss-beacon-ring"></div>
+        <div class="ss-beacon-circle">
+          <i class="fas fa-database"></i>
+        </div>
+        <div class="ss-beacon-dot"></div>
+      </div>
+
+      <!-- Beacon popup panel -->
+      <div id="ss-beacon-popup">
+        <div class="bp-head">
+          <div class="bp-head-ico" id="bp-head-ico"
+               style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.18);">
+            <i class="fas fa-database" style="color:#58a6ff;font-size:12px;"></i>
+          </div>
+          <div>
+            <div class="bp-title">Resource Cache</div>
+            <div class="bp-sub" id="bp-sub">Checking…</div>
+          </div>
+        </div>
+        <!-- Bundle rows -->
+        <div id="bp-row-connect_plus" class="bp-row">
+          <div class="bp-ico" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.18);">
+            <i class="fas fa-globe" style="color:#58a6ff;font-size:10px;"></i>
+          </div>
+          <div>
+            <div class="bp-name">Connect+ Sites</div>
+            <div class="bp-meta" id="bp-meta-connect_plus">—</div>
+          </div>
+          <span class="bp-tag bp-tag-none" id="bp-tag-connect_plus">—</span>
+        </div>
+        <div id="bp-row-catalog" class="bp-row">
+          <div class="bp-ico" style="background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.18);">
+            <i class="fas fa-boxes" style="color:#22d3ee;font-size:10px;"></i>
+          </div>
+          <div>
+            <div class="bp-name">Catalog Items</div>
+            <div class="bp-meta" id="bp-meta-catalog">—</div>
+          </div>
+          <span class="bp-tag bp-tag-none" id="bp-tag-catalog">—</span>
+        </div>
+        <div id="bp-row-qb_schema" class="bp-row">
+          <div class="bp-ico" style="background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.18);">
+            <i class="fas fa-table" style="color:#3fb950;font-size:10px;"></i>
+          </div>
+          <div>
+            <div class="bp-name">QB Field Schema</div>
+            <div class="bp-meta" id="bp-meta-qb_schema">—</div>
+          </div>
+          <span class="bp-tag bp-tag-none" id="bp-tag-qb_schema">—</span>
+        </div>
+        <div class="bp-footer">
+          <button class="bp-btn-sync" id="bp-sync-btn" onclick="window._beaconSync()">
+            <i class="fas fa-sync-alt" id="bp-sync-icon"></i>
+            <span id="bp-sync-label">Sync All</span>
+          </button>
+          <button class="bp-btn-close" onclick="window._beaconClose()">✕</button>
+        </div>
+      </div>
+
       <!-- General Settings always stays rightmost — gear icon tab style -->
       <button class="ss-tab" data-tab="config" id="ss-tab-config"
         style="border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);">
@@ -2622,15 +2772,21 @@
         if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
           state.items = cached.data;
           renderTree('');
-          // Quietly refresh in background to keep role flags current
+          // Quietly refresh in background to keep role flags and data current
+          // Guard: capture catalog canvas ref at call time — skip update if user navigated away
+          const _catCanvas = document.getElementById('canvas-catalog');
           apiFetch('/api/catalog/items').then(r => r.json()).then(d => {
+            if (!document.getElementById('canvas-catalog') || document.getElementById('canvas-catalog') !== _catCanvas) return;
             if (d.ok && d.role) {
               state.isSA = d.role.isSA; state.isSU = d.role.isSU; state.canManage = d.role.canManage;
               const addBtn = document.getElementById('cat-add-btn');
               if (addBtn) addBtn.classList.toggle('visible', state.canManage);
             }
-            // Update cache silently with latest data
-            if (d.ok && d.items) window.StudioCache.setBundle('catalog', d.items, '', d.items.length).catch(() => {});
+            // Silently update state + cache with latest server data
+            if (d.ok && d.items) {
+              state.items = d.items;
+              window.StudioCache.setBundle('catalog', d.items, '', d.items.length).catch(() => {});
+            }
           }).catch(() => {});
           return;
         }
@@ -6163,20 +6319,41 @@
 
   window.addEventListener('studiocache:update', function(e) {
     showSoftBanner(e.detail.outdated, e.detail.serverManifest);
+    beaconSetState('stale');
+    beaconRefreshPopup(e.detail.outdated, []);
   });
 
   window.addEventListener('studiocache:critical', function(e) {
     showCriticalModal(e.detail.critical, e.detail.outdated, e.detail.serverManifest);
+    beaconSetState('critical');
+    beaconRefreshPopup(e.detail.outdated, e.detail.critical);
   });
 
   window.addEventListener('studiocache:progress', function(e) {
     var d = e.detail;
     showProgress(d.bundleId, d.bundlePct, d.overallDone, d.overallTotal);
+    beaconSetState('syncing');
+    var syncLabel = document.getElementById('bp-sync-label');
+    var syncIcon  = document.getElementById('bp-sync-icon');
+    var syncBtn   = document.getElementById('bp-sync-btn');
+    if (syncLabel) syncLabel.textContent = 'Syncing…';
+    if (syncIcon)  syncIcon.className    = 'fas fa-spinner fa-spin';
+    if (syncBtn)   syncBtn.disabled      = true;
+    var bpSub = document.getElementById('bp-sub');
+    if (bpSub) bpSub.textContent = 'Downloading ' + (d.bundleId || '') + ' (' + (d.bundlePct || 0) + '%)…';
   });
 
   window.addEventListener('studiocache:synccomplete', function() {
     hideBannerAndProgress();
     refreshPanel();
+    beaconSetState('fresh');
+    beaconRefreshPopup([], []);
+    var syncLabel = document.getElementById('bp-sync-label');
+    var syncIcon  = document.getElementById('bp-sync-icon');
+    var syncBtn   = document.getElementById('bp-sync-btn');
+    if (syncLabel) syncLabel.textContent = 'Sync All';
+    if (syncIcon)  syncIcon.className    = 'fas fa-sync-alt';
+    if (syncBtn)   syncBtn.disabled      = false;
     // Reload Connect+ data from fresh cache if tab is open
     if (typeof window._cpRefresh === 'function' &&
         document.getElementById('left-panel-connectplus') &&
@@ -6185,8 +6362,121 @@
     }
   });
 
+  window.addEventListener('studiocache:fresh', function(e) {
+    beaconSetState('fresh');
+    beaconRefreshPopup([], []);
+  });
+
+  window.addEventListener('studiocache:firstrun', function(e) {
+    beaconSetState('syncing');
+  });
+
   window.addEventListener('studiocache:bundleerror', function(e) {
     console.warn('[CacheUI] bundle error:', e.detail.bundleId, e.detail.error);
+  });
+
+  // ── Beacon state controller ───────────────────────────────────────
+  function beaconSetState(state) {
+    var b = document.getElementById('ss-cache-beacon');
+    if (b) b.setAttribute('data-state', state);
+  }
+
+  // ── Beacon popup content refresh ─────────────────────────────────
+  function _fmtAgo(ms) {
+    var m = Math.round(ms / 60000);
+    if (m < 2)  return 'just now';
+    if (m < 60) return m + 'm ago';
+    var h = Math.round(m / 60);
+    if (h < 24) return h + 'h ago';
+    return Math.round(h / 24) + 'd ago';
+  }
+
+  function beaconRefreshPopup(outdated, critical) {
+    if (typeof window.StudioCache === 'undefined') return;
+
+    var outdatedIds = (outdated  || []).map(function(o) { return o.id; });
+    var criticalIds = (critical  || []).map(function(o) { return o.id; });
+
+    window.StudioCache.getStats().then(function(stats) {
+      var allFresh = true;
+      var bpSub    = document.getElementById('bp-sub');
+
+      ['connect_plus','catalog','qb_schema'].forEach(function(id) {
+        var stat    = stats[id];
+        var metaEl  = document.getElementById('bp-meta-' + id);
+        var tagEl   = document.getElementById('bp-tag-' + id);
+        if (!metaEl || !tagEl) return;
+
+        if (!stat || !stat.cached) {
+          metaEl.textContent = 'Not downloaded yet';
+          tagEl.textContent  = 'None';
+          tagEl.className    = 'bp-tag bp-tag-none';
+          allFresh = false;
+          return;
+        }
+
+        metaEl.textContent = (stat.count || 0).toLocaleString() + ' records · ' + _fmtAgo(stat.ageMs);
+
+        if (criticalIds.indexOf(id) >= 0) {
+          tagEl.textContent = '⚠ Critical';
+          tagEl.className   = 'bp-tag bp-tag-critical';
+          allFresh = false;
+        } else if (outdatedIds.indexOf(id) >= 0 || stat.expired) {
+          tagEl.textContent = 'Update';
+          tagEl.className   = 'bp-tag bp-tag-stale';
+          allFresh = false;
+        } else {
+          tagEl.textContent = '✓ Fresh';
+          tagEl.className   = 'bp-tag bp-tag-fresh';
+        }
+      });
+
+      if (bpSub) {
+        bpSub.textContent = allFresh
+          ? 'All data current · Last check: just now'
+          : (criticalIds.length > 0 ? 'Critical update required' : 'Update available');
+      }
+
+      // Update beacon head icon color
+      var ico = document.getElementById('bp-head-ico');
+      if (ico) {
+        var col = allFresh ? '#3fb950' : (criticalIds.length > 0 ? '#f85149' : '#d29922');
+        ico.style.background   = 'rgba(' + (allFresh ? '63,185,80' : (criticalIds.length > 0 ? '248,81,73' : '210,153,34')) + ',.1)';
+        ico.style.borderColor  = 'rgba(' + (allFresh ? '63,185,80' : (criticalIds.length > 0 ? '248,81,73' : '210,153,34')) + ',.2)';
+        ico.querySelector('i').style.color = col;
+      }
+    }).catch(function() {});
+  }
+
+  // ── Beacon toggle / close ─────────────────────────────────────────
+  window._beaconToggle = function() {
+    var popup = document.getElementById('ss-beacon-popup');
+    if (!popup) return;
+    var isOpen = popup.classList.contains('open');
+    if (isOpen) {
+      popup.classList.remove('open');
+    } else {
+      popup.classList.add('open');
+      beaconRefreshPopup([], []);
+    }
+  };
+
+  window._beaconClose = function() {
+    var popup = document.getElementById('ss-beacon-popup');
+    if (popup) popup.classList.remove('open');
+  };
+
+  window._beaconSync = function() {
+    window._beaconClose();
+    if (window._cacheUI) window._cacheUI.syncAll();
+  };
+
+  // Close popup on outside click
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('#ss-beacon-popup') &&
+        !e.target.closest('#ss-cache-beacon')) {
+      window._beaconClose();
+    }
   });
 
   // ── Boot: run check on page load (after 2s to not block initial render) ──

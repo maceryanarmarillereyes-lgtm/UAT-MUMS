@@ -5,8 +5,7 @@
 // Called ONLY during cache sync — not on every page load.
 // This is the heavy endpoint; cache_manifest is the lightweight one.
 
-const { getUserFromJwt }       = require('../../lib/supabase');
-const { serviceSelect }        = require('../../lib/supabase');
+const { getUserFromJwt, serviceSelect, serviceUpsert } = require('../../lib/supabase');
 const { readStudioQbSettings } = require('../../lib/studio_quickbase');
 
 function sendJson(res, code, body) {
@@ -125,6 +124,18 @@ async function fetchConnectPlus() {
     }
 
     const hash = simpleHash(String(records.length) + ':' + String(header.join(',')));
+
+    // ── Write version document so cache_manifest can detect future changes ──
+    const nowIso = new Date().toISOString();
+    const versionDoc = {
+      key:        'ss_connectplus_cache_version',
+      value:      { hash, count: records.length, isCritical: false, updatedAt: nowIso },
+      updated_at: nowIso,
+      updated_by_user_id: null,
+      updated_by_name:    'system',
+      updated_by_client_id: null,
+    };
+    serviceUpsert('mums_documents', [versionDoc], 'key').catch(() => {});
 
     return { ok: true, records: records, count: records.length, hash: hash, header: header };
   } catch (err) {
