@@ -1471,6 +1471,58 @@
         </div>
       </div>
 
+      <!-- ═══════ SUPPORT RECORDS — Left Sidebar (Redesigned) ═══════ -->
+      <div id="left-panel-support_records" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
+
+        <!-- Header / identity -->
+        <div style="padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;">
+            <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#7c3aed,#a855f7);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="fas fa-book-open" style="color:#fff;font-size:11px;"></i>
+            </div>
+            <div>
+              <div style="font-size:12px;font-weight:800;color:#fff;line-height:1;">Support Records</div>
+              <div style="font-size:9px;color:var(--ss-muted);margin-top:2px;font-weight:500;">Knowledge Base</div>
+            </div>
+          </div>
+          <!-- KB Stats mini bar -->
+          <div id="sr-stats-mini" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;"></div>
+        </div>
+
+        <!-- Search box in sidebar -->
+        <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
+          <div style="position:relative;">
+            <i class="fas fa-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--ss-muted);font-size:11px;pointer-events:none;"></i>
+            <input id="sr-search-input" type="text"
+              placeholder="Search keyword…"
+              style="width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 28px 7px 28px;color:#fff;font-size:11px;font-family:var(--ss-font);outline:none;transition:border-color .18s;"
+              onfocus="this.style.borderColor='rgba(168,85,247,.5)'"
+              onblur="this.style.borderColor='rgba(255,255,255,.1)'" />
+            <button id="sr-clear-btn" onclick="window._srClear()"
+              style="display:none;position:absolute;right:7px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ss-muted);cursor:pointer;font-size:10px;padding:0;line-height:1;">✕</button>
+          </div>
+        </div>
+
+        <!-- Active filter badge -->
+        <div id="sr-active-filter" style="display:none;margin:8px 12px 0;align-items:center;gap:6px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);border-radius:6px;padding:5px 9px;font-size:10px;color:#c084fc;">
+          <i class="fas fa-filter" style="font-size:9px;opacity:.7;"></i>
+          <span id="sr-filter-label" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          <button onclick="window._srClearFilter()" style="background:none;border:none;color:#c084fc;cursor:pointer;font-size:10px;padding:0;flex-shrink:0;opacity:.8;">✕</button>
+        </div>
+
+        <!-- Category filter list -->
+        <div style="padding:10px 12px 6px;flex-shrink:0;">
+          <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.25);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px;">CATEGORIES</div>
+        </div>
+        <div id="sr-cat-filter" style="flex:1;overflow-y:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:1px;"></div>
+
+        <!-- Quick searches at bottom -->
+        <div style="border-top:1px solid rgba(255,255,255,.06);padding:10px 12px;flex-shrink:0;">
+          <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.25);letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px;">QUICK SEARCH</div>
+          <div id="sr-quick-list" style="display:flex;flex-direction:column;gap:2px;"></div>
+        </div>
+      </div>
+
     </aside>
 
     <!-- ── CACHE UPDATE BANNER (shown when resources are outdated) ── -->
@@ -2208,57 +2260,7 @@
 
       <!-- Connect+ left panel -->
 
-      <!-- ═══════ SUPPORT RECORDS — Left Sidebar (Redesigned) ═══════ -->
-      <div id="left-panel-support_records" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
 
-        <!-- Header / identity -->
-        <div style="padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
-          <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;">
-            <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#7c3aed,#a855f7);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <i class="fas fa-book-open" style="color:#fff;font-size:11px;"></i>
-            </div>
-            <div>
-              <div style="font-size:12px;font-weight:800;color:#fff;line-height:1;">Support Records</div>
-              <div style="font-size:9px;color:var(--ss-muted);margin-top:2px;font-weight:500;">Knowledge Base</div>
-            </div>
-          </div>
-          <!-- KB Stats mini bar -->
-          <div id="sr-stats-mini" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;"></div>
-        </div>
-
-        <!-- Search box in sidebar -->
-        <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
-          <div style="position:relative;">
-            <i class="fas fa-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--ss-muted);font-size:11px;pointer-events:none;"></i>
-            <input id="sr-search-input" type="text"
-              placeholder="Search keyword…"
-              style="width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 28px 7px 28px;color:#fff;font-size:11px;font-family:var(--ss-font);outline:none;transition:border-color .18s;"
-              onfocus="this.style.borderColor='rgba(168,85,247,.5)'"
-              onblur="this.style.borderColor='rgba(255,255,255,.1)'" />
-            <button id="sr-clear-btn" onclick="window._srClear()"
-              style="display:none;position:absolute;right:7px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ss-muted);cursor:pointer;font-size:10px;padding:0;line-height:1;">✕</button>
-          </div>
-        </div>
-
-        <!-- Active filter badge -->
-        <div id="sr-active-filter" style="display:none;margin:8px 12px 0;align-items:center;gap:6px;background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);border-radius:6px;padding:5px 9px;font-size:10px;color:#c084fc;">
-          <i class="fas fa-filter" style="font-size:9px;opacity:.7;"></i>
-          <span id="sr-filter-label" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-          <button onclick="window._srClearFilter()" style="background:none;border:none;color:#c084fc;cursor:pointer;font-size:10px;padding:0;flex-shrink:0;opacity:.8;">✕</button>
-        </div>
-
-        <!-- Category filter list -->
-        <div style="padding:10px 12px 6px;flex-shrink:0;">
-          <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.25);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px;">CATEGORIES</div>
-        </div>
-        <div id="sr-cat-filter" style="flex:1;overflow-y:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:1px;"></div>
-
-        <!-- Quick searches at bottom -->
-        <div style="border-top:1px solid rgba(255,255,255,.06);padding:10px 12px;flex-shrink:0;">
-          <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.25);letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px;">QUICK SEARCH</div>
-          <div id="sr-quick-list" style="display:flex;flex-direction:column;gap:2px;"></div>
-        </div>
-      </div>
       <div id="left-panel-connectplus" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
         <div class="ss-panel" style="flex-shrink:0;">
           <div class="ss-panel-title"><i class="fas fa-plug" style="color:#22d3ee;"></i> Connect+</div>
@@ -2375,39 +2377,44 @@
 
 
       <!-- ═══════════════════════════════════════════════════════════════
-           SUPPORT RECORDS TAB — Full KB, redesigned for frontline tech support
+           SUPPORT RECORDS — Canvas (pure results, sidebar handles filter/search)
       ═══════════════════════════════════════════════════════════════ -->
       <div id="canvas-support_records" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
 
-        <!-- Toolbar -->
+        <!-- Slim toolbar ────────────────────────────────────────── -->
         <div class="ss-canvas-toolbar" style="flex-shrink:0;">
-          <div class="ss-canvas-toolbar-left" style="gap:10px;">
-            <span id="sr-result-count" style="font-size:11px;color:var(--ss-muted);background:rgba(255,255,255,.06);padding:3px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.08);">Loading…</span>
+          <div class="ss-canvas-toolbar-left" style="gap:8px;">
+            <span id="sr-result-count"
+              style="font-size:11px;color:var(--ss-muted);background:rgba(255,255,255,.06);padding:3px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.08);">
+              Loading…
+            </span>
             <div id="sr-breadcrumb" style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ss-muted);"></div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
-            <!-- View toggle -->
-            <div style="display:flex;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:2px;">
-              <button id="sr-view-compact" onclick="window._srSetView('compact')" title="Compact view"
-                style="background:rgba(168,85,247,.2);border:none;color:#c084fc;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:10px;transition:all .15s;">
-                <i class="fas fa-list"></i>
+            <!-- Compact / Detailed toggle -->
+            <div style="display:flex;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:2px;gap:1px;">
+              <button id="sr-view-compact" onclick="window._srSetView('compact')" title="Compact — one-line resolution"
+                style="background:rgba(168,85,247,.2);border:none;color:#c084fc;padding:4px 9px;border-radius:4px;cursor:pointer;font-size:10px;font-family:var(--ss-font);transition:all .15s;display:flex;align-items:center;gap:4px;">
+                <i class="fas fa-list"></i><span style="font-size:9px;font-weight:700;">Compact</span>
               </button>
-              <button id="sr-view-detailed" onclick="window._srSetView('detailed')" title="Detailed view"
-                style="background:transparent;border:none;color:var(--ss-muted);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:10px;transition:all .15s;">
-                <i class="fas fa-th-list"></i>
+              <button id="sr-view-detailed" onclick="window._srSetView('detailed')" title="Detailed — full resolution text"
+                style="background:transparent;border:none;color:var(--ss-muted);padding:4px 9px;border-radius:4px;cursor:pointer;font-size:10px;font-family:var(--ss-font);transition:all .15s;display:flex;align-items:center;gap:4px;">
+                <i class="fas fa-th-list"></i><span style="font-size:9px;font-weight:700;">Detailed</span>
               </button>
             </div>
             <div class="ss-canvas-path"><i class="fas fa-book-open"></i> Support Records</div>
           </div>
         </div>
 
-        <!-- Quick tag pills bar -->
-        <div id="sr-tag-bar" style="flex-shrink:0;padding:8px 16px;background:var(--ss-surface);border-bottom:1px solid var(--ss-border);display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
-          <span style="font-size:10px;color:rgba(255,255,255,.25);font-weight:600;white-space:nowrap;margin-right:2px;">COMMON:</span>
+        <!-- Common quick-tag pills ───────────────────────────────── -->
+        <div id="sr-tag-bar"
+          style="flex-shrink:0;padding:7px 16px;background:var(--ss-surface);border-bottom:1px solid var(--ss-border);display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
+          <span style="font-size:9px;color:rgba(255,255,255,.2);font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;margin-right:2px;">COMMON:</span>
         </div>
 
-        <!-- Pagination bar (top) -->
-        <div id="sr-pagination-bar" style="display:none;flex-shrink:0;padding:6px 16px;background:var(--ss-surface2);border-bottom:1px solid rgba(255,255,255,.04);align-items:center;gap:8px;">
+        <!-- Pagination bar ─────────────────────────────────────── -->
+        <div id="sr-pagination-bar"
+          style="display:none;flex-shrink:0;padding:5px 16px;background:var(--ss-surface2);border-bottom:1px solid rgba(255,255,255,.04);align-items:center;gap:8px;">
           <span id="sr-page-info" style="font-size:10px;color:var(--ss-muted);flex:1;"></span>
           <button id="sr-prev-btn" onclick="window._srPrevPage()"
             style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--ss-muted);padding:3px 10px;border-radius:5px;font-size:10px;cursor:pointer;font-family:var(--ss-font);">◀ Prev</button>
@@ -2415,38 +2422,38 @@
             style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--ss-muted);padding:3px 10px;border-radius:5px;font-size:10px;cursor:pointer;font-family:var(--ss-font);">Next ▶</button>
         </div>
 
-        <!-- Loading state -->
-        <div id="sr-loading" style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;">
-          <div style="width:36px;height:36px;border:3px solid rgba(168,85,247,.15);border-top-color:#a855f7;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+        <!-- Loading spinner ─────────────────────────────────────── -->
+        <div id="sr-loading"
+          style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;">
+          <div style="width:32px;height:32px;border:3px solid rgba(168,85,247,.15);border-top-color:#a855f7;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
           <div style="font-size:12px;color:var(--ss-muted);">Loading Support Records…</div>
-          <div style="font-size:10px;color:rgba(255,255,255,.2);">Fetching 13,925 KB entries</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.18);">13,925 KB entries</div>
         </div>
 
-        <!-- Welcome / landing state (no search, no filter) -->
-        <div id="sr-welcome" style="flex:1;overflow-y:auto;padding:20px 20px;min-height:0;display:none;">
-          <div style="max-width:700px;margin:0 auto;">
-            <div style="text-align:center;padding:20px 0 28px;">
-              <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
-                <i class="fas fa-book-open" style="color:#fff;font-size:20px;"></i>
-              </div>
-              <div style="font-size:18px;font-weight:800;color:#fff;margin-bottom:6px;">Support Records KB</div>
-              <div style="font-size:12px;color:var(--ss-muted);">Search or select a category from the left panel to find resolved case resolutions</div>
+        <!-- Welcome landing — shown when no search/filter active ── -->
+        <div id="sr-welcome" style="flex:1;overflow-y:auto;padding:20px 24px;min-height:0;display:none;">
+          <div style="max-width:860px;">
+            <!-- Stats row -->
+            <div id="sr-welcome-stats"
+              style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;"></div>
+            <!-- Category cards -->
+            <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.25);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;">
+              BROWSE BY CATEGORY — click to filter
             </div>
-            <!-- Stats grid -->
-            <div id="sr-welcome-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px;"></div>
-            <!-- Category overview cards -->
-            <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;">ALL CATEGORIES</div>
-            <div id="sr-welcome-cats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;"></div>
+            <div id="sr-welcome-cats"
+              style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;"></div>
           </div>
         </div>
 
-        <!-- Results area -->
-        <div id="sr-content" style="flex:1;overflow-y:auto;padding:12px 16px;min-height:0;display:none;flex-direction:column;gap:6px;">
-          <div id="sr-results" style="display:flex;flex-direction:column;gap:6px;"></div>
+        <!-- Results ─────────────────────────────────────────────── -->
+        <div id="sr-content"
+          style="flex:1;overflow-y:auto;padding:10px 16px;min-height:0;display:none;flex-direction:column;gap:5px;">
+          <div id="sr-results" style="display:flex;flex-direction:column;gap:5px;"></div>
           <div id="sr-empty" style="display:none;text-align:center;padding:60px 20px;">
-            <i class="fas fa-search" style="font-size:36px;color:rgba(255,255,255,.08);margin-bottom:12px;display:block;"></i>
+            <i class="fas fa-search"
+              style="font-size:32px;color:rgba(255,255,255,.07);margin-bottom:12px;display:block;"></i>
             <div style="font-size:14px;color:var(--ss-muted);font-weight:600;">No matching records found</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.25);margin-top:5px;">Try a shorter or different keyword</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.2);margin-top:4px;">Try a different keyword or clear the category filter</div>
           </div>
         </div>
 
