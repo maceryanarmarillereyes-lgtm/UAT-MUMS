@@ -67,12 +67,15 @@ module.exports = async (req, res) => {
       }
 
       // Return in global_quickbase format (my_quickbase.js expects this shape)
+      // SECURITY FIX: Never expose raw token to client; use qbTokenSet flag instead.
+      // The export endpoint (qb_export.js) reads token directly from DB server-side.
       const settings = {
         reportLink,
         realm,
         tableId,
         qid,
-        qbToken:       s.qbToken       || '',
+        qbToken:       '',           // always blank — token stays server-side only
+        qbTokenSet:    !!(s.qbToken), // true/false so client can show "token saved" hint
         customColumns: Array.isArray(s.customColumns) ? s.customColumns : [],
         filterConfig:  Array.isArray(s.filterConfig)  ? s.filterConfig  : [],
         filterMatch:   s.filterMatch || 'ALL',

@@ -4057,12 +4057,17 @@
     // Step 1: get QB settings
     fetch('/api/studio/qb_settings_global', { headers: headers })
       .then(function(r) { return r.ok ? r.json() : r.json().then(function(e) { throw new Error(e.message || 'Settings fetch failed'); }); })
-      .then(function(cfg) {
+      .then(function(resp) {
+        // Server returns { ok: true, settings: { realm, tableId, qid, qbToken, ... } }
+        // BUG FIX: was reading cfg.realm (undefined) instead of cfg.settings.realm
+        var cfg     = (resp && resp.settings) ? resp.settings : resp;
         var realm   = cfg.realm   || '';
         var tableId = cfg.tableId || '';
         var qid     = cfg.qid     || '';
         var qbToken = cfg.qbToken || '';
-        if (!realm || !tableId || !qid || !qbToken) throw new Error('Studio QB not configured. Go to General Settings → Studio Quickbase Settings first.');
+        // qb_export endpoint validates server-side — only check realm+tableId+qid here
+        // (token is stored in DB; client never needs it for the export call)
+        if (!realm || !tableId || !qid) throw new Error('Studio QB not configured. Go to General Settings → Studio Quickbase Settings first.');
 
         // Step 2: client-side paginated fetch through our proxy endpoint
         var allRecords = []; var fields = [];
@@ -4134,6 +4139,72 @@
       })
       .finally(function() { _setDisabled(false); });
   };
+
+  // ── Connect+ tab state (BUG FIX: was missing — caused ReferenceError) ──
+  var _state = {
+    loaded:    false,
+    loading:   false,
+    all:       [],
+    filtered:  [],
+    page:      1,
+    search:    '',
+    country:   '',
+    directory: '',
+    sortCol:   null,
+    sortDir:   1,
+    modalIdx:  0,
+  };
+  var CSV_URL  = '';
+  var PAGE_SIZE = 100;
+
+  // ── Helper: get active CSV URL from live window var or localStorage ──
+  // (BUG FIX: _getActiveCsvUrl + _normalizeCsvUrl were missing from scope)
+  function _getActiveCsvUrl() {
+    // Primary: live value set by CPS settings module
+    if (window._cpCsvUrl) return String(window._cpCsvUrl);
+    // Fallback: read directly from localStorage key used by CPS module
+    try {
+      var raw = localStorage.getItem('ss_connectplus_settings');
+      if (raw) {
+        var obj = JSON.parse(raw);
+        if (obj && obj.csvUrl) return String(obj.csvUrl);
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  function _normalizeCsvUrl(raw) {
+    var url = String(raw || '').trim();
+    if (!url) return url;
+    // Already a correct CSV export URL
+    if (url.includes('output=csv')) return url;
+    try {
+      var u = new URL(url);
+      // Case 1: /pub link missing output=csv param
+      if (u.pathname.includes('/pub')) {
+        u.searchParams.set('output', 'csv');
+        return u.toString();
+      }
+      // Case 2: /pubhtml — replace with /pub?output=csv
+      if (u.pathname.includes('/pubhtml')) {
+        var gid2 = u.searchParams.get('gid') || '';
+        u.pathname = u.pathname.replace('/pubhtml', '/pub');
+        u.searchParams.set('output', 'csv');
+        if (gid2) u.searchParams.set('gid', gid2);
+        return u.toString();
+      }
+      // Case 3: /edit or /view — build export URL
+      if (u.pathname.includes('/edit') || u.pathname.includes('/view')) {
+        var gid3 = u.searchParams.get('gid') || '0';
+        var m2 = u.pathname.match(/\/d\/([^/]+)\//);
+        if (m2) {
+          return 'https://docs.google.com/spreadsheets/d/' + m2[1] +
+            '/export?format=csv&gid=' + gid3;
+        }
+      }
+    } catch (_) {}
+    return url;
+  }
 
   // ── CSV parser (handles quoted fields with commas) ──────────────────
   function parseCSV(text) {
@@ -4523,10 +4594,15 @@
     if (e.key === 'ArrowLeft')  window._cpModalNav(-1);
     if (e.key === 'ArrowRight') window._cpModalNav(1);
   });
-  // Backdrop click
-  document.getElementById('cp-detail-modal').addEventListener('click', function(e) {
-    if (e.target === this) window._cpCloseModal();
-  });
+  // Backdrop click — guard against null when modal not yet in DOM
+  (function() {
+    var _modal = document.getElementById('cp-detail-modal');
+    if (_modal) {
+      _modal.addEventListener('click', function(e) {
+        if (e.target === this) window._cpCloseModal();
+      });
+    }
+  })();
 
   // ── CSV Export ──────────────────────────────────────────────────────
   window._cpExportCsv = function() {
