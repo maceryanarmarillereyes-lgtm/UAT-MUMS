@@ -4029,560 +4029,110 @@
   // server-side and returns a full CSV or XLS file.
   // No record limit — fetches all 22,000+ cases.
   window._qbsExportAll = function(format) {
-    var statusEl  = document.getElementById('qbs-export-status');
-    var csvBtn    = document.getElementById('qbs-export-csv-btn');
-    var xlsBtn    = document.getElementById('qbs-export-xls-btn');
-    var isCsv     = format === 'csv';
-
-    // Inline token getter — reads from mums_supabase_session (same as CloudAuth storage)
-    function _getToken() {
-      try {
-        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-        if (raw) { var p = JSON.parse(raw); var t = p && p.access_token; if (t) return t; }
-        if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken();
-        if (window.Auth && typeof window.Auth.getSession === 'function') { var s = window.Auth.getSession(); if (s && s.access_token) return s.access_token; }
-      } catch(_) {}
-      return '';
-    }
-
-    if (statusEl) {
-      statusEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i>' +
-        'Fetching all QB records… This may take 20–40 seconds for 22,000+ rows.';
-      statusEl.style.color = '#58a6ff';
-    }
-    if (csvBtn) csvBtn.disabled = true;
-    if (xlsBtn) xlsBtn.disabled = true;
-
-    var tok = _getToken();
-    var headers = {};
-    if (tok) headers['Authorization'] = 'Bearer ' + tok;
-
-    var url = '/api/studio/qb_export?format=' + encodeURIComponent(format || 'csv');
+    var statusEl = document.getElementById('qbs-export-status');
+    var csvBtn   = document.getElementById('qbs-export-csv-btn');
+    var xlsBtn   = document.getElementById('qbs-export-xls-btn');
+    var isCsv    = format === 'csv';
     var startTime = Date.now();
 
-    fetch(url, { headers: headers })
-      .then(function(r) {
-        var count = r.headers.get('X-Record-Count');
-        if (!r.ok) return r.json().then(function(e) { throw new Error(e.message || 'Export failed (HTTP ' + r.status + ')'); });
-        if (statusEl && count) {
-          statusEl.innerHTML = '<i class="fas fa-check-circle" style="margin-right:5px;color:#3fb950;"></i>' +
-            count.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' records — building file…';
-          statusEl.style.color = '#3fb950';
-        }
-        return r.blob();
-      })
-      .then(function(blob) {
-        var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        var ext  = isCsv ? 'csv' : 'xls';
-        var mime = isCsv ? 'text/csv' : 'application/vnd.ms-excel';
-        var date = new Date().toISOString().slice(0, 10);
-        var filename = 'quickbase_all_cases_' + date + '.' + ext;
-
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([blob], { type: mime }));
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(function() { URL.revokeObjectURL(a.href); }, 5000);
-
-        if (statusEl) {
-          statusEl.innerHTML = '<i class="fas fa-check-circle" style="margin-right:5px;"></i>' +
-            'Export complete — ' + filename + ' (' + elapsed + 's)';
-          statusEl.style.color = '#3fb950';
-          clearTimeout(statusEl._t);
-          statusEl._t = setTimeout(function() { statusEl.innerHTML = ''; }, 8000);
-        }
-      })
-      .catch(function(e) {
-        if (statusEl) {
-          statusEl.innerHTML = '<i class="fas fa-times-circle" style="margin-right:5px;"></i>Export failed: ' +
-            (e && e.message || 'Unknown error');
-          statusEl.style.color = '#f85149';
-        }
-      })
-      .finally(function() {
-        if (csvBtn) csvBtn.disabled = false;
-        if (xlsBtn) xlsBtn.disabled = false;
-      });
-  };
-
-
-  // Called from left sidebar "Search all records" button.
-  // Uses /api/studio/qb_search which sends the term to QB API as a
-  // CT (contains) WHERE clause — QB searches all 22,314+ records.
-  (function() {
-    var _dsInFlight = false;
-
-    function sqbToken() {
+    function _setStatus(html, color) { if (statusEl) { statusEl.innerHTML = html; statusEl.style.color = color || '#58a6ff'; } }
+    function _setDisabled(v) { if (csvBtn) csvBtn.disabled = v; if (xlsBtn) xlsBtn.disabled = v; }
+    function _esc(s) { return String(s == null ? '' : s).replace(/"/g, '\\"'); }
+    function _xlEsc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,''); }
+    function _tok() {
       try {
         var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-        if (raw) { var p = JSON.parse(raw); var t = p && p.access_token; if (t) return t; }
+        if (raw) { var p = JSON.parse(raw); if (p && p.access_token) return p.access_token; }
         if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken();
-      } catch(_) {}
-      return '';
+      } catch(_) {} return '';
     }
 
-    window._qbsDeepSearch = function(term, skip) {
-      skip = skip || 0;
-      if (!term || !term.trim()) return;
+    _setDisabled(true);
+    _setStatus('<i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i>Starting export — fetching QB settings…');
 
-      var statusEl = document.getElementById('qbs-search-status');
-      var resultEl = document.getElementById('qbs-search-results');
-      var btnEl    = document.getElementById('qbs-deep-search-btn');
+    var headers = {};
+    var tok = _tok();
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
 
-      if (skip === 0) {
-        if (statusEl) {
-          statusEl.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:5px;font-size:9px;"></i>Searching all records…';
-          statusEl.style.cssText = 'font-size:10px;color:#58a6ff;padding:4px 0;display:flex;align-items:center;';
+    // Step 1: get QB settings
+    fetch('/api/studio/qb_settings_global', { headers: headers })
+      .then(function(r) { return r.ok ? r.json() : r.json().then(function(e) { throw new Error(e.message || 'Settings fetch failed'); }); })
+      .then(function(cfg) {
+        var realm   = cfg.realm   || '';
+        var tableId = cfg.tableId || '';
+        var qid     = cfg.qid     || '';
+        var qbToken = cfg.qbToken || '';
+        if (!realm || !tableId || !qid || !qbToken) throw new Error('Studio QB not configured. Go to General Settings → Studio Quickbase Settings first.');
+
+        // Step 2: client-side paginated fetch through our proxy endpoint
+        var allRecords = []; var fields = [];
+        var PAGE_SIZE = 1000; var skip = 0; var done = false;
+
+        function fetchNext() {
+          _setStatus(
+            '<i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i>Fetching records ' +
+            (skip + 1) + '–' + (skip + PAGE_SIZE) + ' (' + allRecords.length.toLocaleString() + ' loaded)…'
+          );
+          return fetch('/api/studio/qb_export?skip=' + skip + '&top=' + PAGE_SIZE, { headers: headers })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (!d.ok) throw new Error(d.message || 'QB page fetch failed');
+              if (!fields.length && d.fields) fields = d.fields;
+              var batch = d.records || [];
+              allRecords = allRecords.concat(batch);
+              if (batch.length >= PAGE_SIZE && skip < 50000) { skip += PAGE_SIZE; return fetchNext(); }
+            });
         }
-        if (resultEl) resultEl.innerHTML = '';
-        if (btnEl) { btnEl.disabled = true; btnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching…'; }
-      }
 
-      var tok = sqbToken();
-      var headers = { 'Content-Type': 'application/json' };
-      if (tok) headers['Authorization'] = 'Bearer ' + tok;
+        return fetchNext().then(function() { return { allRecords: allRecords, fields: fields }; });
+      })
+      .then(function(result) {
+        var recs = result.allRecords;
+        var cols = (result.fields || []).map(function(f) { return { id: String(f.id), label: String(f.label || 'Field ' + f.id) }; });
+        _setStatus('<i class="fas fa-cog fa-spin" style="margin-right:5px;"></i>Building ' + format.toUpperCase() + ' file (' + recs.length.toLocaleString() + ' records)…', '#22d3ee');
 
-      var url = '/api/studio/qb_search?q=' + encodeURIComponent(term.trim()) +
-        '&skip=' + skip + '&top=100';
-
-      fetch(url, { headers: headers })
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-          if (btnEl) {
-            btnEl.disabled = false;
-            btnEl.innerHTML = '<i class="fas fa-search"></i> Search All Records';
-          }
-
-          if (d.warning === 'studio_qb_not_configured') {
-            if (statusEl) {
-              statusEl.innerHTML = '<i class="fas fa-exclamation-circle" style="color:#f85149;margin-right:4px;"></i>Studio QB not configured';
-              statusEl.style.cssText = 'font-size:10px;color:#f85149;padding:4px 0;';
-            }
-            return;
-          }
-          if (!d.ok) {
-            if (statusEl) {
-              statusEl.innerHTML = '<i class="fas fa-times-circle" style="color:#f85149;margin-right:4px;"></i>' + (d.message || 'Search failed');
-              statusEl.style.cssText = 'font-size:10px;color:#f85149;padding:4px 0;';
-            }
-            return;
-          }
-
-          var total    = d.total;
-          var returned = (d.records || []).length;
-          var fromIdx  = skip + 1;
-          var toIdx    = skip + returned;
-
-          if (statusEl) {
-            if (total != null && total > 0) {
-              var pct = Math.round((toIdx / total) * 100);
-              statusEl.innerHTML =
-                '<span style="color:#3fb950;font-weight:800;">' + total.toLocaleString() + '</span>' +
-                ' records match <em style="color:#58a6ff;">&ldquo;' + term + '&rdquo;</em>' +
-                (skip > 0 ? ' &nbsp;·&nbsp; showing ' + fromIdx + '&ndash;' + toIdx : '');
-            } else if (returned === 0) {
-              statusEl.innerHTML = '<span style="color:var(--ss-muted);">No records found for <em>&ldquo;' + term + '&rdquo;</em></span>';
-            } else {
-              statusEl.innerHTML =
-                '<span style="color:#58a6ff;font-weight:800;">' + returned + '</span> records returned';
-            }
-            statusEl.style.cssText = 'font-size:10px;color:var(--ss-muted);padding:4px 0;line-height:1.6;';
-          }
-
-          if (!resultEl) return;
-          var cols = d.columns || [];
-          var recs = d.records || [];
-
-          if (!recs.length && skip === 0) {
-            resultEl.innerHTML =
-              '<div style="text-align:center;padding:16px 8px;color:var(--ss-muted);">' +
-              '<i class="fas fa-search" style="font-size:20px;opacity:.2;display:block;margin-bottom:8px;"></i>' +
-              '<div style="font-size:11px;">No results for <strong>&ldquo;' + term + '&rdquo;</strong></div>' +
-              '<div style="font-size:10px;opacity:.6;margin-top:4px;">Try different keywords</div>' +
-              '</div>';
-            return;
-          }
-
-          // Priority fields for card display
-          var caseNumCol = cols.find(function(c) { return /case.?#/i.test(c.label); });
-          var descCol    = cols.find(function(c) { return /short.?desc|description/i.test(c.label); });
-          var statusCol  = cols.find(function(c) { return /status/i.test(c.label); });
-          var assignCol  = cols.find(function(c) { return /assigned/i.test(c.label); });
-          var notesCol   = cols.find(function(c) { return /notes|update/i.test(c.label); });
-          var typeCol    = cols.find(function(c) { return /^type$/i.test(c.label); });
-          var endUserCol = cols.find(function(c) { return /end.?user/i.test(c.label); });
-
-          function getVal(rec, col) {
-            if (!col) return '';
-            return String((rec.fields[col.id] || {}).value || '');
-          }
-          function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-          var statusColorMap = {
-            'resolved': '#3fb950', 'initial': '#f59e0b',
-            'investigating': '#58a6ff', 'triag': '#a78bfa',
-            'closed': '#8b949e', 'response': '#f97316'
-          };
-          function statusColor(s) {
-            var sl = String(s || '').toLowerCase();
-            for (var k in statusColorMap) { if (sl.indexOf(k) >= 0) return statusColorMap[k]; }
-            return '#8b949e';
-          }
-
-          // Build snaps array for prev/next navigation in case detail modal
-          var colMap = {};
-          cols.forEach(function(c) { colMap[String(c.id)] = c.label; });
-          // All columns including Case # (field 3)
-          var fullColMap = Object.assign({ '3': 'Case #' }, colMap);
-
-          var dsSnaps = recs.map(function(rec, idx) {
-            return {
-              rowNum:    (skip + idx + 1),
-              recordId:  rec.qbRecordId || '?',
-              fields:    rec.fields || {},
-              columnMap: fullColMap,
-            };
-          });
-
-          // Merge into global snap store (for navigation across load-more pages)
-          if (skip === 0) {
-            window._qbsDsSnaps = dsSnaps;
-          } else {
-            window._qbsDsSnaps = (window._qbsDsSnaps || []).concat(dsSnaps);
-          }
-
-          // Build card DOM elements with proper click handlers
-          var fragment = document.createDocumentFragment();
-          dsSnaps.forEach(function(snap, localIdx) {
-            var rec     = recs[localIdx];
-            var caseId  = snap.recordId;
-            var desc    = getVal(rec, descCol).slice(0, 90);
-            if (getVal(rec, descCol).length > 90) desc += '…';
-            var status  = getVal(rec, statusCol);
-            var assign  = getVal(rec, assignCol);
-            var type    = getVal(rec, typeCol);
-            var endUser = getVal(rec, endUserCol);
-            var sc      = statusColor(status);
-            var globalIdx = skip + localIdx;
-
-            var card = document.createElement('div');
-            card.style.cssText = 'background:var(--ss-surface3);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:8px 10px;margin-bottom:5px;cursor:pointer;transition:border-color .15s,background .15s;';
-            card.addEventListener('mouseenter', function() {
-              this.style.borderColor = 'rgba(88,166,255,.4)';
-              this.style.background  = 'rgba(88,166,255,.05)';
-            });
-            card.addEventListener('mouseleave', function() {
-              this.style.borderColor = 'rgba(255,255,255,.07)';
-              this.style.background  = 'var(--ss-surface3)';
-            });
-            // CLICK → open case detail modal
-            // Use globalIdx to look up snap at click time (handles load-more correctly)
-            card.setAttribute('data-qbs-snap-idx', globalIdx);
-            card.addEventListener('click', function() {
-              var idx = parseInt(this.getAttribute('data-qbs-snap-idx'), 10);
-              var allSnaps = window._qbsDsSnaps || [];
-              var s = allSnaps[idx];
-              if (s) window._qbsOpenCaseDetail(s, allSnaps);
-            });
-
-            var statusHtml = status
-              ? '<span style="font-size:8px;font-weight:700;color:' + sc + ';background:' + sc + '20;border-radius:4px;padding:2px 6px;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis;">' + esc(status.replace(/^[A-Z]\s*-\s*/, '')) + '</span>'
-              : '';
-            var descHtml = desc
-              ? '<div style="font-size:10px;color:var(--ss-text);line-height:1.45;margin-bottom:3px;">' + esc(desc) + '</div>'
-              : '';
-            var endUserHtml = endUser ? '<span style="font-size:9px;color:var(--ss-muted);background:rgba(255,255,255,.04);border-radius:3px;padding:1px 5px;">' + esc(endUser) + '</span>' : '';
-            var typeHtml    = type    ? '<span style="font-size:9px;color:var(--ss-muted);background:rgba(255,255,255,.04);border-radius:3px;padding:1px 5px;">' + esc(type) + '</span>' : '';
-            var assignHtml  = assign  ? '<span style="font-size:9px;color:#8b949e;padding:1px 0;">→ ' + esc(assign.split(' ').pop()) + '</span>' : '';
-
-            card.innerHTML =
-              '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;">' +
-                '<span style="font-size:11px;font-weight:900;color:#58a6ff;letter-spacing:.01em;">#' + esc(caseId) + '</span>' +
-                statusHtml +
-              '</div>' +
-              descHtml +
-              '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;">' + endUserHtml + typeHtml + assignHtml + '</div>';
-
-            fragment.appendChild(card);
-          });
-
-          // Remove old load-more before appending
-          var oldLoadMore = resultEl.querySelector('.qbs-load-more');
-          if (oldLoadMore) oldLoadMore.remove();
-
-          if (skip === 0) {
-            resultEl.innerHTML = '';
-          }
-          resultEl.appendChild(fragment);
-
-          // Load more button
-          var nextSkip = skip + returned;
-          var hasMore  = total == null ? returned === 100 : nextSkip < total;
-          if (hasMore) {
-            var remaining = total != null ? (total - nextSkip).toLocaleString() : 'more';
-            var lm = document.createElement('button');
-            lm.className = 'qbs-load-more';
-            lm.innerHTML = '<i class="fas fa-arrow-down" style="margin-right:5px;"></i>Load more (' + remaining + ' remaining)';
-            lm.style.cssText = 'width:100%;padding:8px;background:rgba(88,166,255,.07);border:1px solid rgba(88,166,255,.18);border-radius:7px;color:#58a6ff;font-size:10px;font-weight:700;cursor:pointer;margin-top:4px;font-family:var(--ss-font);transition:background .15s;';
-            lm.onmouseover = function() { this.style.background = 'rgba(88,166,255,.14)'; };
-            lm.onmouseout  = function() { this.style.background = 'rgba(88,166,255,.07)'; };
-            lm.onclick = function() {
-              lm.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i>Loading…';
-              lm.disabled  = true;
-              window._qbsDeepSearch(term, nextSkip);
-            };
-            resultEl.appendChild(lm);
-          }
-        })
-        .catch(function(e) {
-          if (btnEl) {
-            btnEl.disabled = false;
-            btnEl.innerHTML = '<i class="fas fa-search"></i> Search All Records';
-          }
-          if (statusEl) {
-            statusEl.innerHTML = '<i class="fas fa-times-circle" style="color:#f85149;margin-right:4px;"></i>' + (e && e.message || 'Network error');
-            statusEl.style.cssText = 'font-size:10px;color:#f85149;padding:4px 0;';
-          }
-        });
-    };
-
-        // Trigger deep search from sidebar input
-    var sideInput = document.getElementById('qbs-search-input');
-    if (sideInput) {
-      var _debounce;
-      sideInput.addEventListener('input', function() {
-        clearTimeout(_debounce);
-        var val = sideInput.value.trim();
-        _debounce = setTimeout(function() {
-          if (val.length >= 2) window._qbsDeepSearch(val, 0);
-          else if (!val) {
-            var statusEl = document.getElementById('qbs-search-status');
-            var resultEl = document.getElementById('qbs-search-results');
-            if (statusEl) statusEl.textContent = '';
-            if (resultEl) resultEl.innerHTML = '';
-          }
-        }, 500);
-      });
-      sideInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-          clearTimeout(_debounce);
-          var val = sideInput.value.trim();
-          if (val) window._qbsDeepSearch(val, 0);
+        function cellVal(row, col) {
+          var cell = row && row[col.id];
+          return (cell && typeof cell === 'object') ? cell.value : cell;
         }
-      });
-    }
-  })();
 
-})();
-</script>
+        var blob, filename, mime;
+        if (isCsv) {
+          var rows = [cols.map(function(c) { return '"' + _esc(c.label) + '"'; }).join(',')];
+          recs.forEach(function(row) { rows.push(cols.map(function(c) { return '"' + _esc(cellVal(row,c)) + '"'; }).join(',')); });
+          blob = new Blob(['\uFEFF' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+          filename = 'quickbase_all_cases_' + new Date().toISOString().slice(0,10) + '.csv';
+          mime = 'text/csv';
+        } else {
+          var xml = ['<?xml version="1.0" encoding="UTF-8"?>',
+            '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet">',
+            '<Worksheet ss:Name="QB Export"><Table>',
+            '<Row>' + cols.map(function(c) { return '<Cell><Data ss:Type="String">' + _xlEsc(c.label) + '</Data></Cell>'; }).join('') + '</Row>'];
+          recs.forEach(function(row) {
+            xml.push('<Row>' + cols.map(function(c) {
+              var v = String(cellVal(row,c) == null ? '' : cellVal(row,c));
+              return '<Cell><Data ss:Type="' + (!isNaN(v)&&v.trim()&&v.length<15?'Number':'String') + '">' + _xlEsc(v) + '</Data></Cell>';
+            }).join('') + '</Row>');
+          });
+          xml.push('</Table></Worksheet></Workbook>');
+          blob = new Blob(['\uFEFF' + xml.join('\n')], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+          filename = 'quickbase_all_cases_' + new Date().toISOString().slice(0,10) + '.xls';
+          mime = 'application/vnd.ms-excel';
+        }
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(a.href); }, 5000);
 
-
-  <!-- ── QB CASE DETAIL MODAL (injected for Support Studio) ─────────── -->
-  <div class="modal" id="qbCaseDetailModal" aria-label="Case Detail" role="dialog" aria-modal="true">
-    <div class="panel qbcd-panel">
-      <div class="qbcd-accent-bar"></div>
-      <div class="qbcd-header">
-        <div class="qbcd-row-badge" id="qbcdRowBadge">1</div>
-        <div class="qbcd-title-block">
-          <div class="qbcd-case-label">Case Detail View</div>
-          <div class="qbcd-case-id">CASE# <span id="qbcdCaseId">—</span></div>
-          <div class="qbcd-desc" id="qbcdDesc">—</div>
-        </div>
-        <button class="btn ghost qbcd-close-btn" type="button" id="qbcdCloseBtn" aria-label="Close">✕</button>
-      </div>
-      <div class="qbcd-status-bar">
-        <span class="qbcd-status-label">Status:</span>
-        <span id="qbcdStatusBadge"></span>
-        <span class="qbcd-status-spacer"></span>
-        <span class="qbcd-meta" id="qbcdMeta"></span>
-      </div>
-      <div class="body qbcd-body">
-        <div class="qbcd-kpi-row">
-          <div class="qbcd-kpi qbcd-kpi-cyan">
-            <div class="qbcd-kpi-label">Case Age</div>
-            <div class="qbcd-kpi-value" id="qbcdKpiAge">—</div>
-            <div class="qbcd-kpi-sub">Open duration</div>
-          </div>
-          <div class="qbcd-kpi qbcd-kpi-amber">
-            <div class="qbcd-kpi-label">Last Updated</div>
-            <div class="qbcd-kpi-value" id="qbcdKpiLast">—</div>
-            <div class="qbcd-kpi-sub">Days since update</div>
-          </div>
-          <div class="qbcd-kpi qbcd-kpi-violet">
-            <div class="qbcd-kpi-label">Type</div>
-            <div class="qbcd-kpi-value qbcd-kpi-value-sm" id="qbcdKpiType">—</div>
-            <div class="qbcd-kpi-sub">Case category</div>
-          </div>
-          <div class="qbcd-kpi qbcd-kpi-emerald">
-            <div class="qbcd-kpi-label">End User</div>
-            <div class="qbcd-kpi-value qbcd-kpi-value-sm" id="qbcdKpiEndUser">—</div>
-            <div class="qbcd-kpi-sub">Client account</div>
-          </div>
-        </div>
-        <div class="qbcd-detail-cols">
-          <div class="qbcd-detail-block qbcd-block-cyan">
-            <div class="qbcd-block-title">Case Assignment</div>
-            <div class="qbcd-kv-list">
-              <div class="qbcd-kv"><span class="qbcd-kv-lbl">Assigned To</span><span class="qbcd-kv-val qbcd-kv-hi" id="qbcdAssigned">—</span></div>
-              <div class="qbcd-kv"><span class="qbcd-kv-lbl">Contact — Full Name</span><span class="qbcd-kv-val" id="qbcdContact">—</span></div>
-              <div class="qbcd-kv"><span class="qbcd-kv-lbl">End User / Client</span><span class="qbcd-kv-val" id="qbcdEndUser">—</span></div>
-            </div>
-          </div>
-          <div class="qbcd-detail-block qbcd-block-violet">
-            <div class="qbcd-block-title">Case Classification</div>
-            <div class="qbcd-kv-list">
-              <div class="qbcd-kv"><span class="qbcd-kv-lbl">Case #</span><span class="qbcd-kv-val qbcd-kv-hi" id="qbcdCaseId2">—</span></div>
-              <div class="qbcd-kv"><span class="qbcd-kv-lbl">Case Type</span><span class="qbcd-kv-val" id="qbcdType2">—</span></div>
-              <div class="qbcd-kv"><span class="qbcd-kv-lbl">Case Status</span><span id="qbcdStatus2"></span></div>
-            </div>
-          </div>
-        </div>
-        <!-- Case Notes block — shown only when Case Notes column is configured -->
-        <div class="qbcd-update-block qbcd-notes-block" id="qbcdNotesBlock" style="display:none;">
-          <div class="qbcd-update-label">
-            <span class="qbcd-update-dot" style="background:#a78bfa;box-shadow:0 0 7px #a78bfa;"></span>
-            Case Notes
-          </div>
-          <div class="qbcd-update-text" id="qbcdNotes">—</div>
-        </div>
-        <!-- Latest Update block -->
-        <div class="qbcd-update-block">
-          <div class="qbcd-update-label"><span class="qbcd-update-dot"></span>Latest Update on the Case</div>
-          <div class="qbcd-update-text" id="qbcdLatest">—</div>
-        </div>
-        <!-- Dynamic extra fields — any column not in the known groups above -->
-        <div class="qbcd-detail-block qbcd-extra-block" id="qbcdExtraBlock" style="display:none;">
-          <div class="qbcd-block-title" style="color:rgba(148,163,184,.7);">Additional Fields</div>
-          <div class="qbcd-kv-list" id="qbcdExtraFields"></div>
-        </div>
-      </div>
-      <div class="qbcd-footer">
-        <div class="qbcd-nav-btns">
-          <button class="btn ghost qbcd-nav-btn" id="qbcdPrevBtn" type="button">← Prev</button>
-          <button class="btn ghost qbcd-nav-btn" id="qbcdNextBtn" type="button">Next →</button>
-        </div>
-        <span class="qbcd-pos" id="qbcdPos"></span>
-        <span style="flex:1"></span>
-        <button class="btn qbcd-action-btn" type="button" id="qbcdCopyBtn">Copy Case #</button>
-        <button class="btn ghost" type="button" id="qbcdCloseBtn2">Close</button>
-      </div>
-    </div>
-  </div>
-  <!-- ── END QB CASE DETAIL MODAL ──────────────────────────────────────── -->
-
-  <!-- ── CONNECT+ SITE DETAIL MODAL ────────────────────────────────── -->
-  <div id="cp-detail-modal" style="display:none;position:fixed;inset:0;z-index:2147483647;background:rgba(6,12,24,.88);align-items:center;justify-content:center;padding:16px;box-sizing:border-box;">
-    <div style="background:var(--ss-surface);border:1px solid var(--ss-border);border-radius:16px;width:min(680px,96vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.6);animation:cpModalIn .2s ease;">
-      <style>
-        @keyframes cpModalIn { from { opacity:0;transform:scale(.95) translateY(12px); } to { opacity:1;transform:none; } }
-        .cp-kv { display:flex;flex-direction:column;gap:2px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06); }
-        .cp-kv:last-child { border-bottom:none; }
-        .cp-kv-label { font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted); }
-        .cp-kv-value { font-size:13px;color:#e6edf3;font-weight:500;word-break:break-word; }
-      </style>
-      <!-- Header -->
-      <div style="padding:18px 24px 14px;border-bottom:1px solid var(--ss-border);display:flex;align-items:flex-start;gap:14px;flex-shrink:0;">
-        <div style="width:42px;height:42px;border-radius:11px;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          <i class="fas fa-plug" style="color:#22d3ee;font-size:16px;"></i>
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#22d3ee;margin-bottom:3px;">Connect+ Site Detail</div>
-          <div id="cp-modal-site" style="font-size:18px;font-weight:900;color:#e6edf3;letter-spacing:-.01em;"></div>
-          <div id="cp-modal-address" style="font-size:11px;color:var(--ss-muted);margin-top:2px;"></div>
-        </div>
-        <div style="display:flex;gap:8px;flex-shrink:0;">
-          <button id="cp-modal-prev" onclick="window._cpModalNav(-1)"
-            style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--ss-muted);padding:6px 12px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;">← Prev</button>
-          <button id="cp-modal-next" onclick="window._cpModalNav(1)"
-            style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:var(--ss-muted);padding:6px 12px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;">Next →</button>
-          <button onclick="window._cpCloseModal()"
-            style="background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);border-radius:6px;color:#f85149;padding:6px 10px;font-size:12px;cursor:pointer;">✕</button>
-        </div>
-      </div>
-      <!-- KPI bar -->
-      <div style="display:flex;gap:0;flex-shrink:0;border-bottom:1px solid var(--ss-border);">
-        <div style="flex:1;padding:12px 18px;border-right:1px solid var(--ss-border);">
-          <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:4px;">Country</div>
-          <div id="cp-modal-country" style="font-size:13px;font-weight:700;color:#22d3ee;"></div>
-        </div>
-        <div style="flex:1;padding:12px 18px;border-right:1px solid var(--ss-border);">
-          <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:4px;">Directory</div>
-          <div id="cp-modal-directory" style="font-size:13px;font-weight:700;color:#e6edf3;"></div>
-        </div>
-        <div style="flex:1;padding:12px 18px;border-right:1px solid var(--ss-border);">
-          <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:4px;">Time Zone</div>
-          <div id="cp-modal-timezone" style="font-size:12px;font-weight:600;color:#e6edf3;"></div>
-        </div>
-        <div style="flex:1;padding:12px 18px;">
-          <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:4px;">Control Systems</div>
-          <div id="cp-modal-systems" style="font-size:20px;font-weight:900;color:#3fb950;"></div>
-        </div>
-      </div>
-      <!-- Body -->
-      <div style="flex:1;overflow:auto;padding:16px 24px;">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px;">
-          <div class="cp-kv"><span class="cp-kv-label">City</span><span id="cp-modal-city" class="cp-kv-value"></span></div>
-          <div class="cp-kv"><span class="cp-kv-label">State / Province / Region</span><span id="cp-modal-state" class="cp-kv-value"></span></div>
-          <div class="cp-kv"><span class="cp-kv-label">Zip / Postal Code</span><span id="cp-modal-zip" class="cp-kv-value"></span></div>
-          <div class="cp-kv"><span class="cp-kv-label">Address</span><span id="cp-modal-addr1" class="cp-kv-value"></span></div>
-        </div>
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06);">
-          <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:8px;">Connect+ URL</div>
-          <a id="cp-modal-url" href="#" target="_blank" rel="noopener noreferrer"
-            style="display:inline-flex;align-items:center;gap:8px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.25);border-radius:8px;color:#22d3ee;padding:10px 16px;font-size:12px;font-weight:700;text-decoration:none;transition:background .15s;word-break:break-all;"
-            onmouseover="this.style.background='rgba(34,211,238,.15)'" onmouseout="this.style.background='rgba(34,211,238,.08)'">
-            <i class="fas fa-external-link-alt" style="flex-shrink:0;"></i>
-            <span id="cp-modal-url-text">Open Connect+</span>
-          </a>
-        </div>
-      </div>
-      <!-- Footer -->
-      <div style="padding:12px 24px;border-top:1px solid var(--ss-border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-        <span id="cp-modal-pos" style="font-size:11px;color:var(--ss-muted);"></span>
-        <button onclick="window._cpCloseModal()"
-          style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:7px;color:var(--ss-text);padding:7px 18px;font-size:12px;font-weight:600;font-family:var(--ss-font);cursor:pointer;">Close</button>
-      </div>
-    </div>
-  </div>
-
-<script>
-/* ═══════════════════════════════════════════════════════════════════
-   CONNECT+ TAB — Support Studio
-   Loads 36,000+ sites from Google Sheets CSV (published to web).
-   Client-side search/filter/sort/paginate. Click row → detail modal.
-═══════════════════════════════════════════════════════════════════ */
-(function() {
-  'use strict';
-
-  // CSV URL: reads from Connect+ Settings (General Settings → Connect+ Settings → Data Source)
-  // Falls back to the original default URL if no custom URL is saved.
-  // To change: go to General Settings → Connect+ Settings and paste your new CSV link.
-  var DEFAULT_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTI_dFlSCQPrUJu0bNi4O-G2Lev7G-r5iyUpMo0o2gJmfJVok3dyBpx8XigVeSwl-UORbr6a0J1HIH3/pub?gid=970184644&single=true&output=csv';
-  function _getActiveCsvUrl() {
-    try {
-      if (window._cpCsvUrl) return window._cpCsvUrl;
-      var raw = localStorage.getItem('ss_connectplus_settings');
-      if (raw) { var s = JSON.parse(raw); if (s && s.csvUrl) return s.csvUrl; }
-    } catch(_) {}
-    return DEFAULT_CSV_URL;
-  }
-  var CSV_URL = _getActiveCsvUrl();
-  var PAGE_SIZE = 100;
-
-  var _state = {
-    all:        [],    // all parsed rows
-    filtered:   [],    // after search+filter
-    page:       1,
-    loaded:     false,
-    loading:    false,
-    sortCol:    '',
-    sortDir:    1,
-    search:     '',
-    country:    '',
-    directory:  '',
-    modalIdx:   -1,    // index in filtered for current modal row
+        var elapsed = ((Date.now() - startTime)/1000).toFixed(1);
+        _setStatus('<i class="fas fa-check-circle" style="margin-right:5px;"></i>' + recs.length.toLocaleString() + ' records exported — ' + filename + ' (' + elapsed + 's)', '#3fb950');
+        setTimeout(function() { if (statusEl) statusEl.innerHTML = ''; }, 10000);
+      })
+      .catch(function(e) {
+        _setStatus('<i class="fas fa-times-circle" style="margin-right:5px;"></i>Export failed: ' + (e && e.message || 'Unknown error'), '#f85149');
+      })
+      .finally(function() { _setDisabled(false); });
   };
 
   // ── CSV parser (handles quoted fields with commas) ──────────────────
@@ -4635,7 +4185,7 @@
   function _cpLoad() {
     _state.loading = true;
     // Re-read URL and search columns from settings on every load
-    CSV_URL = _getActiveCsvUrl();
+    CSV_URL = _normalizeCsvUrl(_getActiveCsvUrl());
     _setStatus('Loading…');
 
     var body = document.getElementById('cp-table-body');
@@ -5104,14 +4654,70 @@
   // No duplicate listener needed here — Core JS handles the click routing.
 
   // ── Test & Preview URL ───────────────────────────────────────────
+  // ── Convert any Google Sheets URL to a CSV export URL ───────────────────
+  // Handles all common Google Sheets URL formats:
+  //   - /pub?output=csv (already correct)
+  //   - /pubhtml (published as HTML — convert to CSV)
+  //   - /edit (edit link — extract sheet ID, convert to export)
+  //   - /view (view link)
+  //   - 2PACX-... (exported with new format)
+  function _normalizeGoogleSheetsCsvUrl(raw) {
+    var url = String(raw || '').trim();
+    if (!url) return url;
+
+    // Already a correct CSV URL — return as-is
+    if (url.includes('output=csv')) return url;
+
+    try {
+      var u = new URL(url);
+
+      // Case 1: /pub link missing output=csv param
+      // e.g. .../pub?gid=12345&single=true  →  add &output=csv
+      if (u.pathname.includes('/pub')) {
+        u.searchParams.set('output', 'csv');
+        return u.toString();
+      }
+
+      // Case 2: /pubhtml — replace with /pub?output=csv
+      if (u.pathname.includes('/pubhtml')) {
+        var gid = u.searchParams.get('gid') || '';
+        u.pathname = u.pathname.replace('/pubhtml', '/pub');
+        u.searchParams.set('output', 'csv');
+        if (gid) u.searchParams.set('gid', gid);
+        return u.toString();
+      }
+
+      // Case 3: /edit or /view — extract spreadsheet ID, build export URL
+      // e.g. https://docs.google.com/spreadsheets/d/{ID}/edit  →  .../export?format=csv
+      var idMatch = u.pathname.match(/\/spreadsheets\/d\/([^\/]+)/);
+      if (idMatch) {
+        var sheetId = idMatch[1];
+        var gidEdit = u.searchParams.get('gid') || (u.hash.match(/gid=(\d+)/) || [])[1] || '';
+        var exportUrl = 'https://docs.google.com/spreadsheets/d/' + sheetId + '/export?format=csv';
+        if (gidEdit) exportUrl += '&gid=' + gidEdit;
+        return exportUrl;
+      }
+    } catch(_) {}
+    return url;
+  }
+
   window._cpsTestUrl = window._cpsPreviewUrl = function() {
     var urlEl = document.getElementById('cps-csv-url');
-    var url   = urlEl ? urlEl.value.trim() : '';
-    if (!url) { setUrlStatus('<i class="fas fa-exclamation-circle" style="margin-right:6px;"></i>Please enter a CSV URL first.', 'err'); return; }
+    var rawUrl = urlEl ? urlEl.value.trim() : '';
+    if (!rawUrl) { setUrlStatus('<i class="fas fa-exclamation-circle" style="margin-right:6px;"></i>Please enter a CSV URL first.', 'err'); return; }
+
+    // Auto-normalize Google Sheets URLs before fetching
+    var url = _normalizeGoogleSheetsCsvUrl(rawUrl);
+    if (url !== rawUrl) {
+      // Update the input to show the corrected URL
+      if (urlEl) urlEl.value = url;
+      setUrlStatus('<i class="fas fa-magic" style="margin-right:6px;"></i>Auto-converted to CSV export URL. Fetching…', 'info');
+    } else {
+      setUrlStatus('<i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>Fetching CSV to validate…', 'info');
+    }
 
     var btn = document.querySelector('[onclick*="_cpsTestUrl"]');
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing…'; }
-    setUrlStatus('<i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>Fetching CSV to validate…', 'info');
 
     fetch(url, { cache: 'no-store' })
       .then(function(r) {
@@ -5119,18 +4725,32 @@
         return r.text();
       })
       .then(function(text) {
+        // Detect if response is HTML instead of CSV (common mistake with share links)
+        var trimmed = text.trim().toLowerCase();
+        if (trimmed.startsWith('<!doctype') || trimmed.startsWith('<html')) {
+          // Try to suggest the fix
+          throw new Error(
+            'This URL returned an HTML page, not CSV data. ' +
+            'In Google Sheets: File → Share → Publish to web → Select sheet → CSV → Copy link.'
+          );
+        }
+
         // Parse CSV header row
         var lines = text.split('\n');
         var header = _parseCsvRow(lines[0] || '');
         var rowCount = Math.max(0, lines.filter(function(l) { return l.trim(); }).length - 1);
 
-        if (!header.length) throw new Error('Could not detect column headers — empty CSV?');
+        if (!header.length || (header.length === 1 && header[0].includes('<'))) {
+          throw new Error('Could not detect column headers — the URL may not be a CSV. Make sure to use File → Publish to web → CSV format.');
+        }
 
         // Cache detected columns in stored settings
         var stored = loadStoredSettings();
         stored.detectedColumns = header;
         stored.rowCount = rowCount;
+        stored.csvUrl = url; // save normalized URL
         storeSettings(stored);
+        window._cpCsvUrl = url;
 
         setUrlStatus(
           '<i class="fas fa-check-circle" style="margin-right:6px;"></i>' +
