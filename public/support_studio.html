@@ -30,8 +30,7 @@
   </style>
   <style>
     /* ─────────────────────────────────────────────────────────────────
-       MUMS SUPPORT STUDIO — Base Styles
-       Mirrors controller_lab.html architecture exactly.
+       MUMS SUPPORT STUDIO — HD Premium Base Styles v35
     ───────────────────────────────────────────────────────────────── */
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -41,9 +40,9 @@
       --ss-surface:   #0d1117;
       --ss-surface2:  #161b22;
       --ss-surface3:  #1c2128;
-      --ss-border:    rgba(255,255,255,.10);
+      --ss-border:    rgba(255,255,255,.09);
       --ss-border2:   rgba(255,255,255,.05);
-      --ss-text:      #c9d1d9;
+      --ss-text:      #d0d8e4;
       --ss-muted:     #8b949e;
       --ss-accent:    #58a6ff;
       --ss-accent2:   #0073ea;
@@ -51,7 +50,9 @@
       --ss-purple:    #a25ddc;
       --ss-danger:    #f85149;
       --ss-warn:      #d29922;
-      --ss-radius:    8px;
+      --ss-cyan:      #22d3ee;
+      --ss-orange:    #fb923c;
+      --ss-radius:    7px;
       --ss-font:      'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif;
       --ss-mono:      'JetBrains Mono', 'Courier New', monospace;
     }
@@ -73,55 +74,55 @@
       overflow: hidden;
     }
 
-    /* ── SCROLLBAR ────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    /* ── SCROLLBAR — slim, premium ──────────────────── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 999px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.22); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.2); }
 
     /* ─────────────────────────────────────────────────────────────────
-       HEADER
+       HEADER — HD Premium
     ───────────────────────────────────────────────────────────────── */
     .ss-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 20px;
-      height: 50px;
-      min-height: 50px;
+      padding: 0 16px;
+      height: 46px;
+      min-height: 46px;
       background: var(--ss-surface);
       border-bottom: 1px solid var(--ss-border);
       z-index: 100;
       flex-shrink: 0;
-      gap: 16px;
+      gap: 12px;
     }
 
     .ss-header-left {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: 14px;
       min-width: 0;
     }
 
     .ss-brand {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 9px;
       white-space: nowrap;
       flex-shrink: 0;
     }
 
     .ss-brand-icon {
-      width: 30px;
-      height: 30px;
-      border-radius: 8px;
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
       background: linear-gradient(135deg, #0073ea 0%, #a25ddc 100%);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
+      font-size: 13px;
       color: #fff;
-      box-shadow: 0 2px 10px rgba(0,115,234,.4);
+      box-shadow: 0 2px 8px rgba(0,115,234,.35);
       flex-shrink: 0;
     }
 
@@ -132,7 +133,7 @@
     }
 
     .ss-brand-name {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 800;
       color: #ffffff;
       letter-spacing: .01em;
@@ -140,7 +141,7 @@
     }
 
     .ss-brand-sub {
-      font-size: 9px;
+      font-size: 8px;
       font-weight: 600;
       color: var(--ss-muted);
       letter-spacing: .06em;
@@ -151,23 +152,23 @@
     /* Tab group */
     .ss-tabs {
       display: flex;
-      gap: 4px;
+      gap: 3px;
     }
 
     .ss-tab {
       background: transparent;
       border: 1px solid transparent;
       color: var(--ss-muted);
-      padding: 6px 13px;
-      border-radius: 6px;
+      padding: 5px 11px;
+      border-radius: 5px;
       cursor: pointer;
       font-weight: 600;
-      font-size: 12px;
+      font-size: 11px;
       font-family: var(--ss-font);
       display: flex;
       align-items: center;
-      gap: 6px;
-      transition: all .18s;
+      gap: 5px;
+      transition: all .15s;
       white-space: nowrap;
     }
 
@@ -179,14 +180,14 @@
     .ss-tab.active {
       background: rgba(88,166,255,.10);
       color: var(--ss-accent);
-      border-color: rgba(88,166,255,.35);
+      border-color: rgba(88,166,255,.32);
     }
 
     /* Header right controls */
     .ss-header-right {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       flex-shrink: 0;
     }
 
@@ -194,15 +195,15 @@
       display: flex;
       align-items: center;
       background: rgba(0,0,0,.35);
-      border: 1px solid rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.09);
       border-radius: 6px;
       overflow: hidden;
       transition: border-color .18s;
     }
 
     .ss-search-wrap:focus-within {
-      border-color: rgba(88,166,255,.45);
-      box-shadow: 0 0 0 3px rgba(88,166,255,.12);
+      border-color: rgba(88,166,255,.4);
+      box-shadow: 0 0 0 3px rgba(88,166,255,.1);
     }
 
     .ss-search-input {
@@ -211,25 +212,25 @@
       outline: none;
       color: var(--ss-text);
       font-family: var(--ss-font);
-      font-size: 12px;
-      padding: 7px 12px;
-      width: 200px;
+      font-size: 11px;
+      padding: 6px 12px;
+      width: 220px;
     }
 
-    .ss-search-input::placeholder { color: rgba(255,255,255,.22); }
+    .ss-search-input::placeholder { color: rgba(255,255,255,.2); }
 
     .ss-search-btn {
       background: rgba(255,255,255,.04);
       border: none;
-      border-left: 1px solid rgba(255,255,255,.08);
+      border-left: 1px solid rgba(255,255,255,.07);
       color: var(--ss-muted);
-      padding: 7px 11px;
+      padding: 6px 10px;
       cursor: pointer;
-      transition: background .18s, color .18s;
-      font-size: 11px;
+      transition: background .15s, color .15s;
+      font-size: 10px;
     }
 
-    .ss-search-btn:hover { background: rgba(255,255,255,.10); color: var(--ss-text); }
+    .ss-search-btn:hover { background: rgba(255,255,255,.09); color: var(--ss-text); }
 
     .ss-btn-primary {
       background: linear-gradient(135deg, #0073ea, #0060c2);
@@ -266,11 +267,11 @@
     }
 
     /* ─────────────────────────────────────────────────────────────────
-       SIDEBARS
+       SIDEBARS — HD Premium
     ───────────────────────────────────────────────────────────────── */
     .ss-sidebar {
-      width: 260px;
-      min-width: 260px;
+      width: 200px;
+      min-width: 200px;
       background: var(--ss-surface);
       border-right: 1px solid var(--ss-border);
       display: flex;
@@ -283,8 +284,8 @@
     .ss-sidebar.right {
       border-right: none;
       border-left: 1px solid var(--ss-border);
-      width: 300px;
-      min-width: 300px;
+      width: 262px;
+      min-width: 262px;
     }
 
     .ss-panel {
@@ -422,30 +423,32 @@
     }
 
     /* ─────────────────────────────────────────────────────────────────
-       CENTER CANVAS
+       CENTER CANVAS — HD
     ───────────────────────────────────────────────────────────────── */
     .ss-canvas {
       flex: 1;
       display: flex;
       flex-direction: column;
-      background: #000;
+      background: var(--ss-bg);
       position: relative;
       overflow: hidden;
       min-width: 0;
     }
 
     .ss-canvas-toolbar {
-      padding: 8px 16px;
+      padding: 0 14px;
+      height: 40px;
+      min-height: 40px;
       background: var(--ss-surface2);
       border-bottom: 1px solid var(--ss-border);
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-shrink: 0;
-      gap: 12px;
+      gap: 10px;
     }
 
-    .ss-canvas-toolbar-left { display: flex; gap: 8px; align-items: center; }
+    .ss-canvas-toolbar-left { display: flex; gap: 7px; align-items: center; }
 
     .ss-mode-btn {
       background: rgba(255,255,255,.05);
@@ -1075,6 +1078,255 @@
       text-align: center; color: var(--ss-muted); padding: 32px 16px;
       font-size: 12px; opacity: .6;
     }
+
+    /* ─────────────────────────────────────────────────────────────────
+       CONNECT+ & PARTS NUMBER — PREMIUM SIDEBAR STYLES v35
+       Matches mockup exactly: compact header, stats pills, search,
+       active-filter badge, section labels, filter list buttons
+    ───────────────────────────────────────────────────────────────── */
+
+    /* Section identity header */
+    .prem-sb-header {
+      padding: 12px 12px 10px;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      flex-shrink: 0;
+    }
+    .prem-sb-identity {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 9px;
+    }
+    .prem-sb-icon {
+      width: 26px; height: 26px; border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .prem-sb-icon i { color: #fff; font-size: 11px; }
+    .prem-sb-icon.cyan  { background: linear-gradient(135deg,#0891b2,#22d3ee); box-shadow: 0 2px 8px rgba(34,211,238,.28); }
+    .prem-sb-icon.orange{ background: linear-gradient(135deg,#c2410c,#fb923c); box-shadow: 0 2px 8px rgba(251,146,60,.28); }
+    .prem-sb-title { font-size: 12px; font-weight: 800; color: #fff; line-height: 1; }
+    .prem-sb-sub   { font-size: 9px; color: var(--ss-muted); margin-top: 2px; font-weight: 500; line-height: 1.3; }
+
+    /* Stats mini grid */
+    .prem-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .prem-stat-pill  { border-radius: 6px; padding: 6px 8px; text-align: center; }
+    .prem-stat-pill.cyan  { background: rgba(34,211,238,.07);  border: 1px solid rgba(34,211,238,.14); }
+    .prem-stat-pill.green { background: rgba(63,185,80,.07);   border: 1px solid rgba(63,185,80,.14); }
+    .prem-stat-pill.orange{ background: rgba(251,146,60,.07);  border: 1px solid rgba(251,146,60,.14); }
+    .prem-stat-pill.purple{ background: rgba(167,139,250,.07); border: 1px solid rgba(167,139,250,.14); }
+    .prem-stat-num  { font-size: 14px; font-weight: 800; line-height: 1.1; }
+    .prem-stat-num.cyan   { color: var(--ss-cyan); }
+    .prem-stat-num.green  { color: var(--ss-green); }
+    .prem-stat-num.orange { color: var(--ss-orange); }
+    .prem-stat-num.purple { color: #a78bfa; }
+    .prem-stat-lbl  { font-size: 8px; color: rgba(255,255,255,.3); margin-top: 2px; font-weight: 500; letter-spacing: .01em; }
+
+    /* Sidebar search */
+    .prem-sb-search { padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,.06); flex-shrink: 0; }
+    .prem-search-wrap { position: relative; }
+    .prem-search-icon { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--ss-muted); font-size: 10px; pointer-events: none; }
+    .prem-search-inp {
+      width: 100%; background: rgba(0,0,0,.4); border: 1.5px solid rgba(255,255,255,.09);
+      border-radius: 6px; padding: 6px 26px; color: #fff; font-size: 11px;
+      font-family: var(--ss-font); outline: none; transition: border-color .15s;
+    }
+    .prem-search-inp::placeholder { color: var(--ss-muted); }
+    .prem-search-inp.cyan:focus   { border-color: rgba(34,211,238,.5); }
+    .prem-search-inp.orange:focus { border-color: rgba(251,146,60,.5); }
+    .prem-search-clear {
+      display: none; position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--ss-muted); cursor: pointer;
+      font-size: 10px; padding: 0; line-height: 1;
+    }
+    .prem-search-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+    .prem-search-status, .prem-search-count { font-size: 9px; color: var(--ss-muted); }
+
+    /* Active filter badge */
+    .prem-active-filter {
+      display: none; margin: 6px 10px 0; align-items: center; gap: 5px;
+      border-radius: 5px; padding: 4px 8px; font-size: 10px; flex-shrink: 0;
+    }
+    .prem-active-filter.cyan  { background: rgba(34,211,238,.07);  border: 1px solid rgba(34,211,238,.22);  color: var(--ss-cyan); }
+    .prem-active-filter.orange{ background: rgba(251,146,60,.07);  border: 1px solid rgba(251,146,60,.22);  color: var(--ss-orange); }
+    .prem-active-filter i { font-size: 8px; opacity: .7; flex-shrink: 0; }
+    .prem-active-filter span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 10px; }
+    .prem-active-filter button { background: none; border: none; cursor: pointer; font-size: 10px; padding: 0; opacity: .7; flex-shrink: 0; line-height: 1; }
+    .prem-active-filter.cyan button  { color: var(--ss-cyan); }
+    .prem-active-filter.orange button{ color: var(--ss-orange); }
+
+    /* Section heading rows */
+    .prem-section-head { padding: 8px 10px 4px; flex-shrink: 0; }
+    .prem-section-head.has-border { border-top: 1px solid rgba(255,255,255,.05); }
+    .prem-section-row  { display: flex; align-items: center; justify-content: space-between; }
+    .prem-section-lbl  { font-size: 8px; font-weight: 700; color: rgba(255,255,255,.26); letter-spacing: .1em; text-transform: uppercase; }
+    .prem-section-toggle { background: none; border: none; color: rgba(255,255,255,.26); cursor: pointer; font-size: 8px; padding: 0; }
+
+    /* Filter list */
+    .prem-filter-list  { overflow-y: auto; padding: 0 6px 6px; display: flex; flex-direction: column; gap: 1px; }
+
+    /* Filter button — base */
+    .prem-filter-btn {
+      width: 100%; display: flex; align-items: center; justify-content: space-between;
+      background: transparent; border: 1px solid transparent; border-radius: 5px;
+      padding: 4px 6px; cursor: pointer; font-family: var(--ss-font);
+      gap: 5px; text-align: left; transition: all .12s;
+    }
+    .prem-filter-inner { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+    .prem-filter-ico   { width: 17px; height: 17px; border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .prem-filter-ico i { font-size: 7px; }
+    .prem-filter-lbl   { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .prem-filter-cnt   { font-size: 8px; font-weight: 600; border-radius: 8px; padding: 1px 5px; flex-shrink: 0; }
+
+    /* CYAN variant (Connect+) */
+    .prem-filter-btn.cv:hover  { background: rgba(34,211,238,.04); border-color: rgba(34,211,238,.1); }
+    .prem-filter-btn.cv.active { background: rgba(34,211,238,.09); border-color: rgba(34,211,238,.26); }
+    .prem-filter-btn.cv .prem-filter-ico.active { background: rgba(34,211,238,.15); border: 1px solid rgba(34,211,238,.22); }
+    .prem-filter-btn.cv .prem-filter-ico.idle   { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); }
+    .prem-filter-btn.cv.active .prem-filter-lbl { color: var(--ss-cyan); font-weight: 700; }
+    .prem-filter-btn.cv:not(.active) .prem-filter-lbl { color: var(--ss-muted); font-weight: 400; }
+    .prem-filter-btn.cv.active .prem-filter-cnt { background: rgba(34,211,238,.12); color: var(--ss-cyan); }
+    .prem-filter-btn.cv:not(.active) .prem-filter-cnt { background: rgba(255,255,255,.05); color: rgba(255,255,255,.27); }
+    .prem-filter-btn.cv.active .prem-filter-ico i { color: var(--ss-cyan); }
+    .prem-filter-btn.cv:not(.active) .prem-filter-ico.idle i { color: rgba(255,255,255,.3); }
+
+    /* ORANGE variant (Parts Number) */
+    .prem-filter-btn.ov:hover  { background: rgba(251,146,60,.04); border-color: rgba(251,146,60,.1); }
+    .prem-filter-btn.ov.active { background: rgba(251,146,60,.09); border-color: rgba(251,146,60,.26); }
+    .prem-filter-btn.ov .prem-filter-ico.active { background: rgba(251,146,60,.15); border: 1px solid rgba(251,146,60,.22); }
+    .prem-filter-btn.ov .prem-filter-ico.idle   { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); }
+    .prem-filter-btn.ov.active .prem-filter-lbl { color: var(--ss-orange); font-weight: 700; }
+    .prem-filter-btn.ov:not(.active) .prem-filter-lbl { color: var(--ss-muted); font-weight: 400; }
+    .prem-filter-btn.ov.active .prem-filter-cnt { background: rgba(251,146,60,.12); color: var(--ss-orange); }
+    .prem-filter-btn.ov:not(.active) .prem-filter-cnt { background: rgba(255,255,255,.05); color: rgba(255,255,255,.27); }
+    .prem-filter-btn.ov.active .prem-filter-ico i { color: var(--ss-orange); }
+    .prem-filter-btn.ov:not(.active) .prem-filter-ico.idle i { color: rgba(255,255,255,.3); }
+
+    /* Toolbar record count badge */
+    .prem-count-badge {
+      font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 700;
+    }
+    .prem-count-badge.cyan   { background: rgba(34,211,238,.1);  border: 1px solid rgba(34,211,238,.25);  color: var(--ss-cyan); }
+    .prem-count-badge.orange { background: rgba(251,146,60,.1);  border: 1px solid rgba(251,146,60,.25);  color: var(--ss-orange); }
+    .prem-tb-text { font-size: 10px; color: var(--ss-muted); }
+
+    /* ── HD TABLE enhancements ──────────────────────────────────── */
+    .prem-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .prem-table thead th {
+      padding: 7px 11px; text-align: left; font-size: 8px; font-weight: 800;
+      letter-spacing: .08em; text-transform: uppercase; color: var(--ss-muted);
+      white-space: nowrap; cursor: pointer; background: var(--ss-surface3);
+      border-bottom: 1px solid var(--ss-border);
+    }
+    .prem-table thead th:hover { color: var(--ss-text); }
+    .prem-table tbody tr { transition: background .08s; cursor: pointer; }
+    .prem-table tbody td { padding: 6px 11px; border-bottom: 1px solid rgba(255,255,255,.025); }
+    .prem-table.cyan  tbody tr:hover td { background: rgba(34,211,238,.035) !important; }
+    .prem-table.orange tbody tr:hover td { background: rgba(251,146,60,.03) !important; }
+
+    /* ── Right sidebar HD enhancements ─────────────────────────── */
+    .ss-field-group { margin-bottom: 9px; }
+    .ss-field-label {
+      font-size: 8px; font-weight: 700; color: var(--ss-muted);
+      letter-spacing: .07em; text-transform: uppercase; margin-bottom: 4px;
+    }
+
+    /* ── SR cat-btn hover HD ───────────────────────────────────── */
+    .sr-cat-btn { transition: all .1s; }
+
+    /* ── Left panels that are NOT cp/pn stay at flex display ────── */
+    #left-panel-connectplus.active, #left-panel-parts_number.active { display: flex; }
+
+    /* ── Sidebar scrollbar tints per tab ────────────────────────── */
+    #cp-sidebar-country-list::-webkit-scrollbar-thumb,
+    #cp-sidebar-dir-list::-webkit-scrollbar-thumb { background: rgba(34,211,238,.15); }
+    #pn-sidebar-cat-list::-webkit-scrollbar-thumb  { background: rgba(251,146,60,.15); }
+
+    /* ── Mode badges HD ─────────────────────────────────────────── */
+    .ss-mode-badge {
+      padding: 3px 9px; border-radius: 999px; font-size: 9px; font-weight: 700;
+      letter-spacing: .04em; display: inline-flex; align-items: center; gap: 4px;
+    }
+
+    /* ── Toolbar action buttons HD ──────────────────────────────── */
+    .prem-tb-btn {
+      background: rgba(255,255,255,.05); border: 1px solid var(--ss-border);
+      color: var(--ss-muted); padding: 4px 10px; border-radius: 5px;
+      font-size: 10px; font-weight: 600; font-family: var(--ss-font);
+      cursor: pointer; display: flex; align-items: center; gap: 4px;
+      transition: all .15s;
+    }
+    .prem-tb-btn:hover { background: rgba(255,255,255,.09); color: var(--ss-text); }
+    .prem-tb-btn i { font-size: 9px; }
+
+    /* ── Pagination HD ──────────────────────────────────────────── */
+    .prem-pagination {
+      flex-shrink: 0; padding: 7px 14px; background: var(--ss-surface);
+      border-top: 1px solid var(--ss-border); display: flex; align-items: center; gap: 8px;
+    }
+    .prem-page-info { font-size: 10px; color: var(--ss-muted); flex: 1; }
+    .prem-page-nav  {
+      background: rgba(255,255,255,.05); border: 1px solid var(--ss-border);
+      color: var(--ss-muted); padding: 4px 10px; border-radius: 5px;
+      font-size: 10px; font-weight: 600; font-family: var(--ss-font); cursor: pointer;
+    }
+    .prem-page-num  {
+      min-width: 26px; padding: 4px 6px; border-radius: 4px;
+      font-size: 10px; font-weight: 700; font-family: var(--ss-font); cursor: pointer;
+    }
+    .prem-page-num.cyan  { border: 1px solid rgba(34,211,238,.4);  background: rgba(34,211,238,.12);  color: var(--ss-cyan); }
+    .prem-page-num.orange{ border: 1px solid rgba(251,146,60,.4);  background: rgba(251,146,60,.12);  color: var(--ss-orange); }
+
+    /* ── Right panel HD field labels ────────────────────────────── */
+    #right-call-info .ss-panel-title {
+      font-size: 9px; font-weight: 800; letter-spacing: .07em;
+      color: #e6edf3; text-transform: uppercase; margin-bottom: 12px;
+    }
+
+    /* ── Support Records sidebar improvements ────────────────────── */
+    #left-panel-support_records { display: none; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
+    #left-panel-support_records.active { display: flex; }
+
+    /* ── Canvas backgrounds improved ──────────────────────────────── */
+    #canvas-connectplus, #canvas-parts_number, #canvas-support_records { background: var(--ss-bg); }
+
+    /* ── SS input improvements ──────────────────────────────────── */
+    .ss-input {
+      width: 100%; padding: 6px 9px; background: var(--ss-surface3);
+      border: 1px solid rgba(255,255,255,.1); border-radius: 5px;
+      color: var(--ss-text); font-size: 11px; font-family: var(--ss-font);
+      outline: none; transition: border-color .15s;
+    }
+    .ss-input:focus { border-color: rgba(88,166,255,.4); }
+    .ss-input::placeholder { color: rgba(255,255,255,.2); }
+
+    /* ── Systems badge ──────────────────────────────────────────── */
+    .cp-sys-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 20px; height: 18px; background: rgba(63,185,80,.1);
+      border: 1px solid rgba(63,185,80,.2); border-radius: 4px;
+      color: var(--ss-green); font-size: 9px; font-weight: 800;
+    }
+    /* ── PN brand badge ─────────────────────────────────────────── */
+    .pn-brand-badge {
+      display: inline-flex; align-items: center; height: 18px;
+      background: rgba(88,166,255,.08); border: 1px solid rgba(88,166,255,.15);
+      border-radius: 4px; padding: 0 6px; color: #58a6ff;
+      font-size: 9px; font-weight: 700; font-family: var(--ss-mono);
+    }
+    .pn-partno { color: var(--ss-orange); font-weight: 700; font-size: 11px; font-family: var(--ss-mono); }
+    .pn-desc   { color: var(--ss-text); font-size: 11px; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cp-site-link { color: var(--ss-cyan); font-weight: 700; font-size: 11px; }
+    .cp-open-btn  {
+      display: inline-flex; align-items: center; gap: 4px; color: var(--ss-cyan);
+      font-size: 9px; font-weight: 700; text-decoration: none;
+      background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.2);
+      border-radius: 4px; padding: 2px 7px;
+    }
+
+    /* ─────────────────────────────────────────────────────────────────
+       END CP/PN PREMIUM STYLES
+    ───────────────────────────────────────────────────────────────── */
 
     /* ── Single-body tab switching ─────────────────────────────── */
     .ss-canvas-inner { display: none !important; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
@@ -2377,90 +2629,83 @@
         </div><!-- /overflow scroll -->
       </div><!-- /canvas-config -->
 
-      <!-- Connect+ left panel — PREMIUM REDESIGN -->
+      <!-- Connect+ left panel — PREMIUM v35 (matches mockup exactly) -->
       <div id="left-panel-connectplus" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
 
-        <!-- Header / identity -->
-        <div style="padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
-          <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;">
-            <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#0891b2,#22d3ee);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(34,211,238,.3);">
-              <i class="fas fa-plug" style="color:#fff;font-size:11px;"></i>
-            </div>
+        <!-- HEADER -->
+        <div class="prem-sb-header">
+          <div class="prem-sb-identity">
+            <div class="prem-sb-icon cyan"><i class="fas fa-plug"></i></div>
             <div>
-              <div style="font-size:12px;font-weight:800;color:#fff;line-height:1;">Connect+</div>
-              <div style="font-size:9px;color:var(--ss-muted);margin-top:2px;font-weight:500;">36,000+ sites across all regions</div>
+              <div class="prem-sb-title">Connect+</div>
+              <div class="prem-sb-sub">36,000+ sites across all regions</div>
             </div>
           </div>
-          <!-- Stats mini bar -->
-          <div id="cp-stats-mini" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
-            <div style="background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.15);border-radius:6px;padding:6px 8px;text-align:center;">
-              <div style="font-size:13px;font-weight:800;color:#22d3ee;">—</div>
-              <div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:1px;">Sites</div>
+          <div class="prem-stats-grid" id="cp-stats-mini">
+            <div class="prem-stat-pill cyan">
+              <div class="prem-stat-num cyan" id="cp-stat-sites">—</div>
+              <div class="prem-stat-lbl">Sites</div>
             </div>
-            <div style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.15);border-radius:6px;padding:6px 8px;text-align:center;">
-              <div id="cp-stats-countries" style="font-size:13px;font-weight:800;color:#3fb950;">—</div>
-              <div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:1px;">Countries</div>
+            <div class="prem-stat-pill green">
+              <div class="prem-stat-num green" id="cp-stat-countries">—</div>
+              <div class="prem-stat-lbl">Countries</div>
             </div>
           </div>
         </div>
 
-        <!-- Search box in sidebar -->
-        <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
-          <div style="position:relative;">
-            <i class="fas fa-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--ss-muted);font-size:11px;pointer-events:none;"></i>
-            <input id="cp-search-input" type="text"
-              placeholder="Search sites, cities, states…"
-              autocomplete="off"
-              style="width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 28px;color:#fff;font-size:11px;font-family:var(--ss-font);outline:none;transition:border-color .18s;"
-              onfocus="this.style.borderColor='rgba(34,211,238,.5)'"
-              onblur="this.style.borderColor='rgba(255,255,255,.1)'"
+        <!-- SEARCH -->
+        <div class="prem-sb-search">
+          <div class="prem-search-wrap">
+            <i class="fas fa-search prem-search-icon"></i>
+            <input id="cp-search-input" type="text" class="prem-search-inp cyan"
+              placeholder="Search sites, cities, states…" autocomplete="off"
               oninput="window._cpOnSearch(this.value);document.getElementById('cp-sb-clear').style.display=this.value?'block':'none';"
-              onkeydown="if(event.key==='Enter') window._cpOnSearch(this.value);">
-            <button id="cp-sb-clear" onclick="document.getElementById('cp-search-input').value='';document.getElementById('cp-sb-clear').style.display='none';window._cpOnSearch('');"
-              style="display:none;position:absolute;right:7px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ss-muted);cursor:pointer;font-size:10px;padding:0;line-height:1;">✕</button>
+              onkeydown="if(event.key==='Enter')window._cpOnSearch(this.value);">
+            <button id="cp-sb-clear" class="prem-search-clear"
+              onclick="document.getElementById('cp-search-input').value='';this.style.display='none';window._cpOnSearch('');">✕</button>
           </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px;">
-            <div id="cp-status" style="font-size:10px;color:var(--ss-muted);"></div>
-            <div id="cp-search-count" style="font-size:10px;color:var(--ss-muted);"></div>
+          <div class="prem-search-meta">
+            <span class="prem-search-status" id="cp-status"></span>
+            <span class="prem-search-count" id="cp-search-count"></span>
           </div>
         </div>
 
-        <!-- Active filter badge -->
-        <div id="cp-active-filter" style="display:none;margin:8px 12px 0;align-items:center;gap:6px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.25);border-radius:6px;padding:5px 9px;font-size:10px;color:#22d3ee;">
-          <i class="fas fa-filter" style="font-size:9px;opacity:.7;flex-shrink:0;"></i>
-          <span id="cp-filter-label" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-          <button onclick="window._cpClearSidebarFilter()" style="background:none;border:none;color:#22d3ee;cursor:pointer;font-size:10px;padding:0;flex-shrink:0;opacity:.8;">✕</button>
+        <!-- ACTIVE FILTER BADGE -->
+        <div id="cp-active-filter" class="prem-active-filter cyan">
+          <i class="fas fa-filter"></i>
+          <span id="cp-filter-label"></span>
+          <button onclick="window._cpClearSidebarFilter()">✕</button>
         </div>
 
-        <!-- Hidden legacy elements for JS compat -->
-        <div id="cp-filter-chips" style="display:none;"></div>
+        <!-- compat shims -->
+        <div id="cp-filter-chips" style="display:none;" aria-hidden="true"></div>
 
-        <!-- Country filter section -->
-        <div style="padding:10px 12px 5px;flex-shrink:0;">
-          <div style="display:flex;align-items:center;justify-content:space-between;">
-            <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.28);letter-spacing:.1em;text-transform:uppercase;">COUNTRY</div>
-            <button id="cp-country-toggle-btn" onclick="window._cpToggleSection('country')" style="background:none;border:none;color:rgba(255,255,255,.28);cursor:pointer;font-size:9px;padding:0;transition:transform .15s;">▾</button>
+        <!-- COUNTRY SECTION -->
+        <div class="prem-section-head" style="margin-top:6px;">
+          <div class="prem-section-row">
+            <span class="prem-section-lbl">Country</span>
+            <button class="prem-section-toggle" id="cp-country-toggle" onclick="window._cpToggleSection('country')">▾</button>
           </div>
         </div>
-        <div id="cp-sidebar-country-list" style="flex-shrink:0;max-height:150px;overflow-y:auto;padding:0 8px 4px;display:flex;flex-direction:column;gap:1px;">
+        <div id="cp-sidebar-country-list" class="prem-filter-list" style="max-height:150px;">
           <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
         </div>
 
-        <!-- Directory filter section -->
-        <div style="padding:8px 12px 5px;flex-shrink:0;border-top:1px solid rgba(255,255,255,.05);">
-          <div style="display:flex;align-items:center;justify-content:space-between;">
-            <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.28);letter-spacing:.1em;text-transform:uppercase;">DIRECTORY</div>
-            <button id="cp-dir-toggle-btn" onclick="window._cpToggleSection('directory')" style="background:none;border:none;color:rgba(255,255,255,.28);cursor:pointer;font-size:9px;padding:0;transition:transform .15s;">▾</button>
+        <!-- DIRECTORY SECTION -->
+        <div class="prem-section-head has-border" style="margin-top:2px;">
+          <div class="prem-section-row">
+            <span class="prem-section-lbl">Directory</span>
+            <button class="prem-section-toggle" id="cp-dir-toggle" onclick="window._cpToggleSection('directory')">▾</button>
           </div>
         </div>
-        <div id="cp-sidebar-dir-list" style="flex:1;overflow-y:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:1px;">
+        <div id="cp-sidebar-dir-list" class="prem-filter-list" style="flex:1;">
           <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
         </div>
 
-        <!-- Hidden select elements — kept for JS filter compat -->
+        <!-- Hidden selects — JS compat (unchanged logic) -->
         <div style="display:none;" aria-hidden="true">
           <select id="cp-country-filter" onchange="window._cpApplyFilters()"><option value="">All Countries</option></select>
-          <select id="cp-dir-filter" onchange="window._cpApplyFilters()"><option value="">All Directories</option></select>
+          <select id="cp-dir-filter"     onchange="window._cpApplyFilters()"><option value="">All Directories</option></select>
         </div>
       </div>
 
@@ -2475,35 +2720,29 @@
             </span>
             <span id="cp-live-badge" style="display:none;padding:3px 8px;border-radius:999px;font-size:9px;font-weight:700;letter-spacing:.04em;background:rgba(63,185,80,.12);color:#3fb950;border:1px solid rgba(63,185,80,.3);">● LIVE</span>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
-            <span id="cp-record-count" style="font-size:10px;color:var(--ss-muted);"></span>
-            <button onclick="window._cpExportCsv()"
-              style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:4px 10px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:5px;">
-              <i class="fas fa-download"></i> Export CSV
-            </button>
-            <button onclick="window._cpRefresh()"
-              style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:4px 10px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:5px;">
-              <i class="fas fa-sync-alt"></i> Reload
-            </button>
+          <div style="display:flex;align-items:center;gap:7px;margin-left:auto;">
+            <span id="cp-record-count" class="prem-count-badge cyan"></span>
+            <button onclick="window._cpExportCsv()" class="prem-tb-btn"><i class="fas fa-download"></i> Export CSV</button>
+            <button onclick="window._cpRefresh()" class="prem-tb-btn"><i class="fas fa-sync-alt"></i> Reload</button>
           </div>
         </div>
         <!-- Hidden main-search for JS compat (sync target) -->
         <input type="text" id="cp-main-search" style="display:none;" aria-hidden="true">
 
         <!-- Table header -->
-        <div style="flex-shrink:0;overflow-x:auto;background:var(--ss-surface3);">
-          <table id="cp-table-head" style="width:100%;border-collapse:collapse;min-width:900px;">
+        <div style="flex-shrink:0;overflow-x:auto;">
+          <table id="cp-table-head" class="prem-table cyan" style="min-width:900px;">
             <thead>
-              <tr style="border-bottom:1px solid var(--ss-border);">
-                <th style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;width:40px;">#</th>
-                <th onclick="window._cpSort('site')" style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;cursor:pointer;min-width:180px;">Site <i class="fas fa-sort" id="cp-sort-site" style="opacity:.3;"></i></th>
-                <th onclick="window._cpSort('directory')" style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;cursor:pointer;min-width:130px;">Directory <i class="fas fa-sort" id="cp-sort-directory" style="opacity:.3;"></i></th>
-                <th onclick="window._cpSort('city')" style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;cursor:pointer;min-width:120px;">City <i class="fas fa-sort" id="cp-sort-city" style="opacity:.3;"></i></th>
-                <th onclick="window._cpSort('state')" style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;cursor:pointer;">State/Region <i class="fas fa-sort" id="cp-sort-state" style="opacity:.3;"></i></th>
-                <th onclick="window._cpSort('country')" style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;cursor:pointer;">Country <i class="fas fa-sort" id="cp-sort-country" style="opacity:.3;"></i></th>
-                <th onclick="window._cpSort('timezone')" style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;cursor:pointer;">Time Zone <i class="fas fa-sort" id="cp-sort-timezone" style="opacity:.3;"></i></th>
-                <th style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;">Systems</th>
-                <th style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;">Connect+ Link</th>
+              <tr>
+                <th style="width:38px;">#</th>
+                <th onclick="window._cpSort('site')" style="min-width:180px;">Site <i class="fas fa-sort" id="cp-sort-site" style="opacity:.3;font-size:8px;"></i></th>
+                <th onclick="window._cpSort('directory')" style="min-width:120px;">Directory <i class="fas fa-sort" id="cp-sort-directory" style="opacity:.3;font-size:8px;"></i></th>
+                <th onclick="window._cpSort('city')" style="min-width:110px;">City <i class="fas fa-sort" id="cp-sort-city" style="opacity:.3;font-size:8px;"></i></th>
+                <th onclick="window._cpSort('state')">State/Region <i class="fas fa-sort" id="cp-sort-state" style="opacity:.3;font-size:8px;"></i></th>
+                <th onclick="window._cpSort('country')">Country <i class="fas fa-sort" id="cp-sort-country" style="opacity:.3;font-size:8px;"></i></th>
+                <th onclick="window._cpSort('timezone')">Time Zone <i class="fas fa-sort" id="cp-sort-timezone" style="opacity:.3;font-size:8px;"></i></th>
+                <th>Systems</th>
+                <th>Connect+ Link</th>
               </tr>
             </thead>
           </table>
@@ -2512,19 +2751,17 @@
         <!-- Scrollable table body -->
         <div id="cp-table-body" style="flex:1;overflow:auto;min-height:0;">
           <div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--ss-muted);">
-            <i class="fas fa-spinner fa-spin" style="font-size:20px;opacity:.4;"></i>
-            <span style="font-size:13px;opacity:.5;">Loading Connect+ data…</span>
+            <i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.35;"></i>
+            <span style="font-size:12px;opacity:.45;">Loading Connect+ data…</span>
           </div>
         </div>
 
         <!-- Pagination -->
-        <div id="cp-pagination" style="flex-shrink:0;padding:8px 16px;background:var(--ss-surface);border-top:1px solid var(--ss-border);display:flex;align-items:center;gap:10px;">
-          <span id="cp-page-info" style="font-size:11px;color:var(--ss-muted);flex:1;"></span>
-          <button onclick="window._cpChangePage(-1)" id="cp-prev-btn"
-            style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:5px 12px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;">‹ Prev</button>
+        <div id="cp-pagination" class="prem-pagination">
+          <span id="cp-page-info" class="prem-page-info"></span>
+          <button onclick="window._cpChangePage(-1)" id="cp-prev-btn" class="prem-page-nav">‹ Prev</button>
           <div id="cp-page-btns" style="display:flex;gap:4px;"></div>
-          <button onclick="window._cpChangePage(1)" id="cp-next-btn"
-            style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:5px 12px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;">Next ›</button>
+          <button onclick="window._cpChangePage(1)" id="cp-next-btn" class="prem-page-nav">Next ›</button>
         </div>
       </div>
 
@@ -2533,77 +2770,70 @@
            PARTS NUMBER — Left Panel + Canvas
       ═══════════════════════════════════════════════════════════════ -->
 
-      <!-- Parts Number left panel — PREMIUM REDESIGN -->
+      <!-- Parts Number left panel — PREMIUM v35 (matches mockup exactly) -->
       <div id="left-panel-parts_number" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
 
-        <!-- Header / identity -->
-        <div style="padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
-          <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;">
-            <div style="width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#c2410c,#fb923c);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(251,146,60,.3);">
-              <i class="fas fa-barcode" style="color:#fff;font-size:11px;"></i>
-            </div>
+        <!-- HEADER -->
+        <div class="prem-sb-header">
+          <div class="prem-sb-identity">
+            <div class="prem-sb-icon orange"><i class="fas fa-barcode"></i></div>
             <div>
-              <div style="font-size:12px;font-weight:800;color:#fff;line-height:1;">Parts Number</div>
-              <div style="font-size:9px;color:var(--ss-muted);margin-top:2px;font-weight:500;">Search parts, models &amp; product numbers</div>
+              <div class="prem-sb-title">Parts Number</div>
+              <div class="prem-sb-sub">Search parts, models &amp; product numbers</div>
             </div>
           </div>
-          <!-- Stats mini bar -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
-            <div style="background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.15);border-radius:6px;padding:6px 8px;text-align:center;">
-              <div id="pn-stats-total" style="font-size:13px;font-weight:800;color:#fb923c;">—</div>
-              <div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:1px;">Total Parts</div>
+          <div class="prem-stats-grid">
+            <div class="prem-stat-pill orange">
+              <div class="prem-stat-num orange" id="pn-stats-total">—</div>
+              <div class="prem-stat-lbl">Total Parts</div>
             </div>
-            <div style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.15);border-radius:6px;padding:6px 8px;text-align:center;">
-              <div id="pn-stats-cats" style="font-size:13px;font-weight:800;color:#a78bfa;">—</div>
-              <div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:1px;">Categories</div>
+            <div class="prem-stat-pill purple">
+              <div class="prem-stat-num purple" id="pn-stats-cats">—</div>
+              <div class="prem-stat-lbl">Categories</div>
             </div>
           </div>
         </div>
 
-        <!-- Search box in sidebar -->
-        <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;">
-          <div style="position:relative;">
-            <i class="fas fa-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--ss-muted);font-size:11px;pointer-events:none;"></i>
-            <input id="pn-search-input" type="text"
-              placeholder="Search part numbers, models…"
-              autocomplete="off"
-              style="width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px 28px;color:#fff;font-size:11px;font-family:var(--ss-font);outline:none;transition:border-color .18s;"
-              onfocus="this.style.borderColor='rgba(251,146,60,.5)'"
-              onblur="this.style.borderColor='rgba(255,255,255,.1)'"
+        <!-- SEARCH -->
+        <div class="prem-sb-search">
+          <div class="prem-search-wrap">
+            <i class="fas fa-search prem-search-icon"></i>
+            <input id="pn-search-input" type="text" class="prem-search-inp orange"
+              placeholder="Search part numbers, models…" autocomplete="off"
               oninput="window._pnOnSearch(this.value);document.getElementById('pn-sb-clear').style.display=this.value?'block':'none';"
-              onkeydown="if(event.key==='Enter') window._pnOnSearch(this.value);">
-            <button id="pn-sb-clear" onclick="document.getElementById('pn-search-input').value='';document.getElementById('pn-sb-clear').style.display='none';window._pnOnSearch('');"
-              style="display:none;position:absolute;right:7px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ss-muted);cursor:pointer;font-size:10px;padding:0;line-height:1;">✕</button>
+              onkeydown="if(event.key==='Enter')window._pnOnSearch(this.value);">
+            <button id="pn-sb-clear" class="prem-search-clear"
+              onclick="document.getElementById('pn-search-input').value='';this.style.display='none';window._pnOnSearch('');">✕</button>
           </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px;">
-            <div id="pn-status" style="font-size:10px;color:var(--ss-muted);"></div>
-            <div id="pn-search-count" style="font-size:10px;color:var(--ss-muted);"></div>
+          <div class="prem-search-meta">
+            <span class="prem-search-status" id="pn-status"></span>
+            <span class="prem-search-count" id="pn-search-count"></span>
           </div>
         </div>
 
-        <!-- Active filter badge -->
-        <div id="pn-active-filter" style="display:none;margin:8px 12px 0;align-items:center;gap:6px;background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.25);border-radius:6px;padding:5px 9px;font-size:10px;color:#fb923c;">
-          <i class="fas fa-filter" style="font-size:9px;opacity:.7;flex-shrink:0;"></i>
-          <span id="pn-filter-label" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-          <button onclick="window._pnClearSidebarFilter()" style="background:none;border:none;color:#fb923c;cursor:pointer;font-size:10px;padding:0;flex-shrink:0;opacity:.8;">✕</button>
+        <!-- ACTIVE FILTER BADGE -->
+        <div id="pn-active-filter" class="prem-active-filter orange">
+          <i class="fas fa-filter"></i>
+          <span id="pn-filter-label"></span>
+          <button onclick="window._pnClearSidebarFilter()">✕</button>
         </div>
 
-        <!-- Hidden legacy elements for JS compat -->
-        <div id="pn-filter-chips" style="display:none;"></div>
+        <!-- compat shims -->
+        <div id="pn-filter-chips" style="display:none;" aria-hidden="true"></div>
         <div id="pn-results-list" style="display:none;" aria-hidden="true"></div>
 
-        <!-- Type / Category filter section -->
-        <div style="padding:10px 12px 5px;flex-shrink:0;">
-          <div style="display:flex;align-items:center;justify-content:space-between;">
-            <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.28);letter-spacing:.1em;text-transform:uppercase;">TYPE / CATEGORY</div>
-            <button id="pn-cat-toggle-btn" onclick="window._pnToggleSection()" style="background:none;border:none;color:rgba(255,255,255,.28);cursor:pointer;font-size:9px;padding:0;transition:transform .15s;">▾</button>
+        <!-- TYPE / CATEGORY SECTION -->
+        <div class="prem-section-head" style="margin-top:6px;">
+          <div class="prem-section-row">
+            <span class="prem-section-lbl">Type / Category</span>
+            <button class="prem-section-toggle" id="pn-cat-toggle-btn" onclick="window._pnToggleSection()">▾</button>
           </div>
         </div>
-        <div id="pn-sidebar-cat-list" style="flex:1;overflow-y:auto;padding:0 8px 12px;display:flex;flex-direction:column;gap:1px;">
+        <div id="pn-sidebar-cat-list" class="prem-filter-list" style="flex:1;">
           <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
         </div>
 
-        <!-- Hidden select for JS filter compat -->
+        <!-- Hidden select — JS compat -->
         <div style="display:none;" aria-hidden="true">
           <select id="pn-cat-filter" onchange="window._pnApplyFilters()"><option value="">All Categories</option></select>
         </div>
@@ -2619,27 +2849,20 @@
             </span>
             <span id="pn-live-badge" style="display:none;padding:3px 8px;border-radius:999px;font-size:9px;font-weight:700;letter-spacing:.04em;background:rgba(63,185,80,.12);color:#3fb950;border:1px solid rgba(63,185,80,.3);">● LIVE</span>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
-            <span id="pn-record-count" style="font-size:10px;color:var(--ss-muted);"></span>
-            <button onclick="window._pnExportCsv()"
-              style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:4px 10px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:5px;">
-              <i class="fas fa-download"></i> Export CSV
-            </button>
-            <button onclick="window._pnRefresh()"
-              style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:4px 10px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:5px;">
-              <i class="fas fa-sync-alt"></i> Reload
-            </button>
+          <div style="display:flex;align-items:center;gap:7px;margin-left:auto;">
+            <span id="pn-record-count" class="prem-count-badge orange"></span>
+            <button onclick="window._pnExportCsv()" class="prem-tb-btn"><i class="fas fa-download"></i> Export CSV</button>
+            <button onclick="window._pnRefresh()" class="prem-tb-btn"><i class="fas fa-sync-alt"></i> Reload</button>
           </div>
         </div>
-        <!-- Hidden main-search for JS compat (sync target) -->
         <input type="text" id="pn-main-search" style="display:none;" aria-hidden="true">
 
         <!-- Dynamic table header -->
         <div style="flex-shrink:0;overflow-x:auto;background:var(--ss-surface3);">
-          <table id="pn-table-head" style="width:100%;border-collapse:collapse;min-width:700px;">
+          <table id="pn-table-head" class="prem-table orange" style="min-width:700px;">
             <thead id="pn-thead-row">
-              <tr style="border-bottom:1px solid var(--ss-border);">
-                <th style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);width:40px;">#</th>
+              <tr>
+                <th style="width:38px;">#</th>
                 <!-- columns injected dynamically by _pnBuildTableHeader() -->
               </tr>
             </thead>
@@ -2649,19 +2872,17 @@
         <!-- Scrollable table body -->
         <div id="pn-table-body" style="flex:1;overflow:auto;min-height:0;">
           <div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--ss-muted);">
-            <i class="fas fa-spinner fa-spin" style="font-size:20px;opacity:.4;"></i>
-            <span style="font-size:13px;opacity:.5;">Loading Parts Number data…</span>
+            <i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.35;"></i>
+            <span style="font-size:12px;opacity:.45;">Loading Parts Number data…</span>
           </div>
         </div>
 
         <!-- Pagination -->
-        <div id="pn-pagination" style="flex-shrink:0;padding:8px 16px;background:var(--ss-surface);border-top:1px solid var(--ss-border);display:flex;align-items:center;gap:10px;">
-          <span id="pn-page-info" style="font-size:11px;color:var(--ss-muted);flex:1;"></span>
-          <button onclick="window._pnChangePage(-1)" id="pn-prev-btn"
-            style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:5px 12px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;">‹ Prev</button>
+        <div id="pn-pagination" class="prem-pagination">
+          <span id="pn-page-info" class="prem-page-info"></span>
+          <button onclick="window._pnChangePage(-1)" id="pn-prev-btn" class="prem-page-nav">‹ Prev</button>
           <div id="pn-page-btns" style="display:flex;gap:4px;"></div>
-          <button onclick="window._pnChangePage(1)" id="pn-next-btn"
-            style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:5px 12px;border-radius:5px;font-size:11px;font-weight:600;font-family:var(--ss-font);cursor:pointer;">Next ›</button>
+          <button onclick="window._pnChangePage(1)" id="pn-next-btn" class="prem-page-nav">Next ›</button>
         </div>
       </div><!-- /canvas-parts_number -->
 
@@ -6082,32 +6303,29 @@
       return;
     }
 
-    // Build table
-    var html = '<table style="width:100%;border-collapse:collapse;min-width:900px;font-size:11px;">';
+    // Build table — HD Premium rows
+    var html = '<table class="prem-table cyan" style="width:100%;min-width:900px;">';
     html += '<tbody>';
     rows.forEach(function(row, i) {
       var globalIdx = start + i;
-      var isEven    = i % 2 === 0;
-      var rowBg     = isEven ? 'transparent' : 'rgba(255,255,255,.015)';
-      html += '<tr data-cp-idx="' + globalIdx + '" style="background:' + rowBg + ';transition:background .08s;cursor:pointer;" ' +
+      var rowBg = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.012)';
+      html += '<tr data-cp-idx="' + globalIdx + '" style="background:' + rowBg + ';cursor:pointer;" ' +
         'onclick="window._cpOpenDetail(' + globalIdx + ')" ' +
-        'onmouseover="this.style.background=\'rgba(34,211,238,.06)\'" ' +
-        'onmouseout="this.style.background=\'' + rowBg + '\'">';
-      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--ss-muted);font-size:10px;width:40px;">' + (start + i + 1) + '</td>';
-      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);font-weight:700;color:#22d3ee;max-width:200px;">' + esc(row.site) + '</td>';
-      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--ss-text);">' + esc(row.directory) + '</td>';
-      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--ss-text);">' + esc(row.city) + '</td>';
-      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--ss-muted);">' + esc(row.state) + '</td>';
-      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--ss-text);">' + esc(row.country) + '</td>';
-      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--ss-muted);font-size:10px;">' + esc(row.timezone) + '</td>';
-      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);text-align:center;font-weight:800;color:#3fb950;">' + esc(row.systems || '—') + '</td>';
-      html += '<td style="padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);">';
+        'onmouseover="this.querySelectorAll(\'td\').forEach(function(t){t.style.background=\'rgba(34,211,238,.04)\'})" ' +
+        'onmouseout="this.querySelectorAll(\'td\').forEach(function(t){t.style.background=\'\'});">';
+      html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-muted);font-size:10px;width:38px;">' + (start + i + 1) + '</td>';
+      html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);"><span class="cp-site-link">' + esc(row.site) + '</span></td>';
+      html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-text);">' + esc(row.directory) + '</td>';
+      html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-text);">' + esc(row.city) + '</td>';
+      html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-muted);">' + esc(row.state) + '</td>';
+      html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-text);">' + esc(row.country) + '</td>';
+      html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-muted);font-size:10px;">' + esc(row.timezone) + '</td>';
+      html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);text-align:center;"><span class="cp-sys-badge">' + esc(row.systems || '—') + '</span></td>';
+      html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);">';
       if (row.url) {
         html += '<a href="' + esc(row.url) + '" target="_blank" rel="noopener noreferrer" ' +
-          'onclick="event.stopPropagation()" ' +
-          'style="display:inline-flex;align-items:center;gap:5px;color:#22d3ee;font-size:10px;font-weight:700;text-decoration:none;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.2);border-radius:5px;padding:3px 8px;white-space:nowrap;" ' +
-          'onmouseover="this.style.background=\'rgba(34,211,238,.18)\'" onmouseout="this.style.background=\'rgba(34,211,238,.08)\'">' +
-          '<i class="fas fa-external-link-alt" style="font-size:9px;"></i> Open</a>';
+          'onclick="event.stopPropagation()" class="cp-open-btn">' +
+          '<i class="fas fa-external-link-alt" style="font-size:8px;"></i> Open</a>';
       }
       html += '</td></tr>';
     });
@@ -6129,15 +6347,16 @@
     if (info) info.textContent = 'Showing ' + start.toLocaleString() + '–' + end.toLocaleString() + ' of ' + total.toLocaleString() + ' sites';
     var prevBtn = document.getElementById('cp-prev-btn');
     var nextBtn = document.getElementById('cp-next-btn');
-    if (prevBtn) prevBtn.disabled = page <= 1;
-    if (nextBtn) nextBtn.disabled = page >= maxPage;
+    if (prevBtn) { prevBtn.disabled = page <= 1; prevBtn.style.opacity = page <= 1 ? '.4' : '1'; }
+    if (nextBtn) { nextBtn.disabled = page >= maxPage; nextBtn.style.opacity = page >= maxPage ? '.4' : '1'; }
     var btnContainer = document.getElementById('cp-page-btns');
     if (btnContainer) {
       var pages = [];
       for (var p = Math.max(1, page - 2); p <= Math.min(maxPage, page + 2); p++) pages.push(p);
       btnContainer.innerHTML = pages.map(function(p) {
-        var active = p === page;
-        return '<button onclick="window._cpGoPage(' + p + ')" style="min-width:28px;padding:4px 6px;border-radius:4px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;border:1px solid ' + (active ? 'rgba(34,211,238,.5)' : 'rgba(255,255,255,.1)') + ';background:' + (active ? 'rgba(34,211,238,.15)' : 'rgba(255,255,255,.04)') + ';color:' + (active ? '#22d3ee' : 'var(--ss-muted)') + ';">' + p + '</button>';
+        return '<button onclick="window._cpGoPage(' + p + ')" class="prem-page-num ' + (p === page ? 'cyan' : '') + '" ' +
+          (p !== page ? 'style="border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:var(--ss-muted);"' : '') +
+          '>' + p + '</button>';
       }).join('');
     }
   }
@@ -7976,22 +8195,15 @@
   function _buildTableHeader() {
     var thead = el('pn-thead-row');
     if (!thead) return;
-
-    // Determine display columns — limit to 8 for readability
     var displayCols = _columns.slice(0, 8);
-
-    thead.innerHTML = '<th style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);width:40px;">#</th>' +
+    thead.innerHTML = '<th style="width:38px;">#</th>' +
       displayCols.map(function(col) {
         var iconId = 'pn-sort-' + col.replace(/\W/g,'_');
-        return '<th onclick="window._pnSort(\'' + col.replace(/'/g,"\\'") + '\')" ' +
-          'style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;cursor:pointer;">' +
-          esc(col) + ' <i class="fas fa-sort" id="' + iconId + '" style="opacity:.3;"></i></th>';
+        return '<th onclick="window._pnSort(\'' + col.replace(/'/g,"\\'") + '\')" style="white-space:nowrap;cursor:pointer;">' +
+          esc(col) + ' <i class="fas fa-sort" id="' + iconId + '" style="opacity:.3;font-size:8px;"></i></th>';
       }).join('') +
-      // If there's a URL column, show it as a link column
       (_columns.some(function(c) { return /url|link|href/i.test(c); }) ?
-        '<th style="padding:8px 12px;text-align:left;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);white-space:nowrap;">Link</th>' : '');
-
-    // Store display cols for row rendering
+        '<th>Link</th>' : '');
     _displayCols = displayCols;
   }
 
@@ -8048,47 +8260,51 @@
     var end      = Math.min(start + _perPage, total);
     var slice    = _filtered.slice(start, end);
 
-    // Record count chips
+    // Record count badge — HD
     if (recCnt) {
       recCnt.innerHTML =
-        '<span style="font-size:10px;padding:3px 8px;border-radius:4px;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.2);color:#fb923c;font-weight:700;margin-right:4px;">' +
-        total.toLocaleString() + '</span>' +
-        '<span style="font-size:10px;color:var(--ss-muted);">of ' + _allData.length.toLocaleString() + ' total</span>';
+        '<span style="font-weight:700;margin-right:3px;">' + total.toLocaleString() + '</span>' +
+        '<span style="font-size:10px;font-weight:400;color:var(--ss-muted);">of ' + _allData.length.toLocaleString() + ' total</span>';
     }
     if (schCnt) schCnt.textContent = total.toLocaleString() + ' total';
 
-    // Update left panel status
     var statusEl = el('pn-status');
     if (statusEl) statusEl.textContent = total.toLocaleString() + ' result' + (total !== 1 ? 's' : '');
 
-    // Sidebar results list
     _renderSidebarList(slice, start);
 
-    // Table body
     if (!body) return;
     if (!slice.length) {
       body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:10px;color:var(--ss-muted);">' +
-        '<i class="fas fa-barcode" style="font-size:28px;opacity:.2;"></i>' +
-        '<div style="font-size:13px;">No results found</div>' +
-        '<div style="font-size:11px;opacity:.6;">' + (_query ? 'Try a different search term' : 'No data loaded') + '</div></div>';
+        '<i class="fas fa-barcode" style="font-size:26px;opacity:.2;"></i>' +
+        '<div style="font-size:12px;opacity:.5;">No results found</div>' +
+        '<div style="font-size:10px;opacity:.4;">' + (_query ? 'Try a different search term' : 'No data loaded') + '</div></div>';
     } else {
       var linkCol = _columns.find(function(c) { return /url|link|href/i.test(c); });
-      var html = '<table style="width:100%;border-collapse:collapse;min-width:700px;">';
+      var html = '<table class="prem-table orange" style="width:100%;min-width:700px;">';
       slice.forEach(function(row, i) {
         var rowNum = start + i + 1;
-        html += '<tr style="border-bottom:1px solid var(--ss-border);transition:background .12s;" ' +
-          'onmouseover="this.style.background=\'rgba(251,146,60,.04)\'" onmouseout="this.style.background=\'\'">' +
-          '<td style="padding:8px 12px;font-size:10px;color:var(--ss-muted);width:40px;">' + rowNum + '</td>';
-        (_displayCols.length ? _displayCols : _columns.slice(0,8)).forEach(function(col) {
+        var rowBg = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.012)';
+        html += '<tr style="background:' + rowBg + ';" ' +
+          'onmouseover="this.querySelectorAll(\'td\').forEach(function(t){t.style.background=\'rgba(251,146,60,.03)\'})" ' +
+          'onmouseout="this.querySelectorAll(\'td\').forEach(function(t){t.style.background=\'\'});">' +
+          '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);font-size:10px;color:var(--ss-muted);width:38px;">' + rowNum + '</td>';
+        (_displayCols.length ? _displayCols : _columns.slice(0,8)).forEach(function(col, ci) {
           var val = row[col] || '';
-          html += '<td style="padding:8px 12px;font-size:11px;color:var(--ss-text);white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + esc(val) + '">' + esc(val) + '</td>';
+          // First col = brand badge, second = type text, third = part number, rest = description
+          var cellContent;
+          if (ci === 0) cellContent = '<span class="pn-brand-badge">' + esc(val) + '</span>';
+          else if (ci === 2) cellContent = '<span class="pn-partno">' + esc(val) + '</span>';
+          else if (ci === 3) cellContent = '<span class="pn-desc">' + esc(val) + '</span>';
+          else cellContent = '<span style="color:var(--ss-muted);font-size:11px;">' + esc(val) + '</span>';
+          html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;" title="' + esc(val) + '">' + cellContent + '</td>';
         });
         if (linkCol && row[linkCol]) {
-          html += '<td style="padding:8px 12px;"><a href="' + esc(row[linkCol]) + '" target="_blank" rel="noopener" ' +
-            'style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;background:rgba(251,146,60,.1);border:1px solid rgba(251,146,60,.25);color:#fb923c;font-size:10px;font-weight:700;text-decoration:none;">' +
+          html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);"><a href="' + esc(row[linkCol]) + '" target="_blank" rel="noopener" ' +
+            'style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;background:rgba(251,146,60,.08);border:1px solid rgba(251,146,60,.22);color:#fb923c;font-size:9px;font-weight:700;text-decoration:none;">' +
             '<i class="fas fa-external-link-alt" style="font-size:8px;"></i> Open</a></td>';
         } else if (_columns.some(function(c) { return /url|link|href/i.test(c); })) {
-          html += '<td style="padding:8px 12px;font-size:10px;color:var(--ss-muted);">—</td>';
+          html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);font-size:10px;color:var(--ss-muted);">—</td>';
         }
         html += '</tr>';
       });
@@ -8096,22 +8312,18 @@
       body.innerHTML = html;
     }
 
-    // Pagination
-    if (pageInfo) pageInfo.textContent = 'Showing ' + (total ? (start+1) : 0) + '–' + end + ' of ' + total.toLocaleString() + ' entries';
+    // Pagination HD
+    if (pageInfo) pageInfo.textContent = 'Showing ' + (total ? (start+1).toLocaleString() : 0) + '–' + end.toLocaleString() + ' of ' + total.toLocaleString() + ' entries';
     if (prevBtn) { prevBtn.disabled = _page <= 1; prevBtn.style.opacity = _page <= 1 ? '.35' : '1'; }
     if (nextBtn) { nextBtn.disabled = _page >= pages; nextBtn.style.opacity = _page >= pages ? '.35' : '1'; }
-
     if (pageBtns) {
       var btnHtml = '';
       var lo = Math.max(1, _page-2), hi = Math.min(pages, _page+2);
       for (var p = lo; p <= hi; p++) {
-        var active = p === _page;
-        btnHtml += '<button onclick="window._pnGoPage(' + p + ')" style="background:' +
-          (active ? 'rgba(251,146,60,.2)' : 'rgba(255,255,255,.05)') +
-          ';border:1px solid ' + (active ? 'rgba(251,146,60,.4)' : 'rgba(255,255,255,.1)') +
-          ';color:' + (active ? '#fb923c' : 'var(--ss-muted)') +
-          ';padding:5px 10px;border-radius:5px;font-size:11px;font-weight:' + (active ? '800' : '600') +
-          ';font-family:var(--ss-font);cursor:pointer;">' + p + '</button>';
+        var isActive = p === _page;
+        btnHtml += '<button onclick="window._pnGoPage(' + p + ')" class="prem-page-num ' + (isActive ? 'orange' : '') + '" ' +
+          (!isActive ? 'style="border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:var(--ss-muted);"' : '') +
+          '>' + p + '</button>';
       }
       pageBtns.innerHTML = btnHtml;
     }
@@ -8381,47 +8593,37 @@
   function _cpBuildFilterList(containerId, selectEl, icon, color, type, activeVal, totalCount) {
     var container = $(containerId);
     if (!container) return;
-
     var options = [];
     for (var i = 0; i < selectEl.options.length; i++) {
       var opt = selectEl.options[i];
       if (opt.value !== '') {
-        // Extract count from text like "Florida (1234)" or just use label
         var label = opt.textContent.trim();
         var m = label.match(/^(.+?)\s*\((\d+)\)$/);
         options.push({ value: opt.value, label: m ? m[1] : label, count: m ? parseInt(m[2]) : '' });
       }
     }
-
     var allIsActive = (activeVal === '');
     var html = '';
-
-    // "All" button
-    html += '<button class="cp-filter-btn' + (allIsActive ? ' active' : '') + '" ' +
+    // "All" button — uses prem CSS classes
+    html += '<button class="prem-filter-btn cv' + (allIsActive ? ' active' : '') + '" ' +
       'onclick="window._cpSidebarFilter(\'' + type + '\',\'\')">' +
-      '<span style="display:flex;align-items:center;gap:7px;flex:1;min-width:0;">' +
-        '<span class="cp-filter-icon"><i class="fas ' + icon + '" style="font-size:8px;color:' + color + ';"></i></span>' +
-        '<span style="font-size:11px;color:' + (allIsActive ? color : 'var(--ss-muted)') + ';font-weight:' + (allIsActive ? '700' : '500') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
-          'All ' + (type === 'country' ? 'Countries' : 'Directories') +
-        '</span>' +
+      '<span class="prem-filter-inner">' +
+        '<span class="prem-filter-ico ' + (allIsActive ? 'active' : 'idle') + '"><i class="fas ' + icon + '"></i></span>' +
+        '<span class="prem-filter-lbl">All ' + (type === 'country' ? 'Countries' : 'Directories') + '</span>' +
       '</span>' +
-      '<span class="cp-filter-count">' + (totalCount ? totalCount.toLocaleString() : '') + '</span>' +
+      '<span class="prem-filter-cnt">' + (totalCount ? totalCount.toLocaleString() : '') + '</span>' +
     '</button>';
-
     options.forEach(function(opt) {
       var isActive = (activeVal === opt.value);
-      html += '<button class="cp-filter-btn' + (isActive ? ' active' : '') + '" ' +
+      html += '<button class="prem-filter-btn cv' + (isActive ? ' active' : '') + '" ' +
         'onclick="window._cpSidebarFilter(\'' + type + '\',\'' + opt.value.replace(/'/g,"\\'") + '\')">' +
-        '<span style="display:flex;align-items:center;gap:7px;flex:1;min-width:0;">' +
-          '<span style="width:18px;height:18px;border-radius:4px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
-            '<i class="fas ' + icon + '" style="font-size:7px;color:rgba(255,255,255,.3);"></i>' +
-          '</span>' +
-          '<span style="font-size:11px;color:' + (isActive ? color : 'var(--ss-muted)') + ';font-weight:' + (isActive ? '700' : '400') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(opt.label) + '</span>' +
+        '<span class="prem-filter-inner">' +
+          '<span class="prem-filter-ico idle"><i class="fas ' + icon + '"></i></span>' +
+          '<span class="prem-filter-lbl">' + esc(opt.label) + '</span>' +
         '</span>' +
-        '<span class="cp-filter-count">' + (opt.count !== '' ? opt.count.toLocaleString() : '') + '</span>' +
+        '<span class="prem-filter-cnt">' + (opt.count !== '' ? opt.count.toLocaleString() : '') + '</span>' +
       '</button>';
     });
-
     container.innerHTML = html;
   }
 
@@ -8472,10 +8674,10 @@
   }
 
   window._cpToggleSection = function(section) {
-    var listId  = section === 'country' ? 'cp-sidebar-country-list' : 'cp-sidebar-dir-list';
-    var btnId   = section === 'country' ? 'cp-country-toggle-btn'   : 'cp-dir-toggle-btn';
-    var list    = $(listId);
-    var btn     = $(btnId);
+    var listId = section === 'country' ? 'cp-sidebar-country-list' : 'cp-sidebar-dir-list';
+    var btnId  = section === 'country' ? 'cp-country-toggle'       : 'cp-dir-toggle';
+    var list   = $(listId);
+    var btn    = $(btnId);
     if (!list) return;
     var hidden = list.style.display === 'none';
     list.style.display = hidden ? 'flex' : 'none';
@@ -8517,47 +8719,47 @@
     var allIsActive = (_pnSidebarCat === '');
     var html = '';
 
-    // "All" button
-    html += '<button class="pn-filter-btn' + (allIsActive ? ' active' : '') + '" ' +
+    // "All" button — prem CSS classes
+    html += '<button class="prem-filter-btn ov' + (allIsActive ? ' active' : '') + '" ' +
       'onclick="window._pnSidebarFilter(\'\')">' +
-      '<span style="display:flex;align-items:center;gap:7px;flex:1;min-width:0;">' +
-        '<span class="pn-filter-icon"><i class="fas fa-th-large" style="font-size:8px;color:#fb923c;"></i></span>' +
-        '<span style="font-size:11px;color:' + (allIsActive ? '#fb923c' : 'var(--ss-muted)') + ';font-weight:' + (allIsActive ? '700' : '500') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">All Categories</span>' +
+      '<span class="prem-filter-inner">' +
+        '<span class="prem-filter-ico ' + (allIsActive ? 'active' : 'idle') + '"><i class="fas fa-th-large"></i></span>' +
+        '<span class="prem-filter-lbl">All Categories</span>' +
       '</span>' +
-      '<span class="pn-filter-count">' + (totalParts ? totalParts.toLocaleString() : '') + '</span>' +
+      '<span class="prem-filter-cnt">' + (totalParts ? totalParts.toLocaleString() : '') + '</span>' +
     '</button>';
 
     for (var j = 0; j < catEl.options.length; j++) {
       var opt = catEl.options[j];
       if (!opt.value) continue;
       var isActive = (_pnSidebarCat === opt.value);
-      // Parse "Type Name (count)" format
       var lbl = opt.textContent.trim();
       var match = lbl.match(/^(.+?)\s*\((\d+)\)$/);
       var labelClean = match ? match[1] : lbl;
       var cnt = match ? parseInt(match[2]) : '';
 
-      // Pick a type icon based on label keywords
       var typeIcon = 'fa-cube';
       var lc = labelClean.toLowerCase();
       if (lc.includes('control') || lc.includes('xr') || lc.includes('cc')) typeIcon = 'fa-microchip';
       else if (lc.includes('stand alone') || lc.includes('standalone'))      typeIcon = 'fa-server';
       else if (lc.includes('network') || lc.includes('connect'))             typeIcon = 'fa-wifi';
       else if (lc.includes('sensor') || lc.includes('probe'))                typeIcon = 'fa-thermometer-half';
-      else if (lc.includes('valve') || lc.includes('sporlan'))               typeIcon = 'fa-cog';
+      else if (lc.includes('valve') || lc.includes('sporlan') || lc.includes('alco') || lc.includes('danfoss')) typeIcon = 'fa-cog';
       else if (lc.includes('license') || lc.includes('key'))                 typeIcon = 'fa-key';
       else if (lc.includes('rga') || lc.includes('warranty'))                typeIcon = 'fa-undo-alt';
-      else if (lc.includes('display') || lc.includes('screen'))              typeIcon = 'fa-desktop';
+      else if (lc.includes('display') || lc.includes('screen') || lc.includes('supervisor')) typeIcon = 'fa-desktop';
+      else if (lc.includes('probe') || lc.includes('thermometer'))           typeIcon = 'fa-thermometer-half';
+      else if (lc.includes('walmart') || lc.includes('job'))                 typeIcon = 'fa-briefcase';
+      else if (lc.includes('inquiry') || lc.includes('part number'))         typeIcon = 'fa-search';
+      else if (lc.includes('accessor'))                                       typeIcon = 'fa-puzzle-piece';
 
-      html += '<button class="pn-filter-btn' + (isActive ? ' active' : '') + '" ' +
+      html += '<button class="prem-filter-btn ov' + (isActive ? ' active' : '') + '" ' +
         'onclick="window._pnSidebarFilter(\'' + opt.value.replace(/'/g,"\\'") + '\')">' +
-        '<span style="display:flex;align-items:center;gap:7px;flex:1;min-width:0;">' +
-          '<span style="width:18px;height:18px;border-radius:4px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
-            '<i class="fas ' + typeIcon + '" style="font-size:7px;color:' + (isActive ? '#fb923c' : 'rgba(255,255,255,.3)') + ';"></i>' +
-          '</span>' +
-          '<span style="font-size:11px;color:' + (isActive ? '#fb923c' : 'var(--ss-muted)') + ';font-weight:' + (isActive ? '700' : '400') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(labelClean) + '</span>' +
+        '<span class="prem-filter-inner">' +
+          '<span class="prem-filter-ico idle"><i class="fas ' + typeIcon + '"></i></span>' +
+          '<span class="prem-filter-lbl">' + esc(labelClean) + '</span>' +
         '</span>' +
-        '<span class="pn-filter-count">' + (cnt !== '' ? cnt.toLocaleString() : '') + '</span>' +
+        '<span class="prem-filter-cnt">' + (cnt !== '' ? cnt.toLocaleString() : '') + '</span>' +
       '</button>';
     }
 
