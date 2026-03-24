@@ -4940,50 +4940,95 @@
    DO NOT REMOVE — required for multi-device settings sync.
 ──────────────────────────────────────────────────────────────────── */
 (function() {
+  // ── Get a guaranteed-fresh token, refreshing if needed ──────────────
+  function _getFreshToken() {
+    return new Promise(function(resolve) {
+      // Try CloudAuth.ensureFreshSession first (handles refresh automatically)
+      if (window.CloudAuth && typeof window.CloudAuth.ensureFreshSession === 'function') {
+        window.CloudAuth.ensureFreshSession({ tryRefresh: true, clearOnFail: false, leewaySec: 30 })
+          .then(function() {
+            var tok = (typeof window.CloudAuth.accessToken === 'function') ? window.CloudAuth.accessToken() : '';
+            resolve(tok || '');
+          })
+          .catch(function() {
+            // Fallback: read raw from storage
+            try {
+              var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+              if (raw) { var p = JSON.parse(raw); resolve((p && p.access_token) ? p.access_token : ''); return; }
+            } catch(_) {}
+            resolve('');
+          });
+        return;
+      }
+      // No CloudAuth — read raw
+      try {
+        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+        if (raw) { var p = JSON.parse(raw); resolve((p && p.access_token) ? p.access_token : ''); return; }
+      } catch(_) {}
+      resolve('');
+    });
+  }
+
   function _preloadStudioSettings() {
-    var tok = '';
-    try {
-      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-      if (raw) { var p = JSON.parse(raw); if (p && p.access_token) tok = p.access_token; }
-      if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken();
-    } catch(_) {}
-    if (!tok) return;
+    _getFreshToken().then(function(tok) {
+      if (!tok) {
+        // No token yet — retry once after 2s (handles boot timing)
+        setTimeout(function() {
+          _getFreshToken().then(function(tok2) {
+            if (tok2) _doPreload(tok2);
+          });
+        }, 2000);
+        return;
+      }
+      _doPreload(tok);
+    });
+  }
+
+  function _doPreload(tok) {
+    var headers = { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-cache' };
 
     if (!window._cpCsvUrl) {
-      fetch('/api/studio/csv_settings?type=connect_plus', {
-        headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-cache' }
-      }).then(function(r) { return r.ok ? r.json() : null; })
+      fetch('/api/studio/csv_settings?type=connect_plus', { headers: headers })
+        .then(function(r) {
+          if (!r.ok) { console.warn('[Preload] Connect+ settings HTTP', r.status); return null; }
+          return r.json();
+        })
         .then(function(d) {
           if (d && d.ok && d.settings && d.settings.csvUrl) {
             window._cpCsvUrl = d.settings.csvUrl;
             window._cpSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
               ? d.settings.searchColumns : null;
+            console.log('[Preload] Connect+ URL loaded:', window._cpCsvUrl.slice(0, 60) + '...');
           }
-        }).catch(function(err) { console.warn('[Preload] Connect+ settings error:', err); });
+        })
+        .catch(function(err) { console.warn('[Preload] Connect+ settings error:', err); });
     }
 
     if (!window._pnCsvUrl) {
-      fetch('/api/studio/csv_settings?type=parts_number', {
-        headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-cache' }
-      }).then(function(r) { return r.ok ? r.json() : null; })
+      fetch('/api/studio/csv_settings?type=parts_number', { headers: headers })
+        .then(function(r) {
+          if (!r.ok) { console.warn('[Preload] Parts Number settings HTTP', r.status); return null; }
+          return r.json();
+        })
         .then(function(d) {
           if (d && d.ok && d.settings && d.settings.csvUrl) {
             window._pnCsvUrl = d.settings.csvUrl;
             window._pnSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
               ? d.settings.searchColumns : null;
+            console.log('[Preload] Parts Number URL loaded:', window._pnCsvUrl.slice(0, 60) + '...');
           }
-        }).catch(function(err) { console.warn('[Preload] Parts Number settings error:', err); });
+        })
+        .catch(function(err) { console.warn('[Preload] Parts Number settings error:', err); });
     }
   }
 
-  // CRITICAL FIX: cloud_auth.js dispatches 'mums:authtoken' on window, NOT document.
-  // Using document.addEventListener here means the event is NEVER received.
+  // Listen on window (cloud_auth.js dispatches on window, NOT document)
   window.addEventListener('mums:authtoken', _preloadStudioSettings, { once: false });
-  // Also try immediately in case token is already available at load time
+  // Also attempt on DOMContentLoaded and after a short boot delay
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { setTimeout(_preloadStudioSettings, 800); });
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(_preloadStudioSettings, 1000); });
   } else {
-    setTimeout(_preloadStudioSettings, 800);
+    setTimeout(_preloadStudioSettings, 1000);
   }
 })();
 </script>
