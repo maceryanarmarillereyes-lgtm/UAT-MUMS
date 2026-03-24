@@ -2664,13 +2664,11 @@
               </div>
               <div style="height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;display:flex;" id="cache-storage-bar">
                 <div id="cache-bar-cp"  style="height:100%;background:#58a6ff;transition:width .4s;width:0%;"></div>
-                <div id="cache-bar-pn"  style="height:100%;background:#fb923c;transition:width .4s;width:0%;"></div>
                 <div id="cache-bar-cat" style="height:100%;background:#22d3ee;transition:width .4s;width:0%;"></div>
                 <div id="cache-bar-sch" style="height:100%;background:#3fb950;transition:width .4s;width:0%;"></div>
               </div>
               <div style="display:flex;gap:14px;margin-top:6px;">
                 <span style="font-size:9px;color:var(--ss-muted);"><span style="display:inline-block;width:8px;height:8px;background:#58a6ff;border-radius:2px;margin-right:4px;"></span>Connect+</span>
-                <span style="font-size:9px;color:var(--ss-muted);"><span style="display:inline-block;width:8px;height:8px;background:#fb923c;border-radius:2px;margin-right:4px;"></span>Parts Number</span>
                 <span style="font-size:9px;color:var(--ss-muted);"><span style="display:inline-block;width:8px;height:8px;background:#22d3ee;border-radius:2px;margin-right:4px;"></span>Catalog</span>
                 <span style="font-size:9px;color:var(--ss-muted);"><span style="display:inline-block;width:8px;height:8px;background:#3fb950;border-radius:2px;margin-right:4px;"></span>QB Schema</span>
               </div>
@@ -4923,8 +4921,6 @@
         window._pnsLoadSettings();
       } else if (section === 'studio-cache' && typeof window._cacheUI !== 'undefined') {
         window._cacheUI.refreshPanel();
-        // Also boot check so connect+ / parts_number tags update immediately
-        if (typeof window._bootCacheCheck === 'function') window._bootCacheCheck();
       } else if (section === 'studio-appearance' && typeof window._appLoadDisplay === 'function') {
         window._appLoadDisplay();
       }
@@ -4935,103 +4931,93 @@
 </script>
 
 <script>
-/* ── GLOBAL STUDIO SETTINGS PRELOADER ──────────────────────────────
-   Fires on mums:authtoken so Connect+ and Parts Number settings are
-   warm before the user clicks any tab. Prevents "No CSV URL" on
-   other devices caused by mid-refresh token timing.
-   DO NOT REMOVE — required for multi-device settings sync.
-──────────────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════
+   STUDIO SETTINGS PRE-LOADER
+   Pre-fetches Connect+ and Part Number CSV settings from DB
+   immediately after auth is confirmed (mums:authtoken event).
+   This ensures window._cpCsvUrl and window._pnCsvUrl are populated
+   BEFORE any tab is clicked, so all users/devices see data on load.
+   Also retries on tab refocus (visibilitychange).
+═══════════════════════════════════════════════════════════════════ */
 (function() {
-  // ── Get a guaranteed-fresh token, refreshing if needed ──────────────
-  function _getFreshToken() {
-    return new Promise(function(resolve) {
-      // Try CloudAuth.ensureFreshSession first (handles refresh automatically)
-      if (window.CloudAuth && typeof window.CloudAuth.ensureFreshSession === 'function') {
-        window.CloudAuth.ensureFreshSession({ tryRefresh: true, clearOnFail: false, leewaySec: 30 })
-          .then(function() {
-            var tok = (typeof window.CloudAuth.accessToken === 'function') ? window.CloudAuth.accessToken() : '';
-            resolve(tok || '');
-          })
-          .catch(function() {
-            // Fallback: read raw from storage
-            try {
-              var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-              if (raw) { var p = JSON.parse(raw); resolve((p && p.access_token) ? p.access_token : ''); return; }
-            } catch(_) {}
-            resolve('');
-          });
-        return;
+  'use strict';
+
+  var _preloaded  = false;
+  var _preloading = false;
+
+  function _getApiTok() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) { var p = JSON.parse(raw); if (p && p.access_token) return p.access_token; }
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') {
+        return window.CloudAuth.accessToken() || '';
       }
-      // No CloudAuth — read raw
-      try {
-        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-        if (raw) { var p = JSON.parse(raw); resolve((p && p.access_token) ? p.access_token : ''); return; }
-      } catch(_) {}
-      resolve('');
-    });
+    } catch(_) {}
+    return '';
   }
 
-  function _preloadStudioSettings() {
-    _getFreshToken().then(function(tok) {
-      if (!tok) {
-        // No token yet — retry once after 2s (handles boot timing)
-        setTimeout(function() {
-          _getFreshToken().then(function(tok2) {
-            if (tok2) _doPreload(tok2);
-          });
-        }, 2000);
-        return;
-      }
-      _doPreload(tok);
-    });
-  }
+  function preloadSettings() {
+    if (_preloading) return;
+    var tok = _getApiTok();
+    if (!tok) return;
+    _preloading = true;
 
-  function _doPreload(tok) {
     var headers = { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-cache' };
 
-    if (!window._cpCsvUrl) {
-      fetch('/api/studio/csv_settings?type=connect_plus', { headers: headers })
-        .then(function(r) {
-          if (!r.ok) { console.warn('[Preload] Connect+ settings HTTP', r.status); return null; }
-          return r.json();
-        })
-        .then(function(d) {
-          if (d && d.ok && d.settings && d.settings.csvUrl) {
-            window._cpCsvUrl = d.settings.csvUrl;
-            window._cpSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
-              ? d.settings.searchColumns : null;
-            console.log('[Preload] Connect+ URL loaded:', window._cpCsvUrl.slice(0, 60) + '...');
-          }
-        })
-        .catch(function(err) { console.warn('[Preload] Connect+ settings error:', err); });
-    }
+    var p1 = fetch('/api/studio/csv_settings?type=connect_plus', { headers: headers })
+      .then(function(r) { return r.ok ? r.json().catch(function() { return null; }) : null; })
+      .then(function(d) {
+        if (d && d.ok && d.settings && d.settings.csvUrl) {
+          window._cpCsvUrl    = d.settings.csvUrl;
+          window._cpSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+            ? d.settings.searchColumns : null;
+        }
+      }).catch(function() {});
 
-    if (!window._pnCsvUrl) {
-      fetch('/api/studio/csv_settings?type=parts_number', { headers: headers })
-        .then(function(r) {
-          if (!r.ok) { console.warn('[Preload] Parts Number settings HTTP', r.status); return null; }
-          return r.json();
-        })
-        .then(function(d) {
-          if (d && d.ok && d.settings && d.settings.csvUrl) {
-            window._pnCsvUrl = d.settings.csvUrl;
-            window._pnSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
-              ? d.settings.searchColumns : null;
-            console.log('[Preload] Parts Number URL loaded:', window._pnCsvUrl.slice(0, 60) + '...');
-          }
-        })
-        .catch(function(err) { console.warn('[Preload] Parts Number settings error:', err); });
-    }
+    var p2 = fetch('/api/studio/csv_settings?type=parts_number', { headers: headers })
+      .then(function(r) { return r.ok ? r.json().catch(function() { return null; }) : null; })
+      .then(function(d) {
+        if (d && d.ok && d.settings && d.settings.csvUrl) {
+          window._pnCsvUrl    = d.settings.csvUrl;
+          window._pnSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+            ? d.settings.searchColumns : null;
+        }
+      }).catch(function() {});
+
+    Promise.all([p1, p2]).then(function() {
+      _preloaded  = true;
+      _preloading = false;
+    }).catch(function() { _preloading = false; });
   }
 
-  // Listen on window (cloud_auth.js dispatches on window, NOT document)
-  window.addEventListener('mums:authtoken', _preloadStudioSettings, { once: false });
-  // Also attempt on DOMContentLoaded and after a short boot delay
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { setTimeout(_preloadStudioSettings, 1000); });
+  // PRIMARY TRIGGER: fire as soon as CloudAuth emits a valid token
+  window.addEventListener('mums:authtoken', function() {
+    setTimeout(preloadSettings, 150);
+  });
+
+  // FALLBACK: if mums:authtoken already fired before this script ran
+  if (document.readyState !== 'loading') {
+    setTimeout(function() { if (!_preloaded) preloadSettings(); }, 600);
   } else {
-    setTimeout(_preloadStudioSettings, 1000);
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(function() { if (!_preloaded) preloadSettings(); }, 800);
+    });
   }
+
+  // RETRY: when user switches back to this tab
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && !_preloaded) {
+      setTimeout(preloadSettings, 300);
+    }
+  });
+
+  // EXPOSE for manual re-trigger (called after Save settings to force refresh on other tabs)
+  window._preloadStudioSettings = function() {
+    _preloaded  = false;
+    _preloading = false;
+    preloadSettings();
+  };
+
 })();
 </script>
 
@@ -6166,23 +6152,24 @@
       var tok = '';
       try {
         var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-        if (raw) { var p = JSON.parse(raw); if (p && p.access_token) tok = p.access_token; }
+        if (raw) {
+          var p = JSON.parse(raw);
+          if (p && p.access_token) tok = p.access_token;
+        }
         if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken();
       } catch(_) {}
+      if (!tok) return Promise.resolve(); // no token yet — caller will handle empty CSV_URL
       return fetch('/api/studio/csv_settings?type=connect_plus', {
         headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-cache' }
-      }).then(function(resp) {
-        if (!resp.ok) throw new Error('Settings fetch failed: HTTP ' + resp.status);
-        return resp.json();
-      }).then(function(d) {
-        if (d && d.ok && d.settings && d.settings.csvUrl) {
-          window._cpCsvUrl = d.settings.csvUrl;
-          window._cpSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
-            ? d.settings.searchColumns : null;
-        }
-      }).catch(function(err) {
-        console.warn('[Connect+] _loadSettingsIfNeeded failed:', err && err.message ? err.message : err);
-      });
+      }).then(function(resp) { return resp.ok ? resp.json().catch(function(){ return null; }) : null; })
+        .then(function(d) {
+          if (d && d.ok && d.settings && d.settings.csvUrl) {
+            window._cpCsvUrl = d.settings.csvUrl;
+            window._cpSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+              ? d.settings.searchColumns : null;
+          }
+        })
+        .catch(function() {});
     }
 
     // ── Cache-first: try IndexedDB before hitting network ─────────────
@@ -6191,22 +6178,8 @@
       ? window.StudioCache.getBundle('connect_plus')
       : Promise.resolve(null);
 
-    // FIX: retry getting settings up to 3x with 1s delay before showing "not configured"
-    // This handles race condition where token is still refreshing when tab is clicked
-    function _loadWithRetry(attemptsLeft) {
-      return _loadSettingsIfNeeded().then(function() {
-        var url = _normalizeCsvUrl(_getActiveCsvUrl());
-        if (!url && attemptsLeft > 0) {
-          return new Promise(function(resolve) {
-            setTimeout(function() { resolve(_loadWithRetry(attemptsLeft - 1)); }, 1000);
-          });
-        }
-        return url;
-      });
-    }
-
-    _loadWithRetry(3).then(function(resolvedUrl) {
-      CSV_URL = resolvedUrl || '';
+    _loadSettingsIfNeeded().then(function() {
+      CSV_URL = _normalizeCsvUrl(_getActiveCsvUrl());
       return cachePromise;
     }).then(function(cached) {
       if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
@@ -6916,6 +6889,7 @@
       window._cpCsvUrl = url;
       showMsg('cps-save-msg', '✓ Saved globally! Reload Connect+ to apply.', true);
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Connect+ Settings'; btn.style.opacity = '1'; }
+      if (typeof window._preloadStudioSettings === 'function') window._preloadStudioSettings();
       if (typeof window._cpRefresh === 'function') window._cpRefresh();
     }).catch(function(err){
       showMsg('cps-save-msg', '✗ Save failed: ' + (err && err.message ? err.message : 'Network error'), false);
@@ -7643,11 +7617,9 @@
 
     function pct(n) { return total > 0 ? Math.round(n / total * 100) + '%' : '0%'; }
     var barCp  = el('cache-bar-cp');
-    var barPn  = el('cache-bar-pn');
     var barCat = el('cache-bar-cat');
     var barSch = el('cache-bar-sch');
     if (barCp)  barCp.style.width  = pct(cpSize);
-    if (barPn)  barPn.style.width  = pct(pnSize);
     if (barCat) barCat.style.width = pct(catSize);
     if (barSch) barSch.style.width = pct(schSize);
   }
@@ -7905,7 +7877,7 @@
   });
 
   // ── Boot: run check on page load (after 2s to not block initial render) ──
-  window._bootCacheCheck = function _bootCacheCheck() {
+  function _bootCacheCheck() {
     if (typeof window.StudioCache === 'undefined') return;
     window.StudioCache.startAutoCheck();
     setTimeout(function() {
@@ -8136,6 +8108,7 @@
       window._pnCsvUrl = url;
       showMsg('pns-save-msg', '✓ Saved globally! Reload Parts Number to apply.', true);
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Part Number Settings'; btn.style.opacity = '1'; }
+      if (typeof window._preloadStudioSettings === 'function') window._preloadStudioSettings();
       if (typeof window._pnRefresh === 'function') window._pnRefresh();
     }).catch(function(err){
       showMsg('pns-save-msg', '✗ Save failed: ' + (err && err.message ? err.message : 'Network error'), false);
@@ -8266,28 +8239,13 @@
         _parseData(cached.data, true);
         return;
       }
-      // 2. Fall back to network — with retry if token not ready yet
-      return _fetchFromNetworkWithRetry(3);
+      // 2. Fall back to network
+      return _fetchFromNetwork();
     }).catch(function() {
-      return _fetchFromNetworkWithRetry(3);
+      return _fetchFromNetwork();
     }).catch(function(e) {
       _loading = false;
       _setBodyError(e.message);
-    });
-  }
-
-  // FIX: Retry wrapper — waits for auth token up to 3s before giving up
-  function _fetchFromNetworkWithRetry(attemptsLeft) {
-    return _fetchFromNetwork().then(function(result) {
-      // If _pnCsvUrl is still empty after fetch and we have retries left, wait and try again
-      if (!window._pnCsvUrl && attemptsLeft > 0) {
-        return new Promise(function(resolve, reject) {
-          setTimeout(function() {
-            _fetchFromNetworkWithRetry(attemptsLeft - 1).then(resolve).catch(reject);
-          }, 1000);
-        });
-      }
-      return result;
     });
   }
 
@@ -8297,23 +8255,24 @@
       var tok = '';
       try {
         var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-        if (raw) { var p = JSON.parse(raw); if (p && p.access_token) tok = p.access_token; }
+        if (raw) {
+          var p = JSON.parse(raw);
+          if (p && p.access_token) tok = p.access_token;
+        }
         if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken();
       } catch(_) {}
+      if (!tok) return Promise.resolve(); // no token yet — caller will handle empty url
       return fetch('/api/studio/csv_settings?type=parts_number', {
         headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-cache' }
-      }).then(function(resp) {
-        if (!resp.ok) throw new Error('Settings fetch failed: HTTP ' + resp.status);
-        return resp.json();
-      }).then(function(d) {
-        if (d && d.ok && d.settings && d.settings.csvUrl) {
-          window._pnCsvUrl = d.settings.csvUrl;
-          window._pnSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
-            ? d.settings.searchColumns : null;
-        }
-      }).catch(function(err) {
-        console.warn('[PartsNumber] _loadSettingsIfNeeded failed:', err && err.message ? err.message : err);
-      });
+      }).then(function(resp) { return resp.ok ? resp.json().catch(function(){ return null; }) : null; })
+        .then(function(d) {
+          if (d && d.ok && d.settings && d.settings.csvUrl) {
+            window._pnCsvUrl = d.settings.csvUrl;
+            window._pnSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+              ? d.settings.searchColumns : null;
+          }
+        })
+        .catch(function() {});
     }
 
     return _loadSettingsIfNeeded().then(function() {
