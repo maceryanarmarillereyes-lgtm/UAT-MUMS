@@ -28,6 +28,7 @@
   };
 
   var MANIFEST_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutes
+  var SUPPORT_STUDIO_QB_SETTINGS_KEY = 'support_studio_qb_settings';
   var _db         = null;
   var _dbPromise  = null;
   var _checkTimer = null;
@@ -528,6 +529,7 @@
     // Constants (read-only)
     TTL:                TTL,
     DB_NAME:            DB_NAME,
+    SUPPORT_STUDIO_QB_SETTINGS_KEY: SUPPORT_STUDIO_QB_SETTINGS_KEY,
   };
 
 }(window));
