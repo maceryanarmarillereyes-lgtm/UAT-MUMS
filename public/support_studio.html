@@ -4931,6 +4931,62 @@
 </script>
 
 <script>
+/* ── GLOBAL STUDIO SETTINGS PRELOADER ──────────────────────────────
+   Fires on mums:authtoken so Connect+ and Parts Number settings are
+   warm before the user clicks any tab. Prevents "No CSV URL" on
+   other devices caused by mid-refresh token timing.
+   DO NOT REMOVE — required for multi-device settings sync.
+──────────────────────────────────────────────────────────────────── */
+(function() {
+  function _preloadStudioSettings() {
+    var tok = '';
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) { var p = JSON.parse(raw); if (p && p.access_token) tok = p.access_token; }
+      if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken();
+    } catch(_) {}
+    if (!tok) return;
+
+    if (!window._cpCsvUrl) {
+      fetch('/api/studio/csv_settings?type=connect_plus', {
+        headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-cache' }
+      }).then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) {
+          if (d && d.ok && d.settings && d.settings.csvUrl) {
+            window._cpCsvUrl = d.settings.csvUrl;
+            window._cpSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+              ? d.settings.searchColumns : null;
+          }
+        }).catch(function(err) { console.warn('[Preload] Connect+ settings error:', err); });
+    }
+
+    if (!window._pnCsvUrl) {
+      fetch('/api/studio/csv_settings?type=parts_number', {
+        headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-cache' }
+      }).then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) {
+          if (d && d.ok && d.settings && d.settings.csvUrl) {
+            window._pnCsvUrl = d.settings.csvUrl;
+            window._pnSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+              ? d.settings.searchColumns : null;
+          }
+        }).catch(function(err) { console.warn('[Preload] Parts Number settings error:', err); });
+    }
+  }
+
+  // CRITICAL FIX: cloud_auth.js dispatches 'mums:authtoken' on window, NOT document.
+  // Using document.addEventListener here means the event is NEVER received.
+  window.addEventListener('mums:authtoken', _preloadStudioSettings, { once: false });
+  // Also try immediately in case token is already available at load time
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(_preloadStudioSettings, 800); });
+  } else {
+    setTimeout(_preloadStudioSettings, 800);
+  }
+})();
+</script>
+
+<script>
 /* ═══════════════════════════════════════════════════════════════════
    STUDIO QB SETTINGS — General Settings > Studio Quickbase Settings
    Fully isolated: reads/writes /api/studio/qb_settings only.
@@ -6061,23 +6117,23 @@
       var tok = '';
       try {
         var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-        if (raw) {
-          var p = JSON.parse(raw);
-          if (p && p.access_token) tok = p.access_token;
-        }
+        if (raw) { var p = JSON.parse(raw); if (p && p.access_token) tok = p.access_token; }
         if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken();
       } catch(_) {}
       return fetch('/api/studio/csv_settings?type=connect_plus', {
-        headers: { 'Authorization': 'Bearer ' + tok }
-      }).then(function(resp) { return resp.json(); })
-        .then(function(d) {
-          if (d && d.ok && d.settings && d.settings.csvUrl) {
-            window._cpCsvUrl = d.settings.csvUrl;
-            window._cpSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
-              ? d.settings.searchColumns : null;
-          }
-        })
-        .catch(function() {});
+        headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-cache' }
+      }).then(function(resp) {
+        if (!resp.ok) throw new Error('Settings fetch failed: HTTP ' + resp.status);
+        return resp.json();
+      }).then(function(d) {
+        if (d && d.ok && d.settings && d.settings.csvUrl) {
+          window._cpCsvUrl = d.settings.csvUrl;
+          window._cpSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+            ? d.settings.searchColumns : null;
+        }
+      }).catch(function(err) {
+        console.warn('[Connect+] _loadSettingsIfNeeded failed:', err && err.message ? err.message : err);
+      });
     }
 
     // ── Cache-first: try IndexedDB before hitting network ─────────────
@@ -8161,23 +8217,23 @@
       var tok = '';
       try {
         var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-        if (raw) {
-          var p = JSON.parse(raw);
-          if (p && p.access_token) tok = p.access_token;
-        }
+        if (raw) { var p = JSON.parse(raw); if (p && p.access_token) tok = p.access_token; }
         if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken();
       } catch(_) {}
       return fetch('/api/studio/csv_settings?type=parts_number', {
-        headers: { 'Authorization': 'Bearer ' + tok }
-      }).then(function(resp) { return resp.json(); })
-        .then(function(d) {
-          if (d && d.ok && d.settings && d.settings.csvUrl) {
-            window._pnCsvUrl = d.settings.csvUrl;
-            window._pnSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
-              ? d.settings.searchColumns : null;
-          }
-        })
-        .catch(function() {});
+        headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-cache' }
+      }).then(function(resp) {
+        if (!resp.ok) throw new Error('Settings fetch failed: HTTP ' + resp.status);
+        return resp.json();
+      }).then(function(d) {
+        if (d && d.ok && d.settings && d.settings.csvUrl) {
+          window._pnCsvUrl = d.settings.csvUrl;
+          window._pnSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+            ? d.settings.searchColumns : null;
+        }
+      }).catch(function(err) {
+        console.warn('[PartsNumber] _loadSettingsIfNeeded failed:', err && err.message ? err.message : err);
+      });
     }
 
     return _loadSettingsIfNeeded().then(function() {
