@@ -2410,7 +2410,7 @@
                 <div id="pns-col-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;"></div>
               </div>
               <div style="display:flex;gap:10px;align-items:center;">
-                <button onclick="window._pnsSaveSettings && window._pnsSaveSettings()"
+                <button id="pns-save-btn" onclick="window._pnsSaveSettings && window._pnsSaveSettings()"
                   style="background:linear-gradient(135deg,#fb923c,#ea580c);border:none;color:#fff;padding:9px 20px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--ss-font);display:flex;align-items:center;gap:7px;">
                   <i class="fas fa-save"></i> Save Part Number Settings</button>
                 <button onclick="window._pnsTestUrl && window._pnsTestUrl()"
@@ -6499,6 +6499,15 @@
     try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch(_) {}
   }
 
+  function _getApiTok() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) { var p = JSON.parse(raw); if (p && p.access_token) return p.access_token; }
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken();
+    } catch(_) {} return '';
+  }
+
+
   function showMsg(id, text, ok) {
     var el = document.getElementById(id);
     if (!el) return;
@@ -6536,23 +6545,20 @@
 
   // ── Load settings into form on General Settings open ─────────────
   window._cpsLoadSettings = function() {
-    var stored = loadStoredSettings();
-    var urlEl  = document.getElementById('cps-csv-url');
-    if (urlEl) urlEl.value = stored.csvUrl || '';
-
-    // Expose URL to Connect+ tab
-    window._cpCsvUrl = stored.csvUrl || '';
-
-    // If we have a stored URL, show columns preview from cache
-    if (stored.csvUrl && stored.detectedColumns && stored.detectedColumns.length) {
-      _showColumnsPreview(stored.detectedColumns, stored.rowCount || null);
-    }
-
-    // Set active search columns
-    // null or empty array = search ALL columns; non-empty array = only those columns
-    window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
-
-    setUrlStatus('', '');
+    fetch('/api/studio/csv_settings?type=connect_plus', { headers: { 'Authorization': 'Bearer ' + _getApiTok() } })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var stored = (d.ok && d.settings) ? d.settings : loadStoredSettings();
+      storeSettings(stored);
+      var urlEl = document.getElementById('cps-csv-url');
+      if (urlEl) urlEl.value = stored.csvUrl || '';
+      window._cpCsvUrl = stored.csvUrl || '';
+      window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
+      if (stored.csvUrl && stored.detectedColumns && stored.detectedColumns.length) {
+        _showColumnsPreview(stored.detectedColumns, stored.rowCount || null);
+      }
+      setUrlStatus('', '');
+    }).catch(function(){});
   };
 
   // _cpsLoadSettings is called by the main settings nav listener (in Core JS)
@@ -6748,24 +6754,21 @@
     var urlEl = document.getElementById('cps-csv-url');
     var url   = urlEl ? urlEl.value.trim() : '';
     var btn   = document.getElementById('cps-save-btn');
-
     if (!url) { showMsg('cps-save-msg', '✗ Enter a CSV URL first', false); return; }
-
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; btn.style.opacity = '.7'; }
-
     var stored = loadStoredSettings();
     stored.csvUrl = url;
-    storeSettings(stored);
-
-    // Expose to Connect+ tab
-    window._cpCsvUrl = url;
-
-    showMsg('cps-save-msg', '✓ Saved! Reload Connect+ to apply.', true);
-
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Connect+ Settings'; btn.style.opacity = '1'; }
-
-    // Trigger Connect+ tab reload if it was already loaded
-    if (typeof window._cpRefresh === 'function') window._cpRefresh();
+    fetch('/api/studio/csv_settings?type=connect_plus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
+      body: JSON.stringify(stored)
+    }).then(function(){
+      storeSettings(stored);
+      window._cpCsvUrl = url;
+      showMsg('cps-save-msg', '✓ Saved globally! Reload Connect+ to apply.', true);
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Connect+ Settings'; btn.style.opacity = '1'; }
+      if (typeof window._cpRefresh === 'function') window._cpRefresh();
+    });
   };
 
   window._cpsSaveSearchCols = function() {
@@ -7788,6 +7791,14 @@
     try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch(_) {}
   }
 
+  function _getApiTok() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) { var p = JSON.parse(raw); if (p && p.access_token) return p.access_token; }
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken();
+    } catch(_) {} return '';
+  }
+
   function showMsg(id, text, ok) {
     var el = document.getElementById(id);
     if (!el) return;
@@ -7827,19 +7838,20 @@
 
   // ── Load settings into form ───────────────────────────────────────
   window._pnsLoadSettings = function() {
-    var stored = loadStoredSettings();
-    var urlEl  = document.getElementById('pns-csv-url');
-    if (urlEl) urlEl.value = stored.csvUrl || '';
-
-    // Expose to tab
-    window._pnCsvUrl    = stored.csvUrl || '';
-    window._pnSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0)
-      ? stored.searchColumns : null;
-
-    if (stored.csvUrl && stored.detectedColumns && stored.detectedColumns.length) {
-      _showColumnsPreview(stored.detectedColumns, stored.rowCount || null);
-    }
-    setUrlStatus('', '');
+    fetch('/api/studio/csv_settings?type=parts_number', { headers: { 'Authorization': 'Bearer ' + _getApiTok() } })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var stored = (d.ok && d.settings) ? d.settings : loadStoredSettings();
+      storeSettings(stored);
+      var urlEl = document.getElementById('pns-csv-url');
+      if (urlEl) urlEl.value = stored.csvUrl || '';
+      window._pnCsvUrl = stored.csvUrl || '';
+      window._pnSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
+      if (stored.csvUrl && stored.detectedColumns && stored.detectedColumns.length) {
+        _showColumnsPreview(stored.detectedColumns, stored.rowCount || null);
+      }
+      setUrlStatus('', '');
+    }).catch(function(){});
   };
 
   // ── URL normalizer (same logic as Connect+ settings) ─────────────
@@ -7935,23 +7947,23 @@
   // ── Save CSV URL ──────────────────────────────────────────────────
   window._pnsSaveSettings = function() {
     var urlEl = document.getElementById('pns-csv-url');
-    if (!urlEl) return;
-    var raw = (urlEl.value || '').trim();
-    var url = _normalizeUrl(raw);
-    if (url && url !== raw) urlEl.value = url;
+    var url   = urlEl ? urlEl.value.trim() : '';
+    var btn   = document.getElementById('pns-save-btn');
+    if (!url) { showMsg('pns-save-msg', '✗ Enter a CSV URL first', false); return; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; btn.style.opacity = '.7'; }
     var stored = loadStoredSettings();
     stored.csvUrl = url;
-    storeSettings(stored);
-    window._pnCsvUrl = url;
-    showMsg('pns-save-msg', url ? '✓ Saved — Parts Number tab will reload.' : '✓ Cleared.', true);
-    // Trigger Parts Number tab reload if it is currently open
-    setTimeout(function() {
-      if (typeof window._pnRefresh === 'function' &&
-          document.getElementById('left-panel-parts_number') &&
-          document.getElementById('left-panel-parts_number').style.display !== 'none') {
-        window._pnRefresh();
-      }
-    }, 300);
+    fetch('/api/studio/csv_settings?type=parts_number', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
+      body: JSON.stringify(stored)
+    }).then(function(){
+      storeSettings(stored);
+      window._pnCsvUrl = url;
+      showMsg('pns-save-msg', '✓ Saved globally! Reload Parts Number to apply.', true);
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Part Number Settings'; btn.style.opacity = '1'; }
+      if (typeof window._pnRefresh === 'function') window._pnRefresh();
+    });
   };
 
   // ── Search columns checkbox rendering ────────────────────────────
