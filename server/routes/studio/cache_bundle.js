@@ -206,6 +206,96 @@ async function fetchQbSchema(userId) {
   }
 }
 
+
+async function fetchPartsNumber() {
+  const out = await serviceSelect('mums_documents', `select=key,value&key=eq.ss_parts_number_settings&limit=1`);
+  const row = (Array.isArray(out.json) && out.json[0]) ? out.json[0] : null;
+  const stored = (row && row.value && typeof row.value === 'object') ? row.value : {};
+  const csvUrl = String(stored.csvUrl || '').trim();
+
+  if (!csvUrl) return { ok: false, message: 'Parts Number CSV URL not configured. Go to General Settings → Part Number Settings.' };
+
+  function normalizeCsvUrl(raw) {
+    if (!raw) return '';
+    if (raw.includes('output=csv')) return raw;
+    try {
+      const u = new URL(raw);
+      if (u.pathname.includes('/pub')) { u.searchParams.set('output', 'csv'); return u.toString(); }
+      if (u.pathname.includes('/pubhtml')) {
+        const gid = u.searchParams.get('gid') || '';
+        u.pathname = u.pathname.replace('/pubhtml', '/pub');
+        u.searchParams.set('output', 'csv');
+        if (gid) u.searchParams.set('gid', gid);
+        return u.toString();
+      }
+      if (u.pathname.includes('/edit') || u.pathname.includes('/view')) {
+        const gid = u.searchParams.get('gid') || '0';
+        const m = u.pathname.match(/\/d\/([^/]+)\//);
+        if (m) return `https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv&gid=${gid}`;
+      }
+    } catch (_) {}
+    return raw;
+  }
+
+  const finalUrl = normalizeCsvUrl(csvUrl);
+
+  try {
+    const resp = await fetch(finalUrl, { headers: { 'User-Agent': 'MUMS-StudioCache/1.0' } });
+    if (!resp.ok) throw new Error(`CSV fetch failed: HTTP ${resp.status}`);
+    const text = await resp.text();
+
+    function parseCsv(raw) {
+      const rows = []; let cur = ''; let inQ = false;
+      for (let i = 0; i < raw.length; i++) {
+        const c = raw[i];
+        if (c === '"') { inQ = !inQ; cur += c; }
+        else if (c === '\n' && !inQ) { rows.push(cur); cur = ''; }
+        else if (c === '\r' && !inQ) {}
+        else cur += c;
+      }
+      if (cur.trim()) rows.push(cur);
+      return rows.map(function(row) {
+        const fields = []; let f = ''; let q = false;
+        for (let j = 0; j < row.length; j++) {
+          const ch = row[j];
+          if (ch === '"') {
+            if (q && row[j+1] === '"') { f += '"'; j++; }
+            else q = !q;
+          } else if (ch === ',' && !q) { fields.push(f); f = ''; }
+          else f += ch;
+        }
+        fields.push(f);
+        return fields.map(v => v.replace(/^"|"$/g, '').trim());
+      });
+    }
+
+    const parsed = parseCsv(text);
+    if (!parsed.length) throw new Error('Empty CSV response');
+
+    const header = parsed[0];
+    const records = [];
+    for (let i = 1; i < parsed.length; i++) {
+      const r = parsed[i];
+      if (!r || !r[0] || !String(r[0]).trim()) continue;
+      const rowObj = {};
+      header.forEach((h, idx) => { rowObj[h] = String(r[idx] || '').trim(); });
+      records.push(rowObj);
+    }
+
+    const hash = simpleHash(String(records.length) + ':' + String(header.join(',')));
+    const nowIso = new Date().toISOString();
+    const versionDoc = {
+      key: 'ss_parts_number_cache_version',
+      value: { hash, count: records.length, isCritical: false, updatedAt: nowIso },
+      updated_at: nowIso,
+      updated_by_user_id: null, updated_by_name: 'system', updated_by_client_id: null,
+    };
+    serviceUpsert('mums_documents', [versionDoc], 'key').catch(() => {});
+
+    return { ok: true, records: records, count: records.length, hash: hash, header: header };
+  } catch (err) { return { ok: false, message: String(err.message || err) }; }
+}
+
 // ── Main handler ──────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   try {
@@ -218,12 +308,13 @@ module.exports = async (req, res) => {
 
     const bundleId = String(req.query && req.query.bundle || '').trim();
 
-    if (!['connect_plus', 'catalog', 'qb_schema'].includes(bundleId)) {
-      return sendJson(res, 400, { ok: false, error: 'invalid_bundle', message: 'bundle must be connect_plus|catalog|qb_schema' });
+    if (!['connect_plus', 'parts_number', 'catalog', 'qb_schema'].includes(bundleId)) {
+      return sendJson(res, 400, { ok: false, error: 'invalid_bundle', message: 'bundle must be connect_plus|parts_number|catalog|qb_schema' });
     }
 
     let result;
     if (bundleId === 'connect_plus') result = await fetchConnectPlus();
+    else if (bundleId === 'parts_number') result = await fetchPartsNumber();
     else if (bundleId === 'catalog')  result = await fetchCatalog();
     else if (bundleId === 'qb_schema') result = await fetchQbSchema(user.id);
 
