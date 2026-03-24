@@ -2664,11 +2664,13 @@
               </div>
               <div style="height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;display:flex;" id="cache-storage-bar">
                 <div id="cache-bar-cp"  style="height:100%;background:#58a6ff;transition:width .4s;width:0%;"></div>
+                <div id="cache-bar-pn"  style="height:100%;background:#fb923c;transition:width .4s;width:0%;"></div>
                 <div id="cache-bar-cat" style="height:100%;background:#22d3ee;transition:width .4s;width:0%;"></div>
                 <div id="cache-bar-sch" style="height:100%;background:#3fb950;transition:width .4s;width:0%;"></div>
               </div>
               <div style="display:flex;gap:14px;margin-top:6px;">
                 <span style="font-size:9px;color:var(--ss-muted);"><span style="display:inline-block;width:8px;height:8px;background:#58a6ff;border-radius:2px;margin-right:4px;"></span>Connect+</span>
+                <span style="font-size:9px;color:var(--ss-muted);"><span style="display:inline-block;width:8px;height:8px;background:#fb923c;border-radius:2px;margin-right:4px;"></span>Parts Number</span>
                 <span style="font-size:9px;color:var(--ss-muted);"><span style="display:inline-block;width:8px;height:8px;background:#22d3ee;border-radius:2px;margin-right:4px;"></span>Catalog</span>
                 <span style="font-size:9px;color:var(--ss-muted);"><span style="display:inline-block;width:8px;height:8px;background:#3fb950;border-radius:2px;margin-right:4px;"></span>QB Schema</span>
               </div>
@@ -7641,9 +7643,11 @@
 
     function pct(n) { return total > 0 ? Math.round(n / total * 100) + '%' : '0%'; }
     var barCp  = el('cache-bar-cp');
+    var barPn  = el('cache-bar-pn');
     var barCat = el('cache-bar-cat');
     var barSch = el('cache-bar-sch');
     if (barCp)  barCp.style.width  = pct(cpSize);
+    if (barPn)  barPn.style.width  = pct(pnSize);
     if (barCat) barCat.style.width = pct(catSize);
     if (barSch) barSch.style.width = pct(schSize);
   }

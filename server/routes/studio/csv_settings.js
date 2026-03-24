@@ -51,8 +51,9 @@ module.exports = async (req, res) => {
         });
       }
 
-      if (!body || !body.csv_url || typeof body.csv_url !== 'string' || !body.csv_url.trim()) {
-        return sendJson(res, 400, { ok: false, error: 'missing_csv_url', message: 'csv_url is required and cannot be empty' });
+      const urlValue = body.csvUrl || body.csv_url;
+      if (!body || !urlValue || typeof urlValue !== 'string' || !urlValue.trim()) {
+        return sendJson(res, 400, { ok: false, error: 'missing_csv_url', message: 'csvUrl is required and cannot be empty' });
       }
 
       const nowIso = new Date().toISOString();
