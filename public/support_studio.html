@@ -4591,15 +4591,6 @@
     tab.addEventListener('click', () => activateTab(tab.dataset.tab));
   });
 
-  // Keep Connect+ and Parts Number tabs visible regardless of settings/bootstrap state.
-  ['ss-tab-connectplus', 'ss-tab-parts_number'].forEach(function(tabId) {
-    var tabEl = document.getElementById(tabId);
-    if (!tabEl) return;
-    tabEl.style.removeProperty('display');
-    tabEl.style.removeProperty('visibility');
-    tabEl.classList.add('ss-tab');
-  });
-
   // Default landing: QuickBase_S tab. _qbsInit guard is already in activateTab().
   // Config tab is gated to SUPER_ADMIN; this default works for all roles.
   activateTab('qbs');
@@ -5008,35 +4999,25 @@
   if (document.readyState !== 'loading') {
     setTimeout(function() { if (!_preloaded) preloadSettings(); }, 600);
   } else {
-    setTimeout(_preloadStudioSettings, 1000);
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(function() { if (!_preloaded) preloadSettings(); }, 800);
+    });
   }
 
-  // ==========================================
-  // SILENT BOOTLOADER: PRE-HYDRATE CSV SETTINGS
-  // ==========================================
-  setTimeout(function() {
-    var tok = '';
-    try {
-      var r = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-      if(r) { var p = JSON.parse(r); tok = p.access_token || ''; }
-    } catch(_) {}
-
-    if(!localStorage.getItem('ss_connectplus_settings')) {
-      fetch('/api/studio/csv_settings?type=connect_plus', { headers: { 'Authorization': 'Bearer ' + tok } })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        if(d.ok && d.settings) localStorage.setItem('ss_connectplus_settings', JSON.stringify(d.settings));
-      }).catch(function(e) { console.warn('CP Bootloader skipped:', e); });
+  // RETRY: when user switches back to this tab
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden && !_preloaded) {
+      setTimeout(preloadSettings, 300);
     }
+  });
 
-    if(!localStorage.getItem('ss_parts_number_settings')) {
-      fetch('/api/studio/csv_settings?type=parts_number', { headers: { 'Authorization': 'Bearer ' + tok } })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        if(d.ok && d.settings) localStorage.setItem('ss_parts_number_settings', JSON.stringify(d.settings));
-      }).catch(function(e) { console.warn('PN Bootloader skipped:', e); });
-    }
-  }, 1500);
+  // EXPOSE for manual re-trigger (called after Save settings to force refresh on other tabs)
+  window._preloadStudioSettings = function() {
+    _preloaded  = false;
+    _preloading = false;
+    preloadSettings();
+  };
+
 })();
 </script>
 
