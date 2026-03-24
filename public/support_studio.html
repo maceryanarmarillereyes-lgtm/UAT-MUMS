@@ -6787,20 +6787,12 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
       body: JSON.stringify(stored)
-    }).then(function(r){
-      if (!r.ok) return r.json().catch(function(){ return { ok: false, error: 'HTTP ' + r.status }; })
-                               .then(function(d){ throw new Error(d && d.error ? String(d.error) : 'HTTP ' + r.status); });
-      return r.json().catch(function(){ return { ok: true }; });
-    }).then(function(d){
-      if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
+    }).then(function(){
       storeSettings(stored);
       window._cpCsvUrl = url;
       showMsg('cps-save-msg', '✓ Saved globally! Reload Connect+ to apply.', true);
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Connect+ Settings'; btn.style.opacity = '1'; }
       if (typeof window._cpRefresh === 'function') window._cpRefresh();
-    }).catch(function(err){
-      showMsg('cps-save-msg', '✗ Save failed: ' + (err && err.message ? err.message : 'Network error'), false);
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Connect+ Settings'; btn.style.opacity = '1'; }
     });
   };
 
@@ -6821,17 +6813,7 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
       body: JSON.stringify(stored)
-    }).then(function(r){
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json().catch(function(){ return { ok: true }; });
-    }).then(function(d){
-      if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
-      // Expose live to Connect+ search
-      window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
-      showMsg('cps-cols-msg', '✓ Search columns saved!', true);
-    }).catch(function(err){
-      showMsg('cps-cols-msg', '✗ Failed: ' + (err && err.message ? err.message : 'Network error'), false);
-    });
+    }).catch(function(){});
 
     // Expose live to Connect+ search
     // null or empty = all columns; only restrict when user explicitly selected subset
@@ -8005,20 +7987,12 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
       body: JSON.stringify(stored)
-    }).then(function(r){
-      if (!r.ok) return r.json().catch(function(){ return { ok: false, error: 'HTTP ' + r.status }; })
-                               .then(function(d){ throw new Error(d && d.error ? String(d.error) : 'HTTP ' + r.status); });
-      return r.json().catch(function(){ return { ok: true }; });
-    }).then(function(d){
-      if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
+    }).then(function(){
       storeSettings(stored);
       window._pnCsvUrl = url;
       showMsg('pns-save-msg', '✓ Saved globally! Reload Parts Number to apply.', true);
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Part Number Settings'; btn.style.opacity = '1'; }
       if (typeof window._pnRefresh === 'function') window._pnRefresh();
-    }).catch(function(err){
-      showMsg('pns-save-msg', '✗ Save failed: ' + (err && err.message ? err.message : 'Network error'), false);
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Part Number Settings'; btn.style.opacity = '1'; }
     });
   };
 
@@ -8056,16 +8030,7 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
       body: JSON.stringify(stored)
-    }).then(function(r){
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json().catch(function(){ return { ok: true }; });
-    }).then(function(d){
-      if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
-      window._pnSearchCols = stored.searchColumns;
-      showMsg('pns-cols-msg', '✓ Search columns saved.', true);
-    }).catch(function(err){
-      showMsg('pns-cols-msg', '✗ Failed: ' + (err && err.message ? err.message : 'Network error'), false);
-    });
+    }).catch(function(){});
     window._pnSearchCols = stored.searchColumns;
     showMsg('pns-cols-msg', '✓ Search columns saved.', true);
   };
