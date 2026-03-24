@@ -1797,6 +1797,129 @@
         </div>
       </div>
 
+      <!-- Connect+ left panel — PREMIUM v35 — CORRECTLY IN SIDEBAR -->
+      <div id="left-panel-connectplus" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
+        <div class="prem-sb-header">
+          <div class="prem-sb-identity">
+            <div class="prem-sb-icon cyan"><i class="fas fa-plug"></i></div>
+            <div>
+              <div class="prem-sb-title">Connect+</div>
+              <div class="prem-sb-sub">36,000+ sites across all regions</div>
+            </div>
+          </div>
+          <div class="prem-stats-grid" id="cp-stats-mini">
+            <div class="prem-stat-pill cyan">
+              <div class="prem-stat-num cyan" id="cp-stat-sites">—</div>
+              <div class="prem-stat-lbl">Sites</div>
+            </div>
+            <div class="prem-stat-pill green">
+              <div class="prem-stat-num green" id="cp-stat-countries">—</div>
+              <div class="prem-stat-lbl">Countries</div>
+            </div>
+          </div>
+        </div>
+        <div class="prem-sb-search">
+          <div class="prem-search-wrap">
+            <i class="fas fa-search prem-search-icon"></i>
+            <input id="cp-search-input" type="text" class="prem-search-inp cyan"
+              placeholder="Search sites, cities, states…" autocomplete="off"
+              oninput="window._cpOnSearch(this.value);document.getElementById('cp-sb-clear').style.display=this.value?'block':'none';"
+              onkeydown="if(event.key==='Enter')window._cpOnSearch(this.value);">
+            <button id="cp-sb-clear" class="prem-search-clear"
+              onclick="document.getElementById('cp-search-input').value='';this.style.display='none';window._cpOnSearch('');">✕</button>
+          </div>
+          <div class="prem-search-meta">
+            <span class="prem-search-status" id="cp-status"></span>
+            <span class="prem-search-count" id="cp-search-count"></span>
+          </div>
+        </div>
+        <div id="cp-active-filter" class="prem-active-filter cyan">
+          <i class="fas fa-filter"></i>
+          <span id="cp-filter-label"></span>
+          <button onclick="window._cpClearSidebarFilter()">✕</button>
+        </div>
+        <div id="cp-filter-chips" style="display:none;" aria-hidden="true"></div>
+        <div class="prem-section-head" style="margin-top:6px;">
+          <div class="prem-section-row">
+            <span class="prem-section-lbl">Country</span>
+            <button class="prem-section-toggle" id="cp-country-toggle" onclick="window._cpToggleSection('country')">▾</button>
+          </div>
+        </div>
+        <div id="cp-sidebar-country-list" class="prem-filter-list" style="max-height:148px;">
+          <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
+        </div>
+        <div class="prem-section-head has-border" style="margin-top:2px;">
+          <div class="prem-section-row">
+            <span class="prem-section-lbl">Directory</span>
+            <button class="prem-section-toggle" id="cp-dir-toggle" onclick="window._cpToggleSection('directory')">▾</button>
+          </div>
+        </div>
+        <div id="cp-sidebar-dir-list" class="prem-filter-list" style="flex:1;">
+          <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
+        </div>
+        <div style="display:none;" aria-hidden="true">
+          <select id="cp-country-filter" onchange="window._cpApplyFilters()"><option value="">All Countries</option></select>
+          <select id="cp-dir-filter"     onchange="window._cpApplyFilters()"><option value="">All Directories</option></select>
+        </div>
+      </div>
+
+      <!-- Parts Number left panel — PREMIUM v35 — CORRECTLY IN SIDEBAR -->
+      <div id="left-panel-parts_number" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
+        <div class="prem-sb-header">
+          <div class="prem-sb-identity">
+            <div class="prem-sb-icon orange"><i class="fas fa-barcode"></i></div>
+            <div>
+              <div class="prem-sb-title">Parts Number</div>
+              <div class="prem-sb-sub">Search parts, models &amp; product numbers</div>
+            </div>
+          </div>
+          <div class="prem-stats-grid">
+            <div class="prem-stat-pill orange">
+              <div class="prem-stat-num orange" id="pn-stats-total">—</div>
+              <div class="prem-stat-lbl">Total Parts</div>
+            </div>
+            <div class="prem-stat-pill purple">
+              <div class="prem-stat-num purple" id="pn-stats-cats">—</div>
+              <div class="prem-stat-lbl">Categories</div>
+            </div>
+          </div>
+        </div>
+        <div class="prem-sb-search">
+          <div class="prem-search-wrap">
+            <i class="fas fa-search prem-search-icon"></i>
+            <input id="pn-search-input" type="text" class="prem-search-inp orange"
+              placeholder="Search part numbers, models…" autocomplete="off"
+              oninput="window._pnOnSearch(this.value);document.getElementById('pn-sb-clear').style.display=this.value?'block':'none';"
+              onkeydown="if(event.key==='Enter')window._pnOnSearch(this.value);">
+            <button id="pn-sb-clear" class="prem-search-clear"
+              onclick="document.getElementById('pn-search-input').value='';this.style.display='none';window._pnOnSearch('');">✕</button>
+          </div>
+          <div class="prem-search-meta">
+            <span class="prem-search-status" id="pn-status"></span>
+            <span class="prem-search-count" id="pn-search-count"></span>
+          </div>
+        </div>
+        <div id="pn-active-filter" class="prem-active-filter orange">
+          <i class="fas fa-filter"></i>
+          <span id="pn-filter-label"></span>
+          <button onclick="window._pnClearSidebarFilter()">✕</button>
+        </div>
+        <div id="pn-filter-chips" style="display:none;" aria-hidden="true"></div>
+        <div id="pn-results-list" style="display:none;" aria-hidden="true"></div>
+        <div class="prem-section-head" style="margin-top:6px;">
+          <div class="prem-section-row">
+            <span class="prem-section-lbl">Type / Category</span>
+            <button class="prem-section-toggle" id="pn-cat-toggle-btn" onclick="window._pnToggleSection()">▾</button>
+          </div>
+        </div>
+        <div id="pn-sidebar-cat-list" class="prem-filter-list" style="flex:1;">
+          <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
+        </div>
+        <div style="display:none;" aria-hidden="true">
+          <select id="pn-cat-filter" onchange="window._pnApplyFilters()"><option value="">All Categories</option></select>
+        </div>
+      </div>
+
     </aside>
 
     <!-- ── CACHE UPDATE BANNER (shown when resources are outdated) ── -->
@@ -2629,86 +2752,6 @@
         </div><!-- /overflow scroll -->
       </div><!-- /canvas-config -->
 
-      <!-- Connect+ left panel — PREMIUM v35 (matches mockup exactly) -->
-      <div id="left-panel-connectplus" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
-
-        <!-- HEADER -->
-        <div class="prem-sb-header">
-          <div class="prem-sb-identity">
-            <div class="prem-sb-icon cyan"><i class="fas fa-plug"></i></div>
-            <div>
-              <div class="prem-sb-title">Connect+</div>
-              <div class="prem-sb-sub">36,000+ sites across all regions</div>
-            </div>
-          </div>
-          <div class="prem-stats-grid" id="cp-stats-mini">
-            <div class="prem-stat-pill cyan">
-              <div class="prem-stat-num cyan" id="cp-stat-sites">—</div>
-              <div class="prem-stat-lbl">Sites</div>
-            </div>
-            <div class="prem-stat-pill green">
-              <div class="prem-stat-num green" id="cp-stat-countries">—</div>
-              <div class="prem-stat-lbl">Countries</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- SEARCH -->
-        <div class="prem-sb-search">
-          <div class="prem-search-wrap">
-            <i class="fas fa-search prem-search-icon"></i>
-            <input id="cp-search-input" type="text" class="prem-search-inp cyan"
-              placeholder="Search sites, cities, states…" autocomplete="off"
-              oninput="window._cpOnSearch(this.value);document.getElementById('cp-sb-clear').style.display=this.value?'block':'none';"
-              onkeydown="if(event.key==='Enter')window._cpOnSearch(this.value);">
-            <button id="cp-sb-clear" class="prem-search-clear"
-              onclick="document.getElementById('cp-search-input').value='';this.style.display='none';window._cpOnSearch('');">✕</button>
-          </div>
-          <div class="prem-search-meta">
-            <span class="prem-search-status" id="cp-status"></span>
-            <span class="prem-search-count" id="cp-search-count"></span>
-          </div>
-        </div>
-
-        <!-- ACTIVE FILTER BADGE -->
-        <div id="cp-active-filter" class="prem-active-filter cyan">
-          <i class="fas fa-filter"></i>
-          <span id="cp-filter-label"></span>
-          <button onclick="window._cpClearSidebarFilter()">✕</button>
-        </div>
-
-        <!-- compat shims -->
-        <div id="cp-filter-chips" style="display:none;" aria-hidden="true"></div>
-
-        <!-- COUNTRY SECTION -->
-        <div class="prem-section-head" style="margin-top:6px;">
-          <div class="prem-section-row">
-            <span class="prem-section-lbl">Country</span>
-            <button class="prem-section-toggle" id="cp-country-toggle" onclick="window._cpToggleSection('country')">▾</button>
-          </div>
-        </div>
-        <div id="cp-sidebar-country-list" class="prem-filter-list" style="max-height:150px;">
-          <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
-        </div>
-
-        <!-- DIRECTORY SECTION -->
-        <div class="prem-section-head has-border" style="margin-top:2px;">
-          <div class="prem-section-row">
-            <span class="prem-section-lbl">Directory</span>
-            <button class="prem-section-toggle" id="cp-dir-toggle" onclick="window._cpToggleSection('directory')">▾</button>
-          </div>
-        </div>
-        <div id="cp-sidebar-dir-list" class="prem-filter-list" style="flex:1;">
-          <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
-        </div>
-
-        <!-- Hidden selects — JS compat (unchanged logic) -->
-        <div style="display:none;" aria-hidden="true">
-          <select id="cp-country-filter" onchange="window._cpApplyFilters()"><option value="">All Countries</option></select>
-          <select id="cp-dir-filter"     onchange="window._cpApplyFilters()"><option value="">All Directories</option></select>
-        </div>
-      </div>
-
       <!-- QuickBase_S canvas — full MY QUICKBASE page injected here -->
       <!-- Connect+ canvas -->
       <div id="canvas-connectplus" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
@@ -2767,77 +2810,8 @@
 
 
       <!-- ═══════════════════════════════════════════════════════════════
-           PARTS NUMBER — Left Panel + Canvas
+           PARTS NUMBER — Canvas
       ═══════════════════════════════════════════════════════════════ -->
-
-      <!-- Parts Number left panel — PREMIUM v35 (matches mockup exactly) -->
-      <div id="left-panel-parts_number" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
-
-        <!-- HEADER -->
-        <div class="prem-sb-header">
-          <div class="prem-sb-identity">
-            <div class="prem-sb-icon orange"><i class="fas fa-barcode"></i></div>
-            <div>
-              <div class="prem-sb-title">Parts Number</div>
-              <div class="prem-sb-sub">Search parts, models &amp; product numbers</div>
-            </div>
-          </div>
-          <div class="prem-stats-grid">
-            <div class="prem-stat-pill orange">
-              <div class="prem-stat-num orange" id="pn-stats-total">—</div>
-              <div class="prem-stat-lbl">Total Parts</div>
-            </div>
-            <div class="prem-stat-pill purple">
-              <div class="prem-stat-num purple" id="pn-stats-cats">—</div>
-              <div class="prem-stat-lbl">Categories</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- SEARCH -->
-        <div class="prem-sb-search">
-          <div class="prem-search-wrap">
-            <i class="fas fa-search prem-search-icon"></i>
-            <input id="pn-search-input" type="text" class="prem-search-inp orange"
-              placeholder="Search part numbers, models…" autocomplete="off"
-              oninput="window._pnOnSearch(this.value);document.getElementById('pn-sb-clear').style.display=this.value?'block':'none';"
-              onkeydown="if(event.key==='Enter')window._pnOnSearch(this.value);">
-            <button id="pn-sb-clear" class="prem-search-clear"
-              onclick="document.getElementById('pn-search-input').value='';this.style.display='none';window._pnOnSearch('');">✕</button>
-          </div>
-          <div class="prem-search-meta">
-            <span class="prem-search-status" id="pn-status"></span>
-            <span class="prem-search-count" id="pn-search-count"></span>
-          </div>
-        </div>
-
-        <!-- ACTIVE FILTER BADGE -->
-        <div id="pn-active-filter" class="prem-active-filter orange">
-          <i class="fas fa-filter"></i>
-          <span id="pn-filter-label"></span>
-          <button onclick="window._pnClearSidebarFilter()">✕</button>
-        </div>
-
-        <!-- compat shims -->
-        <div id="pn-filter-chips" style="display:none;" aria-hidden="true"></div>
-        <div id="pn-results-list" style="display:none;" aria-hidden="true"></div>
-
-        <!-- TYPE / CATEGORY SECTION -->
-        <div class="prem-section-head" style="margin-top:6px;">
-          <div class="prem-section-row">
-            <span class="prem-section-lbl">Type / Category</span>
-            <button class="prem-section-toggle" id="pn-cat-toggle-btn" onclick="window._pnToggleSection()">▾</button>
-          </div>
-        </div>
-        <div id="pn-sidebar-cat-list" class="prem-filter-list" style="flex:1;">
-          <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
-        </div>
-
-        <!-- Hidden select — JS compat -->
-        <div style="display:none;" aria-hidden="true">
-          <select id="pn-cat-filter" onchange="window._pnApplyFilters()"><option value="">All Categories</option></select>
-        </div>
-      </div>
 
       <!-- Parts Number canvas -->
       <div id="canvas-parts_number" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
