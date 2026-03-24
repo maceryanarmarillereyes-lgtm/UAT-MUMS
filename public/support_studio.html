@@ -6053,10 +6053,32 @@
 
   function _cpLoad() {
     _state.loading = true;
-    CSV_URL = _normalizeCsvUrl(_getActiveCsvUrl());
     _setStatus('Loading…');
 
     var body = document.getElementById('cp-table-body');
+    function _loadSettingsIfNeeded() {
+      if (window._cpCsvUrl) return Promise.resolve();
+      var tok = '';
+      try {
+        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+        if (raw) {
+          var p = JSON.parse(raw);
+          if (p && p.access_token) tok = p.access_token;
+        }
+        if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken();
+      } catch(_) {}
+      return fetch('/api/studio/csv_settings?type=connect_plus', {
+        headers: { 'Authorization': 'Bearer ' + tok }
+      }).then(function(resp) { return resp.json(); })
+        .then(function(d) {
+          if (d && d.ok && d.settings && d.settings.csvUrl) {
+            window._cpCsvUrl = d.settings.csvUrl;
+            window._cpSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+              ? d.settings.searchColumns : null;
+          }
+        })
+        .catch(function() {});
+    }
 
     // ── Cache-first: try IndexedDB before hitting network ─────────────
     var cacheAvailable = typeof window.StudioCache !== 'undefined';
@@ -6064,7 +6086,10 @@
       ? window.StudioCache.getBundle('connect_plus')
       : Promise.resolve(null);
 
-    cachePromise.then(function(cached) {
+    _loadSettingsIfNeeded().then(function() {
+      CSV_URL = _normalizeCsvUrl(_getActiveCsvUrl());
+      return cachePromise;
+    }).then(function(cached) {
       if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
         // ✅ Serve from cache — instant, no network
         _state.all     = cached.data;
@@ -6784,6 +6809,11 @@
     // null = all columns (no filter); array = specific columns
     stored.searchColumns = (selected.length === allCols.length) ? null : selected;
     storeSettings(stored);
+    fetch('/api/studio/csv_settings?type=connect_plus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
+      body: JSON.stringify(stored)
+    }).catch(function(){});
 
     // Expose live to Connect+ search
     // null or empty = all columns; only restrict when user explicitly selected subset
@@ -7996,6 +8026,11 @@
     var allCols = stored.detectedColumns || [];
     stored.searchColumns = (checked.length === allCols.length) ? null : checked;
     storeSettings(stored);
+    fetch('/api/studio/csv_settings?type=parts_number', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
+      body: JSON.stringify(stored)
+    }).catch(function(){});
     window._pnSearchCols = stored.searchColumns;
     showMsg('pns-cols-msg', '✓ Search columns saved.', true);
   };
@@ -8086,28 +8121,54 @@
   }
 
   function _fetchFromNetwork() {
-    var url = window._pnCsvUrl;
-    if (!url) {
-      // Try to read from localStorage
+    function _loadSettingsIfNeeded() {
+      if (window._pnCsvUrl) return Promise.resolve();
+      var tok = '';
       try {
-        var s = localStorage.getItem('ss_parts_number_settings');
-        if (s) { var p = JSON.parse(s); url = p.csvUrl || ''; }
+        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+        if (raw) {
+          var p = JSON.parse(raw);
+          if (p && p.access_token) tok = p.access_token;
+        }
+        if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken();
       } catch(_) {}
+      return fetch('/api/studio/csv_settings?type=parts_number', {
+        headers: { 'Authorization': 'Bearer ' + tok }
+      }).then(function(resp) { return resp.json(); })
+        .then(function(d) {
+          if (d && d.ok && d.settings && d.settings.csvUrl) {
+            window._pnCsvUrl = d.settings.csvUrl;
+            window._pnSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+              ? d.settings.searchColumns : null;
+          }
+        })
+        .catch(function() {});
     }
-    if (!url) {
-      _loading = false;
-      _setBodyEmpty();
-      return Promise.resolve();
-    }
-    return fetch(url).then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status + ' — check if sheet is published as CSV');
-      return r.text();
-    }).then(function(text) {
-      var data = _parseCsv(text);
-      if (typeof window.StudioCache !== 'undefined') {
-        window.StudioCache.setBundle('parts_number', data, '', data.length).catch(function() {});
+
+    return _loadSettingsIfNeeded().then(function() {
+      var url = window._pnCsvUrl;
+      if (!url) {
+        // Try to read from localStorage
+        try {
+          var s = localStorage.getItem('ss_parts_number_settings');
+          if (s) { var p = JSON.parse(s); url = p.csvUrl || ''; }
+        } catch(_) {}
       }
-      _parseData(data, false);
+      if (!url) {
+        _loading = false;
+        _setBodyEmpty();
+        return Promise.resolve();
+      }
+      return fetch(url).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' — check if sheet is published as CSV');
+        return r.text();
+      }).then(function(text) {
+        var data = _parseCsv(text);
+        if (typeof window.StudioCache !== 'undefined') {
+          window.StudioCache.setBundle('parts_number', data, '', data.length).catch(function() {});
+        }
+        _parseData(data, false);
+      });
     });
   }
 
