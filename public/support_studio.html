@@ -153,7 +153,12 @@
     .ss-tabs {
       display: flex;
       gap: 3px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
     }
+    .ss-tabs::-webkit-scrollbar { display: none; }
 
     .ss-tab {
       background: transparent;
@@ -7136,7 +7141,7 @@
 (function() {
   'use strict';
 
-  var ALLOWED_ROLES = ['SUPER_ADMIN'];
+  var ALLOWED_ROLES = ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN'];
 
   function getUserRole() {
     try {
@@ -7166,9 +7171,23 @@
     var role     = getUserRole();
     var allowed  = ALLOWED_ROLES.indexOf(role) >= 0;
     var configTab = document.getElementById('ss-tab-config');
+    var mainBody = document.getElementById('ss-main-body');
+
+    // Main studio body must never be role-gated.
+    if (mainBody) {
+      try { mainBody.removeAttribute('role'); } catch(_) {}
+      try { mainBody.removeAttribute('aria-hidden'); } catch(_) {}
+      try { mainBody.removeAttribute('data-role-gated'); } catch(_) {}
+      try { mainBody.style.removeProperty('display'); } catch(_) {}
+    }
 
     if (configTab) {
-      configTab.style.display = allowed ? '' : 'none';
+      if (allowed) {
+        configTab.style.removeProperty('display');
+      } else {
+        // Strict hide rule for non-admin roles.
+        configTab.style.setProperty('display', 'none', 'important');
+      }
       configTab.setAttribute('data-role-gated', allowed ? 'visible' : 'hidden');
     }
 
