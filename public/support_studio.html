@@ -4974,14 +4974,12 @@
     }
   }
 
-  // CRITICAL FIX: cloud_auth.js dispatches 'mums:authtoken' on window, NOT document.
-  // Using document.addEventListener here means the event is NEVER received.
-  window.addEventListener('mums:authtoken', _preloadStudioSettings, { once: false });
-  // Also try immediately in case token is already available at load time
+  document.addEventListener('mums:authtoken', _preloadStudioSettings, { once: false });
+  // Also try immediately in case token is already available
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { setTimeout(_preloadStudioSettings, 800); });
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(_preloadStudioSettings, 500); });
   } else {
-    setTimeout(_preloadStudioSettings, 800);
+    setTimeout(_preloadStudioSettings, 500);
   }
 })();
 </script>
