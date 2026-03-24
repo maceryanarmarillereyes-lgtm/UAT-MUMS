@@ -3548,7 +3548,7 @@
             <i class="fas fa-file-excel"></i> Export All (Excel)
           </button>
         </div>
-        <div id="qbs-root" style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;"></div>
+        <div id="qbs-root" data-page="quickbase_s" style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;"></div>
       </div>
 
         </main>
@@ -5393,6 +5393,9 @@
       root.className = 'main card pad';
       root.style.cssText = 'flex:1;min-height:0;overflow:hidden;';
       root.innerHTML = '';
+      // ENFORCE ISOLATION NAMESPACE
+      root.setAttribute('data-page', 'quickbase_s');
+      root.dataset.page = 'quickbase_s';
       try {
         window.Pages.my_quickbase(root);
         _qbsPageMounted = true;
