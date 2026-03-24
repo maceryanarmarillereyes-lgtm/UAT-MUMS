@@ -153,7 +153,12 @@
     .ss-tabs {
       display: flex;
       gap: 3px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
     }
+    .ss-tabs::-webkit-scrollbar { display: none; }
 
     .ss-tab {
       background: transparent;
@@ -2405,7 +2410,7 @@
                 <div id="pns-col-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;"></div>
               </div>
               <div style="display:flex;gap:10px;align-items:center;">
-                <button onclick="window._pnsSaveSettings && window._pnsSaveSettings()"
+                <button id="pns-save-btn" onclick="window._pnsSaveSettings && window._pnsSaveSettings()"
                   style="background:linear-gradient(135deg,#fb923c,#ea580c);border:none;color:#fff;padding:9px 20px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--ss-font);display:flex;align-items:center;gap:7px;">
                   <i class="fas fa-save"></i> Save Part Number Settings</button>
                 <button onclick="window._pnsTestUrl && window._pnsTestUrl()"
@@ -3543,7 +3548,7 @@
             <i class="fas fa-file-excel"></i> Export All (Excel)
           </button>
         </div>
-        <div id="qbs-root" style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;"></div>
+        <div id="qbs-root" data-page="quickbase_s" style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;"></div>
       </div>
 
         </main>
@@ -5388,6 +5393,9 @@
       root.className = 'main card pad';
       root.style.cssText = 'flex:1;min-height:0;overflow:hidden;';
       root.innerHTML = '';
+      // ENFORCE ISOLATION NAMESPACE
+      root.setAttribute('data-page', 'quickbase_s');
+      root.dataset.page = 'quickbase_s';
       try {
         window.Pages.my_quickbase(root);
         _qbsPageMounted = true;
@@ -6045,10 +6053,32 @@
 
   function _cpLoad() {
     _state.loading = true;
-    CSV_URL = _normalizeCsvUrl(_getActiveCsvUrl());
     _setStatus('Loading…');
 
     var body = document.getElementById('cp-table-body');
+    function _loadSettingsIfNeeded() {
+      if (window._cpCsvUrl) return Promise.resolve();
+      var tok = '';
+      try {
+        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+        if (raw) {
+          var p = JSON.parse(raw);
+          if (p && p.access_token) tok = p.access_token;
+        }
+        if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken();
+      } catch(_) {}
+      return fetch('/api/studio/csv_settings?type=connect_plus', {
+        headers: { 'Authorization': 'Bearer ' + tok }
+      }).then(function(resp) { return resp.json(); })
+        .then(function(d) {
+          if (d && d.ok && d.settings && d.settings.csvUrl) {
+            window._cpCsvUrl = d.settings.csvUrl;
+            window._cpSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+              ? d.settings.searchColumns : null;
+          }
+        })
+        .catch(function() {});
+    }
 
     // ── Cache-first: try IndexedDB before hitting network ─────────────
     var cacheAvailable = typeof window.StudioCache !== 'undefined';
@@ -6056,7 +6086,10 @@
       ? window.StudioCache.getBundle('connect_plus')
       : Promise.resolve(null);
 
-    cachePromise.then(function(cached) {
+    _loadSettingsIfNeeded().then(function() {
+      CSV_URL = _normalizeCsvUrl(_getActiveCsvUrl());
+      return cachePromise;
+    }).then(function(cached) {
       if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
         // ✅ Serve from cache — instant, no network
         _state.all     = cached.data;
@@ -6491,6 +6524,15 @@
     try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch(_) {}
   }
 
+  function _getApiTok() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) { var p = JSON.parse(raw); if (p && p.access_token) return p.access_token; }
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken();
+    } catch(_) {} return '';
+  }
+
+
   function showMsg(id, text, ok) {
     var el = document.getElementById(id);
     if (!el) return;
@@ -6528,23 +6570,20 @@
 
   // ── Load settings into form on General Settings open ─────────────
   window._cpsLoadSettings = function() {
-    var stored = loadStoredSettings();
-    var urlEl  = document.getElementById('cps-csv-url');
-    if (urlEl) urlEl.value = stored.csvUrl || '';
-
-    // Expose URL to Connect+ tab
-    window._cpCsvUrl = stored.csvUrl || '';
-
-    // If we have a stored URL, show columns preview from cache
-    if (stored.csvUrl && stored.detectedColumns && stored.detectedColumns.length) {
-      _showColumnsPreview(stored.detectedColumns, stored.rowCount || null);
-    }
-
-    // Set active search columns
-    // null or empty array = search ALL columns; non-empty array = only those columns
-    window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
-
-    setUrlStatus('', '');
+    fetch('/api/studio/csv_settings?type=connect_plus', { headers: { 'Authorization': 'Bearer ' + _getApiTok() } })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var stored = (d.ok && d.settings) ? d.settings : loadStoredSettings();
+      storeSettings(stored);
+      var urlEl = document.getElementById('cps-csv-url');
+      if (urlEl) urlEl.value = stored.csvUrl || '';
+      window._cpCsvUrl = stored.csvUrl || '';
+      window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
+      if (stored.csvUrl && stored.detectedColumns && stored.detectedColumns.length) {
+        _showColumnsPreview(stored.detectedColumns, stored.rowCount || null);
+      }
+      setUrlStatus('', '');
+    }).catch(function(){});
   };
 
   // _cpsLoadSettings is called by the main settings nav listener (in Core JS)
@@ -6740,24 +6779,29 @@
     var urlEl = document.getElementById('cps-csv-url');
     var url   = urlEl ? urlEl.value.trim() : '';
     var btn   = document.getElementById('cps-save-btn');
-
     if (!url) { showMsg('cps-save-msg', '✗ Enter a CSV URL first', false); return; }
-
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; btn.style.opacity = '.7'; }
-
     var stored = loadStoredSettings();
     stored.csvUrl = url;
-    storeSettings(stored);
-
-    // Expose to Connect+ tab
-    window._cpCsvUrl = url;
-
-    showMsg('cps-save-msg', '✓ Saved! Reload Connect+ to apply.', true);
-
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Connect+ Settings'; btn.style.opacity = '1'; }
-
-    // Trigger Connect+ tab reload if it was already loaded
-    if (typeof window._cpRefresh === 'function') window._cpRefresh();
+    fetch('/api/studio/csv_settings?type=connect_plus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
+      body: JSON.stringify(stored)
+    }).then(function(r){
+      if (!r.ok) return r.json().catch(function(){ return { ok: false, error: 'HTTP ' + r.status }; })
+                               .then(function(d){ throw new Error(d && d.error ? String(d.error) : 'HTTP ' + r.status); });
+      return r.json().catch(function(){ return { ok: true }; });
+    }).then(function(d){
+      if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
+      storeSettings(stored);
+      window._cpCsvUrl = url;
+      showMsg('cps-save-msg', '✓ Saved globally! Reload Connect+ to apply.', true);
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Connect+ Settings'; btn.style.opacity = '1'; }
+      if (typeof window._cpRefresh === 'function') window._cpRefresh();
+    }).catch(function(err){
+      showMsg('cps-save-msg', '✗ Save failed: ' + (err && err.message ? err.message : 'Network error'), false);
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Connect+ Settings'; btn.style.opacity = '1'; }
+    });
   };
 
   window._cpsSaveSearchCols = function() {
@@ -6773,6 +6817,21 @@
     // null = all columns (no filter); array = specific columns
     stored.searchColumns = (selected.length === allCols.length) ? null : selected;
     storeSettings(stored);
+    fetch('/api/studio/csv_settings?type=connect_plus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
+      body: JSON.stringify(stored)
+    }).then(function(r){
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json().catch(function(){ return { ok: true }; });
+    }).then(function(d){
+      if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
+      // Expose live to Connect+ search
+      window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
+      showMsg('cps-cols-msg', '✓ Search columns saved!', true);
+    }).catch(function(err){
+      showMsg('cps-cols-msg', '✗ Failed: ' + (err && err.message ? err.message : 'Network error'), false);
+    });
 
     // Expose live to Connect+ search
     // null or empty = all columns; only restrict when user explicitly selected subset
@@ -7136,7 +7195,7 @@
 (function() {
   'use strict';
 
-  var ALLOWED_ROLES = ['SUPER_ADMIN'];
+  var ALLOWED_ROLES = ['SUPERADMIN', 'SUPER_ADMIN', 'ADMIN'];
 
   function getUserRole() {
     try {
@@ -7166,9 +7225,23 @@
     var role     = getUserRole();
     var allowed  = ALLOWED_ROLES.indexOf(role) >= 0;
     var configTab = document.getElementById('ss-tab-config');
+    var mainBody = document.getElementById('ss-main-body');
+
+    // Main studio body must never be role-gated.
+    if (mainBody) {
+      try { mainBody.removeAttribute('role'); } catch(_) {}
+      try { mainBody.removeAttribute('aria-hidden'); } catch(_) {}
+      try { mainBody.removeAttribute('data-role-gated'); } catch(_) {}
+      try { mainBody.style.removeProperty('display'); } catch(_) {}
+    }
 
     if (configTab) {
-      configTab.style.display = allowed ? '' : 'none';
+      if (allowed) {
+        configTab.style.removeProperty('display');
+      } else {
+        // Strict hide rule for non-admin roles.
+        configTab.style.setProperty('display', 'none', 'important');
+      }
       configTab.setAttribute('data-role-gated', allowed ? 'visible' : 'hidden');
     }
 
@@ -7766,6 +7839,14 @@
     try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch(_) {}
   }
 
+  function _getApiTok() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) { var p = JSON.parse(raw); if (p && p.access_token) return p.access_token; }
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken();
+    } catch(_) {} return '';
+  }
+
   function showMsg(id, text, ok) {
     var el = document.getElementById(id);
     if (!el) return;
@@ -7805,19 +7886,20 @@
 
   // ── Load settings into form ───────────────────────────────────────
   window._pnsLoadSettings = function() {
-    var stored = loadStoredSettings();
-    var urlEl  = document.getElementById('pns-csv-url');
-    if (urlEl) urlEl.value = stored.csvUrl || '';
-
-    // Expose to tab
-    window._pnCsvUrl    = stored.csvUrl || '';
-    window._pnSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0)
-      ? stored.searchColumns : null;
-
-    if (stored.csvUrl && stored.detectedColumns && stored.detectedColumns.length) {
-      _showColumnsPreview(stored.detectedColumns, stored.rowCount || null);
-    }
-    setUrlStatus('', '');
+    fetch('/api/studio/csv_settings?type=parts_number', { headers: { 'Authorization': 'Bearer ' + _getApiTok() } })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var stored = (d.ok && d.settings) ? d.settings : loadStoredSettings();
+      storeSettings(stored);
+      var urlEl = document.getElementById('pns-csv-url');
+      if (urlEl) urlEl.value = stored.csvUrl || '';
+      window._pnCsvUrl = stored.csvUrl || '';
+      window._pnSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
+      if (stored.csvUrl && stored.detectedColumns && stored.detectedColumns.length) {
+        _showColumnsPreview(stored.detectedColumns, stored.rowCount || null);
+      }
+      setUrlStatus('', '');
+    }).catch(function(){});
   };
 
   // ── URL normalizer (same logic as Connect+ settings) ─────────────
@@ -7913,23 +7995,31 @@
   // ── Save CSV URL ──────────────────────────────────────────────────
   window._pnsSaveSettings = function() {
     var urlEl = document.getElementById('pns-csv-url');
-    if (!urlEl) return;
-    var raw = (urlEl.value || '').trim();
-    var url = _normalizeUrl(raw);
-    if (url && url !== raw) urlEl.value = url;
+    var url   = urlEl ? urlEl.value.trim() : '';
+    var btn   = document.getElementById('pns-save-btn');
+    if (!url) { showMsg('pns-save-msg', '✗ Enter a CSV URL first', false); return; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; btn.style.opacity = '.7'; }
     var stored = loadStoredSettings();
     stored.csvUrl = url;
-    storeSettings(stored);
-    window._pnCsvUrl = url;
-    showMsg('pns-save-msg', url ? '✓ Saved — Parts Number tab will reload.' : '✓ Cleared.', true);
-    // Trigger Parts Number tab reload if it is currently open
-    setTimeout(function() {
-      if (typeof window._pnRefresh === 'function' &&
-          document.getElementById('left-panel-parts_number') &&
-          document.getElementById('left-panel-parts_number').style.display !== 'none') {
-        window._pnRefresh();
-      }
-    }, 300);
+    fetch('/api/studio/csv_settings?type=parts_number', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
+      body: JSON.stringify(stored)
+    }).then(function(r){
+      if (!r.ok) return r.json().catch(function(){ return { ok: false, error: 'HTTP ' + r.status }; })
+                               .then(function(d){ throw new Error(d && d.error ? String(d.error) : 'HTTP ' + r.status); });
+      return r.json().catch(function(){ return { ok: true }; });
+    }).then(function(d){
+      if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
+      storeSettings(stored);
+      window._pnCsvUrl = url;
+      showMsg('pns-save-msg', '✓ Saved globally! Reload Parts Number to apply.', true);
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Part Number Settings'; btn.style.opacity = '1'; }
+      if (typeof window._pnRefresh === 'function') window._pnRefresh();
+    }).catch(function(err){
+      showMsg('pns-save-msg', '✗ Save failed: ' + (err && err.message ? err.message : 'Network error'), false);
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Part Number Settings'; btn.style.opacity = '1'; }
+    });
   };
 
   // ── Search columns checkbox rendering ────────────────────────────
@@ -7962,6 +8052,20 @@
     var allCols = stored.detectedColumns || [];
     stored.searchColumns = (checked.length === allCols.length) ? null : checked;
     storeSettings(stored);
+    fetch('/api/studio/csv_settings?type=parts_number', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
+      body: JSON.stringify(stored)
+    }).then(function(r){
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json().catch(function(){ return { ok: true }; });
+    }).then(function(d){
+      if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
+      window._pnSearchCols = stored.searchColumns;
+      showMsg('pns-cols-msg', '✓ Search columns saved.', true);
+    }).catch(function(err){
+      showMsg('pns-cols-msg', '✗ Failed: ' + (err && err.message ? err.message : 'Network error'), false);
+    });
     window._pnSearchCols = stored.searchColumns;
     showMsg('pns-cols-msg', '✓ Search columns saved.', true);
   };
@@ -8052,28 +8156,54 @@
   }
 
   function _fetchFromNetwork() {
-    var url = window._pnCsvUrl;
-    if (!url) {
-      // Try to read from localStorage
+    function _loadSettingsIfNeeded() {
+      if (window._pnCsvUrl) return Promise.resolve();
+      var tok = '';
       try {
-        var s = localStorage.getItem('ss_parts_number_settings');
-        if (s) { var p = JSON.parse(s); url = p.csvUrl || ''; }
+        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+        if (raw) {
+          var p = JSON.parse(raw);
+          if (p && p.access_token) tok = p.access_token;
+        }
+        if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken();
       } catch(_) {}
+      return fetch('/api/studio/csv_settings?type=parts_number', {
+        headers: { 'Authorization': 'Bearer ' + tok }
+      }).then(function(resp) { return resp.json(); })
+        .then(function(d) {
+          if (d && d.ok && d.settings && d.settings.csvUrl) {
+            window._pnCsvUrl = d.settings.csvUrl;
+            window._pnSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+              ? d.settings.searchColumns : null;
+          }
+        })
+        .catch(function() {});
     }
-    if (!url) {
-      _loading = false;
-      _setBodyEmpty();
-      return Promise.resolve();
-    }
-    return fetch(url).then(function(r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status + ' — check if sheet is published as CSV');
-      return r.text();
-    }).then(function(text) {
-      var data = _parseCsv(text);
-      if (typeof window.StudioCache !== 'undefined') {
-        window.StudioCache.setBundle('parts_number', data, '', data.length).catch(function() {});
+
+    return _loadSettingsIfNeeded().then(function() {
+      var url = window._pnCsvUrl;
+      if (!url) {
+        // Try to read from localStorage
+        try {
+          var s = localStorage.getItem('ss_parts_number_settings');
+          if (s) { var p = JSON.parse(s); url = p.csvUrl || ''; }
+        } catch(_) {}
       }
-      _parseData(data, false);
+      if (!url) {
+        _loading = false;
+        _setBodyEmpty();
+        return Promise.resolve();
+      }
+      return fetch(url).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' — check if sheet is published as CSV');
+        return r.text();
+      }).then(function(text) {
+        var data = _parseCsv(text);
+        if (typeof window.StudioCache !== 'undefined') {
+          window.StudioCache.setBundle('parts_number', data, '', data.length).catch(function() {});
+        }
+        _parseData(data, false);
+      });
     });
   }
 

@@ -5063,11 +5063,26 @@ body.members-fullscreen-active .tooltip{
 .qb-tabs-inner {
   display: flex;
   gap: 4px;
+  flex-wrap: nowrap;
   flex: 1;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
 .qb-tabs-inner::-webkit-scrollbar { display: none; }
+
+/* Keep Studio tab buttons horizontally scrollable on compact widths. */
+#ss-tabs {
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+#ss-tabs::-webkit-scrollbar { display: none; }
+#ss-tab-connectplus,
+#ss-tab-parts_number {
+  display: inline-flex !important;
+}
 
 /* ── TAB BUTTONS ── */
 .qb-tab-btn {

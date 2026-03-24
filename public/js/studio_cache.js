@@ -23,11 +23,13 @@
 
   var TTL = {
     connect_plus: 24 * 60 * 60 * 1000,  // 24 hours
+    parts_number: 24 * 60 * 60 * 1000,  // 24 hours
     catalog:      12 * 60 * 60 * 1000,  // 12 hours
     qb_schema:    24 * 60 * 60 * 1000,  // 24 hours
   };
 
   var MANIFEST_CHECK_INTERVAL = 30 * 60 * 1000; // 30 minutes
+  var SUPPORT_STUDIO_QB_SETTINGS_KEY = 'support_studio_qb_settings';
   var _db         = null;
   var _dbPromise  = null;
   var _checkTimer = null;
@@ -237,16 +239,18 @@
       fetchServerManifest(force),
       getLocalManifest(),
       getBundle('connect_plus'),
+      getBundle('parts_number'),
       getBundle('catalog'),
       getBundle('qb_schema'),
     ]).then(function (results) {
       var serverManifest = results[0];
       var localManifest  = results[1];
       var cpBundle       = results[2];
-      var catBundle      = results[3];
-      var schBundle      = results[4];
+      var pnBundle       = results[3];
+      var catBundle      = results[4];
+      var schBundle      = results[5];
 
-      var hasAnyLocal = !!(cpBundle || catBundle || schBundle);
+      var hasAnyLocal = !!(cpBundle || pnBundle || catBundle || schBundle);
 
       if (!hasAnyLocal) {
         _emit('firstrun', { serverManifest: serverManifest });
@@ -265,6 +269,7 @@
 
       // Check each bundle
       _checkBundle('connect_plus', cpBundle,  bundles.connect_plus,  outdated, critical);
+      _checkBundle('parts_number', pnBundle,  bundles.parts_number,  outdated, critical);
       _checkBundle('catalog',      catBundle,  bundles.catalog,       outdated, critical);
       _checkBundle('qb_schema',    schBundle,  bundles.qb_schema,     outdated, critical);
 
@@ -333,6 +338,9 @@
     if (bundleId === 'connect_plus') {
       return _downloadConnectPlus(serverHash, onProgress);
     }
+    if (bundleId === 'parts_number') {
+      return _downloadPartsNumber(serverHash, onProgress);
+    }
     if (bundleId === 'catalog') {
       return _downloadCatalog(serverHash, onProgress);
     }
@@ -354,6 +362,25 @@
         if (!d.ok) throw new Error(d.message || 'connect_plus error');
         if (onProgress) onProgress(90, d.records.length, d.records.length);
         return setBundle('connect_plus', d.records, serverHash || d.hash, d.records.length)
+          .then(function () {
+            if (onProgress) onProgress(100, d.records.length, d.records.length);
+            return { ok: true, count: d.records.length };
+          });
+      });
+  }
+
+  // Parts Number — fetches the Google Sheets CSV via server proxy
+  function _downloadPartsNumber(serverHash, onProgress) {
+    if (onProgress) onProgress(5, 0, 1);
+    return fetch('/api/studio/cache_bundle?bundle=parts_number', { headers: _authHeaders() })
+      .then(function (r) {
+        if (!r.ok) throw new Error('parts_number fetch failed: ' + r.status);
+        return r.json();
+      })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.message || 'parts_number error');
+        if (onProgress) onProgress(90, d.records.length, d.records.length);
+        return setBundle('parts_number', d.records, serverHash || d.hash, d.records.length)
           .then(function () {
             if (onProgress) onProgress(100, d.records.length, d.records.length);
             return { ok: true, count: d.records.length };
@@ -456,14 +483,16 @@
   function getStats() {
     return Promise.all([
       getBundle('connect_plus'),
+      getBundle('parts_number'),
       getBundle('catalog'),
       getBundle('qb_schema'),
       getLocalManifest(),
     ]).then(function (r) {
       var cp  = r[0];
-      var cat = r[1];
-      var sch = r[2];
-      var mf  = r[3];
+      var pn  = r[1];
+      var cat = r[2];
+      var sch = r[3];
+      var mf  = r[4];
 
       function bundleStat(b, ttlMs) {
         if (!b) return { cached: false };
@@ -482,6 +511,7 @@
 
       return {
         connect_plus: bundleStat(cp,  TTL.connect_plus),
+        parts_number: bundleStat(pn,  TTL.parts_number),
         catalog:      bundleStat(cat, TTL.catalog),
         qb_schema:    bundleStat(sch, TTL.qb_schema),
         manifest:     mf ? mf.data : null,
@@ -528,6 +558,7 @@
     // Constants (read-only)
     TTL:                TTL,
     DB_NAME:            DB_NAME,
+    SUPPORT_STUDIO_QB_SETTINGS_KEY: SUPPORT_STUDIO_QB_SETTINGS_KEY,
   };
 
 }(window));

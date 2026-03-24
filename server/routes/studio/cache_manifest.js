@@ -161,6 +161,19 @@ async function getConnectPlusHash() {
   }
 }
 
+
+async function getPartsNumberHash() {
+  try {
+    const out = await serviceSelect('mums_documents', `select=key,value,updated_at&key=eq.ss_parts_number_cache_version&limit=1`);
+    const row = (Array.isArray(out.json) && out.json[0]) ? out.json[0] : null;
+    if (row && row.value) {
+      const v = row.value;
+      return { hash: String(v.hash || simpleHash(String(row.updated_at || ''))), count: Number(v.count || 0), isCritical: !!(v.isCritical), lastUpdatedAt: String(row.updated_at || '') };
+    }
+    return { hash: simpleHash('partsnumber:' + new Date().toISOString().slice(0, 10)), count: 0, isCritical: false, lastUpdatedAt: null };
+  } catch (_) { return { hash: 'db_error', count: 0, isCritical: false }; }
+}
+
 // ── Main handler ──────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   try {
@@ -176,8 +189,9 @@ module.exports = async (req, res) => {
     const studioSettings = (studioOut.ok && studioOut.settings) ? studioOut.settings : {};
 
     // All 3 hashes in parallel — fast
-    const [cpHash, catHash, schHash] = await Promise.all([
+    const [cpHash, pnHash, catHash, schHash] = await Promise.all([
       getConnectPlusHash(),
+      getPartsNumberHash(),
       getCatalogHash(),
       getQbSchemaHash(studioSettings),
     ]);
@@ -187,6 +201,7 @@ module.exports = async (req, res) => {
       generatedAt: new Date().toISOString(),
       bundles: {
         connect_plus: cpHash,
+        parts_number: pnHash,
         catalog:      catHash,
         qb_schema:    schHash,
       },

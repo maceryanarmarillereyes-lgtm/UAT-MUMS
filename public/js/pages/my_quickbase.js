@@ -12,6 +12,16 @@
 (function(){
   window.Pages = window.Pages || {};
 
+  function resolveTabStorageNamespace(root) {
+    const pageKey = String(
+      (root && root.getAttribute && (root.getAttribute('data-page') || root.getAttribute('data-route')))
+      || (root && root.dataset && (root.dataset.page || root.dataset.route))
+      || (window.location && window.location.hash)
+      || ''
+    ).toLowerCase();
+    return pageKey.includes('quickbase_s') ? 'quickbase_s' : 'quickbase';
+  }
+
   function esc(v) {
     if (window.UI && typeof window.UI.esc === 'function') return window.UI.esc(v);
     return String(v == null ? '' : v)
@@ -396,26 +406,36 @@
     return deepClone(opts.backendQuickbaseSettings);
   }
 
-  function getQuickbaseSettingsLocalKey(userId) {
+  function isSupportStudioNamespace(namespace) {
+    return String(namespace || '').trim().toLowerCase() === 'quickbase_s';
+  }
+
+  function getQuickbaseSettingsLocalKey(userId, namespace) {
+    if (isSupportStudioNamespace(namespace)) return 'support_studio_qb_settings';
     const safeUserId = String(userId || 'anonymous').trim() || 'anonymous';
     return `mums_my_quickbase_settings:${safeUserId}`;
   }
 
-  function getQuickbaseTabsLocalKey(userId) {
+  function getQuickbaseTabsLocalKey(userId, namespace) {
+    if (isSupportStudioNamespace(namespace)) return 'support_studio_qb_tabs';
     const safeUserId = String(userId || 'anonymous').trim() || 'anonymous';
     return `myQuickbase.tabs:${safeUserId}`;
   }
 
-  function getQuickbaseTabSettingsLocalKey(userId, tabId) {
+  function getQuickbaseTabSettingsLocalKey(userId, tabId, namespace) {
+    if (isSupportStudioNamespace(namespace)) {
+      const safeTabId = String(tabId || '').trim();
+      return `support_studio_qb_tab.${safeTabId}.settings`;
+    }
     const safeUserId = String(userId || 'anonymous').trim() || 'anonymous';
     const safeTabId = String(tabId || '').trim();
     return `myQuickbase.tab.${safeUserId}.${safeTabId}.settings`;
   }
 
-  function readQuickbaseSettingsLocal(userId) {
+  function readQuickbaseSettingsLocal(userId, namespace) {
     try {
       if (!window.localStorage) return null;
-      const rawTabs = localStorage.getItem(getQuickbaseTabsLocalKey(userId));
+      const rawTabs = localStorage.getItem(getQuickbaseTabsLocalKey(userId, namespace));
       if (rawTabs) {
         const parsedTabs = JSON.parse(rawTabs);
         const tabs = Array.isArray(parsedTabs && parsedTabs.tabs) ? parsedTabs.tabs.map((tab, idx) => createTabMeta(tab, { tabName: idx === 0 ? 'Main Report' : `Report ${idx + 1}` })) : [];
@@ -423,7 +443,7 @@
         const settingsByTabId = {};
         const hydratedTabs = [];
         tabs.forEach((tab) => {
-          const tabSettingsRaw = localStorage.getItem(getQuickbaseTabSettingsLocalKey(userId, tab.id));
+          const tabSettingsRaw = localStorage.getItem(getQuickbaseTabSettingsLocalKey(userId, tab.id, namespace));
           const parsedSettings = parseQuickbaseSettings(tabSettingsRaw);
           const normalizedSettings = createDefaultSettings(parsedSettings, {});
           settingsByTabId[tab.id] = deepClone(normalizedSettings) || createDefaultSettings({}, {});
@@ -434,7 +454,7 @@
         return { activeTabIndex, tabs: hydratedTabs, settingsByTabId };
       }
 
-      const rawLegacy = localStorage.getItem(getQuickbaseSettingsLocalKey(userId));
+      const rawLegacy = localStorage.getItem(getQuickbaseSettingsLocalKey(userId, namespace));
       if (!rawLegacy) return null;
       const parsed = JSON.parse(rawLegacy);
       const settings = parsed && typeof parsed === 'object' && parsed.settings ? parsed.settings : parsed;
@@ -444,7 +464,7 @@
     }
   }
 
-  function writeQuickbaseSettingsLocal(userId, settings) {
+  function writeQuickbaseSettingsLocal(userId, settings, namespace) {
     try {
       if (!window.localStorage) return;
       const normalized = normalizeQuickbaseSettingsWithTabs(settings, {});
@@ -460,14 +480,15 @@
           return buildDefaultTab(Object.assign({}, tabMeta, tabSettings), {});
         })
       };
-      localStorage.setItem(getQuickbaseTabsLocalKey(userId), JSON.stringify(payload));
+      localStorage.setItem(getQuickbaseTabsLocalKey(userId, namespace), JSON.stringify(payload));
+      localStorage.setItem(getQuickbaseSettingsLocalKey(userId, namespace), JSON.stringify(normalized));
       normalized.tabs.forEach((tab) => {
         const tabId = String(tab.id || '').trim();
         if (!tabId) return;
         const tabSettings = normalized.settingsByTabId && normalized.settingsByTabId[tabId]
           ? normalized.settingsByTabId[tabId]
           : createDefaultSettings({}, {});
-        localStorage.setItem(getQuickbaseTabSettingsLocalKey(userId, tabId), JSON.stringify(tabSettings));
+        localStorage.setItem(getQuickbaseTabSettingsLocalKey(userId, tabId, namespace), JSON.stringify(tabSettings));
       });
     } catch (_) {}
   }
@@ -1304,8 +1325,11 @@
 
     const AUTO_REFRESH_MS = 300000; // 5-min auto-refresh — was 60s (5× reduction). Egress optimization for Free Plan.
     const me = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
+    const currentUserId = me && me.id;
+    const tabNamespace = resolveTabStorageNamespace(root);
+    const isSupportStudio = isSupportStudioNamespace(tabNamespace);
     const tabManager = (window.TabManager && typeof window.TabManager.init === 'function')
-      ? window.TabManager.init({ userId: me && me.id, apiBaseUrl: '/api' })
+      ? window.TabManager.init({ userId: currentUserId, apiBaseUrl: '/api', namespace: tabNamespace })
       : null;
     let profile = (me && window.Store && Store.getProfile) ? (Store.getProfile(me.id) || {}) : {};
 
@@ -1313,12 +1337,21 @@
     // Report Config (realm/tableId/qid/token) now comes from Global QB Settings.
     // Per-tab settings only customize columns + filters.
     let globalQbSettings = { reportLink: '', realm: '', tableId: '', qid: '', customColumns: [], filterConfig: [], filterMatch: 'ALL' };
+    let studioGlobalQuickbaseSettings = {};
     async function fetchGlobalQbSettings() {
       try {
         const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
-        const r = await fetch('/api/settings/global_quickbase', { headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' } });
+        const endpoint = isSupportStudio ? '/api/studio/qb_settings_global' : '/api/settings/global_quickbase';
+        const r = await fetch(endpoint, { headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' } });
         const d = await r.json();
-        if (d.ok && d.settings) globalQbSettings = Object.assign(globalQbSettings, d.settings);
+        if (d.ok && d.settings) {
+          globalQbSettings = Object.assign(globalQbSettings, d.settings);
+          if (isSupportStudio) {
+            studioGlobalQuickbaseSettings = normalizeQuickbaseSettingsWithTabs(d.settings, d.settings);
+            // Explicitly persist an isolated studio cache key.
+            writeQuickbaseSettingsLocal('support_studio', studioGlobalQuickbaseSettings, 'quickbase_s');
+          }
+        }
       } catch (_) {}
     }
     await fetchGlobalQbSettings();
@@ -1412,14 +1445,21 @@
       ? cloudMe.quickbase_settings
       : null;
     const parsedWindowMeQuickbaseSettings = parseQuickbaseSettings(windowMeQuickbaseSettingsRaw);
-    const localQuickbaseSettings = readQuickbaseSettingsLocal(me && me.id);
+    const localQuickbaseSettings = readQuickbaseSettingsLocal(me && me.id, tabNamespace);
     const backendQuickbaseSettings = normalizeQuickbaseSettingsWithTabs(profileWithCloudFallback.quickbase_settings, quickbaseConfig);
     const windowMeQuickbaseSettings = normalizeQuickbaseSettingsWithTabs(windowMeQuickbaseSettingsRaw, quickbaseConfig);
-    const quickbaseSettings = chooseInitialQuickbaseSettingsSource({
-      backendQuickbaseSettings,
-      windowMeQuickbaseSettings,
-      localQuickbaseSettings
-    });
+    const quickbaseSettings = isSupportStudio
+      ? normalizeQuickbaseSettingsWithTabs(
+        (studioGlobalQuickbaseSettings && Object.keys(studioGlobalQuickbaseSettings).length
+          ? studioGlobalQuickbaseSettings
+          : globalQbSettings),
+        globalQbSettings
+      )
+      : chooseInitialQuickbaseSettingsSource({
+        backendQuickbaseSettings,
+        windowMeQuickbaseSettings,
+        localQuickbaseSettings
+      });
     const initialTabMeta = quickbaseSettings.tabs[quickbaseSettings.activeTabIndex] || quickbaseSettings.tabs[0] || createTabMeta({}, { tabName: 'Main Report' });
     const initialTabId = String(initialTabMeta.id || '').trim();
     const initialTabSettings = createDefaultSettings((quickbaseSettings.settingsByTabId && quickbaseSettings.settingsByTabId[initialTabId]) || {}, {});
@@ -1544,7 +1584,9 @@
     // TabManager uses a separate localStorage key; tabs loaded from Supabase profile won't be in
     // TabManager's internal Map unless we explicitly seed them here.
     if (tabManager && Array.isArray(state.quickbaseSettings.tabs) && me && me.id) {
-      const lsKey = `mums_quickbase_tabs_${String(me.id || 'anonymous').trim()}`;
+      const lsKey = isSupportStudio
+        ? 'mums_quickbase_tabs_support_studio'
+        : `mums_quickbase_tabs_${String(me.id || 'anonymous').trim()}`;
       try {
         const raw = window.localStorage && window.localStorage.getItem(lsKey);
         const existingRows = JSON.parse(raw || '[]');
@@ -1570,7 +1612,7 @@
         }
       } catch (_) {}
       // Reload TabManager from updated localStorage so getTab() returns correct data
-      tabManager.init({ userId: me.id, apiBaseUrl: '/api' });
+      tabManager.init({ userId: me.id, apiBaseUrl: '/api', namespace: tabNamespace });
       // Now push latest Supabase settings into TabManager for each tab
       state.quickbaseSettings.tabs.forEach((tab) => {
         const tabId = String(tab && tab.id || '').trim();
@@ -2113,7 +2155,8 @@
         quickbase_config: activeSettingsObject,
         quickbase_settings: normalizedPayload
       };
-      writeQuickbaseSettingsLocal(me.id, normalizedPayload);
+      writeQuickbaseSettingsLocal(me && me.id, normalizedPayload, tabNamespace);
+      if (isSupportStudio) return { ok: true, isolated: true };
       const authToken = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
       const response = await fetch('/api/users/update_me', {
         method: 'PATCH',
@@ -2137,7 +2180,7 @@
       }
 
       console.log('[Cloud Sync] Multi-Tab Settings Saved');
-      writeQuickbaseSettingsLocal(me.id, normalizedPayload);
+      writeQuickbaseSettingsLocal(me && me.id, normalizedPayload, tabNamespace);
       return data;
     }
 
