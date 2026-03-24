@@ -4921,6 +4921,8 @@
         window._pnsLoadSettings();
       } else if (section === 'studio-cache' && typeof window._cacheUI !== 'undefined') {
         window._cacheUI.refreshPanel();
+        // Also boot check so connect+ / parts_number tags update immediately
+        if (typeof window._bootCacheCheck === 'function') window._bootCacheCheck();
       } else if (section === 'studio-appearance' && typeof window._appLoadDisplay === 'function') {
         window._appLoadDisplay();
       }
@@ -6142,8 +6144,22 @@
       ? window.StudioCache.getBundle('connect_plus')
       : Promise.resolve(null);
 
-    _loadSettingsIfNeeded().then(function() {
-      CSV_URL = _normalizeCsvUrl(_getActiveCsvUrl());
+    // FIX: retry getting settings up to 3x with 1s delay before showing "not configured"
+    // This handles race condition where token is still refreshing when tab is clicked
+    function _loadWithRetry(attemptsLeft) {
+      return _loadSettingsIfNeeded().then(function() {
+        var url = _normalizeCsvUrl(_getActiveCsvUrl());
+        if (!url && attemptsLeft > 0) {
+          return new Promise(function(resolve) {
+            setTimeout(function() { resolve(_loadWithRetry(attemptsLeft - 1)); }, 1000);
+          });
+        }
+        return url;
+      });
+    }
+
+    _loadWithRetry(3).then(function(resolvedUrl) {
+      CSV_URL = resolvedUrl || '';
       return cachePromise;
     }).then(function(cached) {
       if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
@@ -7840,7 +7856,7 @@
   });
 
   // ── Boot: run check on page load (after 2s to not block initial render) ──
-  function _bootCacheCheck() {
+  window._bootCacheCheck = function _bootCacheCheck() {
     if (typeof window.StudioCache === 'undefined') return;
     window.StudioCache.startAutoCheck();
     setTimeout(function() {
@@ -8201,13 +8217,28 @@
         _parseData(cached.data, true);
         return;
       }
-      // 2. Fall back to network
-      return _fetchFromNetwork();
+      // 2. Fall back to network — with retry if token not ready yet
+      return _fetchFromNetworkWithRetry(3);
     }).catch(function() {
-      return _fetchFromNetwork();
+      return _fetchFromNetworkWithRetry(3);
     }).catch(function(e) {
       _loading = false;
       _setBodyError(e.message);
+    });
+  }
+
+  // FIX: Retry wrapper — waits for auth token up to 3s before giving up
+  function _fetchFromNetworkWithRetry(attemptsLeft) {
+    return _fetchFromNetwork().then(function(result) {
+      // If _pnCsvUrl is still empty after fetch and we have retries left, wait and try again
+      if (!window._pnCsvUrl && attemptsLeft > 0) {
+        return new Promise(function(resolve, reject) {
+          setTimeout(function() {
+            _fetchFromNetworkWithRetry(attemptsLeft - 1).then(resolve).catch(reject);
+          }, 1000);
+        });
+      }
+      return result;
     });
   }
 
