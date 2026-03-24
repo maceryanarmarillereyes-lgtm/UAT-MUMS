@@ -12,6 +12,16 @@
 (function(){
   window.Pages = window.Pages || {};
 
+  function resolveTabStorageNamespace(root) {
+    const pageKey = String(
+      (root && root.getAttribute && (root.getAttribute('data-page') || root.getAttribute('data-route')))
+      || (root && root.dataset && (root.dataset.page || root.dataset.route))
+      || (window.location && window.location.hash)
+      || ''
+    ).toLowerCase();
+    return pageKey.includes('quickbase_s') ? 'quickbase_s' : 'quickbase';
+  }
+
   function esc(v) {
     if (window.UI && typeof window.UI.esc === 'function') return window.UI.esc(v);
     return String(v == null ? '' : v)
@@ -1304,8 +1314,10 @@
 
     const AUTO_REFRESH_MS = 300000; // 5-min auto-refresh — was 60s (5× reduction). Egress optimization for Free Plan.
     const me = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
+    const currentUserId = me && me.id;
+    const tabNamespace = resolveTabStorageNamespace(root);
     const tabManager = (window.TabManager && typeof window.TabManager.init === 'function')
-      ? window.TabManager.init({ userId: me && me.id, apiBaseUrl: '/api' })
+      ? window.TabManager.init({ userId: currentUserId, apiBaseUrl: '/api', namespace: tabNamespace })
       : null;
     let profile = (me && window.Store && Store.getProfile) ? (Store.getProfile(me.id) || {}) : {};
 

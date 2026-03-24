@@ -28,6 +28,7 @@
   const tabs = new Map();
   let currentUserId = '';
   let apiBaseUrl = '/api';
+  let storageNamespace = 'quickbase';
 
   function authHeader() {
     const jwt = root.CloudAuth && typeof root.CloudAuth.accessToken === 'function'
@@ -48,7 +49,7 @@
   }
 
   function storageKey() {
-    return `mums_quickbase_tabs_${safeUserId(currentUserId)}`;
+    return `mums_${storageNamespace}_tabs_${safeUserId(currentUserId)}`;
   }
 
   function makeUUID() {
@@ -110,9 +111,10 @@
   }
 
   const TabManager = {
-    init({ userId, apiBaseUrl: nextApiBaseUrl }) {
+    init({ userId, apiBaseUrl: nextApiBaseUrl, namespace }) {
       currentUserId = String(userId || '').trim();
       apiBaseUrl = String(nextApiBaseUrl || '/api').trim() || '/api';
+      storageNamespace = String(namespace || 'quickbase').trim() || 'quickbase';
       tabs.clear();
       loadLocalFallback();
       return this;
@@ -173,7 +175,10 @@
           tab_name: String(entry.settings.tabName || '').trim() || 'New Tab',
           settings_json: cloneDeep(entry.settings)
         };
-        await apiRequest('/quickbase_tabs/upsert', {
+        const upsertPath = storageNamespace === 'quickbase_s'
+          ? '/quickbase_s_tabs/upsert'
+          : '/quickbase_tabs/upsert';
+        await apiRequest(upsertPath, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
