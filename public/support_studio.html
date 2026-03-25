@@ -5783,18 +5783,42 @@
     });
   }
 
+  /*
+    DIAGNOSTIC (Q1-Q4)
+    Q1: my_quickbase case detail opener was not exposed on window; it was an internal _open closure inside _initQbCaseDetailModal with root._qbcdOpen only.
+    Q2: QB_S row number click handler exists via .qb-row-detail-btn (direct onclick + delegated #qbDataBody listener), but cross-module callers could not reliably access the opener.
+    Q3: Deep Search cards had a CASE VIEW DETAILS button (.qbs-case-detail-btn) but it used only data-qbs-result-idx and local fallback openers.
+    Q4: Timing issue risk existed for cross-module calls because no stable window-level modal opener was guaranteed before external handlers fired.
+  */
   function _qbsEnsureDeepSearchCaseDetailBinding(resultsEl) {
     if (!resultsEl || resultsEl._qbsCaseDetailBound) return;
     resultsEl._qbsCaseDetailBound = true;
     resultsEl.addEventListener('click', function(e) {
-      var btn = e.target && e.target.closest && e.target.closest('.qbs-case-detail-btn');
+      var btn = e.target && e.target.closest && e.target.closest('[data-action="ds-case-view-details"]');
       if (!btn) return;
       e.preventDefault();
       e.stopPropagation();
+      var row = (function() {
+        try { return JSON.parse(btn.getAttribute('data-row') || '{}'); }
+        catch(_) { return {}; }
+      })();
+      var rid = btn.getAttribute('data-rid') || row.qbRecordId || row.recordId || '';
+      if (window.MQ && typeof window.MQ.openCaseDetailModal === 'function') {
+        var ctx = _qbsReadContextConfig();
+        window.MQ.openCaseDetailModal({
+          qbRecordId: rid,
+          fields: row.fields || {},
+          columns: (resultsEl._qbsDeepSearchColumns || []),
+          tabConfig: ctx.tabConfig || {},
+          realm: ctx.realm || '',
+          appId: ctx.appId || '',
+          tableId: ctx.tableId || ''
+        });
+        return;
+      }
       var idx = parseInt(btn.getAttribute('data-qbs-result-idx') || '', 10);
       var snaps = resultsEl._qbsDeepSearchSnaps || [];
-      if (isNaN(idx) || !snaps[idx]) return;
-      window._qbsOpenCaseDetail(snaps[idx], snaps);
+      if (!isNaN(idx) && snaps[idx]) window._qbsOpenCaseDetail(snaps[idx], snaps);
     });
   }
 
@@ -5936,7 +5960,7 @@
                   '<span class="ds-card-label" style="font-size:9px;font-weight:700;color:var(--ss-muted);text-transform:uppercase;letter-spacing:.04em;">Assigned to</span>' +
                   '<span class="ds-card-value" style="font-size:10px;color:#e6edf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;">' + _dsEsc2(assignee || '—') + '</span>' +
                 '</div>' +
-                '<button type="button" class="qb-row-num-pill qb-row-detail-btn qbs-case-detail-btn" data-qbs-result-idx="' + resultIdx + '" style="border-radius:999px;padding:5px 10px;min-width:auto;font-size:9px;font-weight:800;letter-spacing:.02em;" onclick="event.stopPropagation();" title="View case details" aria-label="CASE VIEW DETAILS for case #' + _dsEsc2(String(caseNum)) + '">CASE VIEW DETAILS</button>' +
+                '<button type="button" class="qb-row-num-pill qb-row-detail-btn qbs-case-detail-btn ds-case-view-btn" data-action="ds-case-view-details" data-rid="' + _dsEsc2(String(caseNum || '')) + '" data-row=\'' + _dsEsc2(JSON.stringify(rec).replace(/'/g, '&#39;')) + '\' data-qbs-result-idx="' + resultIdx + '" style="border-radius:999px;padding:5px 10px;min-width:auto;font-size:9px;font-weight:800;letter-spacing:.02em;" onclick="event.stopPropagation();" title="View case details" aria-label="CASE VIEW DETAILS for case #' + _dsEsc2(String(caseNum)) + '">CASE VIEW DETAILS</button>' +
               '</div>' +
 
               '</div>';
@@ -5961,6 +5985,7 @@
         if (resultsEl) {
           resultsEl.innerHTML = html + paginationHtml;
           resultsEl._qbsDeepSearchSnaps = _qbsBuildDeepSearchSnaps(records, labelMap);
+          resultsEl._qbsDeepSearchColumns = cols;
           _qbsEnsureDeepSearchCaseDetailBinding(resultsEl);
         }
       })
