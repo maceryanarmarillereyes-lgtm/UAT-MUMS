@@ -1,7 +1,7 @@
 // server/lib/studio_quickbase.js
 // Reads/writes per-user Studio Quickbase Settings from mums_documents.
 // Key format: 'ss_qb_settings_{userId}'
-// Fallback:   'ss_qb_settings_global'  — used when user has no personal settings.
+// Global fallback: 'ss_qb_settings_global'
 // ISOLATED from global QB settings — Support Studio use only.
 
 const { serviceSelect, serviceUpsert } = require('./supabase');
@@ -32,18 +32,17 @@ function normalizeStudioQbSettings(raw) {
 }
 
 function isEmptySettings(s) {
-  // A settings object is "empty" (not configured) if it has no reportLink AND no token.
   return !s.reportLink && !s.qbToken && !s.realm && !s.tableId && !s.qid;
 }
 
 async function readStudioQbSettings(userId) {
-  const userKey    = studioQbKey(userId);
-  const globalKey  = STUDIO_QB_GLOBAL_KEY;
+  const userKey   = studioQbKey(userId);
+  const globalKey = STUDIO_QB_GLOBAL_KEY;
 
   // Fetch both user-specific and global keys in one round-trip.
-  const keysParam  = `key=in.(${encodeURIComponent(userKey)},${encodeURIComponent(globalKey)})`;
-  const q          = `select=key,value,updated_at&${keysParam}&limit=2`;
-  const out        = await serviceSelect('mums_documents', q);
+  const keysParam = `key=in.(${encodeURIComponent(userKey)},${encodeURIComponent(globalKey)})`;
+  const q         = `select=key,value,updated_at&${keysParam}&limit=2`;
+  const out       = await serviceSelect('mums_documents', q);
 
   if (!out.ok) {
     return { ok: false, status: out.status || 500, settings: normalizeStudioQbSettings({}) };
@@ -51,7 +50,6 @@ async function readStudioQbSettings(userId) {
 
   const rows = Array.isArray(out.json) ? out.json : [];
 
-  // Prefer the user's own row; fall back to global.
   const userRow   = rows.find(r => r.key === userKey)   || null;
   const globalRow = rows.find(r => r.key === globalKey) || null;
 
@@ -83,8 +81,6 @@ async function writeStudioQbSettings(userId, nextSettings, actorName) {
   return { ok: true, status: 200, settings: clean };
 }
 
-// Writes to the GLOBAL fallback key — call this from General Settings when saving a
-// "studio default" config that all users without personal settings should inherit.
 async function writeGlobalStudioQbSettings(nextSettings, actorName) {
   const clean  = normalizeStudioQbSettings(nextSettings);
   const nowIso = new Date().toISOString();

@@ -1,10 +1,15 @@
 // server/routes/studio/qb_settings_global.js
-// GET  /api/studio/qb_settings_global  — returns Studio QB settings in global_quickbase format
-// POST /api/studio/qb_settings_global  — saves to Studio QB settings
+// GET /api/studio/qb_settings_global — returns Studio QB settings in global_quickbase format
+// POST /api/studio/qb_settings_global — saves to Studio QB settings
+//   Super Admin saves also write to the global fallback key.
 // Called by Pages.my_quickbase (via fetch patch) — isolated from MUMS Global QB.
 
 const { getUserFromJwt, getProfileForUserId } = require('../../lib/supabase');
-const { readStudioQbSettings, writeStudioQbSettings } = require('../../lib/studio_quickbase');
+const {
+  readStudioQbSettings,
+  writeStudioQbSettings,
+  writeGlobalStudioQbSettings,
+} = require('../../lib/studio_quickbase');
 
 function sendJson(res, statusCode, body) {
   res.statusCode = statusCode;
@@ -12,24 +17,29 @@ function sendJson(res, statusCode, body) {
   res.end(JSON.stringify(body));
 }
 
-// Parse realm / tableId / qid from a Quickbase report URL
+function isSuperAdmin(profile) {
+  if (!profile) return false;
+  const role = String(profile.role || '').toUpperCase().replace(/\s+/g, '_');
+  return role === 'SUPER_ADMIN' || role === 'SA' || role === 'SUPERADMIN';
+}
+
 function parseQbUrl(url) {
   const out = { realm: '', tableId: '', qid: '' };
   if (!url) return out;
   try {
-    const u = new URL(url);
+    const u    = new URL(url);
     const host = String(u.hostname || '').toLowerCase();
-    const m = host.match(/^([a-z0-9-]+)\.quickbase\.com$/i);
+    const m    = host.match(/^([a-z0-9-]+)\.quickbase\.com$/i);
     if (m) out.realm = m[1];
     const segs = u.pathname.split('/').filter(Boolean);
-    const ti = segs.indexOf('table');
+    const ti   = segs.indexOf('table');
     if (ti >= 0 && segs[ti + 1]) out.tableId = segs[ti + 1];
     if (!out.tableId) {
       const di = segs.indexOf('db');
       if (di >= 0 && segs[di + 1]) out.tableId = segs[di + 1];
     }
     const rawQid = u.searchParams.get('qid') || '';
-    const qm = rawQid.match(/-?\d+/);
+    const qm     = rawQid.match(/-?\d+/);
     if (qm) out.qid = qm[0];
     if (!out.qid) {
       const rm = url.match(/[?&]qid=(-?\d+)/i);
@@ -43,7 +53,7 @@ module.exports = async (req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store');
     const auth = req.headers.authorization || '';
-    const jwt = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : '';
+    const jwt  = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : '';
     const user = await getUserFromJwt(jwt);
     if (!user) return sendJson(res, 401, { ok: false, error: 'unauthorized' });
 
@@ -54,10 +64,9 @@ module.exports = async (req, res) => {
       if (!out.ok) return sendJson(res, 500, { ok: false, error: 'db_error' });
       const s = out.settings;
 
-      // Auto-derive realm/tableId/qid from reportLink when missing
-      let realm   = String(s.realm   || '').trim();
-      let tableId = String(s.tableId || '').trim();
-      let qid     = String(s.qid     || '').trim();
+      let realm      = String(s.realm   || '').trim();
+      let tableId    = String(s.tableId || '').trim();
+      let qid        = String(s.qid     || '').trim();
       const reportLink = String(s.reportLink || '').trim();
       if (reportLink && (!realm || !tableId || !qid)) {
         const parsed = parseQbUrl(reportLink);
@@ -66,16 +75,13 @@ module.exports = async (req, res) => {
         if (!qid     && parsed.qid)     qid     = parsed.qid;
       }
 
-      // Return in global_quickbase format (my_quickbase.js expects this shape)
-      // SECURITY FIX: Never expose raw token to client; use qbTokenSet flag instead.
-      // The export endpoint (qb_export.js) reads token directly from DB server-side.
       const settings = {
         reportLink,
         realm,
         tableId,
         qid,
-        qbToken:       '',           // always blank — token stays server-side only
-        qbTokenSet:    !!(s.qbToken), // true/false so client can show "token saved" hint
+        qbToken:       '',
+        qbTokenSet:    !!(s.qbToken),
         customColumns: Array.isArray(s.customColumns) ? s.customColumns : [],
         filterConfig:  Array.isArray(s.filterConfig)  ? s.filterConfig  : [],
         filterMatch:   s.filterMatch || 'ALL',
@@ -95,9 +101,10 @@ module.exports = async (req, res) => {
         });
       } catch (_) { return sendJson(res, 400, { ok: false, error: 'invalid_json' }); }
 
+      // Restore sentinel token
       if (body.qbToken === '__QB_TOKEN_SAVED__') {
         const existing = await readStudioQbSettings(user.id);
-        body.qbToken = (existing.ok && existing.settings) ? existing.settings.qbToken : '';
+        body.qbToken   = (existing.ok && existing.settings) ? existing.settings.qbToken : '';
       }
 
       // Auto-derive realm/tableId/qid from reportLink if not provided
@@ -109,8 +116,16 @@ module.exports = async (req, res) => {
       }
 
       const actorName = (profile && (profile.name || profile.username)) || '';
+
+      // Write to user's personal key
       const saveOut = await writeStudioQbSettings(user.id, body, actorName);
       if (!saveOut.ok) return sendJson(res, 500, { ok: false, error: 'save_failed' });
+
+      // Super Admin saves ALSO update the global fallback so all other users get data.
+      if (isSuperAdmin(profile)) {
+        await writeGlobalStudioQbSettings(body, actorName).catch(() => {});
+      }
+
       const saved = { ...saveOut.settings };
       if (saved.qbToken) { saved.qbTokenSet = true; delete saved.qbToken; }
       return sendJson(res, 200, { ok: true, settings: saved });
