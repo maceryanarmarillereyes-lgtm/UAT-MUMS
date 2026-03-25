@@ -5745,6 +5745,59 @@
   // ── Deep Search — searches ALL QB records via /api/studio/qb_search ──
   // Results sorted by Case # DESCENDING (highest = newest case first).
   // Renders clickable cards in #qbs-search-results.
+  function _qbsReadContextConfig() {
+    var reportLink = ((document.getElementById('sqb-report-link') || {}).value || '').trim();
+    var realm = ((document.getElementById('sqb-realm') || {}).value || '').trim();
+    var tableId = ((document.getElementById('sqb-table-id') || {}).value || '').trim();
+    var appId = '';
+    if (reportLink) {
+      try {
+        var u = new URL(reportLink);
+        var segs = String(u.pathname || '').split('/').filter(Boolean);
+        var ai = segs.findIndex(function(seg) { return String(seg).toLowerCase() === 'app'; });
+        if (ai >= 0 && segs[ai + 1]) appId = String(segs[ai + 1]).trim();
+      } catch(_) {}
+    }
+    var tabConfig = { reportLink: reportLink, realm: realm, tableId: tableId };
+    return { tabConfig: tabConfig, realm: realm, appId: appId, tableId: tableId };
+  }
+
+  function _qbsBuildDeepSearchSnaps(records, labelMap) {
+    var context = _qbsReadContextConfig();
+    var cols = Object.keys(labelMap || {}).map(function(id) {
+      return { id: Number(id) || id, label: labelMap[id] || ('Field #' + id) };
+    });
+    return (Array.isArray(records) ? records : []).map(function(rec, idx) {
+      return {
+        rowNum: idx + 1,
+        recordId: rec && (rec.qbRecordId || rec.recordId || rec.id) ? String(rec.qbRecordId || rec.recordId || rec.id) : '',
+        qbRecordId: rec && rec.qbRecordId ? rec.qbRecordId : '',
+        fields: rec && rec.fields ? rec.fields : {},
+        columns: cols,
+        columnMap: Object.assign({}, labelMap || {}),
+        tabConfig: context.tabConfig,
+        realm: context.realm,
+        appId: context.appId,
+        tableId: context.tableId
+      };
+    });
+  }
+
+  function _qbsEnsureDeepSearchCaseDetailBinding(resultsEl) {
+    if (!resultsEl || resultsEl._qbsCaseDetailBound) return;
+    resultsEl._qbsCaseDetailBound = true;
+    resultsEl.addEventListener('click', function(e) {
+      var btn = e.target && e.target.closest && e.target.closest('.qbs-case-detail-btn');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var idx = parseInt(btn.getAttribute('data-qbs-result-idx') || '', 10);
+      var snaps = resultsEl._qbsDeepSearchSnaps || [];
+      if (isNaN(idx) || !snaps[idx]) return;
+      window._qbsOpenCaseDetail(snaps[idx], snaps);
+    });
+  }
+
   window._qbsDeepSearch = function(term, skip) {
     term = String(term || '').trim();
     if (!term) {
@@ -5843,7 +5896,7 @@
             '<i class="fas fa-search" style="font-size:20px;opacity:.3;display:block;margin-bottom:8px;"></i>' +
             'No results for <strong>' + _dsEsc2(term) + '</strong></div>';
         } else {
-          records.forEach(function(rec) {
+          records.forEach(function(rec, resultIdx) {
             var caseNum   = rec.qbRecordId || '—';
             var status    = getFieldValue(rec.fields, 'case status') || getFieldValue(rec.fields, 'status');
             var desc      = getFieldValue(rec.fields, 'short description') || getFieldValue(rec.fields, 'description') || getFieldValue(rec.fields, 'latest update') || '';
@@ -5878,6 +5931,14 @@
 
               (descTrunc ? '<div style="font-size:10px;color:var(--ss-muted);line-height:1.5;opacity:.85;">' + _dsEsc2(descTrunc) + '</div>' : '') +
 
+              '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,.07);">' +
+                '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' +
+                  '<span class="ds-card-label" style="font-size:9px;font-weight:700;color:var(--ss-muted);text-transform:uppercase;letter-spacing:.04em;">Assigned to</span>' +
+                  '<span class="ds-card-value" style="font-size:10px;color:#e6edf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;">' + _dsEsc2(assignee || '—') + '</span>' +
+                '</div>' +
+                '<button type="button" class="qb-row-num-pill qb-row-detail-btn qbs-case-detail-btn" data-qbs-result-idx="' + resultIdx + '" style="border-radius:999px;padding:5px 10px;min-width:auto;font-size:9px;font-weight:800;letter-spacing:.02em;" onclick="event.stopPropagation();" title="View case details" aria-label="CASE VIEW DETAILS for case #' + _dsEsc2(String(caseNum)) + '">CASE VIEW DETAILS</button>' +
+              '</div>' +
+
               '</div>';
           });
         }
@@ -5897,7 +5958,11 @@
         if (skip > 0) countText = 'Showing ' + (skip + 1) + '–' + (skip + records.length);
 
         if (statusEl) statusEl.textContent = countText;
-        if (resultsEl) resultsEl.innerHTML = html + paginationHtml;
+        if (resultsEl) {
+          resultsEl.innerHTML = html + paginationHtml;
+          resultsEl._qbsDeepSearchSnaps = _qbsBuildDeepSearchSnaps(records, labelMap);
+          _qbsEnsureDeepSearchCaseDetailBinding(resultsEl);
+        }
       })
       .catch(function(err) {
         if (btn) btn.disabled = false;
