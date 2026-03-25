@@ -916,7 +916,11 @@
       const rowSnapIdx = _qbRowSnaps.length - 1;
 
       // FIX: Column order — # first, then Virtual Column, then user-defined columns
-      return `<tr${rowClassAttr}${rowStyleAttr}><td class="qb-row-num-cell"${tdStyle}><button type="button" class="qb-row-num-pill qb-row-detail-btn" data-qb-snap-idx="${rowSnapIdx}" title="View case details" aria-label="View case #${esc(recordId)}">${globalRowNum}</button></td>${vcCell}<td class="qb-case-id"${tdStyle}>${esc(recordId)}</td>${cells}</tr>`;
+      var rowDataAttr = esc(JSON.stringify({
+        qbRecordId: recordId,
+        fields: r && r.fields ? r.fields : {},
+      }).replace(/'/g, '&#39;'));
+      return `<tr${rowClassAttr}${rowStyleAttr}><td class="qb-row-num-cell"${tdStyle}><button type="button" class="qb-row-num-pill qb-row-detail-btn" data-action="case-view-details" data-rid="${esc(recordId)}" data-row='${rowDataAttr}' data-qb-snap-idx="${rowSnapIdx}" title="View case details" aria-label="View case #${esc(recordId)}">${globalRowNum}</button></td>${vcCell}<td class="qb-case-id"${tdStyle}>${esc(recordId)}</td>${cells}</tr>`;
     }).join('');
 
     const vcThPrefix = vcEnabled ? vcHeader : '';
@@ -4025,6 +4029,22 @@
       // Expose _open on root so renderRecords can call it directly (belt+suspenders)
       // root is per-page-load (not window), so this resets cleanly on SPA re-navigation
       root._qbcdOpen = _open;
+      function openCaseDetailModal(payload) {
+        payload = payload || {};
+        var host = root.querySelector('#qbDataBody');
+        var snaps = host && Array.isArray(host._qbRowSnaps) ? host._qbRowSnaps : [];
+        if (!snaps.length) return;
+        var rid = String(payload.qbRecordId || payload.recordId || '');
+        var snap = rid
+          ? snaps.find(function(s) { return s && String(s.recordId) === rid; })
+          : null;
+        if (!snap) snap = snaps[0];
+        if (!snap) return;
+        _open(snap, snaps);
+      }
+      root._qbcdOpenCaseDetailModal = openCaseDetailModal;
+      window.MQ = window.MQ || {};
+      window.MQ.openCaseDetailModal = openCaseDetailModal;
 
       // Wire modal's own buttons (close, prev, next, copy, backdrop)
       var _modal = document.getElementById('qbCaseDetailModal');
