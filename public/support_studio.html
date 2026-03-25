@@ -5512,8 +5512,24 @@
       root.setAttribute('data-page', 'quickbase_s');
       root.dataset.page = 'quickbase_s';
       try {
-        window.Pages.my_quickbase(root);
+        var _qbsInitResult = window.Pages.my_quickbase(root);
         _qbsPageMounted = true;
+        Promise.resolve(_qbsInitResult).then(function() {
+          // Expose root._qbcdOpen globally so support_studio_patches.js can call it
+          if (typeof root._qbcdOpen === 'function') {
+            window.__studioQbCdOpen = function(snap) {
+              return root._qbcdOpen(snap, root.querySelector('#qbDataBody') && root.querySelector('#qbDataBody')._qbRowSnaps || [snap]);
+            };
+          }
+          // Re-check after 2s (renderRecords may run after async data load)
+          setTimeout(function() {
+            if (typeof root._qbcdOpen === 'function' && typeof window.__studioQbCdOpen !== 'function') {
+              window.__studioQbCdOpen = function(snap) {
+                return root._qbcdOpen(snap, [snap]);
+              };
+            }
+          }, 2000);
+        }).catch(function(){});
       } catch (e) {
         root.innerHTML =
           '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:#f85149;padding:24px;text-align:center;">' +
