@@ -7,13 +7,14 @@
 //
 // Bundles:
 //   connect_plus → hash from stored connectplus version key in mums_documents
+//   parts_number → hash from stored parts_number version key in mums_documents
 //   catalog      → hash from COUNT(*) + MAX(updated_at) of support_catalog
 //   qb_schema    → hash from QB fields API (server-cached 1h)
 //
 // Response size: ~300 bytes — designed to be as fast as possible.
 
-const { getUserFromJwt }  = require('../../lib/supabase');
-const { serviceSelect }   = require('../../lib/supabase');
+const { getUserFromJwt } = require('../../lib/supabase');
+const { serviceSelect } = require('../../lib/supabase');
 const { readStudioQbSettings } = require('../../lib/studio_quickbase');
 
 function sendJson(res, code, body) {
@@ -82,8 +83,8 @@ async function getQbSchemaHash(studioSettings) {
     const arr    = Array.isArray(fields) ? fields : (fields.fields || []);
     const count  = arr.length;
     // Hash: field count + sorted field IDs
-    const ids    = arr.map(f => Number(f.id)).sort().join(',');
-    const hash   = simpleHash(`${count}:${ids}`);
+    const ids  = arr.map(f => Number(f.id)).sort().join(',');
+    const hash = simpleHash(`${count}:${ids}`);
     const result = { hash, count, isCritical: false, lastUpdatedAt: new Date().toISOString() };
 
     setCachedSchema(realm, qbToken, tableId, result);
@@ -106,11 +107,14 @@ async function getCatalogHash() {
     }
 
     // Also get total count
-    const countOut = await serviceSelect(
-      'support_catalog',
-      'select=id'
-    );
-    const count      = Array.isArray(countOut.json) ? countOut.json.length : 0;
+    const countOut = await serviceSelect('support_catalog', 'select=id');
+    const count    = Array.isArray(countOut.json) ? countOut.json.length : 0;
+
+    // If there are no catalog items yet, return stable 'empty' — no false updates.
+    if (count === 0) {
+      return { hash: 'empty', count: 0, isCritical: false, lastUpdatedAt: null };
+    }
+
     const latestRow  = out.json[0];
     const latestDate = latestRow ? String(latestRow.updated_at || '') : '';
     const hash       = simpleHash(`${count}:${latestDate}`);
@@ -142,36 +146,43 @@ async function getConnectPlusHash() {
       return {
         hash,
         count,
-        isCritical: !!(v.isCritical),
+        isCritical:    !!(v.isCritical),
         lastUpdatedAt: String(row.updated_at || ''),
       };
     }
 
-    // No version document yet — generate a hash from today's date
-    // This causes clients to re-download once per day at minimum
-    const today = new Date().toISOString().slice(0, 10);
-    return {
-      hash:  simpleHash('connectplus:' + today),
-      count: 0,
-      isCritical: false,
-      lastUpdatedAt: null,
-    };
+    // FIX: No version document yet — return stable 'empty' hash so the client
+    // does NOT show a false "update available" banner before data is ever synced.
+    return { hash: 'empty', count: 0, isCritical: false, lastUpdatedAt: null };
   } catch (_) {
     return { hash: 'db_error', count: 0, isCritical: false };
   }
 }
 
-
+// ── Parts Number hash from stored version document ────────────────────
 async function getPartsNumberHash() {
   try {
-    const out = await serviceSelect('mums_documents', `select=key,value,updated_at&key=eq.ss_parts_number_cache_version&limit=1`);
+    const out = await serviceSelect(
+      'mums_documents',
+      `select=key,value,updated_at&key=eq.ss_parts_number_cache_version&limit=1`
+    );
     const row = (Array.isArray(out.json) && out.json[0]) ? out.json[0] : null;
+
     if (row && row.value) {
       const v = row.value;
-      return { hash: String(v.hash || simpleHash(String(row.updated_at || ''))), count: Number(v.count || 0), isCritical: !!(v.isCritical), lastUpdatedAt: String(row.updated_at || '') };
+      return {
+        hash:          String(v.hash || simpleHash(String(row.updated_at || ''))),
+        count:         Number(v.count || 0),
+        isCritical:    !!(v.isCritical),
+        lastUpdatedAt: String(row.updated_at || ''),
+      };
     }
-    return { hash: simpleHash('partsnumber:' + new Date().toISOString().slice(0, 10)), count: 0, isCritical: false, lastUpdatedAt: null };
-  } catch (_) { return { hash: 'db_error', count: 0, isCritical: false }; }
+
+    // FIX: No version document yet — return stable 'empty' hash.
+    return { hash: 'empty', count: 0, isCritical: false, lastUpdatedAt: null };
+  } catch (_) {
+    return { hash: 'db_error', count: 0, isCritical: false };
+  }
 }
 
 // ── Main handler ──────────────────────────────────────────────────────
@@ -185,10 +196,10 @@ module.exports = async (req, res) => {
     if (!user) return sendJson(res, 401, { ok: false, error: 'unauthorized' });
 
     // Read studio QB settings for schema hash (non-blocking: if missing, skip)
-    const studioOut = await readStudioQbSettings(user.id).catch(() => ({ ok: false }));
+    const studioOut      = await readStudioQbSettings(user.id).catch(() => ({ ok: false }));
     const studioSettings = (studioOut.ok && studioOut.settings) ? studioOut.settings : {};
 
-    // All 3 hashes in parallel — fast
+    // All 4 hashes in parallel — fast
     const [cpHash, pnHash, catHash, schHash] = await Promise.all([
       getConnectPlusHash(),
       getPartsNumberHash(),
@@ -197,7 +208,7 @@ module.exports = async (req, res) => {
     ]);
 
     return sendJson(res, 200, {
-      ok:          true,
+      ok: true,
       generatedAt: new Date().toISOString(),
       bundles: {
         connect_plus: cpHash,
@@ -210,8 +221,8 @@ module.exports = async (req, res) => {
   } catch (err) {
     console.error('[studio/cache_manifest]', err);
     return sendJson(res, 500, {
-      ok:    false,
-      error: 'internal_error',
+      ok: false,
+      error:   'internal_error',
       message: String(err && err.message || err),
     });
   }
