@@ -10,17 +10,24 @@
 (function(){
   'use strict';
 
-  const THEME_STORAGE_KEY = 'mums_theme_preference';
-  const DEFAULT_THEME_ID = 'apex';
+  const THEME_STORAGE_KEY   = 'mums_theme_preference';
+  const BRIGHTNESS_STORAGE  = 'mums_brightness_v1';
+  const DEFAULT_THEME_ID    = 'apex';
   const THEME_ALIAS = {
     aurora_midnight: 'mums_dark',
     mono: 'classic_style'
   };
 
   const ThemeEngine = {
-    currentTheme: null,
-    globalDefault: null,
-    userRole: null,
+    currentTheme:      null,
+    globalDefault:     null,
+    globalBrightness:  130,
+    globalContrast:    100,
+    globalScale:       100,
+    globalSidebar:     100,
+    forcedTheme:       false,
+    forcedBrightness:  false,
+    userRole:          null,
 
     async init(){
       try {
@@ -28,27 +35,24 @@
         const rawRole = String(user?.role || '').trim().toUpperCase();
         this.userRole = rawRole.replace(/\s+/g, '_');
 
-        if (this.userRole === 'SUPER_ADMIN') {
-          await this.loadGlobalDefault();
-        }
+        // Load global appearance defaults for all users.
+        // Forced flags are intended to be enforced tenant-wide.
+        await this.loadGlobalDefault();
 
         this.currentTheme = this.getUserTheme();
 
-        // ── Forced defaults: Super Admin may push APEX+130% to all users ──
+        // Apply forced theme override from Super Admin
         if (this.forcedTheme) {
           const forced = this.normalizeThemeId(this.globalDefault);
           if (forced && this.isValidTheme(forced)) {
-            localStorage.setItem('mums_theme_preference', forced);
+            localStorage.setItem(THEME_STORAGE_KEY, forced);
             this.currentTheme = forced;
           }
         }
-        if (this.forcedBrightness && typeof this.globalBrightness === 'number') {
-          try {
-            localStorage.setItem('mums_brightness_v1', JSON.stringify({ value: this.globalBrightness, useDefault: false }));
-            const app = document.getElementById('app') || document.body;
-            app.style.filter = this.globalBrightness === 100 ? '' : `brightness(${this.globalBrightness / 100})`;
-            document.documentElement.style.setProperty('--mums-brightness', this.globalBrightness / 100);
-          } catch(_) {}
+
+        // Apply forced brightness/contrast/scale/sidebar override from Super Admin
+        if (this.forcedBrightness) {
+          this._applyForcedAppearance();
         }
 
         this.applyTheme(this.currentTheme, { persist: false });
@@ -59,9 +63,39 @@
       }
     },
 
+    _applyForcedAppearance(){
+      try {
+        const app = document.getElementById('app') || document.body;
+        const filters = [];
+        if (typeof this.globalBrightness === 'number' && this.globalBrightness !== 100) {
+          filters.push(`brightness(${this.globalBrightness / 100})`);
+        }
+        if (typeof this.globalContrast === 'number' && this.globalContrast !== 100) {
+          filters.push(`contrast(${this.globalContrast / 100})`);
+        }
+        app.style.filter = filters.length ? filters.join(' ') : '';
+        document.documentElement.style.setProperty('--mums-brightness', (this.globalBrightness || 100) / 100);
+        document.documentElement.style.setProperty('--mums-contrast',   (this.globalContrast  || 100) / 100);
+
+        if (typeof this.globalScale === 'number') {
+          document.documentElement.style.fontSize = `${this.globalScale}%`;
+        }
+        if (typeof this.globalSidebar === 'number') {
+          document.documentElement.style.setProperty('--sidebar-opacity', this.globalSidebar / 100);
+        }
+
+        // Persist so page refreshes keep the forced values
+        localStorage.setItem(BRIGHTNESS_STORAGE, JSON.stringify({
+          value: this.globalBrightness, contrast: this.globalContrast,
+          scale: this.globalScale, sidebarOpacity: this.globalSidebar,
+          useDefault: false, forced: true
+        }));
+      } catch(_) {}
+    },
+
     async loadGlobalDefault(){
       try {
-        const token = window.CloudAuth?.getAccessToken?.();
+        const token = window.CloudAuth?.getAccessToken?.() || window.CloudAuth?.accessToken?.();
         if (!token) return;
 
         const res = await fetch('/api/settings/global-theme', {
@@ -74,7 +108,10 @@
         if (res.ok) {
           const data = await res.json();
           this.globalDefault = this.normalizeThemeId(data.defaultTheme || DEFAULT_THEME_ID);
-          this.globalBrightness      = typeof data.brightness === 'number' ? data.brightness : 130;
+          this.globalBrightness = typeof data.brightness     === 'number' ? data.brightness     : 130;
+          this.globalContrast   = typeof data.contrast       === 'number' ? data.contrast       : 100;
+          this.globalScale      = typeof data.scale          === 'number' ? data.scale          : 100;
+          this.globalSidebar    = typeof data.sidebarOpacity === 'number' ? data.sidebarOpacity : 100;
           this.forcedTheme      = data.forcedTheme      === true;
           this.forcedBrightness = data.forcedBrightness === true;
         }
