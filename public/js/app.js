@@ -17,7 +17,7 @@
   let __themeMeta = {};
   let __themeMetaLoaded = false;
   let __themeMetaLoading = null;
-  let __globalThemeSettings = { defaultTheme: 'aurora_midnight' };
+  let __globalThemeSettings = { defaultTheme: 'apex', brightness: 130, forcedTheme: false, forcedBrightness: false };
   let __globalThemeLoaded = false;
   let __globalThemeLoading = null;
 
@@ -80,9 +80,14 @@
         const data = await res.json().catch(()=>({}));
         if(res.ok && data && data.ok){
           const normalized = String(data.defaultTheme || '').trim();
-          if(isValidThemeId(normalized)){
-            __globalThemeSettings = { defaultTheme: normalized };
-          }
+          __globalThemeSettings = {
+            defaultTheme:    isValidThemeId(normalized) ? normalized : 'apex',
+            brightness:      typeof data.brightness === 'number' ? data.brightness : 130,
+            forcedTheme:     data.forcedTheme      === true,
+            forcedBrightness:data.forcedBrightness === true,
+            forcedAt:        data.forcedAt         || null,
+            forcedByName:    data.forcedByName     || null,
+          };
           __globalThemeLoaded = true;
         } else {
           console.warn('Failed to load global theme settings:', data.error || res.status);
@@ -106,7 +111,7 @@
     if(isValidThemeId(fromGlobal)) return fromGlobal;
 
     const catalog = getThemeCatalog();
-    return catalog[0] && catalog[0].id ? String(catalog[0].id) : 'aurora_midnight';
+    return catalog[0] && catalog[0].id ? String(catalog[0].id) : 'apex';
   }
 
   async function loadThemeMeta(force){
@@ -668,7 +673,7 @@
 
     const cur = resolveEffectiveThemeForUser();
     const rawThemes = getThemeCatalog();
-    const globalDefault = String(__globalThemeSettings && __globalThemeSettings.defaultTheme || '').trim() || 'aurora_midnight';
+    const globalDefault = String(__globalThemeSettings && __globalThemeSettings.defaultTheme || '').trim() || 'apex';
 
     // BULLETPROOF FILTERING LOGIC
     const visibleThemes = rawThemes.filter(t => {
@@ -695,6 +700,12 @@
     `;
 
     // SUPER ADMIN CONTROL BAR
+    const forcedThemeActive      = !!(__globalThemeSettings && __globalThemeSettings.forcedTheme);
+    const forcedBrightnessActive = !!(__globalThemeSettings && __globalThemeSettings.forcedBrightness);
+    const forcedAt               = (__globalThemeSettings && __globalThemeSettings.forcedAt) || null;
+    const forcedByName           = (__globalThemeSettings && __globalThemeSettings.forcedByName) || null;
+    const forcedBothActive       = forcedThemeActive && forcedBrightnessActive;
+
     const adminBarHtml = isSA ? `
       <div class="th-toolbar">
         <div class="th-toolbar-controls">
@@ -714,6 +725,38 @@
             </button>
           </div>
         </div>
+
+        <!-- ── SUPER ADMIN: Force All Users panel ─────────────────────── -->
+        <div class="th-force-panel" style="margin-top:14px;padding:14px 16px;background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.22);border-radius:10px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:12px;font-weight:800;color:#C9A84C;display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Force All Users — APEX + 130% Brightness
+              </div>
+              <div style="font-size:11px;color:rgba(201,168,76,.7);line-height:1.5;max-width:480px;">
+                Overwrites every user's localStorage theme and brightness on their next page load.
+                Fixes accounts stuck on dark/dim setups. Cannot be undone per-user — they can re-customize after.
+              </div>
+              ${forcedBothActive ? `<div style="font-size:10px;color:#C9A84C;margin-top:6px;display:flex;align-items:center;gap:5px;">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <strong>ACTIVE</strong> — forced on${forcedByName ? ' by ' + UI.esc(forcedByName) : ''}${forcedAt ? ' · ' + new Date(forcedAt).toLocaleString() : ''}
+              </div>` : '<div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:5px;">Status: Not currently forced</div>'}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;min-width:160px;">
+              <button class="btn-glass btn-glass-primary" id="forceAllUsersApexBtn"
+                style="background:rgba(201,168,76,.15);border-color:rgba(201,168,76,.4);color:#C9A84C;font-weight:800;font-size:12px;padding:9px 18px;">
+                🛡️ ${forcedBothActive ? 'Re-Force All Users' : 'Force All Users'}
+              </button>
+              ${forcedBothActive ? `<button class="btn-glass" id="clearForceAllBtn"
+                style="font-size:11px;padding:6px 14px;color:rgba(255,255,255,.4);">
+                ✕ Clear Force
+              </button>` : ''}
+            </div>
+          </div>
+          <div id="forceAllUsersStatus" style="display:none;font-size:11px;margin-top:8px;padding:6px 10px;border-radius:5px;"></div>
+        </div>
+
       </div>
     ` : summaryHtml;
 
@@ -764,6 +807,66 @@
             __themeEditMode = !__themeEditMode;
             renderThemeGrid();
         };
+    }
+
+    // ── Force All Users button ─────────────────────────────────────────
+    const forceAllBtn = document.getElementById('forceAllUsersApexBtn');
+    if(forceAllBtn){
+      forceAllBtn.onclick = async () => {
+        const statusEl = document.getElementById('forceAllUsersStatus');
+        const token = getBearerToken();
+        if(!token){ if(statusEl){ statusEl.textContent='Session expired.'; statusEl.style.cssText='display:block;background:rgba(248,81,73,.12);color:#f85149;'; } return; }
+        forceAllBtn.disabled = true;
+        forceAllBtn.textContent = '⏳ Forcing...';
+        if(statusEl){ statusEl.style.display='none'; }
+        try{
+          const res = await fetch('/api/settings/global-theme', {
+            method: 'POST',
+            headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` },
+            body: JSON.stringify({ action:'force_all', themeId:'apex', brightness:130 })
+          });
+          const data = await res.json().catch(()=>({}));
+          if(!res.ok || !data.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`);
+          __globalThemeSettings = {
+            defaultTheme:'apex', brightness:130,
+            forcedTheme:true, forcedBrightness:true,
+            forcedAt: data.forcedAt, forcedByName: data.forcedByName
+          };
+          __globalThemeLoaded = true;
+          if(statusEl){ statusEl.textContent='✓ All users will get APEX + 130% brightness on next page load.'; statusEl.style.cssText='display:block;background:rgba(63,185,80,.1);color:#3fb950;border-radius:5px;'; }
+          renderThemeGrid();
+        }catch(err){
+          if(statusEl){ statusEl.textContent='✗ Error: '+String(err&&err.message||err); statusEl.style.cssText='display:block;background:rgba(248,81,73,.1);color:#f85149;border-radius:5px;'; }
+        }finally{
+          forceAllBtn.disabled = false;
+          forceAllBtn.textContent = '🛡️ Force All Users';
+        }
+      };
+    }
+
+    // ── Clear Force button ──────────────────────────────────────────────
+    const clearForceBtn = document.getElementById('clearForceAllBtn');
+    if(clearForceBtn){
+      clearForceBtn.onclick = async () => {
+        const statusEl = document.getElementById('forceAllUsersStatus');
+        const token = getBearerToken();
+        if(!token) return;
+        clearForceBtn.disabled = true;
+        try{
+          const res = await fetch('/api/settings/global-theme', {
+            method: 'POST',
+            headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` },
+            body: JSON.stringify({ forcedTheme:false, forcedBrightness:false })
+          });
+          const data = await res.json().catch(()=>({}));
+          if(!res.ok || !data.ok) throw new Error(data.message||data.error||`HTTP ${res.status}`);
+          __globalThemeSettings = Object.assign({}, __globalThemeSettings, { forcedTheme:false, forcedBrightness:false, forcedAt:null, forcedByName:null });
+          if(statusEl){ statusEl.textContent='Force cleared — users can now freely customize.'; statusEl.style.cssText='display:block;background:rgba(139,148,158,.1);color:#8b949e;border-radius:5px;'; }
+          renderThemeGrid();
+        }catch(err){
+          if(statusEl){ statusEl.textContent='✗ Error: '+String(err&&err.message||err); statusEl.style.cssText='display:block;background:rgba(248,81,73,.1);color:#f85149;border-radius:5px;'; }
+        }finally{ clearForceBtn.disabled = false; }
+      };
     }
 
     const saveDefaultBtn = document.getElementById('saveGlobalDefaultThemeBtn');
@@ -4934,6 +5037,90 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
         try{ bindBarVisibilityControls(); }catch(_){}
         try{ _syncMsBarToggles(); }catch(_){}
         try{ initBrightnessControl(); }catch(_){}
+
+        // ── APPEARANCE DEFAULTS PANEL (Super Admin) ────────────────────
+        (function initAppearanceDefaultsPanel(){
+          const forceBtn = document.getElementById('forceApexBrightnessBtn');
+          const clearBtn = document.getElementById('clearForceApexBtn');
+          const statusEl = document.getElementById('appearanceForceStatus');
+          const infoEl   = document.getElementById('appearanceForcedInfo');
+
+          function refreshPanelState(){
+            if(!infoEl || !clearBtn) return;
+            const forced = __globalThemeSettings && __globalThemeSettings.forcedTheme && __globalThemeSettings.forcedBrightness;
+            if(forced){
+              const at   = __globalThemeSettings.forcedAt    ? new Date(__globalThemeSettings.forcedAt).toLocaleString()    : '';
+              const who  = __globalThemeSettings.forcedByName || '';
+              infoEl.innerHTML = '✅ <strong>ACTIVE</strong> — All users get APEX + 130% on next load.' +
+                (who ? ' Forced by ' + UI.esc(who) + '.' : '') + (at ? ' Set: ' + UI.esc(at) : '');
+              infoEl.style.cssText = 'display:block;font-size:10px;color:#C9A84C;margin-bottom:10px;padding:6px 10px;background:rgba(201,168,76,.08);border-radius:5px;border:1px solid rgba(201,168,76,.2);';
+              clearBtn.style.display = '';
+            } else {
+              infoEl.style.display = 'none';
+              clearBtn.style.display = 'none';
+            }
+          }
+
+          if(forceBtn && !forceBtn.__apexBound){
+            forceBtn.__apexBound = true;
+            forceBtn.onclick = async () => {
+              const token = getBearerToken();
+              if(!token){ if(statusEl){ statusEl.textContent='Session expired.'; statusEl.style.cssText='display:block;background:rgba(248,81,73,.1);color:#f85149;border-radius:5px;'; } return; }
+              forceBtn.disabled = true;
+              forceBtn.innerHTML = '⏳ Applying…';
+              if(statusEl) statusEl.style.display = 'none';
+              try{
+                const res = await fetch('/api/settings/global-theme',{
+                  method:'POST',
+                  headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},
+                  body:JSON.stringify({action:'force_all',themeId:'apex',brightness:130})
+                });
+                const data = await res.json().catch(()=>({}));
+                if(!res.ok||!data.ok) throw new Error(data.message||data.error||'HTTP '+res.status);
+                __globalThemeSettings = Object.assign({},__globalThemeSettings,{
+                  defaultTheme:'apex',brightness:130,
+                  forcedTheme:true,forcedBrightness:true,
+                  forcedAt:data.forcedAt||new Date().toISOString(),forcedByName:data.forcedByName||null
+                });
+                __globalThemeLoaded = true;
+                if(statusEl){ statusEl.textContent='✓ Force applied. All users will get APEX + 130% on next page load.'; statusEl.style.cssText='display:block;background:rgba(63,185,80,.1);color:#3fb950;border-radius:5px;'; }
+                refreshPanelState();
+                try{ renderThemeGrid(); }catch(_){}
+              }catch(err){
+                if(statusEl){ statusEl.textContent='✗ '+String(err&&err.message||err); statusEl.style.cssText='display:block;background:rgba(248,81,73,.1);color:#f85149;border-radius:5px;'; }
+              }finally{
+                forceBtn.disabled=false;
+                forceBtn.innerHTML='🛡️ Force APEX + 130% for All Users';
+              }
+            };
+          }
+
+          if(clearBtn && !clearBtn.__apexBound){
+            clearBtn.__apexBound = true;
+            clearBtn.onclick = async () => {
+              const token = getBearerToken();
+              if(!token) return;
+              clearBtn.disabled = true;
+              try{
+                const res = await fetch('/api/settings/global-theme',{
+                  method:'POST',
+                  headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},
+                  body:JSON.stringify({forcedTheme:false,forcedBrightness:false})
+                });
+                const data = await res.json().catch(()=>({}));
+                if(!res.ok||!data.ok) throw new Error(data.message||data.error||'HTTP '+res.status);
+                __globalThemeSettings = Object.assign({},__globalThemeSettings,{forcedTheme:false,forcedBrightness:false,forcedAt:null,forcedByName:null});
+                if(statusEl){ statusEl.textContent='Force cleared — users may now customize freely.'; statusEl.style.cssText='display:block;background:rgba(139,148,158,.1);color:#8b949e;border-radius:5px;'; }
+                refreshPanelState();
+                try{ renderThemeGrid(); }catch(_){}
+              }catch(err){
+                if(statusEl){ statusEl.textContent='✗ '+String(err&&err.message||err); statusEl.style.cssText='display:block;background:rgba(248,81,73,.1);color:#f85149;border-radius:5px;'; }
+              }finally{ clearBtn.disabled = false; }
+            };
+          }
+
+          refreshPanelState();
+        })();
       }
 
       // Always sync brightness badge + toggles
@@ -5416,7 +5603,7 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
             tag.style.display = 'none';
           }
         }
-        if (label) label.textContent = raw.useDefault ? 'default (100%)' : val + '%';
+        if (label) label.textContent = raw.useDefault ? 'default (130%)' : val + '%';
       } catch(_) {}
     }
   })();
@@ -5424,7 +5611,7 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
   // ── BRIGHTNESS CONTROL ────────────────────────────────────────────────────────
   (function initBrightnessSystem() {
     const LS_KEY = 'mums_brightness_v1';
-    const DEFAULT_VAL = 100;
+    const DEFAULT_VAL = 130;
     const APP_EL_ID = 'app'; // root app element to apply filter on
 
     function clamp(v) { return Math.max(40, Math.min(130, Number(v) || DEFAULT_VAL)); }
@@ -5557,6 +5744,28 @@ async function boot(){
     Store.ensureSeed();
 
     try{ await Promise.all([loadThemeMeta(), loadGlobalThemeSettings()]); }catch(_){ }
+
+    // ── FORCED DEFAULTS: Super Admin may push APEX+130% to ALL users ──────
+    try{
+      if(__globalThemeSettings && __globalThemeSettings.forcedTheme){
+        const ft = String(__globalThemeSettings.defaultTheme || 'apex').trim();
+        if(isValidThemeId(ft)){
+          try{ if(Store && Store.dispatch) Store.dispatch('UPDATE_THEME',{id:ft}); else Store.setTheme(ft); }catch(_){}
+          try{ localStorage.setItem('mums_theme_preference', ft); }catch(_){}
+        }
+      }
+      if(__globalThemeSettings && __globalThemeSettings.forcedBrightness){
+        const fb = typeof __globalThemeSettings.brightness === 'number' ? __globalThemeSettings.brightness : 130;
+        try{
+          localStorage.setItem('mums_brightness_v1', JSON.stringify({ value: fb, useDefault: false }));
+          const appEl = document.getElementById('app') || document.body;
+          appEl.style.filter = fb === 100 ? '' : `brightness(${fb/100})`;
+          document.documentElement.style.setProperty('--mums-brightness', fb/100);
+          appEl.setAttribute('data-brightness', String(fb));
+        }catch(_){}
+      }
+    }catch(_){}
+
     const effectiveTheme = resolveEffectiveThemeForUser();
     try{
       if(Store && Store.dispatch) Store.dispatch('UPDATE_THEME', { id: effectiveTheme });

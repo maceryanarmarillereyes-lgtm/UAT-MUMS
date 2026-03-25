@@ -8,7 +8,7 @@
 const { serviceSelect, serviceUpsert } = require('./supabase');
 
 const GLOBAL_THEME_DOC_KEY = 'mums_global_theme_settings';
-const DEFAULT_THEME_ID = 'aurora_midnight';
+const DEFAULT_THEME_ID = 'apex';
 
 function normalizeThemeId(raw) {
   const id = String(raw || '').trim();
@@ -28,10 +28,14 @@ function normalizeThemePayload(raw) {
   const themeId = normalizeThemeId(src.defaultTheme);
   return {
     defaultTheme:    themeId || DEFAULT_THEME_ID,
-    brightness:      clamp(src.brightness,      40,  130, 100),
+    brightness:      clamp(src.brightness,      40,  130, 130),
     contrast:        clamp(src.contrast,        60,  140, 100),
     scale:           clamp(src.scale,           80,  120, 100),
     sidebarOpacity:  clamp(src.sidebarOpacity,  30,  100, 100),
+    forcedTheme:     src.forcedTheme     === true,
+    forcedBrightness:src.forcedBrightness=== true,
+    forcedAt:        src.forcedAt        || null,
+    forcedByName:    src.forcedByName    || null,
   };
 }
 

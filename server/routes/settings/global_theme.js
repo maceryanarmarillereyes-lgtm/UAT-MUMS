@@ -49,13 +49,17 @@ module.exports = async (req, res) => {
       }
       return sendJson(res, 200, {
         ok: true,
-        defaultTheme:   out.settings.defaultTheme   || DEFAULT_THEME_ID,
-        brightness:     out.settings.brightness      ?? 100,
-        contrast:       out.settings.contrast        ?? 100,
-        scale:          out.settings.scale           ?? 100,
-        sidebarOpacity: out.settings.sidebarOpacity  ?? 100,
-        updatedAt:      out.row && out.row.updated_at    ? out.row.updated_at    : null,
-        updatedByName:  out.row && out.row.updated_by_name ? out.row.updated_by_name : null,
+        defaultTheme:    out.settings.defaultTheme    || DEFAULT_THEME_ID,
+        brightness:      out.settings.brightness      ?? 130,
+        contrast:        out.settings.contrast        ?? 100,
+        scale:           out.settings.scale           ?? 100,
+        sidebarOpacity:  out.settings.sidebarOpacity  ?? 100,
+        forcedTheme:     out.settings.forcedTheme     === true,
+        forcedBrightness:out.settings.forcedBrightness=== true,
+        forcedAt:        out.settings.forcedAt        || null,
+        forcedByName:    out.settings.forcedByName    || null,
+        updatedAt:       out.row && out.row.updated_at     ? out.row.updated_at     : null,
+        updatedByName:   out.row && out.row.updated_by_name ? out.row.updated_by_name : null,
       });
     }
 
@@ -68,12 +72,19 @@ module.exports = async (req, res) => {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
       const themeId = normalizeThemeId(body && body.themeId || body && body.defaultTheme);
 
+      // action='force_all' → override theme+brightness for all users on next load
+      const isForceAll = body.action === 'force_all';
+
       const payload = {
-        defaultTheme:   themeId || DEFAULT_THEME_ID,
-        brightness:     body.brightness     !== undefined ? body.brightness     : undefined,
-        contrast:       body.contrast       !== undefined ? body.contrast       : undefined,
-        scale:          body.scale          !== undefined ? body.scale          : undefined,
-        sidebarOpacity: body.sidebarOpacity !== undefined ? body.sidebarOpacity : undefined,
+        defaultTheme:    themeId || DEFAULT_THEME_ID,
+        brightness:      body.brightness      !== undefined ? body.brightness      : undefined,
+        contrast:        body.contrast        !== undefined ? body.contrast        : undefined,
+        scale:           body.scale           !== undefined ? body.scale           : undefined,
+        sidebarOpacity:  body.sidebarOpacity  !== undefined ? body.sidebarOpacity  : undefined,
+        forcedTheme:     isForceAll ? true  : (body.forcedTheme     !== undefined ? !!body.forcedTheme     : undefined),
+        forcedBrightness:isForceAll ? true  : (body.forcedBrightness!== undefined ? !!body.forcedBrightness: undefined),
+        forcedAt:        isForceAll ? new Date().toISOString() : undefined,
+        forcedByName:    isForceAll ? (profile && profile.name ? String(profile.name) : null) : undefined,
       };
 
       // Merge with existing so a partial update doesn't wipe other fields
@@ -96,11 +107,15 @@ module.exports = async (req, res) => {
 
       return sendJson(res, 200, {
         ok: true,
-        defaultTheme:   out.settings.defaultTheme   || DEFAULT_THEME_ID,
-        brightness:     out.settings.brightness      ?? 100,
-        contrast:       out.settings.contrast        ?? 100,
-        scale:          out.settings.scale           ?? 100,
-        sidebarOpacity: out.settings.sidebarOpacity  ?? 100,
+        defaultTheme:    out.settings.defaultTheme    || DEFAULT_THEME_ID,
+        brightness:      out.settings.brightness      ?? 130,
+        contrast:        out.settings.contrast        ?? 100,
+        scale:           out.settings.scale           ?? 100,
+        sidebarOpacity:  out.settings.sidebarOpacity  ?? 100,
+        forcedTheme:     out.settings.forcedTheme     === true,
+        forcedBrightness:out.settings.forcedBrightness=== true,
+        forcedAt:        out.settings.forcedAt        || null,
+        forcedByName:    out.settings.forcedByName    || null,
         message: 'Global appearance settings updated.'
       });
     }

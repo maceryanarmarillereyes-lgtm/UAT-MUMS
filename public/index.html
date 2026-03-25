@@ -280,6 +280,10 @@
               <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
               <span class="ms-ni-text"><span class="ms-ni-name">Login Mode</span><span class="ms-ni-sub">Auth method control</span></span>
             </button>
+            <button class="ms-nav-item ms-admin-section" id="msNav_appearancedefaults" data-panel="appearancedefaults" type="button" style="display:none">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2.2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Appearance Defaults</span><span class="ms-ni-sub">Force APEX + brightness</span></span>
+            </button>
 
           </div><!-- /ms-nav-scroll -->
         </nav><!-- /ms-sidenav -->
@@ -526,22 +530,74 @@
                   </div>
                   <div class="ms-ctrl-control ms-ctrl-slider-wrap">
                     <span class="ms-slider-dim"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/></svg></span>
-                    <input type="range" id="brightnessSlider" class="ms-slider" min="40" max="130" step="1" value="100" aria-label="Brightness level" />
+                    <input type="range" id="brightnessSlider" class="ms-slider" min="40" max="130" step="1" value="130" aria-label="Brightness level" />
                     <span class="ms-slider-bright"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg></span>
-                    <span class="ms-slider-val" id="brightnessVal">100%</span>
+                    <span class="ms-slider-val" id="brightnessVal">130%</span>
                   </div>
                 </div>
                 <div class="ms-ctrl-row">
                   <div class="ms-ctrl-label">
                     <div class="ms-ctrl-name">Use default brightness</div>
-                    <div class="ms-ctrl-hint">Reset to 100% and disable override. Device-specific setting.</div>
+                    <div class="ms-ctrl-hint">Reset to 130% (system default) and disable override. Device-specific setting.</div>
                   </div>
                   <div class="ms-ctrl-control"><label class="ms-toggle-wrap"><input type="checkbox" id="brightnessUseDefault" class="ms-toggle-input" /><span class="ms-toggle-track"><span class="ms-toggle-thumb"></span></span></label></div>
                 </div>
               </div>
               <div class="ms-status-bar" id="brightnessStatusBar">
                 <span class="ms-status-dot"></span>
-                <span class="ms-status-text">Brightness saved to this device only — <span id="brightnessStatusLabel">default (100%)</span></span>
+                <span class="ms-status-text">Brightness saved to this device only — <span id="brightnessStatusLabel">default (130%)</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- PANEL: Appearance Defaults (Super Admin only) -->
+          <div class="ms-panel ms-admin-section" id="msp_appearancedefaults" data-panel="appearancedefaults" style="display:none">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon ms-hero-icon--admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title" style="color:#C9A84C;">Appearance Defaults</div><div class="ms-hero-desc">Super Admin only. Force the APEX theme and 130% brightness for all users — new and existing accounts.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <div class="ms-ctrl-group">
+                <div class="ms-ctrl-group-label">Current System Defaults</div>
+                <div class="ms-ctrl-row">
+                  <div class="ms-ctrl-label">
+                    <div class="ms-ctrl-name">Default Theme</div>
+                    <div class="ms-ctrl-hint">APEX — Bloomberg Terminal / Ultra-Premium. Applied to all new users automatically.</div>
+                  </div>
+                  <div class="ms-ctrl-control">
+                    <span style="background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);color:#C9A84C;padding:4px 12px;border-radius:6px;font-size:11px;font-weight:800;letter-spacing:.04em;">APEX</span>
+                  </div>
+                </div>
+                <div class="ms-ctrl-row">
+                  <div class="ms-ctrl-label">
+                    <div class="ms-ctrl-name">Default Brightness</div>
+                    <div class="ms-ctrl-hint">130% — Boosted for readability on support monitors. Applied to all new users automatically.</div>
+                  </div>
+                  <div class="ms-ctrl-control">
+                    <span style="background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);color:#C9A84C;padding:4px 12px;border-radius:6px;font-size:11px;font-weight:800;">130%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ms-ctrl-group" style="margin-top:16px;">
+                <div class="ms-ctrl-group-label" style="color:#C9A84C;">⚡ Force Override — All Existing Users</div>
+                <div style="padding:14px;background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.18);border-radius:8px;">
+                  <p class="small muted" style="margin-bottom:12px;line-height:1.6;">
+                    This will overwrite every existing user's saved theme and brightness settings on their <strong>next page load</strong>.
+                    Use this to fix accounts that are stuck on a dark or dim configuration.
+                    Users can re-customize their appearance after the force is applied.
+                  </p>
+                  <div id="appearanceForceStatus" style="display:none;font-size:11px;margin-bottom:10px;padding:7px 10px;border-radius:5px;"></div>
+                  <div id="appearanceForcedInfo" style="display:none;font-size:10px;color:#C9A84C;margin-bottom:10px;padding:6px 10px;background:rgba(201,168,76,.08);border-radius:5px;border:1px solid rgba(201,168,76,.2);"></div>
+                  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <button class="btn" id="forceApexBrightnessBtn" style="background:rgba(201,168,76,.15);border-color:rgba(201,168,76,.4);color:#C9A84C;font-weight:800;padding:9px 20px;">
+                      🛡️ Force APEX + 130% for All Users
+                    </button>
+                    <button class="btn" id="clearForceApexBtn" style="display:none;font-size:11px;padding:8px 14px;color:rgba(255,255,255,.4);">
+                      ✕ Clear Force
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

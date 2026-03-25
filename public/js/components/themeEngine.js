@@ -11,7 +11,7 @@
   'use strict';
 
   const THEME_STORAGE_KEY = 'mums_theme_preference';
-  const DEFAULT_THEME_ID = 'mums_dark';
+  const DEFAULT_THEME_ID = 'apex';
   const THEME_ALIAS = {
     aurora_midnight: 'mums_dark',
     mono: 'classic_style'
@@ -33,6 +33,24 @@
         }
 
         this.currentTheme = this.getUserTheme();
+
+        // ── Forced defaults: Super Admin may push APEX+130% to all users ──
+        if (this.forcedTheme) {
+          const forced = this.normalizeThemeId(this.globalDefault);
+          if (forced && this.isValidTheme(forced)) {
+            localStorage.setItem('mums_theme_preference', forced);
+            this.currentTheme = forced;
+          }
+        }
+        if (this.forcedBrightness && typeof this.globalBrightness === 'number') {
+          try {
+            localStorage.setItem('mums_brightness_v1', JSON.stringify({ value: this.globalBrightness, useDefault: false }));
+            const app = document.getElementById('app') || document.body;
+            app.style.filter = this.globalBrightness === 100 ? '' : `brightness(${this.globalBrightness / 100})`;
+            document.documentElement.style.setProperty('--mums-brightness', this.globalBrightness / 100);
+          } catch(_) {}
+        }
+
         this.applyTheme(this.currentTheme, { persist: false });
         this.renderThemeGrid();
         this.setupEventListeners();
@@ -56,6 +74,9 @@
         if (res.ok) {
           const data = await res.json();
           this.globalDefault = this.normalizeThemeId(data.defaultTheme || DEFAULT_THEME_ID);
+          this.globalBrightness      = typeof data.brightness === 'number' ? data.brightness : 130;
+          this.forcedTheme      = data.forcedTheme      === true;
+          this.forcedBrightness = data.forcedBrightness === true;
         }
       } catch(err){
         console.warn('[ThemeEngine] Failed to load global default:', err);
