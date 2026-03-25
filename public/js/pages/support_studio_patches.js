@@ -55,26 +55,37 @@
       const rowIndex = parseInt(String(rawIdx || ''), 10);
       if (Number.isNaN(rowIndex)) return;
 
+      const tableHost = qbsRoot.querySelector('#qbDataBody');
+      const rowSnaps = tableHost && Array.isArray(tableHost._qbRowSnaps) ? tableHost._qbRowSnaps : null;
+      const snapFromTable = rowSnaps && rowSnaps[rowIndex] ? rowSnaps[rowIndex] : null;
       const records = Array.isArray(window.__studioQbRecords) ? window.__studioQbRecords : null;
-      if (!records || !records[rowIndex]) return;
-
-      // Let the native row click handler run first.
-      // Fallback only if no modal opener is available in the current context.
-      const openFn = typeof window._qbsOpenCaseDetail === 'function' ? window._qbsOpenCaseDetail : null;
-      if (!openFn) return;
-
-      const rec = records[rowIndex] || {};
-      const snap = {
+      const rec = records && records[rowIndex] ? records[rowIndex] : null;
+      const snap = snapFromTable || (rec ? {
         rowNum: rowIndex + 1,
         recordId: rec['3'] || rec[3] || rec.recordId || rec.id || '',
         fields: rec,
         columnMap: window.__studioQbColumns || {}
-      };
+      } : null);
+      if (!snap) return;
 
       setTimeout(function () {
         const modal = document.getElementById('qbCaseDetailModal');
         if (modal && modal.classList.contains('open')) return;
-        openFn(snap, [snap]);
+        if (window.MQ && typeof window.MQ.openCaseDetailModal === 'function') {
+          window.MQ.openCaseDetailModal({
+            qbRecordId: snap.recordId || '',
+            fields: snap.fields || {},
+            columns: [],
+            tabConfig: {},
+            realm: '',
+            appId: '',
+            tableId: ''
+          });
+          return;
+        }
+        if (typeof window._qbsOpenCaseDetail === 'function') {
+          window._qbsOpenCaseDetail(snap, rowSnaps || [snap]);
+        }
       }, 0);
     }, true);
 
