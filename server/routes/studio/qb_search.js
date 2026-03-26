@@ -5,6 +5,15 @@
 // Strategy: use QB /v1/records/query with CT clauses on TEXT fields only.
 // CT (contains) only works on text-type fields in QB.
 // Using text-only fields avoids QB API errors and gets maximum matches.
+//
+// FIX v2.1 — Three permanent fixes:
+//   1. Default top raised to 10000 (was 100). Cap raised to 10000 (was 1000).
+//      This allows searching across 22k+ records instead of being limited to 100.
+//   2. Numeric-only search terms (e.g. '441056') now get an EX clause on field 3
+//      (Record ID#) in addition to CT clauses on text fields. QB CT operator does
+//      NOT work on numeric fields — so pure numeric searches returned 0 results.
+//   3. allAvailableFields and columns are now returned in a format that allows
+//      the frontend to build a full columnMap for the Case Detail modal.
 
 const { getUserFromJwt } = require('../../lib/supabase');
 const { readStudioQbSettings } = require('../../lib/studio_quickbase');
@@ -96,11 +105,13 @@ async function getTextFields({ realm, token, tableId }) {
 // limited only by our WHERE clause. This is how QB "Search this app" works.
 async function queryAllRecords({ realm, token, tableId, where, select, skip, top }) {
   const normRealm = normalizeRealm(realm);
+  // FIX v2.1: Raised cap from 1000 to 10000 so deep search can reach all 22k+ records.
+  const safeTop = Math.min(Math.max(1, top || 10000), 10000);
   const body = {
     from: tableId,
     where: where || '',
     select: Array.isArray(select) && select.length ? select.slice(0, 30) : undefined,
-    options: { skip: skip || 0, top: Math.min(top || 100, 1000) }
+    options: { skip: skip || 0, top: safeTop }
   };
   if (!body.select) delete body.select;
 
@@ -135,8 +146,12 @@ async function queryAllRecords({ realm, token, tableId, where, select, skip, top
 // ── Build CT WHERE clause — text fields only ──────────────────────
 // Splits term into tokens; each token matched across ALL text fields.
 // "Case 526768" → each word searched separately (maximizes matches).
+//
+// FIX v2.1: When term is purely numeric (e.g. '441056'), also add an
+// EX clause on field 3 (Record ID#). QB CT does NOT work on numeric fields
+// so a numeric-only search with CT returns 0 results — EX on field 3 fixes this.
 function buildSearchWhere(term, textFieldIds) {
-  if (!term || !textFieldIds.length) return '';
+  if (!term) return '';
 
   // Use at most 20 text field IDs to avoid QB WHERE clause length limits
   const fids = textFieldIds.slice(0, 20);
@@ -145,17 +160,33 @@ function buildSearchWhere(term, textFieldIds) {
   const tokens = term.trim().split(/\s+/).filter(t => t.length >= 2);
 
   // If multiple tokens, search for ANY token across ALL text fields
-  // This gives max recall — "coles 526768" matches records containing "coles" OR "526768"
   const allTerms = tokens.length > 1 ? tokens : [term.trim()];
 
-  const termClauses = allTerms.map(tok => {
-    const enc = encLit(tok);
-    const fieldClauses = fids.map(id => `{${id}.CT.'${enc}'}`);
-    return fieldClauses.length === 1 ? fieldClauses[0] : `(${fieldClauses.join(' OR ')})`;
-  });
+  const clauses = [];
 
-  // Any record matching ANY token qualifies
-  return termClauses.length === 1 ? termClauses[0] : `(${termClauses.join(' OR ')})`;
+  // Text CT clauses (only if we have text fields to search)
+  if (fids.length) {
+    const termClauses = allTerms.map(tok => {
+      const enc = encLit(tok);
+      const fieldClauses = fids.map(id => `{${id}.CT.'${enc}'}`);
+      return fieldClauses.length === 1 ? fieldClauses[0] : `(${fieldClauses.join(' OR ')})`;
+    });
+    const textWhere = termClauses.length === 1 ? termClauses[0] : `(${termClauses.join(' OR ')})`;
+    clauses.push(textWhere);
+  }
+
+  // FIX v2.1: For numeric tokens, add EX clause on field 3 (Record ID#)
+  // This is the permanent fix for case# searches like '441056' returning no results.
+  const numericTokens = allTerms.filter(t => /^\d+$/.test(t));
+  if (numericTokens.length) {
+    const numericClauses = numericTokens.map(t => `{3.EX.'${encLit(t)}'}`);
+    const numericWhere = numericClauses.length === 1 ? numericClauses[0] : `(${numericClauses.join(' OR ')})`;
+    clauses.push(numericWhere);
+  }
+
+  if (!clauses.length) return '';
+  // Combine text CT and numeric EX with OR — any match qualifies
+  return clauses.length === 1 ? clauses[0] : `(${clauses.join(' OR ')})`;
 }
 
 // ── Main handler ──────────────────────────────────────────────────
@@ -193,7 +224,8 @@ module.exports = async (req, res) => {
 
     const q    = String(req?.query?.q || req?.query?.search || '').trim();
     const skip = Math.max(0, Number(req?.query?.skip  || 0));
-    const top  = Math.min(Math.max(1, Number(req?.query?.top || req?.query?.limit || 100)), 1000);
+    // FIX v2.1: Default top raised to 10000, cap raised to 10000 (was 100/1000).
+    const top  = Math.min(Math.max(1, Number(req?.query?.top || req?.query?.limit || 10000)), 10000);
 
     // ── Load all fields + identify text fields ─────────────────────
     const { all: allFields, text: textFields } = await getTextFields({ realm, token, tableId });
@@ -202,7 +234,7 @@ module.exports = async (req, res) => {
     const textFieldIds = textFields.map(f => f.id);
 
     // ── Build search WHERE clause ──────────────────────────────────
-    const where = (q && textFieldIds.length) ? buildSearchWhere(q, textFieldIds) : '';
+    const where = q ? buildSearchWhere(q, textFieldIds) : '';
 
     // ── Select fields: use report fields (from QB report metadata) ──
     // For display: use the known text/key field IDs so we get useful data back
@@ -244,8 +276,20 @@ module.exports = async (req, res) => {
         return { id: String(id), label: String(f?.label || f?.name || `Field ${id}`) };
       });
 
+    // FIX v2.1: Build a columnMap object keyed by fid string → label.
+    // This is returned alongside records so the frontend can populate
+    // snap.columnMap for the Case Detail modal (which shows all dashes
+    // when columnMap is empty {}). Every record now carries the full
+    // field label mapping needed for the detail view.
+    const columnMap = Object.fromEntries(
+      returnedFieldIds.map(id => {
+        const f = fieldById[String(id)] || out.fields.find(f => Number(f.id) === id);
+        return [String(id), String(f?.label || f?.name || `Field ${id}`)];
+      })
+    );
+
     // ── Normalize records ──────────────────────────────────────────
-    const records = out.records.map(row => {
+    const records = out.records.map((row, rowIdx) => {
       const normalized = {};
       returnedFieldIds.forEach(id => {
         const fid  = String(id);
@@ -257,12 +301,20 @@ module.exports = async (req, res) => {
       const caseCell = row?.['3'];
       const recordId = (caseCell && typeof caseCell === 'object' ? caseCell.value : caseCell)
         || row?.recordId || 'N/A';
-      return { qbRecordId: String(recordId), fields: normalized };
+      return {
+        qbRecordId: String(recordId),
+        fields: normalized,
+        // FIX v2.1: Attach columnMap to every record so _snapFromRecord in
+        // support_studio_patches.js can read it directly without a separate lookup.
+        columnMap,
+        rowNum: rowIdx + 1 + skip,
+      };
     });
 
     return sendJson(res, 200, {
       ok: true,
       columns,
+      columnMap,
       records,
       total:      out.totalCount,
       returned:   records.length,

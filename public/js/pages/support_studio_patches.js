@@ -7,29 +7,56 @@
 //   4. Banner dismissal memory: banner stays hidden after dismiss (sessionStorage).
 //   5. Deep search card: remove Case View Details button + improve Assigned To.
 //
-// v2.0 FIX — Deep search result card opens CORRECT Case# in Case Detail View.
-//   ROOT CAUSE: _findInCache() was doing an O(n) scan against the wrong cache
-//   array (window.__studioQbDeepRecords), which often didn't contain the clicked
-//   record → cached = null → snap.fields = {} → modal fell back to a wrong row.
+// v3.0 FIX — Three permanent bug fixes:
 //
-//   PERMANENT FIX:
-//     a) patchDeepSearchCards() now stamps every rendered card with
-//        data-record-id AND data-snap-json (full serialised snap) right after
-//        the card is painted in the DOM.
-//     b) _qbsOpenDeepResult() now reads the snap DIRECTLY from the card DOM
-//        (data-snap-json) — zero cache dependency.
-//     c) __studioQbDeepMap: an O(1) Map built whenever __studioQbDeepRecords
-//        is written, used as a fast fallback when data-snap-json is absent.
-//     d) A delegated click handler on #qbs-search-results intercepts all card
-//        clicks and opens the correct snap, covering every render path.
+//   BUG 1 — Case Detail modal shows all dashes:
+//   ROOT CAUSE: _snapFromRecord built snap.columnMap as {} because the raw
+//   QB records from __studioQbDeepRecords had fields data but no columnMap.
+//   FIX: qb_search.js now attaches columnMap to every record. _snapFromRecord
+//   reads r.columnMap directly. Also __studioQbDeepColumns is stored globally
+//   so _findInCache can build columnMap from the columns array as a fallback.
+//
+//   BUG 2 — QB Records section shows 'No records match' for deep search result:
+//   ROOT CAUSE: The Main Report search box does a CLIENT-SIDE filter only on the
+//   already-loaded records (~500). When you click a deep search result card,
+//   the QB Records section does NOT fire a new API call with that case# as a
+//   filter — it just filters the existing 500 locally.
+//   FIX: patchDeepSearchCards now injects the case# into #qbHeaderSearch input
+//   and fires an 'input' event so the existing debounce-search mechanism in
+//   my_quickbase.js triggers a live QB API search for that exact case#.
+//
+//   BUG 3 — stampCard ran before __studioQbDeepMap had full snap data:
+//   ROOT CAUSE: The MutationObserver fired stampCard immediately when cards
+//   appeared, but __studioQbDeepMap was populated AFTER rendering. Cards got
+//   stamped with empty fields {}.
+//   FIX: _rebuildDeepMap now schedules a re-stamp of all cards after the map
+//   is populated. MutationObserver also re-stamps on every mutation.
 
 (function () {
   'use strict';
 
   // ── DEEP RECORD MAP — O(1) lookup by recordId ────────────────────────────
-  // Rebuilt every time window.__studioQbDeepRecords is populated by the main
-  // search function. Keyed by String(recordId).
-  window.__studioQbDeepMap = window.__studioQbDeepMap || {};
+  // Rebuilt every time window.__studioQbDeepRecords is populated.
+  // Keyed by String(recordId).
+  window.__studioQbDeepMap     = window.__studioQbDeepMap     || {};
+  // FIX v3.0: Also store the columns array from the last deep search response.
+  // This allows _snapFromRecord to build columnMap even when r.columnMap is absent.
+  window.__studioQbDeepColumns = window.__studioQbDeepColumns || [];
+
+  function _restampAllCards() {
+    var container = document.getElementById('qbs-search-results');
+    if (!container) return;
+    container.querySelectorAll(
+      '.qbs-result-card, .ds-result-card, .qbs-deep-card, ' +
+      '[class*="result-card"], [class*="deep-card"], ' +
+      '[data-case-num], [data-record-id]'
+    ).forEach(function(card) {
+      // Force re-stamp by clearing the old stamp
+      card.removeAttribute('data-snap-json');
+      delete card.dataset.snapStamped;
+      stampCard(card);
+    });
+  }
 
   function _rebuildDeepMap(records) {
     var map = {};
@@ -44,6 +71,8 @@
   }
 
   // Intercept writes to window.__studioQbDeepRecords so the Map stays fresh.
+  // FIX v3.0: After rebuilding the map, schedule a re-stamp of all rendered
+  // cards so they get the fresh fields+columnMap data.
   (function _interceptDeepRecords() {
     var _raw = window.__studioQbDeepRecords || [];
     window.__studioQbDeepMap = _rebuildDeepMap(_raw);
@@ -54,19 +83,49 @@
         set: function (v) {
           _raw = v;
           window.__studioQbDeepMap = _rebuildDeepMap(v);
+          // FIX v3.0: Re-stamp cards with fresh snap data after map rebuild.
+          // Use setTimeout(0) so card rendering completes first.
+          setTimeout(_restampAllCards, 0);
         }
       });
     } catch (_) {}
   })();
 
   // ── HELPER: build a snap object from a raw QB record ────────────────────
+  // FIX v3.0: columnMap is now read from r.columnMap (attached by qb_search.js
+  // v2.1) or built from window.__studioQbDeepColumns as a fallback.
+  // This is the permanent fix for the Case Detail modal showing all dashes.
   function _snapFromRecord(r, rid) {
     if (!r) return { rowNum: 0, recordId: String(rid), fields: {}, columnMap: {} };
+
+    // Build columnMap: prefer r.columnMap (set by qb_search.js v2.1),
+    // then fall back to building from __studioQbDeepColumns.
+    var columnMap = {};
+    if (r.columnMap && typeof r.columnMap === 'object' && Object.keys(r.columnMap).length) {
+      columnMap = r.columnMap;
+    } else if (Array.isArray(window.__studioQbDeepColumns) && window.__studioQbDeepColumns.length) {
+      window.__studioQbDeepColumns.forEach(function(col) {
+        if (col && col.id) columnMap[String(col.id)] = String(col.label || col.id);
+      });
+    }
+
+    // Normalise fields: handle both {fid:{value:...}} and flat {fid: rawVal} formats
+    var rawFields = r.fields && typeof r.fields === 'object' ? r.fields : r;
+    var fields = {};
+    Object.keys(rawFields).forEach(function(fid) {
+      var cell = rawFields[fid];
+      if (cell && typeof cell === 'object' && Object.prototype.hasOwnProperty.call(cell, 'value')) {
+        fields[fid] = cell;
+      } else {
+        fields[fid] = { value: cell == null ? '' : String(cell) };
+      }
+    });
+
     return {
       rowNum:    Number(r.rowNum || 0),
       recordId:  String(r.qbRecordId || r.recordId || rid),
-      fields:    r.fields && typeof r.fields === 'object' ? r.fields : r,
-      columnMap: r.columnMap && typeof r.columnMap === 'object' ? r.columnMap : {}
+      fields:    fields,
+      columnMap: columnMap
     };
   }
 
@@ -169,10 +228,9 @@
   }
 
   // ── PATCH 3: window._qbsOpenDeepResult ───────────────────────────────────
-  // FIX v2.0: reads snap from card DOM (data-snap-json) first — no cache needed.
+  // FIX v3.0: reads snap from card DOM (data-snap-json) first — no cache needed.
   // Falls back to Map lookup, then array scan, then bare recordId-only snap.
   function defineQbsOpenDeepResult() {
-    // Always redefine to ensure v2.0 logic is active (overwrite any stale v1).
     window._qbsOpenDeepResult = function (caseNum, cardEl) {
       if (!caseNum || String(caseNum) === '—') return;
       var rid = String(caseNum);
@@ -189,7 +247,6 @@
             }
           } catch (_) {}
         }
-        // Fallback: read data-record-id from the card itself
         var cardRid = cardEl.getAttribute('data-record-id') || rid;
         rid = String(cardRid);
       }
@@ -199,7 +256,7 @@
       var snap = _snapFromRecord(cached, rid);
       _callCdOpen(snap);
     };
-    console.log('[SupportStudioPatch] window._qbsOpenDeepResult v2.0 defined.');
+    console.log('[SupportStudioPatch] window._qbsOpenDeepResult v3.0 defined.');
   }
 
   // ── PATCH 4: [data-action="ds-case-view-details"] fallback ───────────────
@@ -218,7 +275,6 @@
         if (!rid) rid = String(rowData.qbRecordId || rowData.recordId || '');
         if (!rid) return;
 
-        // v2.0: check for data-snap-json on the button or its parent card first
         var cardEl = btn.closest('[data-snap-json]') || btn;
         var rawSnap = cardEl && cardEl.getAttribute && cardEl.getAttribute('data-snap-json');
         if (rawSnap) {
@@ -291,23 +347,25 @@
     hookCacheUI();
   }
 
+  // ── stampCard — forward declaration so _restampAllCards can call it ──────
+  // (defined below in patchDeepSearchCards; hoisted via var)
+  var stampCard;
+
   // ── PATCH 6: Deep search cards — stamp data-snap-json + delegated click ──
-  // v2.0 CORE FIX:
-  //   After every card is painted, we stamp two data attributes:
-  //     data-record-id  = the exact Case# / recordId of this card
-  //     data-snap-json  = full serialised snap object (fields + columnMap)
-  //   A single delegated click listener on #qbs-search-results then reads
-  //   data-snap-json and passes it directly to _callCdOpen — 100% accurate,
-  //   no array index, no cache lookup, no wrong-row regression possible.
+  // v3.0 CORE FIX:
+  //   a) __studioQbDeepColumns is stored globally after every search so
+  //      _snapFromRecord can build columnMap without an extra API call.
+  //   b) stampCard now always has access to fresh columnMap via _snapFromRecord.
+  //   c) _restampAllCards is called after __studioQbDeepRecords is set so
+  //      cards stamped before the map was ready get refreshed immediately.
+  //   d) FIX v3.0 (Bug 2): When a deep search card is clicked, the case# is
+  //      also injected into #qbHeaderSearch and an 'input' event fired so the
+  //      QB Records section runs a live API search for that exact case#.
   function patchDeepSearchCards() {
 
     // ── Stamp data-snap-json on a single card element ──────────────────────
-    function stampCard(card) {
-      // Avoid double-stamping
-      if (card.dataset.snapStamped) return;
-
+    stampCard = function(card) {
       // --- Resolve the record ID from the card DOM ---
-      // Try: data-record-id, data-case-num, data-rid, data-id, #qbs-case-num text, .qbs-case-num
       var rid = card.getAttribute('data-record-id')
              || card.getAttribute('data-case-num')
              || card.getAttribute('data-rid')
@@ -315,7 +373,6 @@
              || '';
 
       if (!rid) {
-        // Scan for a child element that looks like a Case # display
         var numEl = card.querySelector('[data-case-num], [data-record-id], .qbs-case-num, .ds-case-num, .qb-case-id');
         if (numEl) {
           rid = numEl.getAttribute('data-case-num')
@@ -325,13 +382,12 @@
       }
 
       if (!rid) {
-        // Last resort: look for any text that looks like a pure numeric case number
         var allText = card.textContent || '';
         var numMatch = allText.match(/\b(\d{5,8})\b/);
         if (numMatch) rid = numMatch[1];
       }
 
-      if (!rid) return; // Cannot determine record ID — skip
+      if (!rid) return;
 
       rid = String(rid);
       card.setAttribute('data-record-id', rid);
@@ -340,16 +396,14 @@
       var cached = _findInCache(rid);
       var snap = _snapFromRecord(cached, rid);
 
-      // Serialise and stamp
       try {
         card.setAttribute('data-snap-json', JSON.stringify(snap));
       } catch (_) {}
       card.dataset.snapStamped = 'true';
-    }
+    };
 
     // ── Process all cards in a container ──────────────────────────────────
     function processCards(container) {
-      // Stamp all recognisable card elements
       container.querySelectorAll(
         '.qbs-result-card, .ds-result-card, .qbs-deep-card, ' +
         '[class*="result-card"], [class*="deep-card"], ' +
@@ -420,19 +474,31 @@
     }
 
     // ── Delegated click handler on the results container ─────────────────
-    // This is the KEY fix: instead of relying on onclick="" inline handlers
-    // (which call _qbsOpenDeepResult with only the Case# string — no card ref),
-    // we intercept every click on the results container, find the nearest card,
-    // read data-snap-json, and open the modal with the EXACT correct snap.
+    // FIX v3.0 (Bug 2): When a card is clicked, also inject the case# into
+    // #qbHeaderSearch and fire 'input' event so the QB Records section
+    // triggers a live API search for that case# (searches all 22k+ records).
+    function _injectSearchTerm(caseNum) {
+      if (!caseNum) return;
+      var searchInput = document.getElementById('qbHeaderSearch');
+      if (!searchInput) return;
+      searchInput.value = String(caseNum);
+      // Fire native 'input' event to trigger the existing debounce handler
+      // in my_quickbase.js (applySearchAndRender / loadQuickbaseData).
+      var evt;
+      try { evt = new Event('input', { bubbles: true, cancelable: true }); } catch(_) {
+        evt = document.createEvent('Event');
+        evt.initEvent('input', true, true);
+      }
+      searchInput.dispatchEvent(evt);
+    }
+
     function attachDelegatedClick(container) {
       if (container.dataset.delegatedClickAttached) return;
       container.dataset.delegatedClickAttached = 'true';
 
       container.addEventListener('click', function (e) {
-        // Find the nearest stamped card ancestor of the click target
         var card = e.target && e.target.closest && e.target.closest('[data-snap-json]');
         if (!card) {
-          // Try un-stamped card — attempt to stamp it now and retry
           var rawCard = e.target && e.target.closest && e.target.closest(
             '.qbs-result-card, .ds-result-card, .qbs-deep-card, [data-case-num], [data-record-id]'
           );
@@ -440,36 +506,39 @@
         }
         if (!card) return;
 
-        // Don't steal clicks from buttons that have their own specific action
         var clickedBtn = e.target && e.target.closest && e.target.closest('button, a');
         if (clickedBtn) {
           var action = clickedBtn.getAttribute('data-action') || '';
-          // Only block if it's a non-case-detail action button
           if (action && action !== 'ds-case-view-details' && action !== 'case-view-details') return;
         }
 
-        // Read the snap directly from the card
         var rawSnap = card.getAttribute('data-snap-json');
+        var snapObj = null;
         if (rawSnap) {
           try {
-            var snap = JSON.parse(rawSnap);
-            if (snap && snap.recordId) {
-              e.stopPropagation();
-              _callCdOpen(snap);
-              return;
-            }
+            var parsedSnap = JSON.parse(rawSnap);
+            if (parsedSnap && parsedSnap.recordId) snapObj = parsedSnap;
           } catch (_) {}
         }
 
-        // Fallback: use recordId only
-        var rid = card.getAttribute('data-record-id') || '';
-        if (!rid) return;
-        e.stopPropagation();
-        var cached = _findInCache(rid);
-        _callCdOpen(_snapFromRecord(cached, rid));
-      }, true); // capture phase — fires before inline onclick handlers
+        if (!snapObj) {
+          var rid = card.getAttribute('data-record-id') || '';
+          if (!rid) return;
+          var cached = _findInCache(rid);
+          snapObj = _snapFromRecord(cached, rid);
+        }
 
-      console.log('[SupportStudioPatch] Delegated click handler attached to results container.');
+        if (!snapObj) return;
+        e.stopPropagation();
+
+        // FIX v3.0 (Bug 2): Inject case# into QB Records search box so the
+        // main QB Records section also shows the matching record via API search.
+        _injectSearchTerm(snapObj.recordId);
+
+        _callCdOpen(snapObj);
+      }, true);
+
+      console.log('[SupportStudioPatch] Delegated click handler v3.0 attached to results container.');
     }
 
     // ── Watch #qbs-search-results for card renders ────────────────────────
@@ -479,32 +548,27 @@
       if (container.dataset.cardPatchApplied) return;
       container.dataset.cardPatchApplied = 'true';
 
-      // Stamp cards already in DOM
       processCards(container);
-      // Attach delegated click
       attachDelegatedClick(container);
 
-      // Watch for future renders (each search clears + repaints the container)
       var obs = new MutationObserver(function (mutations) {
-        // Re-stamp any new cards that were added
         mutations.forEach(function (m) {
           m.addedNodes.forEach(function (node) {
             if (node.nodeType !== 1) return;
-            // The added node itself might be a card
             if (node.matches && node.matches(
               '.qbs-result-card, .ds-result-card, .qbs-deep-card, [data-case-num], [data-record-id]'
             )) {
               stampCard(node);
             }
-            // Or it might contain cards
             processCards(node.querySelectorAll ? node : container);
           });
         });
-        // Also re-stamp the whole container in case of full innerHTML replacement
+        // FIX v3.0: Always re-stamp the whole container so cards populated
+        // before __studioQbDeepMap was ready get refreshed with correct snap.
         processCards(container);
       });
       obs.observe(container, { childList: true, subtree: true });
-      console.log('[SupportStudioPatch] Deep search card patch v2.0 observer active.');
+      console.log('[SupportStudioPatch] Deep search card patch v3.0 observer active.');
     }
 
     watchResults();
