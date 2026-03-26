@@ -3,99 +3,350 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Login | MUMS</title><link rel="stylesheet" href="./css/styles.css?v=p1-516" />
+  <title>Login | MUMS</title>
+  <link rel="stylesheet" href="./css/styles.css?v=p1-516" />
   <link rel="stylesheet" href="./css/enterprise_ux.css?v=p1-516" />
-  <!-- PERF-FIX-02a: Pre-warm DNS for all external dependencies -->
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Supabase — DNS prefetch (project URL not known at build time; warms resolver) -->
   <link rel="dns-prefetch" href="https://supabase.co">
   <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-  <!-- PERF-FIX-02b: Prefetch the landing page while user is typing credentials.
-       Browser downloads index.html in background — post-login load feels instant. -->
   <link rel="prefetch" href="./index.html">
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#02040a;--surface:#0d1117;--surface2:#161b22;
+      --border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.05);
+      --text:#d0d8e4;--muted:#8b949e;--accent:#58a6ff;
+      --accent-soft:#1f6feb;--green:#3fb950;--danger:#f85149;--warn:#d29922;
+      --font:'Plus Jakarta Sans',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+    }
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;overflow:hidden}
+    body{display:flex;flex-direction:column}
+
+    /* top bar */
+    .topbar{
+      position:relative;z-index:2;
+      height:52px;padding:0 32px;
+      display:flex;align-items:center;justify-content:space-between;
+      border-bottom:1px solid rgba(255,255,255,.04);
+      background:radial-gradient(circle at top,#070b13 0,#02040a 55%);
+      backdrop-filter:blur(18px);
+    }
+    .top-left{display:flex;align-items:center;gap:10px}
+    .top-pill{
+      padding:4px 9px;border-radius:999px;
+      border:1px solid rgba(88,166,255,.4);
+      background:rgba(88,166,255,.12);
+      font-size:10px;text-transform:uppercase;letter-spacing:.08em;
+      color:#c9d1d9;font-weight:700;
+    }
+    .top-env{
+      display:flex;align-items:center;gap:6px;
+      font-size:11px;color:var(--muted);
+    }
+    .top-env-dot{
+      width:7px;height:7px;border-radius:50%;
+      background:var(--green);box-shadow:0 0 8px rgba(63,185,80,.9);
+    }
+    .top-right{
+      font-size:11px;color:var(--muted);display:flex;align-items:center;gap:10px;font-family:var(--mono);
+    }
+    .top-tag{
+      padding:3px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.12);
+      background:rgba(13,17,23,.9);font-size:10px;color:rgba(240,246,252,.8);
+    }
+
+    /* background grid */
+    .bg-grid{
+      position:fixed;inset:0;z-index:0;
+      background-image:
+        radial-gradient(ellipse 60% 50% at 18% 40%,rgba(0,115,234,.12) 0%,transparent 70%),
+        radial-gradient(ellipse 50% 40% at 82% 70%,rgba(162,93,220,.09) 0%,transparent 70%),
+        repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,.02) 39px,rgba(255,255,255,.02) 40px),
+        repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,255,255,.02) 39px,rgba(255,255,255,.02) 40px);
+      opacity:.5;
+    }
+
+    .main{
+      position:relative;z-index:1;
+      flex:1;
+      display:flex;align-items:center;justify-content:center;
+      padding:32px;
+    }
+
+    .shell{
+      display:grid;grid-template-columns:1.2fr 480px 260px;
+      max-width:1440px;width:100%;min-height:620px;
+      gap:40px;
+    }
+
+    /* LEFT PANEL */
+    .side-left{display:flex;flex-direction:column;justify-content:center;padding-left:12px;gap:32px}
+    .brand-hero{display:flex;flex-direction:column;gap:20px}
+    .brand-logo{
+      width:56px;height:56px;border-radius:18px;
+      background:linear-gradient(135deg,#0073ea,#a25ddc);
+      display:flex;align-items:center;justify-content:center;
+      font-size:24px;color:#fff;
+      box-shadow:0 14px 40px rgba(0,115,234,.5);
+    }
+    .brand-name{font-size:42px;font-weight:900;color:#fff;letter-spacing:-.03em;line-height:1}
+    .brand-sub{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-top:4px}
+    .brand-desc{font-size:13px;color:rgba(255,255,255,.45);line-height:1.9;max-width:420px}
+    .pills{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+    .pill{
+      display:flex;align-items:center;gap:10px;
+      padding:10px 14px;border-radius:10px;
+      background:rgba(13,17,23,.9);border:1px solid rgba(255,255,255,.06);
+      font-size:11px;color:var(--muted);font-weight:600;
+    }
+    .pill i{color:var(--accent);font-size:11px;width:14px;text-align:center}
+    .pill span{flex:1}
+    .pill-meta{font-size:10px;color:rgba(148,163,184,.7)}
+
+    /* CENTER CARD */
+    .center{display:flex;flex-direction:column;justify-content:center;align-items:center}
+    .login-card{
+      background:var(--surface);border:1px solid var(--border);
+      border-radius:20px;padding:30px 28px 26px;
+      box-shadow:0 32px 80px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.04);
+      max-width:460px;width:100%;
+    }
+    .card-header{margin-bottom:22px}
+    .card-eyebrow{
+      font-size:9px;font-weight:800;letter-spacing:.14em;
+      text-transform:uppercase;color:var(--accent-soft);margin-bottom:8px;
+      display:flex;align-items:center;gap:6px;
+    }
+    .card-eyebrow::before{content:'';width:16px;height:1px;background:var(--accent-soft);opacity:.7}
+    .card-title{font-size:22px;font-weight:800;color:#fff;margin-bottom:4px}
+    .card-sub{font-size:11px;color:var(--muted)}
+    .card-sub b{color:#e6edf3}
+
+    .field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+    .field label{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+    .field-wrap{position:relative}
+    .field-ico{
+      position:absolute;left:11px;top:50%;transform:translateY(-50%);
+      color:var(--muted);font-size:11px;pointer-events:none;
+    }
+    .input{
+      width:100%;padding:10px 12px 10px 34px;
+      background:#010409;border:1.5px solid rgba(255,255,255,.16);
+      border-radius:8px;color:var(--text);font-size:12px;font-family:var(--font);
+      outline:none;transition:border-color .18s,box-shadow .18s,background .18s;
+    }
+    .input:focus{border-color:rgba(88,166,255,.7);box-shadow:0 0 0 3px rgba(88,166,255,.25);background:#020814;}
+    .input::placeholder{color:rgba(255,255,255,.27)}
+
+    .check-row{display:flex;align-items:center;gap:10px;margin:4px 0 16px}
+    .check-row label{font-size:11px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:6px}
+    input[type=checkbox]{width:14px;height:14px;accent-color:var(--accent);cursor:pointer}
+
+    .btn-primary{
+      width:100%;padding:11px;border-radius:8px;
+      background:linear-gradient(135deg,#0073ea,#0060c2);
+      border:1px solid rgba(0,115,234,.6);color:#fff;
+      font-size:13px;font-weight:800;font-family:var(--font);
+      cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+      box-shadow:0 7px 24px rgba(0,115,234,.55);
+      transition:all .18s;
+    }
+    .btn-primary:hover{background:linear-gradient(135deg,#0284c7,#0073ea);transform:translateY(-1px);box-shadow:0 12px 34px rgba(0,115,234,.7)}
+
+    .btn-ghost{
+      width:100%;padding:8px 10px;margin-top:10px;
+      border-radius:7px;
+      background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+      color:var(--muted);font-size:11px;font-weight:600;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;
+      transition:all .15s;
+    }
+    .btn-ghost:hover{background:rgba(255,255,255,.07);color:var(--text)}
+
+    .err{
+      display:none;padding:9px 11px;border-radius:8px;
+      background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.3);
+      color:var(--danger);font-size:11px;margin-top:10px;line-height:1.5;
+    }
+
+    /* RIGHT STATS COLUMN */
+    .side-right{display:flex;flex-direction:column;justify-content:center;gap:14px}
+    .stat-card{
+      background:rgba(13,17,23,.96);border:1px solid rgba(255,255,255,.06);
+      border-radius:14px;padding:13px 15px;
+      box-shadow:0 16px 40px rgba(0,0,0,.7);
+    }
+    .stat-num{font-size:22px;font-weight:900;color:#fff;font-family:var(--mono);line-height:1}
+    .stat-lbl{font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:3px}
+    .stat-chip{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;margin-top:5px}
+    .stat-chip.up{color:var(--green)}
+    .stat-chip i{font-size:8px}
+    .version-badge{
+      font-size:9px;color:rgba(255,255,255,.25);margin-top:10px;
+      font-family:var(--mono);display:flex;align-items:center;gap:7px;
+    }
+    .dot-live{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s ease-in-out infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+    /* footer */
+    .footer{
+      position:relative;z-index:1;
+      height:34px;padding:0 32px 10px;
+      display:flex;align-items:flex-end;justify-content:space-between;
+      font-size:10px;color:rgba(139,148,158,.8);
+    }
+    .footer a{color:var(--accent);text-decoration:none}
+    .footer a:hover{text-decoration:underline}
+
+    @media (max-width:1100px){
+      .shell{grid-template-columns:1.2fr 1fr;gap:28px;max-width:1040px}
+      .side-right{display:none}
+    }
+    @media (max-width:768px){
+      .topbar{padding:0 16px}
+      .main{padding:16px}
+      .shell{grid-template-columns:1fr;gap:20px}
+      .side-left{display:none}
+    }
+  </style>
 </head>
 <body>
-  <div class="auth-wrap">
-    <div class="auth-card">
-      <div class="card pad">
-        <div class="brand brand-login" aria-label="MUMS">
-          <div class="brand-mark" aria-hidden="true"></div>
-          <div class="brand-text">
-            <div class="brand-name">MUMS</div>
-            <div class="brand-sub">MUMS User Management System</div>
-          <div class="brand-build">Build ID: <span data-build-label></span></div>
-          </div>
-        </div>
-        <h1 class="h1" style="margin-top:10px">Login</h1>
-        <p class="h2">Login required. Timezone: <b>Asia/Manila</b></p>
-        <!-- Wrap credentials in a form so browsers can correctly detect and autofill password fields. -->
-        <form id="loginForm" autocomplete="on" novalidate>
-          <div class="grid2">
-            <div>
-              <label class="small" for="login">Username or Email</label>
-              <input class="input" id="login" name="username" placeholder="Username or email" autocomplete="username" />
-            </div>
-            <div>
-              <label class="small" for="password">Password</label>
-              <input class="input" id="password" name="password" type="password" placeholder="Password" autocomplete="current-password" />
-            </div>
-          </div>
+  <div class="bg-grid"></div>
 
-          <div class="row" style="justify-content:flex-start;align-items:center;margin-top:10px;gap:12px;flex-wrap:wrap">
-            <label class="row small" style="gap:8px;cursor:pointer;user-select:none">
-              <input type="checkbox" id="saveDetails" />
-              <span>Save details</span>
-            </label>
-            <label class="row small" id="savePasswordWrap" style="gap:8px;cursor:pointer;user-select:none;display:none">
-              <input type="checkbox" id="savePassword" />
-              <span>Also save password (not recommended)</span>
-            </label>
-          </div>
-
-          <div class="row" style="justify-content:space-between;margin-top:12px;flex-wrap:wrap">
-            <div class="small">Initial Super User: <b>MUMS / MUMS</b></div>
-            <div class="row" style="gap:8px">
-              <button class="btn" id="resetMeys" type="button">Reset MUMS</button>
-              <button class="btn danger" id="factoryReset" type="button">Factory Reset</button>
-              <button class="btn primary" id="loginBtn" type="submit">Login</button>
-            </div>
-          </div>
-
-          <div id="microsoftLoginSection" style="display:none">
-            <div style="display:flex;align-items:center;gap:10px;margin-top:16px;margin-bottom:12px;">
-              <div style="flex:1;height:1px;background:rgba(255,255,255,0.2);"></div>
-              <div class="small" style="letter-spacing:0.08em;">OR</div>
-              <div style="flex:1;height:1px;background:rgba(255,255,255,0.2);"></div>
-            </div>
-            <button class="btn" id="azureLoginBtn" type="button" style="width:100%;background:#2F2F2F;color:#fff;border-color:#4a4a4a;">🪟 Sign in with Microsoft</button>
-          </div>
-        </form>
-        <div class="err" id="err" style="display:none"></div>
-
-        <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px;gap:10px;flex-wrap:wrap">
-          <div class="small">Users database (for private/incognito browsers):</div>
-          <div class="row" style="gap:8px">
-            <button class="btn" id="exportUsersLogin" type="button">Export</button>
-            <button class="btn" id="importUsersLogin" type="button">Import</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="card pad">
-        <h2 style="margin:0 0 10px">Admin Rules</h2>
-        <ul class="small" style="margin:0;line-height:1.6">
-          <li><b>SUPER_ADMIN (MUMS)</b> controls everything and can create Admins/Team Leads.</li>
-          <li><b>Team Leads</b> can manage users and announcements inside their team.</li>
-          <li><b>Schedules</b> show as icons on user tags in Mailbox.</li>
-          <li><b>Announcements</b> appear at the top bar within their date/time window.</li>
-        </ul>
+  <header class="topbar">
+    <div class="top-left">
+      <div class="top-pill">MUMS ENTERPRISE</div>
+      <div class="top-env">
+        <span class="top-env-dot"></span>
+        <span>Production · Asia/Manila</span>
       </div>
     </div>
-  </div>
+    <div class="top-right">
+      <span class="top-tag">Uptime · 99.9%</span>
+      <span>Build <span data-build-label>p1-516</span></span>
+    </div>
+  </header>
 
-  <!-- Load in order (no modules) so it works via file:// in Edge -->
+  <main class="main">
+    <div class="bg-orb"></div>
+    <div class="bg-orb2"></div>
+
+    <div class="shell">
+      <!-- LEFT PANEL -->
+      <div class="side-left">
+        <div class="brand-hero">
+          <div class="brand-logo"><i class="fas fa-headset"></i></div>
+          <div>
+            <div class="brand-name">MUMS</div>
+            <div class="brand-sub">USER MANAGEMENT SYSTEM</div>
+          </div>
+          <div class="brand-desc">
+            Enterprise‑grade console for managing teams, schedules, and live support operations across your organization.
+          </div>
+        </div>
+        <div class="pills">
+          <div class="pill">
+            <i class="fas fa-shield-halved"></i>
+            <span>Role‑Based Access Control</span>
+            <span class="pill-meta">Super Admin · Admin · Team Lead</span>
+          </div>
+          <div class="pill">
+            <i class="fas fa-users"></i>
+            <span>Multi‑Team Management</span>
+            <span class="pill-meta">Queues, shifts, coverage</span>
+          </div>
+          <div class="pill">
+            <i class="fas fa-database"></i>
+            <span>QuickBase Integration</span>
+            <span class="pill-meta">Live cases & history</span>
+          </div>
+          <div class="pill">
+            <i class="fas fa-clock"></i>
+            <span>Live Schedule Tracking</span>
+            <span class="pill-meta">Timezone‑aware views</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CENTER LOGIN CARD -->
+      <div class="center">
+        <div class="login-card">
+          <div class="card-header">
+            <div class="card-eyebrow">Secure Access Portal</div>
+            <div class="card-title">Welcome back</div>
+            <div class="card-sub">
+              Sign in to your MUMS workspace · <b>Asia/Manila</b>
+            </div>
+          </div>
+
+          <form id="loginForm" autocomplete="on" novalidate>
+            <div class="field">
+              <label for="login">Username or Email</label>
+              <div class="field-wrap">
+                <i class="fas fa-user field-ico"></i>
+                <input class="input" id="login" name="username" placeholder="username or email" autocomplete="username" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="password">Password</label>
+              <div class="field-wrap">
+                <i class="fas fa-lock field-ico"></i>
+                <input class="input" id="password" name="password" type="password" placeholder="••••••••••" autocomplete="current-password" />
+              </div>
+            </div>
+
+            <div class="check-row">
+              <label><input type="checkbox" id="saveDetails" />Remember me</label>
+            </div>
+
+            <button class="btn-primary" id="loginBtn" type="submit">
+              <i class="fas fa-arrow-right-to-bracket"></i> Sign In to MUMS
+            </button>
+
+            <div id="microsoftLoginSection" style="display:none;margin-top:14px">
+              <button class="btn-ghost" id="azureLoginBtn" type="button">
+                <i class="fab fa-microsoft"></i> Sign in with Microsoft
+              </button>
+            </div>
+
+            <div class="err" id="err"></div>
+          </form>
+        </div>
+      </div>
+
+      <!-- RIGHT METRICS -->
+      <div class="side-right">
+        <div class="stat-card">
+          <div class="stat-num">99.9<span style="font-size:13px;color:var(--muted)">%</span></div>
+          <div class="stat-lbl">System Uptime</div>
+          <div class="stat-chip up"><i class="fas fa-circle"></i>Operational</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" style="color:var(--accent)">v5.16</div>
+          <div class="stat-lbl">Platform Version</div>
+          <div class="stat-chip up"><i class="fas fa-arrow-up"></i>Latest Build</div>
+        </div>
+        <div class="version-badge">
+          <div class="dot-live"></div>
+          MUMS Enterprise · Asia/Manila
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <span>© <span id="year"></span> MUMS · All rights reserved.</span>
+    <span>Need help? <a href="#">Contact system administrator</a></span>
+  </footer>
+
+  <!-- JS includes -->
   <script src="./js/env_runtime.js?v=p1-516"></script>
   <script src="./js/remote_patch.js?v=p1-516"></script>
   <script src="./js/config/version.js?v=p1-516"></script>
@@ -106,12 +357,12 @@
   <script src="./js/auth.js?v=p1-516"></script>
   <script src="./js/ui.js?v=p1-516"></script>
   <script>
-  // Force native system cursor (no delay)
-  try{ localStorage.setItem("mums_cursor_mode","system"); }catch(e){}
-</script>
+    try{ localStorage.setItem("mums_cursor_mode","system"); }catch(e){}
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
 
   <script>
-    // Surface runtime errors on the login page instead of failing silently
+    // Same login JS as before, only trimmed of removed buttons (reset/export/import)
     window.addEventListener('error', (ev)=>{
       try{
         const msg = (ev && ev.message) ? ev.message : 'Unknown error';
@@ -121,22 +372,19 @@
       }catch(_){ }
     });
 
-    // ── Login Mode: fetch from server and show/hide Microsoft button ──────────
     (function applyLoginMode(){
       const section = document.getElementById('microsoftLoginSection');
-      // Optimistic local cache: avoids button flicker on repeat visits
       try{
         const cached = localStorage.getItem('mums_login_mode_cache');
         if(cached){
           const { mode, ts } = JSON.parse(cached);
           const age = Date.now() - (ts || 0);
-          if(mode && age < 5 * 60 * 1000){ // 5-minute cache
+          if(mode && age < 5 * 60 * 1000){
             const showMs = (mode === 'microsoft' || mode === 'both');
             if(section) section.style.display = showMs ? '' : 'none';
           }
         }
       }catch(_){}
-      // Always fetch fresh from server (no auth needed)
       fetch('/api/settings/login_mode')
         .then(r => r.json())
         .then(data => {
@@ -145,15 +393,9 @@
           const showMs = (mode === 'microsoft' || mode === 'both');
           if(section) section.style.display = showMs ? '' : 'none';
         })
-        .catch(() => {
-          // Network failure: default to showing Microsoft button (safe fallback)
-          if(section) section.style.display = '';
-        });
+        .catch(() => { if(section) section.style.display = ''; });
     })();
 
-    // Ensure MUMS exists (and repair if old broken localStorage exists)
-    // If Store.ensureSeed fails for any reason, fall back to a minimal MUMS seed
-    // so the system is always recoverable.
     try{
       Store.ensureSeed();
     }catch(e){
@@ -182,24 +424,20 @@
     function parseAuthErrorFromUrl(){
       try{
         const out = { error: '', error_description: '' };
-        const read = (paramSource)=>{
-          if(!paramSource) return;
-          const err = String(paramSource.get('error') || '').trim();
-          const desc = String(paramSource.get('error_description') || paramSource.get('errorDescription') || '').trim();
+        const read = (ps)=>{
+          if(!ps) return;
+          const err = String(ps.get('error') || '').trim();
+          const desc = String(ps.get('error_description') || ps.get('errorDescription') || '').trim();
           if(err && !out.error) out.error = err;
           if(desc && !out.error_description) out.error_description = desc;
         };
-
         const hashRaw = String(window.location.hash || '').replace(/^#/, '');
         if(hashRaw) read(new URLSearchParams(hashRaw));
         read(new URLSearchParams(window.location.search || ''));
-
         if(!out.error && !out.error_description) return null;
         if(!out.error_description) out.error_description = out.error || 'Microsoft sign-in failed.';
         return out;
-      }catch(_){
-        return null;
-      }
+      }catch(_){ return null; }
     }
 
     function consumeAuthErrorFromUrl(){
@@ -213,7 +451,6 @@
       }catch(_){ }
     }
 
-    // One-time flash error (used when a deleted account is forcibly logged out).
     try{
       const flash = localStorage.getItem('mums_login_flash');
       if(flash){
@@ -221,11 +458,8 @@
         showErr(String(flash));
       }
     }catch(_){}
-
-    // Show exact OAuth/database-trigger error returned in URL hash/query.
     consumeAuthErrorFromUrl();
 
-    // Mirror auth state failures on login screen instead of silent loops.
     try{
       window.addEventListener('mums:oauth_error', (ev)=>{
         const msg = String((ev && ev.detail && ev.detail.error_description) || 'Microsoft sign-in failed.');
@@ -237,7 +471,6 @@
       });
     }catch(_){ }
 
-    // Save details (username/email, optional password)
     const SAVE_KEY = 'mums_login_saved_v1';
     function _getSaved(){
       try{ return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}'); }catch(e){ return {}; }
@@ -248,34 +481,19 @@
     function _clearSaved(){
       try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
     }
-    function _syncSaveUi(){
-      const sd = $("saveDetails");
-      const enabled = !!(sd && sd.checked);
-      const wrap = $("savePasswordWrap");
-      if(wrap) wrap.style.display = enabled ? "flex" : "none";
-      if(!enabled && $("savePassword")) $("savePassword").checked = false;
-    }
     function _restoreSavedDetails(){
       const saved = _getSaved();
       if(saved && saved.enabled){
         if($("saveDetails")) $("saveDetails").checked = true;
         if(saved.login && $("login")) $("login").value = saved.login;
-        if(saved.savePassword && saved.password && $("password")){
-          if($("savePassword")) $("savePassword").checked = true;
-          $("password").value = saved.password;
-        }
       }
-      _syncSaveUi();
     }
     function _persistSavedDetails(){
       const sd = $("saveDetails");
       const enabled = !!(sd && sd.checked);
       if(!enabled){ _clearSaved(); return; }
       const loginVal = $("login") ? $("login").value.trim() : '';
-      const sp = $("savePassword");
-      const savePass = !!(sp && sp.checked);
-      const obj = { enabled: true, login: loginVal, savePassword: !!savePass };
-      if(savePass && $("password")) obj.password = $("password").value;
+      const obj = { enabled: true, login: loginVal };
       _setSaved(obj);
     }
 
@@ -285,12 +503,6 @@
       const pass = $("password").value;
       if(!login || !pass) return showErr("Please enter username/email and password.");
 
-      // FIX-ENV-WAIT: Wait for /api/env to resolve before calling Auth.login().
-      // On fresh devices or with browser autofill, the login button can be clicked
-      // before env_runtime.js has received the Supabase URL/key from /api/env.
-      // Without this guard, apiFetch() throws "Supabase env missing" and login fails
-      // silently — the user sees "User not found" or stays stuck on the login page.
-      // Max wait: 4 seconds. After timeout, attempt login anyway (local fallback path).
       try {
         const envReady = window.__MUMS_ENV_READY || (window.EnvRuntime && EnvRuntime.ready && EnvRuntime.ready());
         if (envReady && typeof envReady.then === 'function') {
@@ -301,12 +513,6 @@
         }
       } catch(_) {}
 
-      // ── DISK IO / OVERLOAD RETRY GUARD ────────────────────────────────────────
-      // Supabase Nano plan can throttle auth operations when Disk IO budget is
-      // exhausted (Supabase returns 500/503 with "Database error" or similar).
-      // Strategy: attempt login up to 3 times with exponential backoff before
-      // showing a final error. Does NOT change auth logic — same Auth.login() call.
-      // FIX v3.9.24: Added 502/abort/CORS patterns from Supabase new-project warmup errors
       function _isTransientError(msg) {
         if (!msg) return false;
         const m = String(msg).toLowerCase();
@@ -331,7 +537,7 @@
       }
 
       const MAX_RETRIES = 2;
-      const RETRY_DELAY_MS = [2500, 5000]; // backoff: 2.5s, then 5s
+      const RETRY_DELAY_MS = [2500, 5000];
       let res = null;
 
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -348,30 +554,23 @@
           res = { ok: false, message: (e && e.message) ? e.message : 'Login exception.' };
         }
 
-        // Success → break and proceed
         if (res && res.ok) break;
 
-        // Credential error (wrong password/email) → no point retrying
         const errMsg = (res && res.message) ? String(res.message) : '';
         if (!_isTransientError(errMsg)) break;
-
-        // Transient error → retry (unless this was the last attempt)
         if (attempt < MAX_RETRIES) continue;
       }
 
       if (!res || !res.ok) {
-        // Improve error message for Supabase infrastructure overload
         const rawMsg = (res && res.message) ? String(res.message) : 'Login failed.';
         let displayMsg = rawMsg;
         if (_isTransientError(rawMsg)) {
-          displayMsg = '⚠️ Supabase is currently overloaded (Disk IO limit reached). '
-            + 'This resets daily. Please wait a few minutes and try again, or contact your admin.';
+          displayMsg = '⚠️ Supabase is currently overloaded (Disk IO limit reached). This resets daily. Please wait a few minutes and try again, or contact your admin.';
         }
         return showErr(displayMsg);
       }
 
       try{ _persistSavedDetails(); }catch(e){}
-      // Use replace() to avoid a slow back navigation and slightly reduce perceived latency.
       try{
         if(String(window.location.protocol||'') === 'file:'){
           window.location.replace("./index.html#dashboard");
@@ -382,6 +581,7 @@
         window.location.replace("./index.html#dashboard");
       }
     }
+
     async function doMicrosoftLogin(){
       hideErr();
       try{
@@ -396,8 +596,6 @@
         }
         const out = await CloudAuth.signInWithAzure({
           scopes: 'email',
-          // Always return to login page callback handler so hash tokens/errors
-          // are absorbed before any root/index redirect guard runs.
           redirectTo: oauthRedirectTo
         });
         if(out && out.ok===false){
@@ -408,8 +606,6 @@
       }
     }
 
-    // Use a form submit handler so password managers/autofill behave properly.
-    // Prevent default navigation to keep the app SPA-style.
     const loginForm = $("loginForm");
     if(loginForm){
       loginForm.addEventListener("submit", (e)=>{
@@ -417,36 +613,16 @@
         doLogin();
       });
     }
+
     const azureLoginBtn = $("azureLoginBtn");
     if(azureLoginBtn){
       azureLoginBtn.addEventListener('click', ()=>{ doMicrosoftLogin(); });
     }
 
-    // Save details UI wiring
     try{
-      if($("saveDetails")) $("saveDetails").addEventListener('change', _syncSaveUi);
-      if($("savePassword")) $("savePassword").addEventListener('change', _syncSaveUi);
+      if($("saveDetails")) $("saveDetails").addEventListener('change', _persistSavedDetails);
       _restoreSavedDetails();
-    }catch(e){}
-
-    $("factoryReset").onclick = ()=>{ Store.factoryReset(); alert("Reset complete. Use MUMS / MUMS"); };
-    $("resetMeys").onclick = ()=>{ Store.ensureSeed(); alert("MUMS repaired. Use MUMS / MUMS"); };
-
-    // Incognito/private windows do not share localStorage with normal windows.
-    // This import/export provides an explicit way to sync users.
-    $("exportUsersLogin").onclick = ()=>{
-      try{ UI.downloadJSON("mums_bundle.json", Store.exportBundle()); }catch(e){ showErr("Export failed: "+(e && e.message ? e.message : e)); }
-    };
-    $("importUsersLogin").onclick = async()=>{
-      try{
-        const data = await UI.pickJSON();
-        const res = Store.importBundle(data);
-        alert("Imported: users "+res.users+", announcements "+res.announcements+", release notes "+res.releaseNotes+". You can now log in.");
-      }catch(e){
-        showErr('Import failed: '+(e && e.message ? e.message : e));
-      }
-    };
-
+    }catch(_){}
   </script>
 </body>
 </html>
