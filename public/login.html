@@ -7,12 +7,10 @@
   <link rel="stylesheet" href="./css/styles.css?v=p1-516" />
   <link rel="stylesheet" href="./css/enterprise_ux.css?v=p1-516" />
 
-  <!-- PERF-FIX-02a: Pre-warm DNS for all external dependencies -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://supabase.co">
   <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-  <!-- Prefetch landing page -->
   <link rel="prefetch" href="./index.html">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
@@ -21,83 +19,114 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
-      --bg:#010409;--surface:#0d1117;--surface2:#161b22;
+      --bg:#02040a;--surface:#0d1117;--surface2:#161b22;
       --border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.05);
       --text:#d0d8e4;--muted:#8b949e;--accent:#58a6ff;
-      --green:#3fb950;--danger:#f85149;--warn:#d29922;
+      --accent-soft:#1f6feb;--green:#3fb950;--danger:#f85149;--warn:#d29922;
       --font:'Plus Jakarta Sans',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
     }
     html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;overflow:hidden}
-    body{display:flex;align-items:center;justify-content:center;padding:32px}
+    body{display:flex;flex-direction:column}
 
+    /* top bar */
+    .topbar{
+      position:relative;z-index:2;
+      height:52px;padding:0 32px;
+      display:flex;align-items:center;justify-content:space-between;
+      border-bottom:1px solid rgba(255,255,255,.04);
+      background:radial-gradient(circle at top,#070b13 0,#02040a 55%);
+      backdrop-filter:blur(18px);
+    }
+    .top-left{display:flex;align-items:center;gap:10px}
+    .top-pill{
+      padding:4px 9px;border-radius:999px;
+      border:1px solid rgba(88,166,255,.4);
+      background:rgba(88,166,255,.12);
+      font-size:10px;text-transform:uppercase;letter-spacing:.08em;
+      color:#c9d1d9;font-weight:700;
+    }
+    .top-env{
+      display:flex;align-items:center;gap:6px;
+      font-size:11px;color:var(--muted);
+    }
+    .top-env-dot{
+      width:7px;height:7px;border-radius:50%;
+      background:var(--green);box-shadow:0 0 8px rgba(63,185,80,.9);
+    }
+    .top-right{
+      font-size:11px;color:var(--muted);display:flex;align-items:center;gap:10px;font-family:var(--mono);
+    }
+    .top-tag{
+      padding:3px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.12);
+      background:rgba(13,17,23,.9);font-size:10px;color:rgba(240,246,252,.8);
+    }
+
+    /* background grid */
     .bg-grid{
       position:fixed;inset:0;z-index:0;
       background-image:
-        radial-gradient(ellipse 60% 50% at 20% 50%,rgba(0,115,234,.07) 0%,transparent 70%),
-        radial-gradient(ellipse 40% 60% at 80% 30%,rgba(162,93,220,.05) 0%,transparent 70%),
-        repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,.018) 39px,rgba(255,255,255,.018) 40px),
-        repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,255,255,.018) 39px,rgba(255,255,255,.018) 40px);
+        radial-gradient(ellipse 60% 50% at 18% 40%,rgba(0,115,234,.12) 0%,transparent 70%),
+        radial-gradient(ellipse 50% 40% at 82% 70%,rgba(162,93,220,.09) 0%,transparent 70%),
+        repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,.02) 39px,rgba(255,255,255,.02) 40px),
+        repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,255,255,.02) 39px,rgba(255,255,255,.02) 40px);
+      opacity:.5;
     }
-    .bg-orb{
-      position:fixed;width:600px;height:600px;border-radius:50%;
-      background:radial-gradient(circle,rgba(0,115,234,.09) 0%,transparent 70%);
-      top:-200px;left:-200px;z-index:0;
-      animation:orbFloat 12s ease-in-out infinite;
+
+    .main{
+      position:relative;z-index:1;
+      flex:1;
+      display:flex;align-items:center;justify-content:center;
+      padding:32px;
     }
-    .bg-orb2{
-      position:fixed;width:400px;height:400px;border-radius:50%;
-      background:radial-gradient(circle,rgba(162,93,220,.07) 0%,transparent 70%);
-      bottom:-100px;right:-100px;z-index:0;
-      animation:orbFloat 16s ease-in-out infinite reverse;
-    }
-    @keyframes orbFloat{0%,100%{transform:translate(0,0)}50%{transform:translate(30px,20px)}}
 
     .shell{
-      position:relative;z-index:1;
       display:grid;grid-template-columns:1.2fr 480px 260px;
-      max-width:1440px;width:100%;min-height:640px;
+      max-width:1440px;width:100%;min-height:620px;
       gap:40px;
     }
 
     /* LEFT PANEL */
-    .side-left{display:flex;flex-direction:column;justify-content:center;padding:40px 0;gap:28px}
-    .brand-hero{display:flex;flex-direction:column;gap:18px}
+    .side-left{display:flex;flex-direction:column;justify-content:center;padding-left:12px;gap:32px}
+    .brand-hero{display:flex;flex-direction:column;gap:20px}
     .brand-logo{
       width:56px;height:56px;border-radius:18px;
       background:linear-gradient(135deg,#0073ea,#a25ddc);
       display:flex;align-items:center;justify-content:center;
       font-size:24px;color:#fff;
-      box-shadow:0 12px 40px rgba(0,115,234,.45);
+      box-shadow:0 14px 40px rgba(0,115,234,.5);
     }
-    .brand-name{font-size:40px;font-weight:900;color:#fff;letter-spacing:-.03em;line-height:1}
-    .brand-sub{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
-    .brand-desc{font-size:13px;color:rgba(255,255,255,.4);line-height:1.8;max-width:360px}
+    .brand-name{font-size:42px;font-weight:900;color:#fff;letter-spacing:-.03em;line-height:1}
+    .brand-sub{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-top:4px}
+    .brand-desc{font-size:13px;color:rgba(255,255,255,.45);line-height:1.9;max-width:420px}
     .pills{display:flex;flex-direction:column;gap:8px;margin-top:8px}
     .pill{
       display:flex;align-items:center;gap:10px;
       padding:10px 14px;border-radius:10px;
-      background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);
+      background:rgba(13,17,23,.9);border:1px solid rgba(255,255,255,.06);
       font-size:11px;color:var(--muted);font-weight:600;
     }
     .pill i{color:var(--accent);font-size:11px;width:14px;text-align:center}
+    .pill span{flex:1}
+    .pill-meta{font-size:10px;color:rgba(148,163,184,.7)}
 
     /* CENTER CARD */
-    .center{display:flex;flex-direction:column;justify-content:center}
+    .center{display:flex;flex-direction:column;justify-content:center;align-items:center}
     .login-card{
       background:var(--surface);border:1px solid var(--border);
-      border-radius:18px;padding:30px 28px;
-      box-shadow:0 32px 80px rgba(0,0,0,.75),0 0 0 1px rgba(255,255,255,.04);
-      max-width:520px;width:100%;
+      border-radius:20px;padding:30px 28px 26px;
+      box-shadow:0 32px 80px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.04);
+      max-width:460px;width:100%;
     }
     .card-header{margin-bottom:22px}
     .card-eyebrow{
-      font-size:9px;font-weight:800;letter-spacing:.12em;
-      text-transform:uppercase;color:var(--accent);margin-bottom:8px;
+      font-size:9px;font-weight:800;letter-spacing:.14em;
+      text-transform:uppercase;color:var(--accent-soft);margin-bottom:8px;
       display:flex;align-items:center;gap:6px;
     }
-    .card-eyebrow::before{content:'';width:16px;height:1px;background:var(--accent);opacity:.6}
+    .card-eyebrow::before{content:'';width:16px;height:1px;background:var(--accent-soft);opacity:.7}
     .card-title{font-size:22px;font-weight:800;color:#fff;margin-bottom:4px}
     .card-sub{font-size:11px;color:var(--muted)}
+    .card-sub b{color:#e6edf3}
 
     .field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
     .field label{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
@@ -108,12 +137,12 @@
     }
     .input{
       width:100%;padding:10px 12px 10px 34px;
-      background:#010409;border:1.5px solid rgba(255,255,255,.12);
+      background:#010409;border:1.5px solid rgba(255,255,255,.16);
       border-radius:8px;color:var(--text);font-size:12px;font-family:var(--font);
       outline:none;transition:border-color .18s,box-shadow .18s,background .18s;
     }
-    .input:focus{border-color:rgba(88,166,255,.6);box-shadow:0 0 0 3px rgba(88,166,255,.18);background:#020814;}
-    .input::placeholder{color:rgba(255,255,255,.25)}
+    .input:focus{border-color:rgba(88,166,255,.7);box-shadow:0 0 0 3px rgba(88,166,255,.25);background:#020814;}
+    .input::placeholder{color:rgba(255,255,255,.27)}
 
     .check-row{display:flex;align-items:center;gap:10px;margin:4px 0 16px}
     .check-row label{font-size:11px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:6px}
@@ -122,16 +151,17 @@
     .btn-primary{
       width:100%;padding:11px;border-radius:8px;
       background:linear-gradient(135deg,#0073ea,#0060c2);
-      border:1px solid rgba(0,115,234,.5);color:#fff;
+      border:1px solid rgba(0,115,234,.6);color:#fff;
       font-size:13px;font-weight:800;font-family:var(--font);
       cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
-      box-shadow:0 6px 22px rgba(0,115,234,.4);
+      box-shadow:0 7px 24px rgba(0,115,234,.55);
       transition:all .18s;
     }
-    .btn-primary:hover{background:linear-gradient(135deg,#0284c7,#0073ea);transform:translateY(-1px);box-shadow:0 10px 30px rgba(0,115,234,.6)}
+    .btn-primary:hover{background:linear-gradient(135deg,#0284c7,#0073ea);transform:translateY(-1px);box-shadow:0 12px 34px rgba(0,115,234,.7)}
 
     .btn-ghost{
-      width:100%;padding:8px 10px;border-radius:7px;
+      width:100%;padding:8px 10px;margin-top:10px;
+      border-radius:7px;
       background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
       color:var(--muted);font-size:11px;font-weight:600;
       cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;
@@ -146,10 +176,11 @@
     }
 
     /* RIGHT STATS COLUMN */
-    .side-right{display:flex;flex-direction:column;justify-content:center;gap:12px}
+    .side-right{display:flex;flex-direction:column;justify-content:center;gap:14px}
     .stat-card{
-      background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);
-      border-radius:12px;padding:13px 15px;
+      background:rgba(13,17,23,.96);border:1px solid rgba(255,255,255,.06);
+      border-radius:14px;padding:13px 15px;
+      box-shadow:0 16px 40px rgba(0,0,0,.7);
     }
     .stat-num{font-size:22px;font-weight:900;color:#fff;font-family:var(--mono);line-height:1}
     .stat-lbl{font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:3px}
@@ -157,18 +188,29 @@
     .stat-chip.up{color:var(--green)}
     .stat-chip i{font-size:8px}
     .version-badge{
-      font-size:9px;color:rgba(255,255,255,.2);margin-top:10px;
+      font-size:9px;color:rgba(255,255,255,.25);margin-top:10px;
       font-family:var(--mono);display:flex;align-items:center;gap:7px;
     }
     .dot-live{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s ease-in-out infinite}
     @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
+    /* footer */
+    .footer{
+      position:relative;z-index:1;
+      height:34px;padding:0 32px 10px;
+      display:flex;align-items:flex-end;justify-content:space-between;
+      font-size:10px;color:rgba(139,148,158,.8);
+    }
+    .footer a{color:var(--accent);text-decoration:none}
+    .footer a:hover{text-decoration:underline}
+
     @media (max-width:1100px){
-      .shell{grid-template-columns:1.3fr 1fr;gap:28px;max-width:1040px}
+      .shell{grid-template-columns:1.2fr 1fr;gap:28px;max-width:1040px}
       .side-right{display:none}
     }
     @media (max-width:768px){
-      body{padding:16px}
+      .topbar{padding:0 16px}
+      .main{padding:16px}
       .shell{grid-template-columns:1fr;gap:20px}
       .side-left{display:none}
     }
@@ -176,97 +218,135 @@
 </head>
 <body>
   <div class="bg-grid"></div>
-  <div class="bg-orb"></div>
-  <div class="bg-orb2"></div>
 
-  <div class="shell">
-    <!-- LEFT BRAND PANEL -->
-    <div class="side-left">
-      <div class="brand-hero">
-        <div class="brand-logo"><i class="fas fa-headset"></i></div>
-        <div>
-          <div class="brand-name">MUMS</div>
-          <div class="brand-sub">USER MANAGEMENT SYSTEM</div>
-        </div>
-        <div class="brand-desc">
-          Enterprise‑grade support console for managing teams, schedules, and operations at scale.
-        </div>
-      </div>
-      <div class="pills">
-        <div class="pill"><i class="fas fa-shield-halved"></i>Role‑Based Access Control</div>
-        <div class="pill"><i class="fas fa-users"></i>Multi‑Team Management</div>
-        <div class="pill"><i class="fas fa-database"></i>QuickBase Integration</div>
-        <div class="pill"><i class="fas fa-clock"></i>Live Schedule Tracking</div>
+  <header class="topbar">
+    <div class="top-left">
+      <div class="top-pill">MUMS ENTERPRISE</div>
+      <div class="top-env">
+        <span class="top-env-dot"></span>
+        <span>Production · Asia/Manila</span>
       </div>
     </div>
+    <div class="top-right">
+      <span class="top-tag">Uptime · 99.9%</span>
+      <span>Build <span data-build-label>p1-516</span></span>
+    </div>
+  </header>
 
-    <!-- CENTER LOGIN CARD -->
-    <div class="center">
-      <div class="login-card">
-        <div class="card-header">
-          <div class="card-eyebrow">Secure Access Portal</div>
-          <div class="card-title">Welcome back</div>
-          <div class="card-sub">Sign in to your MUMS workspace · Asia/Manila</div>
+  <main class="main">
+    <div class="bg-orb"></div>
+    <div class="bg-orb2"></div>
+
+    <div class="shell">
+      <!-- LEFT PANEL -->
+      <div class="side-left">
+        <div class="brand-hero">
+          <div class="brand-logo"><i class="fas fa-headset"></i></div>
+          <div>
+            <div class="brand-name">MUMS</div>
+            <div class="brand-sub">USER MANAGEMENT SYSTEM</div>
+          </div>
+          <div class="brand-desc">
+            Enterprise‑grade console for managing teams, schedules, and live support operations across your organization.
+          </div>
         </div>
+        <div class="pills">
+          <div class="pill">
+            <i class="fas fa-shield-halved"></i>
+            <span>Role‑Based Access Control</span>
+            <span class="pill-meta">Super Admin · Admin · Team Lead</span>
+          </div>
+          <div class="pill">
+            <i class="fas fa-users"></i>
+            <span>Multi‑Team Management</span>
+            <span class="pill-meta">Queues, shifts, coverage</span>
+          </div>
+          <div class="pill">
+            <i class="fas fa-database"></i>
+            <span>QuickBase Integration</span>
+            <span class="pill-meta">Live cases & history</span>
+          </div>
+          <div class="pill">
+            <i class="fas fa-clock"></i>
+            <span>Live Schedule Tracking</span>
+            <span class="pill-meta">Timezone‑aware views</span>
+          </div>
+        </div>
+      </div>
 
-        <form id="loginForm" autocomplete="on" novalidate>
-          <div class="field">
-            <label for="login">Username or Email</label>
-            <div class="field-wrap">
-              <i class="fas fa-user field-ico"></i>
-              <input class="input" id="login" name="username" placeholder="username or email" autocomplete="username" />
+      <!-- CENTER LOGIN CARD -->
+      <div class="center">
+        <div class="login-card">
+          <div class="card-header">
+            <div class="card-eyebrow">Secure Access Portal</div>
+            <div class="card-title">Welcome back</div>
+            <div class="card-sub">
+              Sign in to your MUMS workspace · <b>Asia/Manila</b>
             </div>
           </div>
 
-          <div class="field">
-            <label for="password">Password</label>
-            <div class="field-wrap">
-              <i class="fas fa-lock field-ico"></i>
-              <input class="input" id="password" name="password" type="password" placeholder="••••••••••" autocomplete="current-password" />
+          <form id="loginForm" autocomplete="on" novalidate>
+            <div class="field">
+              <label for="login">Username or Email</label>
+              <div class="field-wrap">
+                <i class="fas fa-user field-ico"></i>
+                <input class="input" id="login" name="username" placeholder="username or email" autocomplete="username" />
+              </div>
             </div>
-          </div>
 
-          <div class="check-row">
-            <label><input type="checkbox" id="saveDetails" />Remember me</label>
-          </div>
+            <div class="field">
+              <label for="password">Password</label>
+              <div class="field-wrap">
+                <i class="fas fa-lock field-ico"></i>
+                <input class="input" id="password" name="password" type="password" placeholder="••••••••••" autocomplete="current-password" />
+              </div>
+            </div>
 
-          <button class="btn-primary" id="loginBtn" type="submit">
-            <i class="fas fa-arrow-right-to-bracket"></i> Sign In to MUMS
-          </button>
+            <div class="check-row">
+              <label><input type="checkbox" id="saveDetails" />Remember me</label>
+            </div>
 
-          <!-- Microsoft login section (kept for login_mode) -->
-          <div id="microsoftLoginSection" style="display:none;margin-top:14px">
-            <button class="btn-ghost" id="azureLoginBtn" type="button">
-              <i class="fab fa-microsoft"></i> Sign in with Microsoft
+            <button class="btn-primary" id="loginBtn" type="submit">
+              <i class="fas fa-arrow-right-to-bracket"></i> Sign In to MUMS
             </button>
-          </div>
 
-          <!-- Error message only -->
-          <div class="err" id="err"></div>
-        </form>
+            <div id="microsoftLoginSection" style="display:none;margin-top:14px">
+              <button class="btn-ghost" id="azureLoginBtn" type="button">
+                <i class="fab fa-microsoft"></i> Sign in with Microsoft
+              </button>
+            </div>
+
+            <div class="err" id="err"></div>
+          </form>
+        </div>
+      </div>
+
+      <!-- RIGHT METRICS -->
+      <div class="side-right">
+        <div class="stat-card">
+          <div class="stat-num">99.9<span style="font-size:13px;color:var(--muted)">%</span></div>
+          <div class="stat-lbl">System Uptime</div>
+          <div class="stat-chip up"><i class="fas fa-circle"></i>Operational</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" style="color:var(--accent)">v5.16</div>
+          <div class="stat-lbl">Platform Version</div>
+          <div class="stat-chip up"><i class="fas fa-arrow-up"></i>Latest Build</div>
+        </div>
+        <div class="version-badge">
+          <div class="dot-live"></div>
+          MUMS Enterprise · Asia/Manila
+        </div>
       </div>
     </div>
+  </main>
 
-    <!-- RIGHT METRICS -->
-    <div class="side-right">
-      <div class="stat-card">
-        <div class="stat-num">99.9<span style="font-size:13px;color:var(--muted)">%</span></div>
-        <div class="stat-lbl">System Uptime</div>
-        <div class="stat-chip up"><i class="fas fa-circle"></i>Operational</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-num" style="color:var(--accent)">v5.16</div>
-        <div class="stat-lbl">Platform Version</div>
-        <div class="stat-chip up"><i class="fas fa-arrow-up"></i>Latest Build</div>
-      </div>
-      <div class="version-badge">
-        <div class="dot-live"></div>
-        MUMS Enterprise · Asia/Manila
-      </div>
-    </div>
-  </div>
+  <footer class="footer">
+    <span>© <span id="year"></span> MUMS · All rights reserved.</span>
+    <span>Need help? <a href="#">Contact system administrator</a></span>
+  </footer>
 
-  <!-- JS includes (unchanged) -->
+  <!-- JS includes -->
   <script src="./js/env_runtime.js?v=p1-516"></script>
   <script src="./js/remote_patch.js?v=p1-516"></script>
   <script src="./js/config/version.js?v=p1-516"></script>
@@ -278,10 +358,11 @@
   <script src="./js/ui.js?v=p1-516"></script>
   <script>
     try{ localStorage.setItem("mums_cursor_mode","system"); }catch(e){}
+    document.getElementById('year').textContent = new Date().getFullYear();
   </script>
 
   <script>
-    // Surface runtime errors
+    // Same login JS as before, only trimmed of removed buttons (reset/export/import)
     window.addEventListener('error', (ev)=>{
       try{
         const msg = (ev && ev.message) ? ev.message : 'Unknown error';
@@ -291,7 +372,6 @@
       }catch(_){ }
     });
 
-    // Login mode: show/hide Microsoft
     (function applyLoginMode(){
       const section = document.getElementById('microsoftLoginSection');
       try{
@@ -313,12 +393,9 @@
           const showMs = (mode === 'microsoft' || mode === 'both');
           if(section) section.style.display = showMs ? '' : 'none';
         })
-        .catch(() => {
-          if(section) section.style.display = '';
-        });
+        .catch(() => { if(section) section.style.display = ''; });
     })();
 
-    // Ensure minimal seed if Store.ensureSeed fails
     try{
       Store.ensureSeed();
     }catch(e){
@@ -543,10 +620,9 @@
     }
 
     try{
-      if($("saveDetails")) $("saveDetails").addEventListener('change', _restoreSavedDetails);
+      if($("saveDetails")) $("saveDetails").addEventListener('change', _persistSavedDetails);
       _restoreSavedDetails();
     }catch(_){}
-
   </script>
 </body>
 </html>
