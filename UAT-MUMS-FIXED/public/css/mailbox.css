@@ -1,0 +1,92 @@
+/* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
+   Protects: Enterprise UI/UX · Global Themes · Layout Cascade · CSS Architecture.
+   DO NOT modify any existing selectors, layout rules, or theme structures in this file
+   without first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
+   Violations will cause visual regressions across all themes. When in doubt — STOP and REPORT. */
+/* ===== CODE UNTOUCHABLES =====
+   Global Override Label styling:
+   - Must remain visible, bold, uppercase, and red/orange when global override is active.
+   - Exception: Only change if required by documented design system updates.
+   ============================== */
+
+.override-label{
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-weight:800;
+  font-size:12px;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  color:#b45309; /* orange/red */
+  background:rgba(245, 158, 11, 0.14);
+  border:1px solid rgba(245, 158, 11, 0.45);
+  line-height:1;
+  white-space:nowrap;
+}
+
+.override-label:focus{
+  outline:2px solid rgba(245, 158, 11, 0.6);
+  outline-offset:2px;
+}
+
+/* Mailbox analytics + assignment modal UX (Enterprise)
+   - Modular add-on styles (safe to rollback)
+*/
+
+.mbx-spinner{
+  display:inline-block;
+  width:14px;
+  height:14px;
+  border:2px solid currentColor;
+  border-right-color:transparent;
+  border-radius:999px;
+  vertical-align:-2px;
+  animation:mbxSpin .8s linear infinite;
+}
+@keyframes mbxSpin{to{transform:rotate(360deg)}}
+
+.mbx-analytics{display:grid;gap:12px}
+.mbx-analytics-grid{display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:12px}
+@media (max-width: 980px){
+  .mbx-analytics-grid{grid-template-columns:1fr}
+}
+.mbx-ana-box{border:1px solid var(--border);background:var(--panel);border-radius:14px;padding:12px}
+.mbx-ana-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px dashed color-mix(in srgb, var(--border) 55%, transparent)}
+.mbx-ana-row:first-child{border-top:none}
+.mbx-ana-bar{height:8px;border-radius:999px;background:color-mix(in srgb, var(--border) 45%, transparent);overflow:hidden}
+.mbx-ana-bar > span{display:block;height:100%;background:color-mix(in srgb, var(--accent) 70%, transparent)}
+
+/* Soft modal entrance (best effort) */
+.modal .panel{transform:translateY(4px);transition:transform .18s ease}
+.modal.open .panel{transform:translateY(0)}
+
+/* ── GLOBAL MAILBOX TIME OVERRIDE BANNER ───────────────────────────────────
+   Realtime banner shown at top of Mailbox Control Center when a global
+   override is active. Uses existing .override-label pill from above.
+   DO NOT remove — required by the override realtime fix.
+   ──────────────────────────────────────────────────────────────────────── */
+.mbx-override-banner{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 16px;
+  margin:0 0 2px 0;
+  background:rgba(245,158,11,0.10);
+  border:1.5px solid rgba(245,158,11,0.40);
+  border-radius:10px;
+  flex-wrap:wrap;
+  animation:mbxOverridePulse 2.4s ease-in-out infinite;
+}
+@keyframes mbxOverridePulse{
+  0%,100%{ border-color:rgba(245,158,11,0.40); box-shadow:0 0 0 0 rgba(245,158,11,0.0); }
+  50%    { border-color:rgba(245,158,11,0.75); box-shadow:0 0 8px 2px rgba(245,158,11,0.18); }
+}
+.mbx-override-clock{
+  font-variant-numeric:tabular-nums;
+  font-family:'Courier New',Courier,monospace;
+  font-size:20px;
+  font-weight:800;
+  color:#f59e0b;
+  letter-spacing:0.05em;
+  flex-shrink:0;
+}

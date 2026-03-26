@@ -726,7 +726,18 @@
     if (!columns.length || !rows.length) {
       const emptyBySearch = !!opts.userInitiatedSearch;
       meta.textContent = 'No Quickbase Records Found';
-      host.innerHTML = `<div class="card pad"><div class="small muted">${emptyBySearch ? 'No records match your filters.' : 'No records loaded. Open ⚙️ Settings to configure report, columns, and filters.'}</div></div>`;
+      // FIX v3.9.28: In QB_S (Studio) mode, when a search yields no local results,
+      // surface a "Search All Records" bridge that fires the Deep Search panel with
+      // the same term — Deep Search covers all 22k+ records, not just the loaded report.
+      const isStudioPage = !!(root && root.dataset && root.dataset.page === 'quickbase_s');
+      const searchTerm = opts.searchTerm || (root && root.querySelector && (root.querySelector('#qbHeaderSearch') || root.querySelector('input[type="text"]') || {}).value) || '';
+      const deepSearchBridge = (emptyBySearch && isStudioPage && String(searchTerm || '').trim())
+        ? `<button onclick="(function(){var inp=document.getElementById('qbs-search-input');if(inp){inp.value=${JSON.stringify(String(searchTerm || '').trim())};var leftPanel=document.getElementById('left-panel-qbs');if(leftPanel&&leftPanel.style.display==='none'){var leftBtn=document.querySelector('[data-tab=\'qbs\']');if(leftBtn)leftBtn.click();}if(typeof window._qbsDeepSearch==='function')window._qbsDeepSearch(inp.value,0);}})();"
+            style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">
+            <i class="fas fa-search" style="font-size:10px;"></i> Search All 22k+ Records in Deep Search
+          </button>`
+        : '';
+      host.innerHTML = `<div class="card pad" style="text-align:center;padding:24px 16px;"><div class="small muted">${emptyBySearch ? 'No records match your filters in the current report.' : 'No records loaded. Open ⚙️ Settings to configure report, columns, and filters.'}</div>${deepSearchBridge}</div>`;
       return;
     }
 

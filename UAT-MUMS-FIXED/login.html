@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MUMS | Login</title>
+  <!-- PERF-FIX-01: Replaced meta-refresh (full HTTP round-trip ~200-400ms)
+       with inline JS redirect. window.location.replace avoids history stack entry.
+       Fallback link preserved for no-JS environments. -->
+  <script>window.location.replace('./public/login.html');</script>
+</head>
+<body>
+  <p>Redirecting… If you are not redirected, <a href="./public/login.html">click here</a>.</p>
+</body>
+</html>

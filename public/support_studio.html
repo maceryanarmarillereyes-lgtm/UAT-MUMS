@@ -5600,10 +5600,14 @@
               // root._qbcdOpen is set by my_quickbase.js only AFTER async data loads + renderRecords
               function _exposeQbCdOpen() {
                 if (typeof root._qbcdOpen === 'function') {
-                  window.__studioQbCdOpen = function(snap) {
-                    var host = root.querySelector('#qbDataBody');
-                    var snaps = host && Array.isArray(host._qbRowSnaps) ? host._qbRowSnaps : [snap];
-                    return root._qbcdOpen(snap, snaps);
+                  // FIX v3.9.28: __studioQbCdOpen passes [snap] as the snaps array
+                  // when called from deep search, since host._qbRowSnaps only has the
+                  // current report rows and won't contain resolved/old cases.
+                  window.__studioQbCdOpen = function(snap, allSnaps) {
+                    var snapsToUse = Array.isArray(allSnaps) && allSnaps.length
+                      ? allSnaps
+                      : [snap];
+                    return root._qbcdOpen(snap, snapsToUse);
                   };
                   console.log('[SupportStudio] __studioQbCdOpen exposed successfully');
                   return true;
@@ -5871,19 +5875,28 @@
     return { tabConfig: tabConfig, realm: realm, appId: appId, tableId: tableId };
   }
 
+  // FIX v3.9.28: _qbsBuildDeepSearchSnaps now uses rec.columnMap from the server
+  // response directly (which includes ALL field IDs, including field 3 / Record ID#).
+  // Previously it rebuilt columnMap only from d.columns (which filters out field 3),
+  // so _populate() could not find "Case #" or other critical fields → empty modal.
   function _qbsBuildDeepSearchSnaps(records, labelMap) {
     var context = _qbsReadContextConfig();
     var cols = Object.keys(labelMap || {}).map(function(id) {
       return { id: Number(id) || id, label: labelMap[id] || ('Field #' + id) };
     });
     return (Array.isArray(records) ? records : []).map(function(rec, idx) {
+      // Prefer the server-supplied rec.columnMap (complete field map including field 3).
+      // Fall back to labelMap (built from d.columns) only if server didn't send it.
+      var colMap = (rec && rec.columnMap && Object.keys(rec.columnMap).length)
+        ? Object.assign({}, rec.columnMap)
+        : Object.assign({}, labelMap || {});
       return {
         rowNum: idx + 1,
         recordId: rec && (rec.qbRecordId || rec.recordId || rec.id) ? String(rec.qbRecordId || rec.recordId || rec.id) : '',
         qbRecordId: rec && rec.qbRecordId ? rec.qbRecordId : '',
         fields: rec && rec.fields ? rec.fields : {},
         columns: cols,
-        columnMap: Object.assign({}, labelMap || {}),
+        columnMap: colMap,
         tabConfig: context.tabConfig,
         realm: context.realm,
         appId: context.appId,
@@ -6119,38 +6132,38 @@
   };
 
   // Helper: open a deep search result as a case detail
+  // FIX v3.9.28: Removed the broken window.MQ.openCaseDetailModal path.
+  // That function looks up the record in the CURRENTLY LOADED REPORT rows
+  // (_qbRowSnaps, max 100–500 records, filtered to active cases only).
+  // Resolved/old cases are NOT in that set, so the modal opened with
+  // wrong data (row 0) or empty dashes.
+  // Correct path: root._qbcdOpen(snap, snaps) which calls _populate(snap)
+  // using the snap's own fields + columnMap from the deep search API.
   window._qbsOpenDeepResult = function(caseNum, resultIdx) {
-    // Preferred path: open Case Details directly from current deep-search snapshots.
     var resultsEl = document.getElementById('qbs-search-results');
     var snaps = resultsEl && Array.isArray(resultsEl._qbsDeepSearchSnaps) ? resultsEl._qbsDeepSearchSnaps : [];
     var idx = Number(resultIdx);
+    var root = document.getElementById('qbs-root');
+
     if (!isNaN(idx) && snaps[idx]) {
       var snap = snaps[idx];
-      if (window.MQ && typeof window.MQ.openCaseDetailModal === 'function') {
-        var ctx = _qbsReadContextConfig();
-        window.MQ.openCaseDetailModal({
-          qbRecordId: snap.qbRecordId || snap.recordId || String(caseNum || ''),
-          fields: snap.fields || {},
-          columns: (resultsEl && resultsEl._qbsDeepSearchColumns) || [],
-          tabConfig: ctx.tabConfig || {},
-          realm: ctx.realm || '',
-          appId: ctx.appId || '',
-          tableId: ctx.tableId || ''
-        });
+      // Primary path: root._qbcdOpen uses snap.fields + snap.columnMap directly.
+      // This is correct regardless of whether the record is in the current report.
+      if (root && typeof root._qbcdOpen === 'function') {
+        root._qbcdOpen(snap, snaps);
         return;
       }
+      // Secondary path: window._qbsOpenCaseDetail checks root._qbcdOpen first, then fallback modal.
       if (typeof window._qbsOpenCaseDetail === 'function') {
         window._qbsOpenCaseDetail(snap, snaps);
         return;
       }
     }
-    // Try to find the case in the currently loaded records as fallback.
-    var root = document.getElementById('qbs-root');
+    // Last resort: no snap data — fallback to main search box
     if (root && typeof root._searchByCaseNum === 'function') {
       root._searchByCaseNum(String(caseNum));
       return;
     }
-    // Fallback: put the case number into the main search box and trigger search
     var mainSearch = root && root.querySelector('input[type="text"]');
     if (mainSearch) {
       mainSearch.value = '#' + caseNum;

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controller Lab - Enterprise Visual Studio</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/css/enterprise_ux.css">
+    <link rel="stylesheet" href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css)">
+    <script src="[https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js](https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js)"></script>
+    <style>
+        body { background-color: #010409; color: #c9d1d9; margin: 0; font-family: 'Inter', 'Segoe UI', sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* Header & Tabs */
+        .lab-header { padding: 10px 20px; background: #0d1117; border-bottom: 1px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; justify-content: space-between; z-index: 10; }
+        .header-left { display: flex; align-items: center; gap: 20px; }
+        .lab-header h1 { font-size: 1.1rem; font-weight: 600; margin: 0; color: #ffffff; display: flex; align-items: center; gap: 10px; }
+        .tab-group { display: flex; gap: 5px; }
+        .tab-btn { background: transparent; border: 1px solid transparent; color: #8b949e; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; transition: all 0.2s; }
+        .tab-btn:hover { color: #c9d1d9; background: rgba(255,255,255,0.05); }
+        .tab-btn.active { background: rgba(88, 166, 255, 0.1); color: #58a6ff; border: 1px solid rgba(88, 166, 255, 0.4); }
+        
+        /* 3-Pane Studio Layout */
+        .tab-content { display: none; height: calc(100vh - 50px); }
+        .tab-content.active { display: flex; }
+        
+        /* Sidebars */
+        .sidebar { width: 280px; background: #0d1117; border-right: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; overflow-y: auto; }
+        .sidebar.right { border-right: none; border-left: 1px solid rgba(255,255,255,0.1); width: 320px; }
+        .panel-section { padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .panel-title { font-size: 11px; text-transform: uppercase; color: #8b949e; margin: 0 0 10px 0; font-weight: bold; letter-spacing: 1px; }
+        
+        /* Center Canvas */
+        .canvas-area { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
+        .canvas-toolbar { padding: 8px 15px; background: #161b22; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; }
+        #live-canvas { width: 100%; flex: 1; border: none; background: #0d1117; transition: outline 0.1s; }
+        
+        /* Controls */
+        .btn-action { width: 100%; padding: 8px; margin-bottom: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 12px; transition: 0.2s; text-align: left; }
+        .btn-action:hover { background: rgba(255,255,255,0.1); }
+        .btn-primary { background: #238636; border: 1px solid rgba(255,255,255,0.1); color: white; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
+        .btn-primary:hover { background: #2ea043; }
+        .btn-danger { background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.4); color: #f85149; }
+        .btn-danger:hover { background: rgba(248, 81, 73, 0.2); }
+        
+        /* Forms */
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 11px; color: #8b949e; margin-bottom: 4px; }
+        .form-control { width: 100%; padding: 6px; background: #010409; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #c9d1d9; font-size: 12px; box-sizing: border-box; }
+        .color-picker { height: 30px; padding: 2px; cursor: pointer; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        
+        /* Project List */
+        .project-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 4px; margin-bottom: 5px; font-size: 12px; }
+        .project-actions i { cursor: pointer; padding: 4px; color: #8b949e; }
+        .project-actions i:hover { color: #fff; }
+        
+        /* Output Terminal */
+        .export-overlay { position: absolute; bottom: 0; left: 0; right: 0; height: 40%; background: rgba(13, 17, 23, 0.95); backdrop-filter: blur(10px); border-top: 1px solid rgba(255,255,255,0.2); display: none; flex-direction: column; z-index: 100; }
+        .export-header { padding: 10px 15px; display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); background: #161b22; }
+        #export-textarea { flex: 1; background: #010409; color: #58a6ff; font-family: monospace; font-size: 12px; border: none; padding: 15px; resize: none; }
+        
+        /* Mode Badge */
+        .mode-badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; border: 1px solid; }
+        .mode-edit { background: rgba(88, 166, 255, 0.1); color: #58a6ff; border-color: rgba(88, 166, 255, 0.4); }
+        .mode-preview { background: rgba(46, 160, 67, 0.1); color: #3fb950; border-color: rgba(46, 160, 67, 0.4); }
+    </style>
+</head>
+<body>
+<div class="lab-header">
+    <div class="header-left">
+        <h1><i class="fas fa-gamepad" style="color: #58a6ff;"></i> Controller Lab <span style="font-size:10px; color:#8b949e; margin-left:10px;">Enterprise Visual Studio</span></h1>
+        <div class="tab-group">
+            <button class="tab-btn active" onclick="switchTab('tab-studio')"><i class="fas fa-paint-brush"></i> Visual Studio</button>
+            <button class="tab-btn" onclick="switchTab('tab-data')"><i class="fas fa-database"></i> Excel Adapter</button>
+        </div>
+    </div>
+    <div>
+        <button class="btn-primary" onclick="exportCode()"><i class="fas fa-code"></i> Generate Codex Payload</button>
+    </div>
+</div>
+
+<div id="tab-studio" class="tab-content active">
+    
+    <div class="sidebar">
+        <div class="panel-section">
+            <h3 class="panel-title"><i class="fas fa-folder-open"></i> Project Manager</h3>
+            <div class="form-group" style="display: flex; gap: 5px;">
+                <input type="text" id="project-name" class="form-control" placeholder="Project Name...">
+                <button class="btn-primary" style="padding: 6px 10px;" onclick="saveProject()"><i class="fas fa-save"></i></button>
+            </div>
+            <div id="project-list"></div>
+        </div>
+        
+        <div class="panel-section" style="flex: 1;">
+            <h3 class="panel-title"><i class="fas fa-cubes"></i> Inject Widgets</h3>
+            <p style="font-size: 11px; color: #8b949e; margin-bottom: 10px;">Select a container in canvas first, then inject.</p>
+            
+            <button class="btn-action" onclick="injectComponent('glass_card')"><i class="fas fa-square"></i> Enterprise Glass Card</button>
+            <button class="btn-action" onclick="injectComponent('kpi_card')"><i class="fas fa-chart-line"></i> Metric / KPI Card</button>
+            <button class="btn-action" onclick="injectComponent('two_col')"><i class="fas fa-columns"></i> 2-Column Grid</button>
+            <button class="btn-action" onclick="injectComponent('heading')"><i class="fas fa-heading"></i> Section Header</button>
+            <button class="btn-action" onclick="injectComponent('text')"><i class="fas fa-align-left"></i> Text Block</button>
+            <button class="btn-action" onclick="injectComponent('button')"><i class="fas fa-link"></i> Action Button (Link)</button>
+            <button class="btn-action" onclick="injectComponent('divider')"><i class="fas fa-minus"></i> Horizontal Divider</button>
+        </div>
+    </div>
+    
+    <div class="canvas-area">
+        <div class="canvas-toolbar">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button id="btn-toggle-mode" class="btn-action" style="margin:0; width: auto;" onclick="toggleEditorMode()">
+                    <i class="fas fa-mouse-pointer"></i> Enable Edit Mode
+                </button>
+                <span id="mode-status" class="mode-badge mode-preview">Preview Mode (Clicking works normally)</span>
+            </div>
+            <div style="font-size: 11px; color: #8b949e;"><i class="fas fa-desktop"></i> Sandbox: /index.html</div>
+        </div>
+        
+        <iframe id="live-canvas" src="/index.html" onload="initCanvas()"></iframe>
+        
+        <div class="export-overlay" id="export-overlay">
+            <div class="export-header">
+                <span style="font-weight: bold; font-size: 12px;"><i class="fas fa-terminal"></i> Codex DOM Export</span>
+                <i class="fas fa-times" style="cursor:pointer;" onclick="document.getElementById('export-overlay').style.display='none'"></i>
+            </div>
+            <textarea id="export-textarea" readonly></textarea>
+        </div>
+    </div>
+    
+    <div class="sidebar right">
+        <div class="panel-section">
+            <h3 class="panel-title"><i class="fas fa-sliders-h"></i> Element Inspector</h3>
+            <div id="inspector-empty" style="font-size: 12px; color: #8b949e; text-align: center; padding: 20px 0;">
+                <i class="fas fa-mouse-pointer" style="font-size: 24px; margin-bottom: 10px; display: block;"></i>
+                Enable Edit Mode and click any element to inspect.
+            </div>
+            
+            <div id="inspector-tools" style="display: none;">
+                <div class="form-group">
+                    <label>Target Element</label>
+                    <input type="text" id="prop-tag" class="form-control" disabled style="background: rgba(255,255,255,0.05); color: #58a6ff; font-weight: bold;">
+                </div>
+                
+                <div class="form-group" id="wrap-href" style="display:none;">
+                    <label>Link Destination (URL / Path)</label>
+                    <input type="text" id="prop-href" class="form-control" placeholder="/dashboard or https://...">
+                    <span style="font-size:10px; color:#8b949e;">Where this button goes when clicked.</span>
+                </div>
+
+                <div class="form-group">
+                    <label>Inner Text</label>
+                    <textarea id="prop-text" class="form-control" rows="2"></textarea>
+                </div>
+                
+                <hr style="border:0; border-top: 1px solid rgba(255,255,255,0.1); margin: 15px 0;">
+                <h3 class="panel-title">Sizing & Spacing</h3>
+                
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Width</label>
+                        <input type="text" id="prop-width" class="form-control" placeholder="auto, 100%, 200px">
+                    </div>
+                    <div class="form-group">
+                        <label>Height</label>
+                        <input type="text" id="prop-height" class="form-control" placeholder="auto, 100%, 200px">
+                    </div>
+                    <div class="form-group">
+                        <label>Padding</label>
+                        <input type="text" id="prop-padding" class="form-control" placeholder="e.g. 10px 20px">
+                    </div>
+                    <div class="form-group">
+                        <label>Margin</label>
+                        <input type="text" id="prop-margin" class="form-control" placeholder="e.g. 0 auto">
+                    </div>
+                </div>
+
+                <hr style="border:0; border-top: 1px solid rgba(255,255,255,0.1); margin: 15px 0;">
+                <h3 class="panel-title">Styling</h3>
+                
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Background</label>
+                        <input type="color" id="prop-bg" class="form-control color-picker">
+                    </div>
+                    <div class="form-group">
+                        <label>Text Color</label>
+                        <input type="color" id="prop-color" class="form-control color-picker">
+                    </div>
+                </div>
+                
+                <hr style="border:0; border-top: 1px solid rgba(255,255,255,0.1); margin: 15px 0;">
+                <h3 class="panel-title">Danger Zone</h3>
+                
+                <button class="btn-action" onclick="modifyElement('hide')"><i class="fas fa-eye-slash"></i> Hide Element</button>
+                <button class="btn-action btn-danger" onclick="modifyElement('delete')"><i class="fas fa-trash"></i> Delete from DOM</button>
+                
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="btn-action" style="flex:1; justify-content:center;" onclick="modifyElement('moveUp')"><i class="fas fa-arrow-up"></i> Move</button>
+                    <button class="btn-action" style="flex:1; justify-content:center;" onclick="modifyElement('moveDown')"><i class="fas fa-arrow-down"></i> Move</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="tab-data" class="tab-content" style="padding: 20px; flex-direction: column;">
+    <h2 style="font-size: 1.2rem; margin-top: 0;">Universal Excel Adapter</h2>
+    <div style="border: 2px dashed rgba(255,255,255,0.2); padding: 40px; text-align: center; border-radius: 8px;">
+        <i class="fas fa-file-excel" style="font-size: 3rem; color: #238636;"></i>
+        <p>Adapter Engine is preserved. Switch back to Visual Studio for layout editing.</p>
+    </div>
+</div>
+
+<script>
+    // --- GLOBAL STATE ---
+    let isEditMode = false;
+    let selectedElement = null;
+    let outlineCache = "";
+    const canvas = document.getElementById('live-canvas');
+    const iframeDoc = () => canvas.contentDocument || canvas.contentWindow.document;
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(tab).classList.add('active');
+        event.currentTarget.classList.add('active');
+    }
+
+    // --- CANVAS INJECTION LOGIC ---
+    function initCanvas() {
+        const doc = iframeDoc();
+        doc.addEventListener('click', handleIframeClick, true);
+        doc.addEventListener('mouseover', handleIframeHover, true);
+        doc.addEventListener('mouseout', handleIframeMouseOut, true);
+        renderProjectList();
+    }
+
+    function toggleEditorMode() {
+        isEditMode = !isEditMode;
+        const btn = document.getElementById('btn-toggle-mode');
+        const status = document.getElementById('mode-status');
+        
+        if(isEditMode) {
+            btn.innerHTML = `<i class="fas fa-times"></i> Disable Edit Mode`;
+            btn.classList.add('btn-danger');
+            status.innerText = "Edit Mode Active (Click to Select)";
+            status.className = "mode-badge mode-edit";
+            
+            // Prevent actual navigation while editing
+            iframeDoc().addEventListener('click', preventNav, true);
+        } else {
+            btn.innerHTML = `<i class="fas fa-mouse-pointer"></i> Enable Edit Mode`;
+            btn.classList.remove('btn-danger');
+            status.innerText = "Preview Mode (Clicking works normally)";
+            status.className = "mode-badge mode-preview";
+            deselectElement();
+            iframeDoc().removeEventListener('click', preventNav, true);
+        }
+    }
+
+    function preventNav(e) {
+        if(e.target.tagName === 'A' || e.target.closest('a')) {
+            e.preventDefault();
+        }
+    }
+
+    // --- SELECTION ENGINE ---
+    function handleIframeHover(e) {
+        if(!isEditMode) return;
+        e.target.style.boxShadow = "inset 0 0 0 2px rgba(88, 166, 255, 0.5)";
+    }
+    
+    function handleIframeMouseOut(e) {
+        if(!isEditMode) return;
+        if(e.target !== selectedElement) e.target.style.boxShadow = "";
+    }
+
+    function handleIframeClick(e) {
+        if(!isEditMode) return;
+        e.preventDefault();
+        e.stopPropagation();
+        selectElement(e.target);
+    }
+
+    function selectElement(el) {
+        deselectElement();
+        selectedElement = el;
+        
+        outlineCache = selectedElement.style.boxShadow;
+        selectedElement.style.boxShadow = "inset 0 0 0 2px #58a6ff";
+        
+        document.getElementById('inspector-empty').style.display = 'none';
+        document.getElementById('inspector-tools').style.display = 'block';
+        
+        document.getElementById('prop-tag').value = `<${el.tagName.toLowerCase()}> ${el.id ? '#'+el.id : ''} ${el.className ? '.'+el.className.split(' ').join('.') : ''}`;
+        
+        const computedStyle = window.getComputedStyle(el);
+        document.getElementById('prop-width').value = el.style.width || computedStyle.width || '';
+        document.getElementById('prop-height').value = el.style.height || computedStyle.height || '';
+        document.getElementById('prop-padding').value = el.style.padding || computedStyle.padding || '';
+        document.getElementById('prop-margin').value = el.style.margin || computedStyle.margin || '';
+
+        // If it's a link, show href editor
+        const hrefWrap = document.getElementById('wrap-href');
+        const hrefInput = document.getElementById('prop-href');
+        if(el.tagName === 'A') {
+            hrefWrap.style.display = 'block';
+            hrefInput.value = el.getAttribute('href') || '#';
+        } else {
+            hrefWrap.style.display = 'none';
+        }
+
+        if(el.children.length === 0 || el.tagName === 'P' || el.tagName === 'A' || el.tagName === 'SPAN' || el.tagName.match(/^H[1-6]$/)) {
+            document.getElementById('prop-text').value = el.innerText;
+            document.getElementById('prop-text').disabled = false;
+        } else {
+            document.getElementById('prop-text').value = "[Complex Layout Node - Edit children directly]";
+            document.getElementById('prop-text').disabled = true;
+        }
+    }
+
+    function deselectElement() {
+        if(selectedElement) {
+            selectedElement.style.boxShadow = outlineCache || "";
+            selectedElement = null;
+        }
+        document.getElementById('inspector-empty').style.display = 'block';
+        document.getElementById('inspector-tools').style.display = 'none';
+    }
+
+    // --- INSPECTOR ACTIONS ---
+    document.getElementById('prop-text').addEventListener('input', function() {
+        if(selectedElement && !this.disabled) selectedElement.innerText = this.value;
+    });
+    document.getElementById('prop-bg').addEventListener('input', function() {
+        if(selectedElement) selectedElement.style.backgroundColor = this.value;
+    });
+    document.getElementById('prop-color').addEventListener('input', function() {
+        if(selectedElement) selectedElement.style.color = this.value;
+    });
+    document.getElementById('prop-width').addEventListener('input', function() {
+        if(selectedElement) selectedElement.style.width = this.value;
+    });
+    document.getElementById('prop-height').addEventListener('input', function() {
+        if(selectedElement) selectedElement.style.height = this.value;
+    });
+    document.getElementById('prop-padding').addEventListener('input', function() {
+        if(selectedElement) selectedElement.style.padding = this.value;
+    });
+    document.getElementById('prop-margin').addEventListener('input', function() {
+        if(selectedElement) selectedElement.style.margin = this.value;
+    });
+    document.getElementById('prop-href').addEventListener('input', function() {
+        if(selectedElement && selectedElement.tagName === 'A') {
+            selectedElement.setAttribute('href', this.value);
+        }
+    });
+
+    function modifyElement(action) {
+        if(!selectedElement) return;
+        
+        if(action === 'delete') {
+            selectedElement.remove();
+            deselectElement();
+        } else if (action === 'hide') {
+            selectedElement.style.display = 'none';
+            deselectElement();
+        } else if (action === 'moveUp') {
+            const prev = selectedElement.previousElementSibling;
+            if(prev) selectedElement.parentNode.insertBefore(selectedElement, prev);
+        } else if (action === 'moveDown') {
+            const next = selectedElement.nextElementSibling;
+            if(next) selectedElement.parentNode.insertBefore(next, selectedElement);
+        }
+    }
+
+    // --- INJECTOR WIDGETS ---
+    function injectComponent(type) {
+        const target = selectedElement || iframeDoc().body;
+        let html = "";
+        
+        // Native resizability built into the styles via 'resize: both; overflow: auto;'
+        if(type === 'glass_card') {
+            html = `<div style="padding: 20px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; backdrop-filter: blur(10px); color: white; margin-bottom: 15px; width: 100%; min-height: 100px; resize: both; overflow: auto;"><h3 style="margin-top:0;">New Component</h3><p>Enterprise layout here.</p></div>`;
+        } else if (type === 'kpi_card') {
+            html = `<div style="padding: 15px; background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(0,0,0,0.2)); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; width: 220px; display: inline-block; margin: 5px; resize: both; overflow: auto;"><div style="font-size: 11px; color: #8b949e; text-transform: uppercase; font-weight: bold;">Metric Title</div><div style="font-size: 28px; font-weight: 900; color: #58a6ff; margin-top: 5px;">1,234</div><div style="font-size: 11px; color: #3fb950; margin-top: 5px;">+5.2% vs last week</div></div>`;
+        } else if (type === 'two_col') {
+            html = `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; width: 100%; resize: both; overflow: auto;"><div style="padding: 15px; border: 1px dashed rgba(255,255,255,0.2); border-radius: 8px;">Column 1</div><div style="padding: 15px; border: 1px dashed rgba(255,255,255,0.2); border-radius: 8px;">Column 2</div></div>`;
+        } else if (type === 'text') {
+            html = `<p style="color: #8b949e; line-height: 1.6; font-size: 14px; margin-bottom: 15px;">Replace this text with your enterprise guidelines or system instructions. This text block can be styled using the inspector.</p>`;
+        } else if (type === 'button') {
+            // Action button injected as an anchor tag for navigability
+            html = `<a href="#new-page" style="display: inline-block; padding: 10px 20px; background: #58a6ff; color: #000; border: none; border-radius: 6px; font-weight: bold; text-decoration: none; cursor: pointer; margin: 5px; text-align: center;">Action Button</a>`;
+        } else if (type === 'divider') {
+            html = `<hr style="border: 0; border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 20px 0; width: 100%;" />`;
+        } else if (type === 'heading') {
+            html = `<h2 style="color: #ffffff; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-top: 0;">New Section</h2>`;
+        }
+
+        const wrapper = iframeDoc().createElement('div');
+        wrapper.innerHTML = html;
+        target.appendChild(wrapper.firstChild);
+    }
+
+    // --- PROJECT MANAGER (LOCALSTORAGE) ---
+    function getProjects() {
+        return JSON.parse(localStorage.getItem('mums_vs_projects')) || {};
+    }
+    
+    function saveProject() {
+        const name = document.getElementById('project-name').value.trim();
+        if(!name) return alert("Enter a project name first.");
+        
+        deselectElement();
+        const htmlPayload = iframeDoc().body.innerHTML;
+        
+        const projects = getProjects();
+        projects[name] = htmlPayload;
+        localStorage.setItem('mums_vs_projects', JSON.stringify(projects));
+        
+        document.getElementById('project-name').value = '';
+        renderProjectList();
+        alert("Project Saved Successfully!");
+    }
+
+    function loadProject(name) {
+        const projects = getProjects();
+        if(projects[name]) {
+            iframeDoc().body.innerHTML = projects[name];
+            alert("Project Loaded!");
+        }
+    }
+
+    function deleteProject(name) {
+        if(confirm(`Delete layout iteration: ${name}?`)) {
+            const projects = getProjects();
+            delete projects[name];
+            localStorage.setItem('mums_vs_projects', JSON.stringify(projects));
+            renderProjectList();
+        }
+    }
+
+    function renderProjectList() {
+        const projects = getProjects();
+        const list = document.getElementById('project-list');
+        list.innerHTML = '';
+        
+        Object.keys(projects).forEach(name => {
+            list.innerHTML += `
+                <div class="project-item">
+                    <span><i class="fas fa-file-code" style="color: #8b949e; margin-right: 5px;"></i> ${name}</span>
+                    <div class="project-actions">
+                        <i class="fas fa-play" title="Load" onclick="loadProject('${name}')"></i>
+                        <i class="fas fa-trash" title="Delete" style="color:#f85149;" onclick="deleteProject('${name}')"></i>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    // --- CODEX EXPORT ---
+    function exportCode() {
+        deselectElement(); 
+        const rawHTML = iframeDoc().documentElement.outerHTML;
+        const box = document.getElementById('export-textarea');
+        box.value = rawHTML;
+        document.getElementById('export-overlay').style.display = 'flex';
+    }
+</script>
+</body>
+</html>
