@@ -3415,29 +3415,46 @@
           if (prevBtn) { prevBtn.disabled = srPage===0; prevBtn.style.opacity = srPage===0?'.35':'1'; }
           if (nextBtn) { nextBtn.disabled = srPage>=maxPage; nextBtn.style.opacity = srPage>=maxPage?'.35':'1'; }
 
+          // Store full cache reference for detail modal prev/next navigation
+          if (resArea) resArea._srFullCache = srCache;
+
           resArea.innerHTML = pageData.map((e,i) => {
+            const globalIdx = srPage*PAGE_SZ + i;
             const tHL = _hl(e.title, q);
             const resShort = e.res.length > 220 ? e.res.slice(0,220)+'…' : e.res;
             const rHL  = _hl(resShort, q);
             const rHLFull = _hl(e.res.length > 500 ? e.res.slice(0,500)+'…' : e.res, q);
             return `
-              <div class="sr-card" style="--sr-card-accent:${e.color};background:var(--ss-surface2);border:1px solid rgba(255,255,255,.06);border-radius:9px;padding:11px 14px;cursor:default;"
-                onmouseover="this.style.borderColor='${e.color}44';this.style.background='rgba(255,255,255,.025)'"
-                onmouseout="this.style.borderColor='rgba(255,255,255,.06)';this.style.background='var(--ss-surface2)'">
-                <!-- Card header -->
+              <div class="sr-card" data-sr-idx="${globalIdx}"
+                style="--sr-card-accent:${e.color};background:var(--ss-surface2);border:1px solid rgba(255,255,255,.06);border-radius:9px;padding:11px 14px;cursor:pointer;position:relative;transition:border-color .15s,background .15s,box-shadow .15s;"
+                onclick="window._srOpenDetail(${globalIdx})"
+                onmouseover="this.style.borderColor='${e.color}55';this.style.background='rgba(255,255,255,.03)';this.style.boxShadow='0 4px 20px rgba(0,0,0,.3)'"
+                onmouseout="this.style.borderColor='rgba(255,255,255,.06)';this.style.background='var(--ss-surface2)';this.style.boxShadow=''">
+
+                <!-- Card header: category pill + end user + CASE # BADGE (premium) -->
                 <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;flex-wrap:wrap;">
-                  <span style="background:${e.color}18;border:1px solid ${e.color}30;color:${e.color};padding:2px 8px;border-radius:7px;font-size:9px;font-weight:700;display:inline-flex;align-items:center;gap:4px;flex-shrink:0;letter-spacing:.02em;">
+                  <span style="background:${e.color}18;border:1px solid ${e.color}35;color:${e.color};padding:3px 9px;border-radius:7px;font-size:9px;font-weight:700;display:inline-flex;align-items:center;gap:4px;flex-shrink:0;letter-spacing:.02em;">
                     <i class="fas ${e.icon}" style="font-size:8px;"></i>${e.cat}
                   </span>
-                  ${e.eu ? `<span style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.4);padding:2px 7px;border-radius:7px;font-size:9px;font-weight:600;">${e.eu}</span>` : ''}
-                  <span style="margin-left:auto;font-size:9px;color:rgba(255,255,255,.18);font-family:var(--ss-mono);letter-spacing:.02em;">#${e.case}</span>
+                  ${e.eu ? `<span style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.45);padding:3px 8px;border-radius:7px;font-size:9px;font-weight:600;">${e.eu}</span>` : ''}
+                  <!-- CASE # — premium badge -->
+                  <span onclick="event.stopPropagation();window._srOpenDetail(${globalIdx})"
+                    style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;padding:3px 9px;border-radius:6px;font-size:10px;font-weight:800;font-family:var(--ss-mono,'JetBrains Mono',monospace);letter-spacing:.02em;flex-shrink:0;cursor:pointer;"
+                    onmouseover="this.style.background='rgba(88,166,255,.22)';this.style.borderColor='rgba(88,166,255,.55)'"
+                    onmouseout="this.style.background='rgba(88,166,255,.12)';this.style.borderColor='rgba(88,166,255,.3)'"
+                    title="View Case #${e.case} detail">
+                    <i class="fas fa-hashtag" style="font-size:8px;opacity:.7;"></i>${e.case}
+                  </span>
                 </div>
+
                 <!-- Title -->
                 <div style="font-size:12px;font-weight:700;color:#e6edf3;margin-bottom:7px;line-height:1.4;">${tHL}</div>
+
                 <!-- Resolution — compact view -->
                 <div class="sr-res-short" style="font-size:11px;color:#8b949e;line-height:1.55;padding:7px 11px;background:rgba(0,0,0,.2);border-radius:6px;border-left:2px solid ${e.color}60;">
                   <span style="display:inline-block;width:7px;height:7px;background:#3fb950;border-radius:50%;margin-right:6px;flex-shrink:0;vertical-align:middle;opacity:.8;"></span>${rHL}
                 </div>
+
                 <!-- Resolution — detailed view -->
                 <div class="sr-res-full" style="font-size:11px;color:#8b949e;line-height:1.65;padding:9px 12px;background:rgba(0,0,0,.22);border-radius:6px;border-left:3px solid ${e.color};">
                   <div style="display:flex;align-items:center;gap:5px;margin-bottom:5px;">
@@ -3446,11 +3463,75 @@
                   </div>
                   <span style="color:#adbac7;">${rHLFull}</span>
                 </div>
+
+                <!-- Footer hint -->
+                <div style="display:flex;align-items:center;justify-content:flex-end;margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,.04);">
+                  <span style="font-size:9px;font-weight:700;color:${e.color};opacity:.6;display:inline-flex;align-items:center;gap:4px;">
+                    <i class="fas fa-expand-alt" style="font-size:7px;"></i> View Full Case Detail
+                  </span>
+                </div>
               </div>`;
           }).join('');
         }
 
         window._srRender = _srRender;
+
+        // ── SR CASE DETAIL OPENER ──────────────────────────────────────────
+        // Opens #qbCaseDetailModal from a Support Records KB entry.
+        // Constructs a snap object that maps KB fields to the modal's expected
+        // columnMap keywords so _populate() in my_quickbase.js fills all slots.
+        window._srOpenDetail = function(globalIdx) {
+          const resArea = $('sr-results');
+          const cache   = (resArea && resArea._srFullCache) ? resArea._srFullCache : srCache;
+          const e       = cache[globalIdx];
+          if (!e) return;
+
+          // Build allSnaps for prev/next navigation across the full filtered set
+          const allSnaps = cache.map(function(entry, idx) {
+            return _srBuildSnap(entry, idx);
+          });
+
+          const snap = allSnaps[globalIdx];
+          if (typeof window._qbsOpenCaseDetail === 'function') {
+            window._qbsOpenCaseDetail(snap, allSnaps);
+          } else if (typeof window.__studioQbCdOpen === 'function') {
+            window.__studioQbCdOpen(snap);
+          } else {
+            console.warn('[SR] No case detail opener available');
+          }
+        };
+
+        function _srBuildSnap(e, idx) {
+          // Map KB entry fields to columnMap labels that _populate() keyword-matches:
+          // desc:    'Short Description'
+          // notes:   'Case Notes'       → full resolution text
+          // latest:  'Latest Update on the Case'
+          // type:    'Type'
+          // endUser: 'End User'
+          // status:  'Case Status'
+          return {
+            rowNum:    idx + 1,
+            recordId:  String(e.case || '—'),
+            qbRecordId: String(e.case || ''),
+            fields: {
+              'sr_f1': { value: e.title  || '—' },
+              'sr_f2': { value: e.res    || '' },
+              'sr_f3': { value: e.res    || '' },
+              'sr_f4': { value: e.cat    || '—' },
+              'sr_f5': { value: e.eu     || '—' },
+              'sr_f6': { value: 'C - Resolved' },
+            },
+            columnMap: {
+              'sr_f1': 'Short Description',
+              'sr_f2': 'Case Notes',
+              'sr_f3': 'Latest Update on the Case',
+              'sr_f4': 'Type',
+              'sr_f5': 'End User',
+              'sr_f6': 'Case Status',
+            },
+          };
+        }
+
         window._srCatClick = function(catId, catLabel, catColor) {
           const cat = srCats.find(c => c.id === catId);
           if (cat && cat.subcats && cat.subcats.length > 0) {
