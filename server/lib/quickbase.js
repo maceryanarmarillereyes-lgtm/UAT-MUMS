@@ -153,6 +153,12 @@ function normalizeQuickbaseCellValue(input) {
   return '';
 }
 
+// ── PAGINATION CONSTANTS ───────────────────────────────────────────────────────
+// QB API max per-page is 10,000. We fetch in pages of 10,000 until all records
+// are retrieved. Hard cap is 20,000 records to protect against runaway tables.
+const QB_PAGE_SIZE   = 10000;
+const QB_HARD_CAP    = 20000;
+
 async function queryQuickbaseRecords(opts = {}) {
   const cfg = readQuickbaseConfig(opts.config);
   if (!cfg.realm || !cfg.token || !cfg.tableId) {
@@ -164,7 +170,14 @@ async function queryQuickbaseRecords(opts = {}) {
     };
   }
 
-  const limit = Number(opts.limit);
+  // Determine the caller-requested limit.
+  // If not finite (i.e. caller did not pass a limit), default to QB_HARD_CAP so
+  // that the full table is always available for server-side search and filtering.
+  const callerLimit = Number(opts.limit);
+  const effectiveLimit = (Number.isFinite(callerLimit) && callerLimit > 0)
+    ? Math.min(callerLimit, QB_HARD_CAP)
+    : QB_HARD_CAP;
+
   const select = Array.isArray(opts.select)
     ? Array.from(new Set(opts.select.map((id) => Number(id)).filter((id) => Number.isFinite(id))))
     : [];
@@ -174,82 +187,116 @@ async function queryQuickbaseRecords(opts = {}) {
   // dynamic report-defined fields (qid-aware queries).
   if (!select.length && !opts.allowEmptySelect) select.push(3);
 
-  const baseBody = {
-    from: cfg.tableId,
-    select,
-    options: {
-      top: Number.isFinite(limit) && limit > 0 ? Math.min(limit, 1000) : 100,
-      skip: 0
-    }
-  };
-
   const whereClause = String(opts.where || '').trim();
   if (whereClause) {
-    baseBody.where = whereClause;
     console.log('[Quickbase] Applying WHERE:', whereClause);
   } else {
     console.log('[Quickbase] No WHERE clause - using report/QID filters only');
   }
-  if (Array.isArray(opts.sortBy) && opts.sortBy.length) {
-    baseBody.sortBy = opts.sortBy
-      .map((entry) => ({
-        fieldId: Number(entry && entry.fieldId),
-        order: String(entry && entry.order || '').toUpperCase() === 'DESC' ? 'DESC' : 'ASC'
-      }))
-      .filter((entry) => Number.isFinite(entry.fieldId));
-  }
+
+  const sortBy = Array.isArray(opts.sortBy) && opts.sortBy.length
+    ? opts.sortBy
+        .map((entry) => ({
+          fieldId: Number(entry && entry.fieldId),
+          order: String(entry && entry.order || '').toUpperCase() === 'DESC' ? 'DESC' : 'ASC'
+        }))
+        .filter((entry) => Number.isFinite(entry.fieldId))
+    : [];
 
   const variants = queryIdVariants(cfg.qid, !!opts.enableQueryIdFallback);
   if (!variants.length) variants.push('');
 
-  let records = [];
+  let allRecords = [];
   let lastFailure = null;
 
+  // ── VARIANT LOOP — try each QID variant until one succeeds ───────────────────
   for (const qidVariant of variants) {
-    const body = Object.assign({}, baseBody);
-    if (qidVariant) body.queryId = qidVariant;
-
     console.log('[Quickbase] Trying QID variant:', qidVariant || '(base table)', {
-      hasWhere: !!body.where,
-      selectCount: body.select?.length || 0
+      hasWhere: !!whereClause,
+      selectCount: select.length,
+      effectiveLimit
     });
 
-    const response = await fetch('https://api.quickbase.com/v1/records/query', {
-      method: 'POST',
-      headers: {
-        'QB-Realm-Hostname': cfg.realm,
-        Authorization: `QB-USER-TOKEN ${cfg.token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    });
+    // ── PAGINATION LOOP — keep fetching pages until effectiveLimit is reached ──
+    let skip = 0;
+    let pageRecords = [];
+    let variantFailed = false;
+    let variantFailureResult = null;
 
-    const rawText = await response.text();
-    let json;
-    try { json = rawText ? JSON.parse(rawText) : {}; } catch (_) { json = {}; }
+    while (true) {
+      const pageTop = Math.min(QB_PAGE_SIZE, effectiveLimit - pageRecords.length);
+      if (pageTop <= 0) break;
 
-    if (!response.ok) {
-      console.error('[Quickbase] Variant failed:', qidVariant, '- Status:', response.status);
-      lastFailure = {
-        ok: false,
-        status: response.status || 502,
-        error: 'quickbase_query_failed',
-        message: json.message || `Quickbase query failed with status ${response.status}`
+      const body = {
+        from: cfg.tableId,
+        select,
+        options: { top: pageTop, skip }
       };
+      if (whereClause)  body.where   = whereClause;
+      if (qidVariant)   body.queryId = qidVariant;
+      if (sortBy.length) body.sortBy  = sortBy;
+
+      const response = await fetch('https://api.quickbase.com/v1/records/query', {
+        method: 'POST',
+        headers: {
+          'QB-Realm-Hostname': cfg.realm,
+          Authorization: `QB-USER-TOKEN ${cfg.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      const rawText = await response.text();
+      let json;
+      try { json = rawText ? JSON.parse(rawText) : {}; } catch (_) { json = {}; }
+
+      if (!response.ok) {
+        console.error('[Quickbase] Variant failed:', qidVariant, '- Status:', response.status);
+        variantFailed = true;
+        variantFailureResult = {
+          ok: false,
+          status: response.status || 502,
+          error: 'quickbase_query_failed',
+          message: json.message || `Quickbase query failed with status ${response.status}`
+        };
+        break;
+      }
+
+      const page = Array.isArray(json.data) ? json.data : [];
+      pageRecords = pageRecords.concat(page);
+
+      // QB metadata tells us the TOTAL number of matching records and what was returned
+      const totalRecords = Number(json.metadata?.totalRecords ?? json.metadata?.numRecords ?? 0);
+      const returnedCount = page.length;
+
+      console.log(`[Quickbase] ✅ Page skip=${skip} top=${pageTop} → got ${returnedCount} records (total=${totalRecords || '?'}, fetched=${pageRecords.length})`);
+
+      // Stop if: no more data, reached effective limit, or QB returned fewer than requested
+      const moreAvailable = totalRecords > 0
+        ? (skip + returnedCount) < Math.min(totalRecords, effectiveLimit)
+        : returnedCount === pageTop; // heuristic when totalRecords not available
+
+      if (!moreAvailable || pageRecords.length >= effectiveLimit || returnedCount === 0) break;
+      skip += returnedCount;
+    }
+
+    if (variantFailed) {
+      lastFailure = variantFailureResult;
       continue;
     }
 
-    records = Array.isArray(json.data) ? json.data : [];
-    console.log('[Quickbase] ✅ Variant success:', qidVariant || '(base)', '- Records:', records.length);
-    if (records.length > 0 || qidVariant === variants[variants.length - 1]) {
-      lastFailure = null;
-      break;
-    }
+    allRecords = pageRecords;
+    lastFailure = null;
+
+    // Stop trying variants once we have data (or exhausted all variants on the last one)
+    if (allRecords.length > 0 || qidVariant === variants[variants.length - 1]) break;
   }
 
   if (lastFailure) return lastFailure;
 
-  const mappedRecords = records.map((record) => {
+  console.log(`[Quickbase] ✅ Total records fetched: ${allRecords.length} (limit=${effectiveLimit})`);
+
+  const mappedRecords = allRecords.map((record) => {
     const src = record && typeof record === 'object' ? record : {};
     const mapped = {};
     Object.keys(src).forEach((key) => {
@@ -265,7 +312,7 @@ async function queryQuickbaseRecords(opts = {}) {
     return mapped;
   });
 
-  return { ok: true, status: 200, records, mappedRecords };
+  return { ok: true, status: 200, records: allRecords, mappedRecords };
 }
 
 async function listQuickbaseFields() {
