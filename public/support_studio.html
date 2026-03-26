@@ -5831,6 +5831,17 @@
         catch(_) { return {}; }
       })();
       var rid = btn.getAttribute('data-rid') || row.qbRecordId || row.recordId || '';
+      // Try direct opener first (works even if QB table page not loaded)
+      if (typeof window.__studioQbCdOpen === 'function') {
+        var snap = {
+          rowNum: 0,
+          recordId: rid,
+          fields: row.fields || {},
+          columnMap: {}
+        };
+        window.__studioQbCdOpen(snap);
+        return;
+      }
       if (window.MQ && typeof window.MQ.openCaseDetailModal === 'function') {
         var ctx = _qbsReadContextConfig();
         window.MQ.openCaseDetailModal({
