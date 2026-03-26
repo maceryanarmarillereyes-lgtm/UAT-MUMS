@@ -1,0 +1,4976 @@
+/* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
+   Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
+   Database/API Adapters · Tab Isolation · Virtual Column State ·
+   QuickBase Settings Persistence · Auth Flow.
+   DO NOT modify any existing logic, layout, or structure in this file without
+   first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
+   Violations will cause regressions. When in doubt — STOP and REPORT. */
+/**
+ * public/js/pages/my_quickbase.js
+ * High Level Enterprise Quickbase Dashboard + Settings Modal
+ */
+(function(){
+  window.Pages = window.Pages || {};
+
+  function resolveTabStorageNamespace(root) {
+    const pageKey = String(
+      (root && root.getAttribute && (root.getAttribute('data-page') || root.getAttribute('data-route')))
+      || (root && root.dataset && (root.dataset.page || root.dataset.route))
+      || (window.location && window.location.hash)
+      || ''
+    ).toLowerCase();
+    return pageKey.includes('quickbase_s') ? 'quickbase_s' : 'quickbase';
+  }
+
+  function esc(v) {
+    if (window.UI && typeof window.UI.esc === 'function') return window.UI.esc(v);
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  const ENABLE_QID_URL_MATCH_VALIDATION = true;
+
+  function parseQuickbaseReportUrl(url) {
+    const value = String(url || '').trim();
+    if (!value) return null;
+    try {
+      const u = new URL(value);
+      const segments = String(u.pathname || '').split('/').filter(Boolean);
+      const appIndex = segments.findIndex((segment) => String(segment).toLowerCase() === 'app');
+      const tableIndex = segments.findIndex((segment) => String(segment).toLowerCase() === 'table');
+      const appId = appIndex >= 0 ? String(segments[appIndex + 1] || '').trim() : '';
+      const tableId = tableIndex >= 0
+        ? String(segments[tableIndex + 1] || '').trim()
+        : (() => {
+          const dbIndex = segments.findIndex((segment) => String(segment).toLowerCase() === 'db');
+          return dbIndex >= 0 ? String(segments[dbIndex + 1] || '').trim() : '';
+        })();
+      const rawQid = String(u.searchParams.get('qid') || '').trim();
+      const qidMatch = rawQid.match(/-?\d+/);
+      const qid = qidMatch && qidMatch[0] ? qidMatch[0] : '';
+      const out = {};
+      if (appId) out.appId = appId;
+      if (tableId) out.tableId = tableId;
+      if (qid) out.qid = qid;
+      return Object.keys(out).length ? out : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function parseQuickbaseLink(link) {
+    const out = { realm: '', appId: '', tableId: '', qid: '' };
+    const value = String(link || '').trim();
+    if (!value) return out;
+
+    const parsedGeneric = parseQuickbaseReportUrl(value);
+    if (parsedGeneric) {
+      out.appId = String(parsedGeneric.appId || '').trim();
+      out.tableId = String(parsedGeneric.tableId || '').trim();
+      out.qid = String(parsedGeneric.qid || '').trim();
+    }
+
+    try {
+      const urlObj = new URL(value);
+      const host = String(urlObj.hostname || '').trim().toLowerCase();
+      const realmMatch = host.match(/^([a-z0-9-]+)\.quickbase\.com$/i);
+      out.realm = realmMatch && realmMatch[1] ? String(realmMatch[1]).trim() : host;
+    } catch (_) {}
+    const dbMatch = value.match(/\/db\/([a-zA-Z0-9]+)/i);
+    if (dbMatch && dbMatch[1]) out.tableId = String(dbMatch[1]).trim();
+    if (!out.tableId) {
+      const tableMatch = value.match(/\/table\/([a-zA-Z0-9]+)/i);
+      if (tableMatch && tableMatch[1]) out.tableId = String(tableMatch[1]).trim();
+    }
+    if (!out.qid) {
+      const qidParamMatch = value.match(/[?&]qid=(-?\d+)/i);
+      if (qidParamMatch && qidParamMatch[1]) out.qid = String(qidParamMatch[1]).trim();
+    }
+    if (!out.qid) {
+      const reportMatch = value.match(/\/report\/(-?\d+)/i);
+      if (reportMatch && reportMatch[1]) out.qid = String(reportMatch[1]).trim();
+    }
+    return out;
+  }
+
+  function normalizeFilters(raw) {
+    const operatorMap = {
+      'IS EQUAL TO': 'EX',
+      'IS (EXACT)': 'EX',
+      EX: 'EX',
+      '=': 'EX',
+      'IS NOT': 'XEX',
+      'NOT EQUAL TO': 'XEX',
+      'IS NOT EQUAL TO': 'XEX',
+      XEX: 'XEX',
+      '!=': 'XEX',
+      '<>': 'XEX',
+      CONTAINS: 'CT',
+      CT: 'CT',
+      'DOES NOT CONTAIN': 'XCT',
+      XCT: 'XCT'
+    };
+    const toOperator = (value) => {
+      const key = String(value == null ? 'EX' : value).trim().toUpperCase();
+      return operatorMap[key] || key || 'EX';
+    };
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((f) => f && typeof f === 'object')
+      .map((f) => ({
+        fieldId: String((f.fieldId ?? f.field_id ?? f.fid ?? f.id ?? '')).trim(),
+        operator: toOperator(f.operator),
+        value: String((f.value ?? '')).trim()
+      }))
+      .filter((f) => f.fieldId && f.value);
+  }
+
+  function normalizeFilterMatch(raw) {
+    const value = String(raw || '').trim().toUpperCase();
+    return value === 'ANY' ? 'ANY' : 'ALL';
+  }
+
+  function normalizeCounterColor(value) {
+    const allowedColors = new Set(['default', 'blue', 'green', 'red', 'purple', 'orange']);
+    const normalized = String(value || 'default').trim().toLowerCase();
+    return allowedColors.has(normalized) ? normalized : 'default';
+  }
+
+  function normalizeDashboardCounters(raw) {
+    let source = raw;
+    if (typeof source === 'string') {
+      try {
+        source = JSON.parse(source);
+      } catch (_) {
+        source = [];
+      }
+    }
+    if (!Array.isArray(source)) return [];
+    const allowedOperators = new Set(['EX', 'XEX', 'CT']);
+    const operatorMap = {
+      'IS EQUAL TO': 'EX',
+      '=': 'EX',
+      EX: 'EX',
+      'IS NOT EQUAL TO': 'XEX',
+      'IS NOT': 'XEX',
+      '!=': 'XEX',
+      XEX: 'XEX',
+      CONTAINS: 'CT',
+      CT: 'CT'
+    };
+    return source
+      .filter((item) => item && typeof item === 'object')
+      .map((item) => {
+        const opKey = String(item.operator || '').trim().toUpperCase();
+        const normalizedOperator = operatorMap[opKey] || opKey || 'EX';
+        return {
+          fieldId: String(item.fieldId ?? item.field_id ?? '').trim(),
+          operator: allowedOperators.has(normalizedOperator) ? normalizedOperator : 'EX',
+          value: String(item.value ?? '').trim(),
+          label: String(item.label ?? '').trim(),
+          color: normalizeCounterColor(item.color)
+        };
+      })
+      .filter((item) => item.fieldId);
+  }
+
+  function getCounterGlassStyle(color) {
+    const palette = {
+      blue: 'background: rgba(33, 150, 243, 0.1); border: 1px solid rgba(33, 150, 243, 0.3); box-shadow: 0 4px 15px rgba(33, 150, 243, 0.1);',
+      green: 'background: rgba(76, 175, 80, 0.1); border: 1px solid rgba(76, 175, 80, 0.3); box-shadow: 0 4px 15px rgba(76, 175, 80, 0.1);',
+      red: 'background: rgba(244, 67, 54, 0.1); border: 1px solid rgba(244, 67, 54, 0.3); box-shadow: 0 4px 15px rgba(244, 67, 54, 0.1);',
+      purple: 'background: rgba(156, 39, 176, 0.1); border: 1px solid rgba(156, 39, 176, 0.3); box-shadow: 0 4px 15px rgba(156, 39, 176, 0.1);',
+      orange: 'background: rgba(255, 152, 0, 0.1); border: 1px solid rgba(255, 152, 0, 0.3); box-shadow: 0 4px 15px rgba(255, 152, 0, 0.1);',
+      default: 'background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 4px 15px rgba(255,255,255,0.05);'
+    };
+    return palette[normalizeCounterColor(color)] || palette.default;
+  }
+
+  function counterToFilter(counter) {
+    if (!counter || typeof counter !== 'object') return null;
+    const fieldId = String(counter.fieldId || '').trim();
+    const value = String(counter.value || '').trim();
+    const operator = String(counter.operator || 'EX').trim().toUpperCase();
+    if (!fieldId || !value) return null;
+    return { fieldId, operator, value };
+  }
+
+  function rowsToCsv(rows, columns) {
+    const safeRows = Array.isArray(rows) ? rows : [];
+    const safeColumns = Array.isArray(columns) ? columns : [];
+    const headers = ['Case #'].concat(safeColumns.map((c) => String(c && c.label || c && c.id || 'Field')));
+    const escapeCsv = (value) => {
+      const text = String(value == null ? '' : value);
+      const escaped = text.replace(/"/g, '""');
+      if (/[,\n"]/g.test(escaped)) return `"${escaped}"`;
+      return escaped;
+    };
+    const body = safeRows.map((row) => {
+      const list = [String(row && row.qbRecordId || 'N/A')];
+      safeColumns.forEach((col) => {
+        const fid = String(col && col.id || '').trim();
+        const val = row && row.fields && row.fields[fid] ? row.fields[fid].value : '';
+        list.push(String(val == null ? '' : val));
+      });
+      return list.map(escapeCsv).join(',');
+    });
+    return [headers.map(escapeCsv).join(',')].concat(body).join('\n');
+  }
+
+
+  function parseQuickbaseSettings(raw) {
+    if (!raw) return {};
+    if (typeof raw === 'object') return raw;
+    try {
+      const parsed = JSON.parse(String(raw));
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function generateUUID() {
+    try {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    } catch (_) {}
+    return `qb-tab-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  }
+
+  function deepClone(obj) {
+    try {
+      return JSON.parse(JSON.stringify(obj));
+    } catch (_) {
+      return obj;
+    }
+  }
+
+  function createDefaultSettings(source, defaults) {
+    const src = source && typeof source === 'object' ? source : {};
+    const base = defaults && typeof defaults === 'object' ? defaults : {};
+    const reportLink = String(src.reportLink || src.qb_report_link || base.reportLink || '').trim();
+    const parsed = parseQuickbaseLink(reportLink);
+    const hasReportLink = !!reportLink;
+    return {
+      reportLink,
+      qid: hasReportLink ? String(src.qid || src.qb_qid || parsed.qid || base.qid || '').trim() : '',
+      tableId: hasReportLink ? String(src.tableId || src.qb_table_id || parsed.tableId || base.tableId || '').trim() : '',
+      realm: hasReportLink ? String(src.realm || src.qb_realm || parsed.realm || base.realm || '').trim() : '',
+      // bypassGlobal: when true, this tab uses its own reportLink + profile.qb_token
+      // instead of the Global QB Settings. Each tab is independent.
+      bypassGlobal: !!(src.bypassGlobal || base.bypassGlobal || false),
+      dashboard_counters: deepClone(normalizeDashboardCounters(src.dashboard_counters || src.dashboardCounters || base.dashboard_counters || [])),
+      customColumns: deepClone(Array.isArray(src.customColumns || src.qb_custom_columns || base.customColumns)
+        ? (src.customColumns || src.qb_custom_columns || base.customColumns).map((v) => String(v))
+        : []),
+      customFilters: deepClone(normalizeFilters(src.customFilters || src.qb_custom_filters || base.customFilters || [])),
+      filterMatch: normalizeFilterMatch(src.filterMatch || src.qb_filter_match || base.filterMatch),
+      virtualColumn: deepClone(src.virtualColumn || base.virtualColumn || { enabled: false, label: 'Status', items: [], conditionalRules: [] })
+    };
+  }
+
+  function createTabMeta(source, defaults) {
+    const src = source && typeof source === 'object' ? source : {};
+    const base = defaults && typeof defaults === 'object' ? defaults : {};
+    return {
+      id: String(src.id || src.tabId || base.id || generateUUID()),
+      tabName: String(src.tabName || src.name || base.tabName || 'Main Report').trim() || 'Main Report'
+    };
+  }
+
+  function buildDefaultTab(source, defaults) {
+    const src = source && typeof source === 'object' ? deepClone(source) : {};
+    const base = defaults && typeof defaults === 'object' ? deepClone(defaults) : {};
+    const reportLink = String(src.reportLink || src.qb_report_link || '').trim();
+    const parsed = parseQuickbaseLink(reportLink);
+    const hasReportLink = !!reportLink;
+    return {
+      id: String(src.id || generateUUID()),
+      tabName: String(src.tabName || src.name || base.tabName || 'New Report').trim() || 'New Report',
+      reportLink,
+      qid: hasReportLink ? String(src.qid || src.qb_qid || parsed.qid || '').trim() : '',
+      tableId: hasReportLink ? String(src.tableId || src.qb_table_id || parsed.tableId || '').trim() : '',
+      realm: hasReportLink ? String(src.realm || src.qb_realm || parsed.realm || '').trim() : '',
+      bypassGlobal: !!(src.bypassGlobal || base.bypassGlobal || false),
+      dashboard_counters: deepClone(normalizeDashboardCounters(src.dashboard_counters || src.dashboardCounters || [])),
+      customColumns: deepClone(Array.isArray(src.customColumns || src.qb_custom_columns) ? (src.customColumns || src.qb_custom_columns).map((v) => String(v)) : []),
+      customFilters: deepClone(normalizeFilters(src.customFilters || src.qb_custom_filters || [])),
+      filterMatch: normalizeFilterMatch(src.filterMatch || src.qb_filter_match || 'ALL'),
+      virtualColumn: deepClone(src.virtualColumn || base.virtualColumn || { enabled: false, label: 'Status', items: [], conditionalRules: [] })
+    };
+  }
+
+  function normalizeQuickbaseSettingsWithTabs(rawSettings, fallbackConfig) {
+    const flat = normalizeQuickbaseConfig(fallbackConfig);
+    const rawMissing = rawSettings == null;
+    let parseFailed = false;
+    let settings = {};
+    if (!rawMissing && typeof rawSettings === 'string') {
+      try {
+        const parsed = JSON.parse(String(rawSettings));
+        settings = parsed && typeof parsed === 'object' ? parsed : {};
+      } catch (_) {
+        parseFailed = true;
+      }
+    } else {
+      settings = parseQuickbaseSettings(rawSettings);
+    }
+
+    // FIX: [Issue 1] - Preserve tab-based settings when serialized quickbase_settings has a tabs array.
+    if (!parseFailed && Array.isArray(settings.tabs)) {
+      const tabs = [];
+      const settingsByTabId = {};
+      settings.tabs.forEach((tab, idx) => {
+        const tabMeta = createTabMeta(tab, { tabName: idx === 0 ? 'Main Report' : `Report ${idx + 1}` });
+        const tabSettings = createDefaultSettings(tab, {});
+        const isolatedTabSettings = createDefaultSettings(tabSettings, {});
+        tabs.push(Object.assign({}, tabMeta, deepClone(isolatedTabSettings) || createDefaultSettings({}, {})));
+        settingsByTabId[tabMeta.id] = deepClone(isolatedTabSettings) || createDefaultSettings({}, {});
+      });
+      // FIX: [Issue 1] - Defensive default when tabs array exists but is empty.
+      const safeTabs = tabs.length ? tabs : [buildDefaultTab(settings, { tabName: 'Main Report' })];
+      if (!tabs.length) settingsByTabId[safeTabs[0].id] = createDefaultSettings(settings, {});
+      const maxIndex = safeTabs.length - 1;
+      const activeTabIndex = Math.min(Math.max(Number(settings.activeTabIndex || 0), 0), maxIndex);
+      return { activeTabIndex, tabs: safeTabs, settingsByTabId };
+    }
+
+    if (!rawMissing && parseFailed) {
+      const tab = buildDefaultTab({}, { tabName: 'Main Report' });
+      return { activeTabIndex: 0, tabs: [tab], settingsByTabId: { [tab.id]: createDefaultSettings({}, {}) } };
+    }
+
+    const primaryTab = buildDefaultTab(settings, { tabName: 'Main Report' });
+    return {
+      activeTabIndex: 0,
+      tabs: [primaryTab],
+      settingsByTabId: {
+        [primaryTab.id]: createDefaultSettings(settings, {
+          reportLink: flat.reportLink,
+          qid: flat.qid,
+          tableId: flat.tableId,
+          customColumns: flat.customColumns,
+          customFilters: flat.customFilters,
+          filterMatch: flat.filterMatch,
+          dashboard_counters: flat.dashboardCounters
+        })
+      }
+    };
+  }
+
+  function normalizeQuickbaseConfig(raw) {
+    const cfg = raw && typeof raw === 'object' ? raw : {};
+    return {
+      reportLink: String(cfg.reportLink || cfg.qb_report_link || '').trim(),
+      qid: String(cfg.qid || cfg.qb_qid || '').trim(),
+      tableId: String(cfg.tableId || cfg.qb_table_id || '').trim(),
+      realm: String(cfg.realm || cfg.qb_realm || '').trim(),
+      customColumns: Array.isArray(cfg.customColumns || cfg.qb_custom_columns)
+        ? (cfg.customColumns || cfg.qb_custom_columns).map((v) => String(v))
+        : [],
+      customFilters: normalizeFilters(cfg.customFilters || cfg.qb_custom_filters),
+      filterMatch: normalizeFilterMatch(cfg.filterMatch || cfg.qb_filter_match),
+      dashboardCounters: normalizeDashboardCounters(cfg.dashboardCounters || cfg.dashboard_counters || cfg.qb_dashboard_counters)
+    };
+  }
+
+  function hasUsableQuickbaseSettings(rawSettings) {
+    const parsed = parseQuickbaseSettings(rawSettings);
+    if (Array.isArray(parsed && parsed.tabs) && parsed.tabs.length > 0) return true;
+    const cfg = normalizeQuickbaseConfig(parsed);
+    return Boolean(
+      String(cfg.reportLink || '').trim() ||
+      String(cfg.qid || '').trim() ||
+      String(cfg.tableId || '').trim() ||
+      (Array.isArray(cfg.customColumns) && cfg.customColumns.length) ||
+      (Array.isArray(cfg.customFilters) && cfg.customFilters.length) ||
+      (Array.isArray(cfg.dashboardCounters) && cfg.dashboardCounters.length)
+    );
+  }
+
+  function chooseInitialQuickbaseSettingsSource(options) {
+    const opts = options && typeof options === 'object' ? options : {};
+    const hasBackendTabs = hasPersistedQuickbaseTabs(opts.backendQuickbaseSettings);
+    const hasWindowMeTabs = hasPersistedQuickbaseTabs(opts.windowMeQuickbaseSettings);
+    // ISOLATION FIX: Always prefer backend (Supabase) as the authoritative source.
+    // Backend tab IDs are the canonical IDs — local cache may have mismatched IDs
+    // causing settingsByTabId lookups to fail on tab switch.
+    if (hasBackendTabs) return deepClone(opts.backendQuickbaseSettings);
+    if (hasWindowMeTabs) return deepClone(opts.windowMeQuickbaseSettings);
+    // Only use local if backend has no usable config
+    const hasLocalTabs = hasPersistedQuickbaseTabs(opts.localQuickbaseSettings);
+    if (hasLocalTabs) return deepClone(opts.localQuickbaseSettings);
+    return deepClone(opts.backendQuickbaseSettings);
+  }
+
+  function isSupportStudioNamespace(namespace) {
+    return String(namespace || '').trim().toLowerCase() === 'quickbase_s';
+  }
+
+  function getQuickbaseSettingsLocalKey(userId, namespace) {
+    if (isSupportStudioNamespace(namespace)) return 'support_studio_qb_settings';
+    const safeUserId = String(userId || 'anonymous').trim() || 'anonymous';
+    return `mums_my_quickbase_settings:${safeUserId}`;
+  }
+
+  function getQuickbaseTabsLocalKey(userId, namespace) {
+    if (isSupportStudioNamespace(namespace)) return 'support_studio_qb_tabs';
+    const safeUserId = String(userId || 'anonymous').trim() || 'anonymous';
+    return `myQuickbase.tabs:${safeUserId}`;
+  }
+
+  function getQuickbaseTabSettingsLocalKey(userId, tabId, namespace) {
+    if (isSupportStudioNamespace(namespace)) {
+      const safeTabId = String(tabId || '').trim();
+      return `support_studio_qb_tab.${safeTabId}.settings`;
+    }
+    const safeUserId = String(userId || 'anonymous').trim() || 'anonymous';
+    const safeTabId = String(tabId || '').trim();
+    return `myQuickbase.tab.${safeUserId}.${safeTabId}.settings`;
+  }
+
+  function readQuickbaseSettingsLocal(userId, namespace) {
+    try {
+      if (!window.localStorage) return null;
+      const rawTabs = localStorage.getItem(getQuickbaseTabsLocalKey(userId, namespace));
+      if (rawTabs) {
+        const parsedTabs = JSON.parse(rawTabs);
+        const tabs = Array.isArray(parsedTabs && parsedTabs.tabs) ? parsedTabs.tabs.map((tab, idx) => createTabMeta(tab, { tabName: idx === 0 ? 'Main Report' : `Report ${idx + 1}` })) : [];
+        if (!tabs.length) return null;
+        const settingsByTabId = {};
+        const hydratedTabs = [];
+        tabs.forEach((tab) => {
+          const tabSettingsRaw = localStorage.getItem(getQuickbaseTabSettingsLocalKey(userId, tab.id, namespace));
+          const parsedSettings = parseQuickbaseSettings(tabSettingsRaw);
+          const normalizedSettings = createDefaultSettings(parsedSettings, {});
+          settingsByTabId[tab.id] = deepClone(normalizedSettings) || createDefaultSettings({}, {});
+          hydratedTabs.push(Object.assign({}, tab, deepClone(normalizedSettings) || createDefaultSettings({}, {})));
+        });
+        const maxIndex = tabs.length - 1;
+        const activeTabIndex = Math.min(Math.max(Number(parsedTabs && parsedTabs.activeTabIndex || 0), 0), maxIndex);
+        return { activeTabIndex, tabs: hydratedTabs, settingsByTabId };
+      }
+
+      const rawLegacy = localStorage.getItem(getQuickbaseSettingsLocalKey(userId, namespace));
+      if (!rawLegacy) return null;
+      const parsed = JSON.parse(rawLegacy);
+      const settings = parsed && typeof parsed === 'object' && parsed.settings ? parsed.settings : parsed;
+      return normalizeQuickbaseSettingsWithTabs(settings, {});
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeQuickbaseSettingsLocal(userId, settings, namespace) {
+    try {
+      if (!window.localStorage) return;
+      const normalized = normalizeQuickbaseSettingsWithTabs(settings, {});
+      const payload = {
+        savedAt: Date.now(),
+        activeTabIndex: normalized.activeTabIndex,
+        tabs: normalized.tabs.map((tab) => {
+          const tabMeta = createTabMeta(tab, {});
+          const tabId = String(tabMeta.id || '').trim();
+          const tabSettings = normalized.settingsByTabId && normalized.settingsByTabId[tabId]
+            ? normalized.settingsByTabId[tabId]
+            : createDefaultSettings(tab, {});
+          return buildDefaultTab(Object.assign({}, tabMeta, tabSettings), {});
+        })
+      };
+      localStorage.setItem(getQuickbaseTabsLocalKey(userId, namespace), JSON.stringify(payload));
+      localStorage.setItem(getQuickbaseSettingsLocalKey(userId, namespace), JSON.stringify(normalized));
+      normalized.tabs.forEach((tab) => {
+        const tabId = String(tab.id || '').trim();
+        if (!tabId) return;
+        const tabSettings = normalized.settingsByTabId && normalized.settingsByTabId[tabId]
+          ? normalized.settingsByTabId[tabId]
+          : createDefaultSettings({}, {});
+        localStorage.setItem(getQuickbaseTabSettingsLocalKey(userId, tabId, namespace), JSON.stringify(tabSettings));
+      });
+    } catch (_) {}
+  }
+
+  function getProfileQuickbaseConfig(profile) {
+    const p = profile && typeof profile === 'object' ? profile : {};
+    const quickbaseSettings = parseQuickbaseSettings(p.quickbase_settings);
+    const quickbaseConfig = parseQuickbaseSettings(p.quickbase_config);
+    const settingsFromTabs = Array.isArray(quickbaseSettings.tabs) && quickbaseSettings.tabs.length
+      ? (() => {
+        const maxIndex = quickbaseSettings.tabs.length - 1;
+        const idx = Math.min(Math.max(Number(quickbaseSettings.activeTabIndex || 0), 0), maxIndex);
+        return quickbaseSettings.tabs[idx] || quickbaseSettings.tabs[0] || {};
+      })()
+      : null;
+    const source = Object.keys(quickbaseSettings).length
+      ? (settingsFromTabs || quickbaseSettings)
+      : Object.keys(quickbaseConfig).length
+        ? quickbaseConfig
+        : normalizeQuickbaseConfig(p);
+    return normalizeQuickbaseConfig(source);
+  }
+
+  function hasPersistedQuickbaseTabs(settings) {
+    if (!settings || !Array.isArray(settings.tabs)) return false;
+    return settings.tabs.some((tab) => {
+      const rawTab = tab && typeof tab === 'object' ? tab : {};
+      const normalizedTab = createDefaultSettings(rawTab, {});
+      const hasReportConfig = !!String(normalizedTab.reportLink || normalizedTab.qid || normalizedTab.tableId || '').trim();
+      const hasCustomColumns = Array.isArray(normalizedTab.customColumns) && normalizedTab.customColumns.length > 0;
+      const hasFilterConfig = Array.isArray(normalizedTab.customFilters) && normalizedTab.customFilters.length > 0;
+      const hasDashboardCounters = Array.isArray(normalizedTab.dashboard_counters) && normalizedTab.dashboard_counters.length > 0;
+      return hasReportConfig || hasCustomColumns || hasFilterConfig || hasDashboardCounters;
+    });
+  }
+
+
+  function renderDashboardCounters(root, records, settings, state, onCounterToggle) {
+    const host = root.querySelector('#qbDashboardCounters');
+    if (!host) return;
+    try {
+      const rows = Array.isArray(records) ? records : [];
+      const dashboardCounters = normalizeDashboardCounters(settings && settings.dashboard_counters);
+      if (!dashboardCounters.length) {
+        host.innerHTML = '';
+        host.classList.remove('qb-counters-many');
+        return;
+      }
+      // Smart sizing: when >4 counters, switch to fill mode so they share space evenly
+      if (dashboardCounters.length > 4) {
+        host.classList.add('qb-counters-many');
+      } else {
+        host.classList.remove('qb-counters-many');
+      }
+      const widgets = dashboardCounters.map((counter, widgetsIndex) => {
+        const matcherValue = String(counter.value || '').toLowerCase();
+        const matchedRows = rows.filter((record) => {
+          const fields = record && record.fields ? record.fields : {};
+          const field = fields[String(counter.fieldId)] || null;
+          const sourceValue = String(field && field.value != null ? field.value : '').toLowerCase();
+          if (counter.operator === 'XEX') return sourceValue !== matcherValue;
+          if (counter.operator === 'CT') return sourceValue.includes(matcherValue);
+          return sourceValue === matcherValue;
+        });
+
+        const label = counter.label || 'N/A';
+        return `
+          <div class="qb-counter-widget ${state && state.activeCounterIndex === widgetsIndex ? 'is-active' : ''}" data-counter-idx="${widgetsIndex}" style="${getCounterGlassStyle(counter.color)}">
+            <div class="qb-counter-label">${esc(label)}</div>
+            <div class="qb-counter-value">${esc(String(matchedRows.length))}</div>
+          </div>
+        `;
+      }).join('');
+
+      host.innerHTML = widgets;
+      host.querySelectorAll('[data-counter-idx]').forEach((el) => {
+        el.onclick = () => {
+          if (typeof onCounterToggle === 'function') onCounterToggle(Number(el.getAttribute('data-counter-idx')));
+        };
+      });
+    } catch (_) {
+      host.innerHTML = '';
+    }
+  }
+
+  // ── CASE NOTES DATE UTILITIES (outer scope — shared by renderRecords + applySearchAndRender) ──
+  const _MONTH_MAP_CN = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+
+  // ── PHT CONVERSION (EST → Philippine Time, UTC+8) ────────────────────────
+  // QB stores case note timestamps in EST (UTC-5). PHT is UTC+8 = EST+13h.
+  // Format: [MON-DD-YY H:MM AM/PM Name...] → converted date+time in same bracket.
+  // Example: [MAR-22-26 7:22 PM Mace] → [MAR-22-26 8:22 PM Mace] (PHT)
+  const _MONTH_NAMES_CN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const _PHT_OFFSET_MS  = 13 * 60 * 60 * 1000; // EST(UTC-5) → PHT(UTC+8) = +13h
+
+  // QB stores timestamps in Eastern Time (ET) which observes US DST:
+  //   EDT (UTC-4): 2nd Sunday March → 1st Sunday November
+  //   EST (UTC-5): rest of year
+  // We must use the correct offset for the timestamp's date.
+  function _getEasternOffsetH(year, month, day) {
+    // month is 0-indexed (JS style): 2=March, 10=November
+    if (month > 2 && month < 10) return 4; // Apr-Oct: EDT (UTC-4)
+    if (month === 2) { // March: DST starts 2nd Sunday
+      const d = new Date(year, 2, 1);
+      const secondSun = ((7 - d.getDay()) % 7) + 8;
+      return day >= secondSun ? 4 : 5;
+    }
+    if (month === 10) { // November: DST ends 1st Sunday
+      const d = new Date(year, 10, 1);
+      const firstSun = ((7 - d.getDay()) % 7) + 1;
+      return day < firstSun ? 4 : 5;
+    }
+    return 5; // Dec, Jan, Feb: EST (UTC-5)
+  }
+
+  function _cnDateToEST(mon, dd, yy, hh, mi, ap) {
+    const year = (yy < 50 ? 2000 : 1900) + yy;
+    const month = _MONTH_MAP_CN[mon];
+    let h = hh;
+    if (ap === 'PM' && h < 12) h += 12;
+    if (ap === 'AM' && h === 12) h = 0;
+    // Use DST-aware Eastern Time offset
+    const offsetH = _getEasternOffsetH(year, month, dd);
+    return new Date(Date.UTC(year, month, dd, h + offsetH, mi, 0, 0));
+  }
+
+  function _fmtPHT(utcDate) {
+    // Convert UTC date to PHT formatted string: MON-DD-YY H:MM AM/PM
+    const pht = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000)); // UTC+8
+    const mon = _MONTH_NAMES_CN[pht.getUTCMonth()];
+    const dd  = pht.getUTCDate();
+    const yy  = String(pht.getUTCFullYear()).slice(-2);
+    let   h   = pht.getUTCHours();
+    const mi  = String(pht.getUTCMinutes()).padStart(2, '0');
+    const ap  = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${mon}-${dd}-${yy} ${h}:${mi} ${ap}`;
+  }
+
+  // Convert all [MON-DD-YY TIME ...] timestamps in a notes string from EST to PHT.
+  // Preserves everything else in the bracket (name, etc.) intact.
+  // Called on every case notes / latest-update field before rendering.
+  function _convertNotesESTtoPHT(text) {
+    if (!text) return text;
+    // Match [MON-DD-YY H:MM AM/PM ...rest...]
+    return text.replace(
+      /\[([A-Z]{3})-(\d{1,2})-(\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)([\s\S]*?)\]/gi,
+      function(full, mon, dd, yy, hh, mi, ap, rest) {
+        try {
+          const utc  = _cnDateToEST(mon.toUpperCase(), parseInt(dd,10), parseInt(yy,10), parseInt(hh,10), parseInt(mi,10), ap.toUpperCase());
+          const phtStr = _fmtPHT(utc);
+          return '[' + phtStr + rest + ']';
+        } catch(_) { return full; }
+      }
+    );
+  }
+  // ── END PHT CONVERSION ────────────────────────────────────────────────────
+
+  function _parseCNDate(m) {
+    const mon = m[1].toUpperCase(), dd = parseInt(m[2],10), yy = parseInt(m[3],10);
+    const hh  = parseInt(m[4],10),   mi = parseInt(m[5],10), ap = (m[6]||'').toUpperCase();
+    if (!(mon in _MONTH_MAP_CN)) return null;
+    const year = yy < 50 ? 2000+yy : 1900+yy;
+    let h = hh;
+    if (ap==='PM' && h<12) h+=12;
+    if (ap==='AM' && h===12) h=0;
+    const d = new Date(year, _MONTH_MAP_CN[mon], dd, h, mi, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // Returns the most recent timestamp (ms) found in Case Notes text — 0 if none
+  function _caseNotesSortKey(text) {
+    if (!text) return 0;
+    const re = /\[([A-Z]{3})-(\d{1,2})-(\d{2})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/gi;
+    let best = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      const d = _parseCNDate(m);
+      if (d && d.getTime() > best) best = d.getTime();
+    }
+    return best;
+  }
+
+  // Returns today in Manila as "MAR-21-26"
+  function _getManilaToday() {
+    try {
+      const parts = {};
+      new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Manila',year:'2-digit',month:'short',day:'2-digit'})
+        .formatToParts(new Date()).forEach(p => { parts[p.type] = p.value; });
+      return parts.month.toUpperCase().slice(0,3) + '-' + parts.day.replace(/^0/,'') + '-' + parts.year;
+    } catch(_) { return ''; }
+  }
+
+  // Wraps [MON-DD-YY ...] that match todayStr with <mark class="qb-date-today">.
+  // If myQbName is provided and the bracket name matches the current user,
+  // uses <mark class="qb-date-today qb-date-mine"> (Premium Gray Glass) instead.
+  // Returns highlighted HTML string, or null if today not found in text.
+  //
+  // FIX (v3.9.28): Only the FIRST (topmost / most-recent) matching bracket per
+  // cell is highlighted. Previously every today-date bracket in the cell was
+  // wrapped in <mark>, causing multiple highlights per row item. Since notes are
+  // written newest-first, the first match is always the latest update.
+  function _highlightTodayInNotes(rawText, todayStr, myQbName) {
+    if (!todayStr || !rawText) return null;
+    const myNameLower = String(myQbName || '').trim().toLowerCase();
+    const escapedSafe = rawText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const re = /\[([A-Z]{3}-\d{1,2}-\d{2}\s[^\]]*)\]/g;
+    let hasHighlight  = false;
+    let firstDone     = false; // guard — only the FIRST today-match gets the mark
+    const result = escapedSafe.replace(re, (full, inner) => {
+      const tok = inner.trim().split(/\s/)[0];
+      if (tok === todayStr && !firstDone) {
+        hasHighlight = true;
+        firstDone    = true; // lock — all subsequent today-brackets stay plain
+        const isMine = myNameLower && inner.toLowerCase().includes(myNameLower);
+        if (isMine) {
+          return '<mark class="qb-date-today qb-date-mine">[' + inner + ']<span class="qb-date-mine-badge">me</span></mark>';
+        }
+        return '<mark class="qb-date-today">[' + inner + ']</mark>';
+      }
+      return '[' + inner + ']';
+    });
+    return hasHighlight ? result : null;
+  }
+  // ── END CASE NOTES DATE UTILITIES ─────────────────────────────────────────
+
+  function renderRecords(root, payload, options) {
+    const host = root.querySelector('#qbDataBody');
+    const meta = root.querySelector('#qbDataMeta');
+    if (!host || !meta) return;
+
+    const columns = Array.isArray(payload && payload.columns) ? payload.columns : [];
+    const rows = Array.isArray(payload && payload.records) ? payload.records : [];
+    const opts = options && typeof options === 'object' ? options : {};
+
+    if (!columns.length || !rows.length) {
+      const emptyBySearch = !!opts.userInitiatedSearch;
+      meta.textContent = 'No Quickbase Records Found';
+      host.innerHTML = `<div class="card pad"><div class="small muted">${emptyBySearch ? 'No records match your filters.' : 'No records loaded. Open ⚙️ Settings to configure report, columns, and filters.'}</div></div>`;
+      return;
+    }
+
+    const pageSize = Number(opts.pageSize || 100);
+    const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+    const activePage = Math.min(Math.max(Number(opts.page || 1), 1), totalPages);
+    // FIX: [Issue 2] - Pagination for large record sets to avoid DOM-heavy render blocking.
+    const visibleRows = rows.slice((activePage - 1) * pageSize, activePage * pageSize);
+    meta.innerHTML = `${rows.length} record${rows.length === 1 ? '' : 's'} loaded${rows.length > pageSize ? ` • Page ${activePage}/${totalPages}` : ''}`;
+
+    // Compute Manila today once per renderRecords call (used for cell highlighting)
+    const _CN_TODAY = _getManilaToday();
+
+    // ENHANCEMENT 1: Days-only duration — never show hours
+
+    const toDurationLabel = (value) => {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric) || numeric < 0) return String(value == null ? 'N/A' : value);
+      const hours = numeric / (1000 * 60 * 60);
+      const days = Math.round(hours / 24);
+      if (days < 1) return '< 1 day';
+      return `${days} day${days === 1 ? '' : 's'}`;
+    };
+
+    // ── CASE NOTES AUTO-WIDTH: scan visible rows to fit [DATE TIME NAME] ──────
+    // Extracts the FULL content of the first [bracket] in each row's Case Notes field.
+    // Computes the pixel width needed so the name is never cut mid-word.
+    // Uses character-count × font-width-estimate (7.2px for 13px DM Sans) + cell padding.
+    const _cnColIdx = columns.findIndex(c =>
+      ['case notes', 'notes'].includes(String(c && c.label || '').trim().toLowerCase())
+    );
+    let _cnColWidth = 220; // default (matches existing CSS)
+    if (_cnColIdx >= 0) {
+      const _cnFid = String(columns[_cnColIdx].id);
+      let _maxBracketLen = 0;
+      visibleRows.forEach(r => {
+        const val = r && r.fields && r.fields[_cnFid] ? String(r.fields[_cnFid].value || '') : '';
+        // Find ALL bracket groups [MON-DD-YY TIME NAME] and track the longest
+        const re = /\[([^\]]{5,80})\]/g;
+        let m;
+        while ((m = re.exec(val)) !== null) {
+          if (m[1].length > _maxBracketLen) _maxBracketLen = m[1].length;
+        }
+      });
+      if (_maxBracketLen > 0) {
+        // 7.2px per char (DM Sans 13px) + 32px cell padding + 10px buffer
+        const _computed = Math.round(_maxBracketLen * 7.2 + 42);
+        // Clamp: never narrower than 200px, never wider than 500px
+        _cnColWidth = Math.min(500, Math.max(200, _computed));
+      }
+    }
+    // ── END AUTO-WIDTH COMPUTE ─────────────────────────────────────────────────
+
+    const headers = columns.map((c, _ci) => {
+      const _isNotesCol = _ci === _cnColIdx;
+      return `<th${_isNotesCol ? ' class="qb-cn-col"' : ''}>${esc(c.label || c.id || 'Field')}</th>`;
+    }).join('');
+    const rowStartIndex = (activePage - 1) * pageSize;
+
+    // ── SCROLL POSITION SAVE ─────────────────────────────────────────────────
+    const existingTableInner = host.querySelector('.qb-table-inner');
+    const savedScrollTop  = existingTableInner ? existingTableInner.scrollTop  : 0;
+    const savedScrollLeft = existingTableInner ? existingTableInner.scrollLeft : 0;
+
+    // ── CASE STATUS COLOR BADGE RENDERER ────────────────────────────────
+    function renderStatusBadge(rawStatus) {
+      const s = String(rawStatus || '').trim();
+      if (!s || s === 'N/A') return `<span class="qb-status-badge qb-status-default">${esc(s || '—')}</span>`;
+      const sl = s.toLowerCase();
+      let cls = 'qb-status-default';
+      if (sl.includes('investigating'))                                 cls = 'qb-status-investigating';
+      else if (sl.includes('waiting for customer') || sl.includes('waiting'))  cls = 'qb-status-waiting';
+      else if (sl.includes('soft close') || sl.includes('soft-close')) cls = 'qb-status-soft-close';
+      else if (sl.includes('initial inquiry'))                          cls = 'qb-status-initial';
+      else if (sl.includes('response received') || sl.includes('for support')) cls = 'qb-status-response';
+      else if (sl.includes('closed') || sl.startsWith('c -'))          cls = 'qb-status-closed';
+      else if (sl.startsWith('s -'))                                    cls = 'qb-status-soft-close';
+      else if (sl.startsWith('o -'))                                    cls = 'qb-status-investigating';
+      return `<span class="qb-status-badge ${cls}"><span class="qb-status-dot"></span>${esc(s)}</span>`;
+    }
+
+    // ENHANCEMENT 2: 3-line clamp cell renderer with premium tooltip
+    function renderClampedCell(value, isStatus) {
+      if (isStatus) return `<td>${renderStatusBadge(String(value))}</td>`;
+      const safeVal = esc(String(value == null ? '' : value));
+      // Only apply clamp + tooltip for cells that may contain long text
+      const rawStr = String(value == null ? '' : value);
+      if (rawStr.length <= 60) return `<td><span class="qb-cell-text">${safeVal}</span></td>`;
+      return `<td><div class="qb-cell-clamp" data-full="${esc(rawStr)}"><span class="qb-cell-text">${safeVal}</span></div></td>`;
+    }
+
+    // ENHANCEMENT 3: Virtual Column support
+    const vcSettings = opts.virtualColumnSettings || null;
+    const vcEnabled = !!(vcSettings && vcSettings.enabled && vcSettings.items && vcSettings.items.length);
+    const vcHeader = vcEnabled ? `<th class="qb-vc-th" title="Virtual Column">⬡ ${esc(vcSettings.label || 'Status')}</th>` : '';
+
+    // Per-render snap store — buttons reference by index (no JSON parse needed)
+    const _qbRowSnaps = [];
+    const body = visibleRows.map((r, rowIdx) => {
+      const globalRowNum = rowStartIndex + rowIdx + 1;
+      const recordId = String(r && r.qbRecordId || 'N/A');
+
+      // Virtual Column cell
+      let vcCell = '';
+      if (vcEnabled) {
+        const savedVal = (opts.virtualColumnValues && opts.virtualColumnValues[recordId]) || '';
+        const cfStyle = _getConditionalStyle(savedVal, vcSettings.conditionalRules || []);
+        const hasVal = !!savedVal;
+        const optionsHtml = vcSettings.items.map(item => {
+          const itemRule = (vcSettings.conditionalRules || []).find(r => r.value === item) || {};
+          const optStyle = itemRule.bgColor
+            ? ` style="background:${itemRule.bgColor};color:${itemRule.textColor || '#fff'};"`
+            : '';
+          return `<option value="${esc(item)}"${optStyle} ${savedVal === item ? 'selected' : ''}>${esc(item)}</option>`;
+        }).join('');
+        // Build pill accent from the matching CF rule when a value is set
+        const vcRule = hasVal ? ((vcSettings.conditionalRules || []).find(r => r.value === savedVal) || {}) : {};
+        const pillAccent = hasVal && vcRule.bgColor
+          ? `background:${_hexToRgba(vcRule.bgColor, 0.22)}!important;border-color:${_hexToRgba(vcRule.bgColor, 0.55)}!important;color:${vcRule.textColor || '#e2e8f0'}!important;`
+          : '';
+        vcCell = `<td class="qb-vc-cell">
+          <select class="qb-vc-select${hasVal ? ' qb-vc-has-value' : ''}" data-record-id="${esc(recordId)}" data-vc-value="${esc(savedVal)}" title="${esc(savedVal || 'Set status…')}" style="${pillAccent}">
+            <option value="">—</option>${optionsHtml}
+          </select>
+        </td>`;
+      }
+
+      // Apply row-level conditional formatting from virtual column
+      const savedVcVal = vcEnabled ? ((opts.virtualColumnValues && opts.virtualColumnValues[recordId]) || '') : '';
+      const rowCf = vcEnabled ? _getConditionalStyle(savedVcVal, vcSettings.conditionalRules || []) : {};
+      const rowStyleAttr = rowCf.rowStyle ? ` style="${rowCf.rowStyle}"` : '';
+      const rowClassAttr = rowCf.rowClass ? ` class="${rowCf.rowClass}"` : '';
+      // FIX: cellStyle must go on each <td> individually — tr-level color is overridden by td CSS specificity
+      const tdStyle = rowCf.cellStyle ? ` style="${rowCf.cellStyle}"` : '';
+
+      // Columns that are always force-clamped regardless of text length
+      // (long-text columns that would otherwise blow out the table layout)
+      const _CLAMP_COLS = new Set(['case notes','notes','latest update on the case','latest update',
+        'last comment','update on the case','short description','description','concern','subject']);
+      // Columns that render a duration instead of raw value
+      const _DUR_COLS   = new Set(['last update days','last update','update days','age']);
+
+      const cells = columns.map((c) => {
+        const field = r && r.fields ? r.fields[String(c.id)] : null;
+        const rawValue = field && field.value != null ? field.value : 'N/A';
+        const normalizedLabel = String(c && c.label || '').trim().toLowerCase();
+
+        // Status badge
+        if (normalizedLabel === 'case status' || normalizedLabel === 'status') {
+          return `<td${tdStyle}>${renderStatusBadge(String(rawValue))}</td>`;
+        }
+        // Duration columns
+        const displayValue = _DUR_COLS.has(normalizedLabel)
+          ? toDurationLabel(rawValue)
+          : String(rawValue);
+
+        const safeVal = esc(displayValue);
+        const rawStr  = String(displayValue);
+
+        // Force-clamp known long-text columns + any cell over 60 chars
+        const forceClamp = _CLAMP_COLS.has(normalizedLabel);
+        const isCaseNotes = (normalizedLabel === 'case notes' || normalizedLabel === 'notes'
+          || normalizedLabel === 'latest update on the case' || normalizedLabel === 'latest update'
+          || normalizedLabel === 'last comment');
+
+        // Apply Manila-date highlight for Case Notes column
+        if (isCaseNotes && rawStr.length > 0) {
+          // Convert EST timestamps → PHT before highlighting/rendering
+          const phtStr  = _convertNotesESTtoPHT(rawStr);
+          // Pass myQbName so own entries get gray-glass highlight
+          const highlighted = _highlightTodayInNotes(phtStr, _CN_TODAY, opts.myQbName || '');
+          if (highlighted) {
+            return `<td class="qb-col-clamped qb-col-hasnew qb-cn-col"${tdStyle}><div class="qb-cell-clamp qb-cell-hasnew" data-full="${esc(phtStr)}"><span class="qb-cell-text qb-notes-html">${highlighted}</span></div></td>`;
+          }
+          return `<td class="qb-col-clamped qb-cn-col"${tdStyle}><div class="qb-cell-clamp" data-full="${esc(phtStr)}"><span class="qb-cell-text">${esc(phtStr)}</span></div></td>`;
+        }
+
+        if (!forceClamp && rawStr.length <= 60) {
+          return `<td${tdStyle}><span class="qb-cell-text">${safeVal}</span></td>`;
+        }
+        return `<td class="qb-col-clamped"${tdStyle}><div class="qb-cell-clamp" data-full="${esc(rawStr)}"><span class="qb-cell-text">${safeVal}</span></div></td>`;
+      }).join('');
+
+      // Build the row data snapshot for the Case Detail Modal
+      // Store snap in JS array — no JSON encode/decode (avoids silent parse failures)
+      const rowSnapshot = {
+        rowNum:    globalRowNum,
+        recordId:  recordId,
+        fields:    r && r.fields ? r.fields : {},
+        columnMap: columns.reduce((acc, c) => { acc[String(c.id)] = String(c.label || c.id || ''); return acc; }, {}),
+      };
+      _qbRowSnaps.push(rowSnapshot);
+      const rowSnapIdx = _qbRowSnaps.length - 1;
+
+      // FIX: Column order — # first, then Virtual Column, then user-defined columns
+      var rowDataAttr = esc(JSON.stringify({
+        qbRecordId: recordId,
+        fields: r && r.fields ? r.fields : {},
+      }).replace(/'/g, '&#39;'));
+      return `<tr${rowClassAttr}${rowStyleAttr}><td class="qb-row-num-cell"${tdStyle}><button type="button" class="qb-row-num-pill qb-row-detail-btn" data-action="case-view-details" data-rid="${esc(recordId)}" data-row='${rowDataAttr}' data-qb-snap-idx="${rowSnapIdx}" title="View case details" aria-label="View case #${esc(recordId)}">${globalRowNum}</button></td>${vcCell}<td class="qb-case-id"${tdStyle}>${esc(recordId)}</td>${cells}</tr>`;
+    }).join('');
+
+    const vcThPrefix = vcEnabled ? vcHeader : '';
+    host.innerHTML = `<div class="qb-table-inner"><table class="qb-data-table"><thead><tr><th class="qb-row-num-th">#</th>${vcThPrefix}<th>Case #</th>${headers}</tr></thead><tbody>${body}</tbody></table></div>`;
+
+    // ── APPLY DYNAMIC CASE NOTES COLUMN WIDTH ─────────────────────────────────
+    // Sets CSS variable --qb-cn-w so the qb-cn-col class gets the computed width.
+    // Must run AFTER host.innerHTML is set so the host element exists in DOM.
+    host.style.setProperty('--qb-cn-w', _cnColWidth + 'px');
+    // ── END APPLY WIDTH ────────────────────────────────────────────────────────
+
+    // ── PREMIUM TOOLTIP SETUP ─────────────────────────────────────────────
+    _setupQbTooltips(host);
+
+    // ── CASE DETAIL MODAL — Direct per-button onclick (primary) ─────────────────
+    // Belt+suspenders: bind onclick DIRECTLY on each button after innerHTML is set.
+    // This is the most reliable approach — no delegation, no bubbling, no closest().
+    // root._qbcdOpen is set by _initQbCaseDetailModal() in page-init (below).
+    // renderRecords runs AFTER that init, so root._qbcdOpen is always available.
+    // ── CASE DETAIL: bind clicks using integer index (no JSON parse) ──────────
+    (function _bindRowDetailBtns() {
+      // Store snaps on host so delegation can also access them
+      host._qbRowSnaps = _qbRowSnaps;
+      var btns = host.querySelectorAll('.qb-row-detail-btn');
+      for (var bi = 0; bi < btns.length; bi++) {
+        (function(btn) {
+          var idx = parseInt(btn.getAttribute('data-qb-snap-idx'), 10);
+          if (isNaN(idx)) return;
+          btn.onclick = function(e) {
+            e.stopPropagation();
+            var snap = _qbRowSnaps[idx];
+            if (!snap) return;
+            if (typeof root._qbcdOpen === 'function') {
+              root._qbcdOpen(snap, _qbRowSnaps);
+            }
+          };
+        })(btns[bi]);
+      }
+    })();
+
+    // ── VIRTUAL COLUMN CHANGE HANDLER (PREMIUM) ───────────────────────────
+    if (vcEnabled && typeof opts.onVirtualColumnChange === 'function') {
+      host.querySelectorAll('.qb-vc-select').forEach(sel => {
+        // Apply initial pill accent if value already set
+        _applyVcPillAccent(sel, vcSettings.conditionalRules || []);
+
+        sel.addEventListener('change', () => {
+          const rid = sel.getAttribute('data-record-id');
+          const val = sel.value;
+          // Toggle has-value class for CSS pill styling
+          sel.classList.toggle('qb-vc-has-value', !!val);
+          sel.setAttribute('data-vc-value', val);
+          sel.title = val || 'Set status…';
+          // Apply accent color from CF rule immediately (no re-render needed)
+          _applyVcPillAccent(sel, vcSettings.conditionalRules || []);
+          opts.onVirtualColumnChange(rid, val);
+        });
+      });
+    }
+
+    // ── SCROLL POSITION PRESERVATION ──────────────────────────────────────────
+    if (savedScrollTop > 0 || savedScrollLeft > 0) {
+      const newTableInner = host.querySelector('.qb-table-inner');
+      if (newTableInner) {
+        newTableInner.scrollTop = savedScrollTop;
+        newTableInner.scrollLeft = savedScrollLeft;
+      }
+    }
+    if (rows.length > pageSize && typeof opts.onPageChange === 'function') {
+      const pager = document.createElement('div');
+      pager.style.cssText = 'display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:8px;';
+      pager.innerHTML = `
+        <button type="button" class="btn" data-page-nav="prev" ${activePage <= 1 ? 'disabled' : ''}>Prev</button>
+        <span class="small muted">Page ${activePage} of ${totalPages}</span>
+        <button type="button" class="btn" data-page-nav="next" ${activePage >= totalPages ? 'disabled' : ''}>Next</button>
+      `;
+      host.appendChild(pager);
+      pager.querySelectorAll('[data-page-nav]').forEach((btn) => {
+        btn.onclick = () => {
+          const direction = btn.getAttribute('data-page-nav');
+          const nextPage = direction === 'next' ? activePage + 1 : activePage - 1;
+          opts.onPageChange(nextPage);
+        };
+      });
+    }
+  }
+
+  // ── PREMIUM TOOLTIP ENGINE ──────────────────────────────────────────────────
+  // Singleton tooltip DOM node — created once, reused on hover
+  let _qbTooltipEl = null;
+  function _getTooltip() {
+    if (_qbTooltipEl) return _qbTooltipEl;
+    _qbTooltipEl = document.createElement('div');
+    _qbTooltipEl.className = 'qb-cell-tooltip';
+    _qbTooltipEl.setAttribute('role', 'tooltip');
+    _qbTooltipEl.setAttribute('aria-live', 'polite');
+    document.body.appendChild(_qbTooltipEl);
+    return _qbTooltipEl;
+  }
+
+  function _setupQbTooltips(host) {
+    const clampEls = host.querySelectorAll('.qb-cell-clamp');
+    clampEls.forEach(el => {
+      el.addEventListener('mouseenter', _qbTooltipEnter);
+      el.addEventListener('mousemove', _qbTooltipMove);
+      el.addEventListener('mouseleave', _qbTooltipLeave);
+    });
+  }
+
+  function _qbTooltipEnter(e) {
+    const el = e.currentTarget;
+    // data-full already stores PHT-converted text (set during renderRecords).
+    // Do NOT run _convertNotesESTtoPHT again — that would double-convert.
+    const full = el.getAttribute('data-full') || '';
+    // Don't show tooltip if content isn't clamped (short text fits in 3 lines)
+    if (!full || full.trim().length < 2) return;
+    // Only show tooltip if text is actually truncated
+    const clamped = el.scrollHeight > el.clientHeight + 4;
+    const hasLongContent = full.length > 80;
+    if (!clamped && !hasLongContent) return;
+    const tip = _getTooltip();
+
+    // For Case Notes cells: highlight today's Manila dates in the tooltip too
+    const todayStr = (typeof _getManilaToday === 'function') ? _getManilaToday() : '';
+    if (todayStr) {
+      // Also pass myQbName for consistent gray-glass on own entries in tooltip
+      const highlighted = (typeof _highlightTodayInNotes === 'function')
+        ? _highlightTodayInNotes(full, todayStr, window._qbMyNameCache || '')
+        : null;
+      if (highlighted) {
+        tip.innerHTML = highlighted.replace(/\n/g,'<br>').replace(/\r/g,'');
+        tip.classList.add('is-visible');
+        _positionTooltip(tip, e);
+        return;
+      }
+    }
+
+    // Default: plain text with newlines
+    tip.innerHTML = full.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>').replace(/\r/g,'');
+    tip.classList.add('is-visible');
+    _positionTooltip(tip, e);
+  }
+  function _qbTooltipMove(e) {
+    const tip = _getTooltip();
+    _positionTooltip(tip, e);
+  }
+  function _qbTooltipLeave() {
+    const tip = _getTooltip();
+    tip.classList.remove('is-visible');
+  }
+  function _positionTooltip(tip, e) {
+    const GAP = 14;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    tip.style.left = '0'; tip.style.top = '0'; // reset to measure
+    const tw = tip.offsetWidth || 280, th = tip.offsetHeight || 60;
+    let x = e.clientX + GAP, y = e.clientY + GAP;
+    if (x + tw > vw - 10) x = e.clientX - tw - GAP;
+    if (y + th > vh - 10) y = e.clientY - th - GAP;
+    tip.style.left = `${Math.max(8, x)}px`;
+    tip.style.top  = `${Math.max(8, y)}px`;
+  }
+
+  // ── VIRTUAL COLUMN CONDITIONAL FORMATTING HELPER ───────────────────────────
+  // PREMIUM DESIGN: Left accent bar only on <tr>. Background tint + typography on each <td>.
+  // This eliminates full-row garish background while keeping clean enterprise look.
+  function _getConditionalStyle(value, rules) {
+    if (!value || !Array.isArray(rules) || !rules.length) return {};
+    const rule = rules.find(r => String(r.value || '') === String(value));
+    if (!rule) return {};
+
+    const hasBg  = !!(rule.bgColor);
+    const hasTxt = !!(rule.textColor);
+
+    // <tr> gets ONLY the left accent bar — no background fill on the row itself.
+    // Full-row fill is ugly on wide tables and conflicts with zebra striping themes.
+    const rowStyle = hasBg
+      ? `box-shadow:inset 3px 0 0 ${rule.bgColor}!important`
+      : '';
+
+    // All styling (tint + typography) goes on each <td> individually.
+    // tr-level color/bg is always overridden by td-level CSS specificity — must be per-cell.
+    const cellParts = [];
+    if (hasBg) {
+      const tint = _hexToRgba(rule.bgColor, 0.10);
+      cellParts.push(`background:${tint}!important`);
+    }
+    if (hasTxt) cellParts.push(`color:${rule.textColor}!important`);
+    if (rule.fontWeight) cellParts.push(`font-weight:${rule.fontWeight}!important`);
+    if (rule.fontSize)   cellParts.push(`font-size:${rule.fontSize}!important`);
+    if (rule.fontStyle)  cellParts.push(`font-style:${rule.fontStyle}!important`);
+    if (rule.textDecoration) cellParts.push(`text-decoration:${rule.textDecoration}!important`);
+    if (rule.textAlign)  cellParts.push(`text-align:${rule.textAlign}!important`);
+    const cellStyle = cellParts.join(';');
+
+    // VC dropdown cell: slightly stronger accent tint + right divider for visual anchoring
+    const vcCellStyle = hasBg
+      ? `background:${_hexToRgba(rule.bgColor, 0.20)}!important;border-right:1px solid ${_hexToRgba(rule.bgColor, 0.35)}!important`
+      : '';
+
+    return {
+      rowStyle,    // left accent bar only — on <tr>
+      cellStyle,   // tint + typography — applied to every <td>
+      vcCellStyle, // stronger accent on the VC dropdown <td>
+      rowClass: (rowStyle || cellStyle) ? 'qb-cf-row' : ''
+    };
+  }
+
+
+  // Helper: convert hex color to rgba string
+  function _hexToRgba(hex, alpha) {
+    try {
+      const h = hex.replace('#', '');
+      const r = parseInt(h.substring(0,2), 16);
+      const g = parseInt(h.substring(2,4), 16);
+      const b = parseInt(h.substring(4,6), 16);
+      if (isNaN(r) || isNaN(g) || isNaN(b)) return hex;
+      return `rgba(${r},${g},${b},${alpha})`;
+    } catch(_) { return hex; }
+  }
+
+  // Apply dynamic accent color + pill styling to a .qb-vc-select element
+  // based on its current value and the CF rules. Called on render + on change.
+  function _applyVcPillAccent(sel, rules) {
+    if (!sel) return;
+    const val = sel.value;
+    if (!val) {
+      sel.style.cssText = '';
+      sel.classList.remove('qb-vc-has-value');
+      return;
+    }
+    sel.classList.add('qb-vc-has-value');
+    const rule = Array.isArray(rules) ? rules.find(r => String(r.value || '') === val) : null;
+    if (rule && rule.bgColor) {
+      const bg = _hexToRgba(rule.bgColor, 0.22);
+      const border = _hexToRgba(rule.bgColor, 0.55);
+      const textClr = rule.textColor || '#e2e8f0';
+      sel.style.cssText = `background:${bg}!important;border-color:${border}!important;color:${textClr}!important;`;
+    } else {
+      // Has value but no CF rule — use default accent
+      sel.style.cssText = 'border-color:rgba(56,189,248,.35)!important;color:#7dd3fc!important;';
+    }
+  }
+
+  function renderEmptyState(root, message) {
+    const host = root.querySelector('#qbDataBody');
+    const meta = root.querySelector('#qbDataMeta');
+    if (meta) meta.textContent = 'No Quickbase Records Found';
+    if (host) host.innerHTML = `<div class="card pad"><div class="small muted">${esc(String(message || 'No records loaded.'))}</div></div>`;
+  }
+
+
+  function shouldApplyInitialFilters(searchInput) {
+    return String(searchInput || '').trim().length > 0;
+  }
+
+  function filterRecordsBySearch(payload, searchTerm) {
+    const source = payload && typeof payload === 'object' ? payload : {};
+    const columns = Array.isArray(source.columns) ? source.columns : [];
+    const records = Array.isArray(source.records) ? source.records : [];
+    const term = String(searchTerm || '').trim().toLowerCase();
+    if (!term) {
+      return { columns, records };
+    }
+
+    const filtered = records.filter((row) => {
+      const caseId = String(row && row.qbRecordId || '').toLowerCase();
+      if (caseId.includes(term)) return true;
+      return columns.some((col) => {
+        const fid = String(col && col.id || '').trim();
+        if (!fid) return false;
+        const cellValue = row && row.fields && row.fields[fid] ? row.fields[fid].value : '';
+        return String(cellValue == null ? '' : cellValue).toLowerCase().includes(term);
+      });
+    });
+
+    return { columns, records: filtered };
+  }
+
+  function filterRecordsByCounter(payload, counter) {
+    const source = payload && typeof payload === 'object' ? payload : {};
+    const columns = Array.isArray(source.columns) ? source.columns : [];
+    const records = Array.isArray(source.records) ? source.records : [];
+    const activeFilter = counterToFilter(counter);
+    if (!activeFilter) return { columns, records };
+
+    const targetFieldId = String(activeFilter.fieldId || '').trim();
+    const matcherValue = String(activeFilter.value || '').toLowerCase();
+    const op = String(activeFilter.operator || 'EX').toUpperCase();
+
+    const filtered = records.filter((record) => {
+      const fields = record && record.fields ? record.fields : {};
+      const field = fields[targetFieldId] || null;
+      const sourceValue = String(field && field.value != null ? field.value : '').toLowerCase();
+      if (op === 'XEX') return sourceValue !== matcherValue;
+      if (op === 'CT') return sourceValue.includes(matcherValue);
+      return sourceValue === matcherValue;
+    });
+
+    return { columns, records: filtered };
+  }
+
+  function shouldApplyServerFilters(options) {
+    const opts = options && typeof options === 'object' ? options : {};
+    return opts.applyFilters !== false;
+  }
+
+  if (window.__MUMS_TEST_HOOKS__) {
+    window.__MUMS_TEST_HOOKS__.myQuickbase = {
+      shouldApplyInitialFilters,
+      filterRecordsBySearch,
+      filterRecordsByCounter,
+      shouldApplyServerFilters,
+      getQuickbaseSettingsLocalKey,
+      getQuickbaseTabsLocalKey,
+      getQuickbaseTabSettingsLocalKey,
+      readQuickbaseSettingsLocal,
+      writeQuickbaseSettingsLocal,
+      normalizeQuickbaseSettingsWithTabs,
+      createDefaultSettings,
+      parseQuickbaseReportUrl,
+      hasPersistedQuickbaseTabs,
+      hasUsableQuickbaseSettings,
+      chooseInitialQuickbaseSettingsSource
+    };
+  }
+
+  window.Pages.my_quickbase = async function(root) {
+    // ── STALE INSTANCE KILL ────────────────────────────────────────────
+    // If a previous invocation of this page left a cleanup registered on root
+    // (e.g. user navigated away then back while an interval was still live),
+    // destroy it NOW — before any new state is created.
+    // Without this, two independent closures share the same DOM and call
+    // renderTabBar() with different state.activeTabIndex values, producing the
+    // "tabs alternate every ~2 s" bug.
+    if (typeof root._cleanup === 'function') {
+      try { root._cleanup(); } catch (_) {}
+      root._cleanup = null;
+    }
+
+    // ── LAYOUT GUARD — SYNCHRONOUS SETUP ──────────────────────────────
+    // app.js calls window.Pages[id](main) WITHOUT await. Our function has
+    // multiple awaits before root._cleanup is ever set, so app.js's cleanup
+    // capture fires while cleanup is still null — meaning cleanup NEVER runs
+    // when the user navigates away. We protect against this with THREE layers:
+    //
+    //  Layer 1 – Inline styles (not CSS class): Overflow/padding are set as
+    //    root.style properties. Inline styles are unambiguously ours to clear.
+    //
+    //  Layer 2 – MutationObserver on root.childList: When app.js calls
+    //    main.innerHTML = '' (navigation), our shell #qbPageShell disappears.
+    //    The observer fires SYNCHRONOUSLY — calls root._cleanup() immediately,
+    //    guaranteed regardless of whether app.js captured the cleanup reference.
+    //
+    //  Layer 3 – Preliminary root._cleanup set SYNCHRONOUSLY before first
+    //    await so that app.js DOES capture a real cleanup function on the same
+    //    microtask tick. setupAutoRefresh() chains onto this later.
+    //
+    // CSS .page-qb class is still added for theme/skin rules but must NOT
+    // be the sole carrier of overflow/padding — those must be inline.
+    root.classList.add('page-qb');
+    root.style.padding  = '0';
+    root.style.overflow = 'clip';     // Does NOT trap position:fixed children
+
+    // ── PROMOTE TIMER VARS — must be declared BEFORE first await so that
+    // the preliminary cleanup (below) and MutationObserver can reference them.
+    let quickbaseRefreshTimer = null;
+    let autosaveTimer         = null;
+    let quickbaseLoadInFlight = null;
+    let lastQuickbaseLoadAt   = 0;
+    let modalBindingsActive   = false;
+
+    // ── PRELIMINARY CLEANUP (Layer 3) ─────────────────────────────────
+    // Set on root SYNCHRONOUSLY — app.js runs `cleanup = main._cleanup`
+    // on the same tick as calling window.Pages[id](main), so this reference
+    // IS captured.  setupAutoRefresh() will wrap this via its prevCleanup chain.
+    root._cleanup = function _qbPreliminaryCleanup() {
+      try { if (quickbaseRefreshTimer) { clearInterval(quickbaseRefreshTimer); quickbaseRefreshTimer = null; } } catch (_) {}
+      try { if (autosaveTimer) { clearTimeout(autosaveTimer); autosaveTimer = null; } } catch (_) {}
+      try { root.style.padding  = ''; } catch (_) {}
+      try { root.style.overflow = ''; } catch (_) {}
+      try { document.body.style.overflow = ''; } catch (_) {}
+      try { root.classList.remove('page-qb'); } catch (_) {}
+    };
+
+    // ── MUTATION OBSERVER (Layer 2) ────────────────────────────────────
+    // Install synchronously. When #qbPageShell vanishes (navigation), fire the
+    // FULL root._cleanup() — not just style resets — so timers are always killed.
+    let _qbLayoutGuardObs = null;
+    try {
+      _qbLayoutGuardObs = new MutationObserver(function() {
+        if (!root.querySelector('#qbPageShell')) {
+          // Shell is gone — app.js navigated away. Run FULL cleanup NOW.
+          try {
+            if (typeof root._cleanup === 'function') { root._cleanup(); root._cleanup = null; }
+          } catch (_) {}
+          // Belt-and-suspenders: ensure styles are cleared even if cleanup threw.
+          try { root.style.padding  = ''; } catch (_) {}
+          try { root.style.overflow = ''; } catch (_) {}
+          try { document.body.style.overflow = ''; } catch (_) {}
+          try { root.classList.remove('page-qb'); } catch (_) {}
+          try { if (_qbLayoutGuardObs) { _qbLayoutGuardObs.disconnect(); _qbLayoutGuardObs = null; } } catch (_) {}
+        }
+      });
+      _qbLayoutGuardObs.observe(root, { childList: true });
+    } catch (_) {}
+
+    const AUTO_REFRESH_MS = 300000; // 5-min auto-refresh — was 60s (5× reduction). Egress optimization for Free Plan.
+    const me = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
+    const currentUserId = me && me.id;
+    const tabNamespace = resolveTabStorageNamespace(root);
+    const isSupportStudio = isSupportStudioNamespace(tabNamespace);
+    const tabManager = (window.TabManager && typeof window.TabManager.init === 'function')
+      ? window.TabManager.init({ userId: currentUserId, apiBaseUrl: '/api', namespace: tabNamespace })
+      : null;
+    let profile = (me && window.Store && Store.getProfile) ? (Store.getProfile(me.id) || {}) : {};
+
+    // ── GLOBAL QB SETTINGS — fetched once on page load ─────────────────────
+    // Report Config (realm/tableId/qid/token) now comes from Global QB Settings.
+    // Per-tab settings only customize columns + filters.
+    let globalQbSettings = { reportLink: '', realm: '', tableId: '', qid: '', customColumns: [], filterConfig: [], filterMatch: 'ALL' };
+    let studioGlobalQuickbaseSettings = {};
+    async function fetchGlobalQbSettings() {
+      try {
+        const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
+        const endpoint = isSupportStudio ? '/api/studio/qb_settings_global' : '/api/settings/global_quickbase';
+        const r = await fetch(endpoint, { headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' } });
+        const d = await r.json();
+        if (d.ok && d.settings) {
+          globalQbSettings = Object.assign(globalQbSettings, d.settings);
+          if (isSupportStudio) {
+            studioGlobalQuickbaseSettings = normalizeQuickbaseSettingsWithTabs(d.settings, d.settings);
+            // Explicitly persist an isolated studio cache key.
+            writeQuickbaseSettingsLocal('support_studio', studioGlobalQuickbaseSettings, 'quickbase_s');
+          }
+        }
+      } catch (_) {}
+    }
+    await fetchGlobalQbSettings();
+
+    async function refreshProfileFromCloud() {
+      if (!me || !window.CloudUsers || typeof window.CloudUsers.me !== 'function') return;
+      try {
+        const out = await window.CloudUsers.me();
+        const cloudProfile = out && out.ok && out.profile && typeof out.profile === 'object' ? out.profile : null;
+        if (!cloudProfile) return;
+        profile = cloudProfile;
+        if (window.Store && typeof Store.setProfile === 'function') {
+          Store.setProfile(me.id, Object.assign({}, cloudProfile, { updatedAt: Date.now() }));
+        }
+      } catch (_) {}
+    }
+
+    await refreshProfileFromCloud();
+    profile = (me && window.Store && Store.getProfile) ? (Store.getProfile(me.id) || {}) : {};
+
+    // FIX: If Store has no qb_name, check Store.getUsers() first (populated by
+    // refreshIntoLocalStore which maps qb_name into the users array).
+    // Then fallback to a direct /api/users/me fetch.
+    // This handles: SA sets qb_name → realtime sync arrives → user opens My QB.
+    if (me && !String(profile.qb_name || '').trim()) {
+      try {
+        // 1. Check Store.getUsers() — refreshIntoLocalStore maps qb_name here
+        const storeUser = window.Store && Store.getUsers
+          ? (Store.getUsers() || []).find(u => u && String(u.id || '') === String(me.id || ''))
+          : null;
+        if (storeUser && String(storeUser.qb_name || '').trim()) {
+          profile = Object.assign({}, profile, { qb_name: storeUser.qb_name });
+        }
+      } catch(_) {}
+    }
+    if (me && !String(profile.qb_name || '').trim()) {
+      try {
+        // 2. Final fallback: direct API call — catches cold-start / stale Store
+        const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
+        const r = await fetch('/api/users/me', { headers: { Authorization: 'Bearer ' + tok } });
+        const d = await r.json().catch(() => ({}));
+        if (d.ok && d.profile && String(d.profile.qb_name || '').trim()) {
+          profile = Object.assign({}, profile, { qb_name: d.profile.qb_name });
+          if (window.Store && typeof Store.setProfile === 'function') {
+            Store.setProfile(me.id, Object.assign({}, profile, { updatedAt: Date.now() }));
+          }
+        }
+      } catch(_) {}
+    }
+
+    // ── QB NAME GUARD — blocks ALL data loading when no qb_name is assigned ──
+    // Privacy rule: a user MUST have a Quickbase Name assigned before they can
+    // see ANY records. This applies to every role including SUPER_ADMIN.
+    // Without this guard the monitoring API returns all records for SUPER_ADMIN
+    // (data leak). The correct fix is on the frontend: block the call entirely.
+    const _userQbName = String(profile.qb_name || '').trim();
+    // Cache globally so tooltip handler can access it without re-reading profile
+    try { window._qbMyNameCache = _userQbName; } catch(_) {}
+    if (!_userQbName) {
+      root.classList.add('page-qb');
+      root.style.padding  = '0';
+      root.style.overflow = 'clip';
+      root.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:320px;gap:16px;padding:40px;text-align:center;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <div style="font-size:17px;font-weight:700;color:rgba(255,255,255,0.85);">Quickbase Name Not Assigned</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.45);max-width:380px;line-height:1.6;">
+            Your Quickbase Name has not been configured yet.<br>
+            Contact your <strong style="color:rgba(255,255,255,0.7);">Super Admin</strong> to assign your name in User Management → Edit User → Quickbase Name.
+          </div>
+        </div>`;
+      root._cleanup = function() {
+        try { root.style.padding = ''; } catch(_) {}
+        try { root.style.overflow = ''; } catch(_) {}
+        try { root.classList.remove('page-qb'); } catch(_) {}
+      };
+      return;
+    }
+
+    const cloudMe = window.me && typeof window.me === 'object' ? window.me : {};
+    const profileWithCloudFallback = Object.assign({}, cloudMe, profile);
+    if (
+      cloudMe
+      && Object.prototype.hasOwnProperty.call(cloudMe, 'quickbase_settings')
+      && hasUsableQuickbaseSettings(cloudMe.quickbase_settings)
+    ) {
+      profileWithCloudFallback.quickbase_settings = cloudMe.quickbase_settings;
+    }
+    const quickbaseConfig = getProfileQuickbaseConfig(profileWithCloudFallback);
+    const windowMeQuickbaseSettingsRaw = cloudMe && Object.prototype.hasOwnProperty.call(cloudMe, 'quickbase_settings')
+      ? cloudMe.quickbase_settings
+      : null;
+    const parsedWindowMeQuickbaseSettings = parseQuickbaseSettings(windowMeQuickbaseSettingsRaw);
+    const localQuickbaseSettings = readQuickbaseSettingsLocal(me && me.id, tabNamespace);
+    const backendQuickbaseSettings = normalizeQuickbaseSettingsWithTabs(profileWithCloudFallback.quickbase_settings, quickbaseConfig);
+    const windowMeQuickbaseSettings = normalizeQuickbaseSettingsWithTabs(windowMeQuickbaseSettingsRaw, quickbaseConfig);
+    const quickbaseSettings = isSupportStudio
+      ? normalizeQuickbaseSettingsWithTabs(
+        (studioGlobalQuickbaseSettings && Object.keys(studioGlobalQuickbaseSettings).length
+          ? studioGlobalQuickbaseSettings
+          : globalQbSettings),
+        globalQbSettings
+      )
+      : chooseInitialQuickbaseSettingsSource({
+        backendQuickbaseSettings,
+        windowMeQuickbaseSettings,
+        localQuickbaseSettings
+      });
+    const initialTabMeta = quickbaseSettings.tabs[quickbaseSettings.activeTabIndex] || quickbaseSettings.tabs[0] || createTabMeta({}, { tabName: 'Main Report' });
+    const initialTabId = String(initialTabMeta.id || '').trim();
+    const initialTabSettings = createDefaultSettings((quickbaseSettings.settingsByTabId && quickbaseSettings.settingsByTabId[initialTabId]) || {}, {});
+    const initialLink = String(initialTabSettings.reportLink || '').trim();
+    const parsedFromLink = parseQuickbaseLink(initialLink);
+    const state = {
+      quickbaseSettings,
+      activeTabIndex: quickbaseSettings.activeTabIndex,
+      modalDraft: null,
+      tabName: String(initialTabMeta.tabName || 'Main Report').trim(),
+      reportLink: initialLink,
+      qid: String(initialTabSettings.qid || parsedFromLink.qid || '').trim(),
+      tableId: String(initialTabSettings.tableId || parsedFromLink.tableId || '').trim(),
+      realm: String(initialTabSettings.realm || parsedFromLink.realm || '').trim(),
+      customColumns: Array.isArray(initialTabSettings.customColumns) ? initialTabSettings.customColumns.map((v) => String(v)) : [],
+      customFilters: normalizeFilters(initialTabSettings.customFilters),
+      filterMatch: normalizeFilterMatch(initialTabSettings.filterMatch),
+      dashboardCounters: normalizeDashboardCounters(initialTabSettings.dashboard_counters),
+      allAvailableFields: [],
+      isSaving: false,
+      activeCounterIndex: -1,
+      searchTerm: '',
+      searchDebounceTimer: null,
+      baseRecords: [],
+      rawPayload: { columns: [], records: [] },
+      currentPayload: { columns: [], records: [] },
+      hasUserSearched: false,
+      didInitialDefaultRender: false,
+      isDefaultReportMode: false,
+      currentPage: 1,
+      pageSize: 100,
+      qbCache: {},
+      _tabDataCache: {},
+      settingsModalView: 'custom-columns',  // report-config moved to Global QB Settings
+      settingsEditingTabId: '',
+      virtualColumn: deepClone(initialTabSettings.virtualColumn || { enabled: false, label: 'Status', items: [], conditionalRules: [] }),
+      virtualColumnValues: {}  // { [recordId]: selectedValue } — persisted per-tab in localStorage
+    };
+
+    function syncTabManagerFromState(tabId) {
+      if (!tabManager) return;
+      const safeTabId = String(tabId || '').trim();
+      if (!safeTabId) return;
+      const tabMeta = Array.isArray(state.quickbaseSettings.tabs)
+        ? state.quickbaseSettings.tabs.find((tab) => String(tab && tab.id || '').trim() === safeTabId)
+        : null;
+      const tabSettings = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[safeTabId]
+        ? state.quickbaseSettings.settingsByTabId[safeTabId]
+        : createDefaultSettings({}, {});
+      tabManager.updateTabLocal(safeTabId, Object.assign({}, tabSettings, {
+        tabName: String(tabMeta && tabMeta.tabName || tabSettings.tabName || 'New Tab').trim()
+      }));
+    }
+
+    const cleanupHandlers = [];
+    // NOTE: quickbaseRefreshTimer, autosaveTimer, quickbaseLoadInFlight,
+    // lastQuickbaseLoadAt, modalBindingsActive are declared ABOVE (before the
+    // first await) so that the preliminary root._cleanup and MutationObserver
+    // can reference them.  Do NOT re-declare them here.
+
+    const QUICKBASE_CACHE_TTL_MS = 55 * 1000; // 55s — slightly under 60s refresh interval
+    const QUICKBASE_BACKGROUND_LIMIT = 500;
+
+    function getQuickbaseCacheKey({ tabId, tableId, qid, filters, filterMatch }) {
+      const hashBase = JSON.stringify({ tabId, tableId, qid, filters, filterMatch });
+      return `qb_cache:${hashBase}`;
+    }
+
+    function readQuickbaseCache(cacheKey, tabId) {
+      const now = Date.now();
+      const safeTabId = String(tabId || '').trim();
+      if (safeTabId && state._tabDataCache && state._tabDataCache[safeTabId]) {
+        const tabEntry = state._tabDataCache[safeTabId][cacheKey];
+        if (tabEntry && (now - tabEntry.savedAt) < QUICKBASE_CACHE_TTL_MS) return tabEntry.payload;
+      }
+      const memoryEntry = state.qbCache[cacheKey];
+      if (memoryEntry && (now - memoryEntry.savedAt) < QUICKBASE_CACHE_TTL_MS) return memoryEntry.payload;
+      try {
+        const raw = sessionStorage.getItem(cacheKey);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || (now - Number(parsed.savedAt || 0)) >= QUICKBASE_CACHE_TTL_MS) {
+          sessionStorage.removeItem(cacheKey);
+          return null;
+        }
+        state.qbCache[cacheKey] = parsed;
+        return parsed.payload || null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function writeQuickbaseCache(cacheKey, payload, tabId) {
+      const entry = { savedAt: Date.now(), payload };
+      state.qbCache[cacheKey] = entry;
+      const safeTabId = String(tabId || '').trim();
+      if (safeTabId) {
+        if (!state._tabDataCache || typeof state._tabDataCache !== 'object') state._tabDataCache = {};
+        if (!state._tabDataCache[safeTabId] || typeof state._tabDataCache[safeTabId] !== 'object') {
+          state._tabDataCache[safeTabId] = {};
+        }
+        state._tabDataCache[safeTabId][cacheKey] = entry;
+      }
+      try {
+        sessionStorage.setItem(cacheKey, JSON.stringify(entry));
+      } catch (_) {}
+    }
+
+    function mergeRecordsById(existingRecords, incomingRecords) {
+      const merged = [];
+      const seen = new Set();
+      (Array.isArray(existingRecords) ? existingRecords : []).concat(Array.isArray(incomingRecords) ? incomingRecords : []).forEach((record) => {
+        const id = String(record && record.qbRecordId || '');
+        if (!id || seen.has(id)) return;
+        seen.add(id);
+        merged.push(record);
+      });
+      return merged;
+    }
+
+    // FIX[Bug1]: Seed TabManager with all tabs from Supabase state so isolation works correctly.
+    // TabManager uses a separate localStorage key; tabs loaded from Supabase profile won't be in
+    // TabManager's internal Map unless we explicitly seed them here.
+    if (tabManager && Array.isArray(state.quickbaseSettings.tabs) && me && me.id) {
+      const lsKey = isSupportStudio
+        ? 'mums_quickbase_tabs_support_studio'
+        : `mums_quickbase_tabs_${String(me.id || 'anonymous').trim()}`;
+      try {
+        const raw = window.localStorage && window.localStorage.getItem(lsKey);
+        const existingRows = JSON.parse(raw || '[]');
+        const safeRows = Array.isArray(existingRows) ? existingRows : [];
+        let changed = false;
+        state.quickbaseSettings.tabs.forEach((tab) => {
+          const tabId = String(tab && tab.id || '').trim();
+          if (!tabId) return;
+          const alreadyExists = safeRows.some((r) => String(r && r.tab_id || '').trim() === tabId);
+          if (!alreadyExists) {
+            const tabSettings = (state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]) || {};
+            safeRows.push({
+              tab_id: tabId,
+              tab_name: String(tab.tabName || 'Report').trim(),
+              settings_json: JSON.parse(JSON.stringify(tabSettings)),
+              meta: { createdAt: Date.now(), updatedAt: Date.now() }
+            });
+            changed = true;
+          }
+        });
+        if (changed && window.localStorage) {
+          window.localStorage.setItem(lsKey, JSON.stringify(safeRows));
+        }
+      } catch (_) {}
+      // Reload TabManager from updated localStorage so getTab() returns correct data
+      tabManager.init({ userId: me.id, apiBaseUrl: '/api', namespace: tabNamespace });
+      // Now push latest Supabase settings into TabManager for each tab
+      state.quickbaseSettings.tabs.forEach((tab) => {
+        const tabId = String(tab && tab.id || '').trim();
+        if (!tabId) return;
+        const tabSettings = (state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]) || {};
+        // FIX: Always seed ALL tabs into TabManager — not just those with reportLink/qid/tableId.
+        // The old gate was silently dropping virtualColumn for bypass tabs and bare tabs.
+        // settingsByTabId from backendQuickbaseSettings (mums_profiles) is authoritative.
+        tabManager.updateTabLocal(tabId, Object.assign({}, tabSettings, {
+          tabName: String(tab.tabName || 'Report').trim()
+        }));
+      });
+    }
+
+    // FIX[Bug1]: Ensure active tab state is immediately aligned after profile load.
+    state.activeTabIndex = quickbaseSettings.activeTabIndex;
+    state.quickbaseSettings.activeTabIndex = quickbaseSettings.activeTabIndex;
+    syncStateFromActiveTab();
+
+    function getActiveTabMeta() {
+      const tabs = Array.isArray(state.quickbaseSettings && state.quickbaseSettings.tabs) ? state.quickbaseSettings.tabs : [];
+      if (!tabs.length) {
+        const firstTab = createTabMeta({}, { tabName: 'Main Report' });
+        state.quickbaseSettings = {
+          activeTabIndex: 0,
+          tabs: [firstTab],
+          settingsByTabId: { [firstTab.id]: createDefaultSettings({}, {}) }
+        };
+      }
+      const safeTabs = state.quickbaseSettings.tabs;
+      const safeIndex = Math.min(Math.max(Number(state.activeTabIndex || 0), 0), safeTabs.length - 1);
+      state.activeTabIndex = safeIndex;
+      state.quickbaseSettings.activeTabIndex = safeIndex;
+      return safeTabs[safeIndex];
+    }
+
+    function getActiveTabId() {
+      return String((getActiveTabMeta() || {}).id || '').trim();
+    }
+
+    function getActiveTab() {
+      const meta = getActiveTabMeta();
+      const tabId = String(meta && meta.id || '').trim();
+      const settings = createDefaultSettings((state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]) || {}, {});
+      return Object.assign({}, meta, settings);
+    }
+
+    function getActiveTabKey() {
+      const activeTabId = getActiveTabId();
+      return String(activeTabId || state.activeTabIndex);
+    }
+
+    function getActiveSearchTerm() {
+      if (!state.quickbaseSettings || !state.quickbaseSettings.tabs || !state.quickbaseSettings.tabs[state.activeTabIndex]) return '';
+      if (!state.searchByTab || typeof state.searchByTab !== 'object') state.searchByTab = {};
+      return String(state.searchByTab[getActiveTabKey()] || '').trim();
+    }
+
+    function setActiveSearchTerm(value) {
+      if (!state.quickbaseSettings || !state.quickbaseSettings.tabs || !state.quickbaseSettings.tabs[state.activeTabIndex]) return;
+      if (!state.searchByTab || typeof state.searchByTab !== 'object') state.searchByTab = {};
+      state.searchByTab[getActiveTabKey()] = String(value || '').trim();
+    }
+
+    function getActiveUserSearched() {
+      if (!state.quickbaseSettings || !state.quickbaseSettings.tabs || !state.quickbaseSettings.tabs[state.activeTabIndex]) return false;
+      if (!state.userSearchedByTab || typeof state.userSearchedByTab !== 'object') state.userSearchedByTab = {};
+      return !!state.userSearchedByTab[getActiveTabKey()];
+    }
+
+    function setActiveUserSearched(value) {
+      if (!state.quickbaseSettings || !state.quickbaseSettings.tabs || !state.quickbaseSettings.tabs[state.activeTabIndex]) return;
+      if (!state.userSearchedByTab || typeof state.userSearchedByTab !== 'object') state.userSearchedByTab = {};
+      state.userSearchedByTab[getActiveTabKey()] = !!value;
+    }
+
+    function syncStateFromActiveTab() {
+      const activeTabId = getActiveTabId();
+      const freshSettings = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[activeTabId]
+        ? createDefaultSettings(state.quickbaseSettings.settingsByTabId[activeTabId], {})
+        : createDefaultSettings({}, {});
+      const activeTabMeta = getActiveTabMeta();
+      const parsed = parseQuickbaseLink(freshSettings.reportLink);
+      state.tabName = String(activeTabMeta.tabName || 'Main Report').trim() || 'Main Report';
+      state.reportLink = String(freshSettings.reportLink || '').trim();
+      state.qid = String(freshSettings.qid || parsed.qid || '').trim();
+      state.tableId = String(freshSettings.tableId || parsed.tableId || '').trim();
+      state.realm = String(freshSettings.realm || parsed.realm || '').trim();
+      state.customColumns = deepClone(Array.isArray(freshSettings.customColumns) ? freshSettings.customColumns : []);
+      state.customFilters = deepClone(normalizeFilters(freshSettings.customFilters || []));
+      state.filterMatch = normalizeFilterMatch(freshSettings.filterMatch || 'ALL');
+      state.dashboardCounters = deepClone(normalizeDashboardCounters(freshSettings.dashboard_counters || []));
+      state.activeCounterIndex = -1;
+      state.virtualColumn = deepClone(freshSettings.virtualColumn || { enabled: false, label: 'Status', items: [], conditionalRules: [] });
+      const headerSearch = root.querySelector('#qbHeaderSearch');
+      if (headerSearch) headerSearch.value = getActiveSearchTerm();
+      const instanceTitle = root.querySelector('#qbInstanceTitle');
+      if (instanceTitle) instanceTitle.textContent = state.tabName || 'Main Report';
+      const activeTabRecordCache = state._tabDataCache && state._tabDataCache[activeTabId] && Array.isArray(state._tabDataCache[activeTabId].cachedRows)
+        ? state._tabDataCache[activeTabId].cachedRows
+        : [];
+      state.baseRecords = activeTabRecordCache.slice();
+      state.rawPayload = {
+        columns: Array.isArray(state.rawPayload && state.rawPayload.columns) ? state.rawPayload.columns : [],
+        records: state.baseRecords.slice()
+      };
+    }
+
+    function syncSettingsInputsFromState() {
+      const tabNameEl = root.querySelector('#qbTabName');
+      if (tabNameEl) tabNameEl.value = String(state.tabName || 'Main Report');
+
+      const reportLinkEl = root.querySelector('#qbReportLink');
+      if (reportLinkEl) reportLinkEl.value = String(state.reportLink || '');
+
+      const qidEl = root.querySelector('#qbQid');
+      if (qidEl) qidEl.value = String(state.qid || '');
+
+      const tabBaseQidEl = root.querySelector('#qbTabBaseQid');
+      if (tabBaseQidEl) tabBaseQidEl.value = String(state.qid || '');
+
+      const tableIdEl = root.querySelector('#qbTableId');
+      if (tableIdEl) tableIdEl.value = String(state.tableId || '');
+
+      const filterMatchEl = root.querySelector('#qbFilterMatch');
+      if (filterMatchEl) filterMatchEl.value = normalizeFilterMatch(state.filterMatch);
+    }
+
+    function syncActiveTabFromState() {
+      const activeMeta = getActiveTabMeta();
+      const tabId = String(activeMeta && activeMeta.id || '').trim() || generateUUID();
+      const nextMeta = createTabMeta({
+        id: tabId,
+        tabName: String(state.tabName || 'Main Report').trim() || 'Main Report'
+      });
+
+      // ── BYPASS GUARD ─────────────────────────────────────────────────────
+      // Read existing bypassGlobal from settingsByTabId BEFORE building nextSettings.
+      // syncActiveTabFromState rebuilds settings from state.reportLink etc, but bypass
+      // tabs store their config in settingsByTabId — not in state.reportLink.
+      // Without this guard, every sync call wipes bypassGlobal and the bypass reportLink.
+      const _existingTabSettings = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId];
+      const _isBypassTab = !!(_existingTabSettings && _existingTabSettings.bypassGlobal);
+
+      let nextSettings;
+      if (_isBypassTab) {
+        // Bypass tab: preserve all bypass-specific fields, only sync non-report fields
+        nextSettings = deepClone(createDefaultSettings({
+          reportLink: String(_existingTabSettings.reportLink || '').trim(),
+          qid: String(_existingTabSettings.qid || '').trim(),
+          tableId: String(_existingTabSettings.tableId || '').trim(),
+          realm: String(_existingTabSettings.realm || '').trim(),
+          bypassGlobal: true,
+          customColumns: Array.isArray(state.customColumns) ? state.customColumns.map((v) => String(v)) : [],
+          customFilters: normalizeFilters(state.customFilters),
+          filterMatch: normalizeFilterMatch(state.filterMatch),
+          dashboard_counters: normalizeDashboardCounters(state.dashboardCounters),
+          virtualColumn: deepClone(state.virtualColumn || (_existingTabSettings && _existingTabSettings.virtualColumn) || { enabled: false, label: 'Status', items: [], conditionalRules: [] })
+        }, {}));
+      } else {
+        nextSettings = deepClone(createDefaultSettings({
+          reportLink: String(state.reportLink || '').trim(),
+          qid: String(state.qid || '').trim(),
+          tableId: String(state.tableId || '').trim(),
+          realm: String(state.realm || '').trim(),
+          bypassGlobal: false,
+          customColumns: Array.isArray(state.customColumns) ? state.customColumns.map((v) => String(v)) : [],
+          customFilters: normalizeFilters(state.customFilters),
+          filterMatch: normalizeFilterMatch(state.filterMatch),
+          dashboard_counters: normalizeDashboardCounters(state.dashboardCounters),
+          virtualColumn: deepClone(state.virtualColumn || (_existingTabSettings && _existingTabSettings.virtualColumn) || { enabled: false, label: 'Status', items: [], conditionalRules: [] })
+        }, {}));
+      }
+
+      // ISOLATION: Write only to this tab's slot — never mutate another tab's settings
+      state.quickbaseSettings.tabs[state.activeTabIndex] = deepClone(nextMeta);
+      state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, {
+        [tabId]: nextSettings
+      });
+      state.quickbaseSettings.activeTabIndex = state.activeTabIndex;
+      state.modalDraft = deepClone(Object.assign({}, nextMeta, nextSettings));
+    }
+
+
+    function updateTabSettings(tabId, partialUpdate) {
+      const safeTabId = String(tabId || '').trim();
+      if (!safeTabId) return;
+      const nextPartial = partialUpdate && typeof partialUpdate === 'object' ? deepClone(partialUpdate) : {};
+      const prevSettings = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[safeTabId]
+        ? deepClone(state.quickbaseSettings.settingsByTabId[safeTabId])
+        : createDefaultSettings({}, {});
+      // ISOLATION: always produce a fresh object — no reference sharing across tabs
+      // Preserve bypassGlobal from prevSettings unless explicitly overriding
+      const nextSettings = createDefaultSettings(Object.assign({}, prevSettings, nextPartial, {
+        bypassGlobal: Object.prototype.hasOwnProperty.call(nextPartial, 'bypassGlobal')
+          ? !!nextPartial.bypassGlobal
+          : !!prevSettings.bypassGlobal
+      }), {});
+      state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, {
+        [safeTabId]: deepClone(nextSettings)
+      });
+      const tabIndex = Array.isArray(state.quickbaseSettings.tabs)
+        ? state.quickbaseSettings.tabs.findIndex((tab) => String(tab && tab.id || '').trim() === safeTabId)
+        : -1;
+      if (tabIndex >= 0) {
+        const tabMeta = createTabMeta(state.quickbaseSettings.tabs[tabIndex], {});
+        state.quickbaseSettings.tabs[tabIndex] = deepClone(tabMeta);
+      }
+    }
+
+    function handleReportLinkChange(tabId, value) {
+      const safeTabId = String(tabId || '').trim();
+      if (!safeTabId) return;
+      const reportLink = String(value || '').trim();
+      updateTabSettings(safeTabId, { reportLink });
+      const parsed = parseQuickbaseReportUrl(reportLink);
+      const parsedLink = parseQuickbaseLink(reportLink);
+      const updates = {};
+      if (!reportLink) {
+        updates.qid = '';
+        updates.tableId = '';
+        updates.realm = '';
+      } else {
+        if (parsed && parsed.qid) {
+          updates.qid = parsed.qid;
+        }
+        if (parsed && parsed.tableId) {
+          updates.tableId = parsed.tableId;
+        }
+        if (parsedLink && parsedLink.realm) {
+          updates.realm = parsedLink.realm;
+        }
+      }
+      if (Object.keys(updates).length) updateTabSettings(safeTabId, updates);
+
+      if (safeTabId === getActiveTabId()) {
+        state.reportLink = reportLink;
+        if (Object.prototype.hasOwnProperty.call(updates, 'qid')) state.qid = String(updates.qid || '').trim();
+        if (Object.prototype.hasOwnProperty.call(updates, 'tableId')) state.tableId = String(updates.tableId || '').trim();
+        if (Object.prototype.hasOwnProperty.call(updates, 'realm')) state.realm = String(updates.realm || '').trim();
+        syncSettingsInputsFromState();
+      }
+    }
+
+    function validateQidMatchesUrl(tabSettings) {
+      const tab = tabSettings && typeof tabSettings === 'object' ? tabSettings : {};
+      const reportLink = String(tab.reportLink || '').trim();
+      const qid = String(tab.qid || '').trim();
+      if (!reportLink) return { ok: true };
+      if (!ENABLE_QID_URL_MATCH_VALIDATION) return { ok: true };
+      const parsed = parseQuickbaseReportUrl(reportLink);
+      if (parsed && parsed.qid && qid && parsed.qid !== qid) {
+        return { ok: false, field: 'qid', message: 'QID must match the qid value inside the Report Link URL.' };
+      }
+      return { ok: true };
+    }
+
+    function validateQuickbaseTabSettings(tabSettings) {
+      return validateQidMatchesUrl(tabSettings);
+    }
+
+    /**
+     * My Quickbase per-tab settings isolation – migration note
+     * - Internal state now stores per-tab settings in settingsByTabId with cloned objects (no shared references).
+     * - Report Link parsing auto-syncs qid/tableId for each tab independently.
+     * - Save payload stays backward compatible: profile.quickbase_settings preserves legacy { activeTabIndex, tabs } shape.
+     * - Future readers must not rely on object identity being shared across tabs.
+     */
+    function serializeQuickbaseSettingsForSave(quickbaseSettingsState, activeTabIndex) {
+      const settingsState = quickbaseSettingsState && typeof quickbaseSettingsState === 'object' ? quickbaseSettingsState : {};
+      const tabs = Array.isArray(settingsState.tabs) ? settingsState.tabs : [];
+      const settingsByTabId = settingsState.settingsByTabId && typeof settingsState.settingsByTabId === 'object'
+        ? settingsState.settingsByTabId
+        : {};
+
+      return {
+        activeTabIndex: Number.isFinite(Number(activeTabIndex)) ? Number(activeTabIndex) : 0,
+        tabs: tabs.map((tab) => {
+          const tabMeta = createTabMeta(tab, {});
+          const tabId = String(tabMeta.id || '').trim();
+          const tabSettings = createDefaultSettings(settingsByTabId[tabId] || tab || {}, {});
+          return buildDefaultTab(Object.assign({}, tabMeta, tabSettings), {});
+        })
+      };
+    }
+
+
+    function captureSettingsDraftFromInputs() {
+      const tabNameEl = root.querySelector('#qbTabName');
+      const reportLinkEl = root.querySelector('#qbReportLink');
+      const tabBaseQidEl = root.querySelector('#qbTabBaseQid');
+      const qidEl = root.querySelector('#qbQid');
+      const tableIdEl = root.querySelector('#qbTableId');
+      const filterMatchEl = root.querySelector('#qbFilterMatch');
+
+      const reportLink = String(reportLinkEl && reportLinkEl.value || state.reportLink || '').trim();
+      const parsed = parseQuickbaseLink(reportLink);
+      const hasReportLink = !!reportLink;
+      const resolvedQid = hasReportLink
+        ? String(tabBaseQidEl && tabBaseQidEl.value || qidEl && qidEl.value || parsed.qid || state.qid || '').trim()
+        : '';
+      const resolvedTableId = hasReportLink
+        ? String(tableIdEl && tableIdEl.value || parsed.tableId || state.tableId || '').trim()
+        : '';
+      const resolvedRealm = hasReportLink ? String(parsed.realm || state.realm || '').trim() : '';
+
+      state.tabName = String(tabNameEl && tabNameEl.value || state.tabName || 'Main Report').trim() || 'Main Report';
+      state.reportLink = reportLink;
+      state.qid = resolvedQid;
+      state.tableId = resolvedTableId;
+      state.realm = resolvedRealm;
+      state.filterMatch = normalizeFilterMatch(String(filterMatchEl && filterMatchEl.value || state.filterMatch || 'ALL'));
+      syncActiveTabFromState();
+    }
+
+    function scrapeModalCounterInputs() {
+      const rows = Array.from(root.querySelectorAll('#qbCounterRows [data-counter-idx]'));
+      return rows
+        .map((row) => {
+          const fieldId = String((row.querySelector('[data-counter-f="fieldId"]') || {}).value || '').trim();
+          const operator = String((row.querySelector('[data-counter-f="operator"]') || {}).value || 'EX').trim().toUpperCase();
+          const value = String((row.querySelector('[data-counter-f="value"]') || {}).value || '').trim();
+          const label = String((row.querySelector('[data-counter-f="label"]') || {}).value || '').trim();
+          const color = String((row.querySelector('[data-counter-f="color"]') || {}).value || 'default').trim().toLowerCase();
+          return { fieldId, operator, value, label, color };
+        })
+        .filter((counter) => counter.fieldId && counter.value);
+    }
+
+    function renderTabBar() {
+      const tabBar = root.querySelector('#qbTabBar');
+      if (!tabBar) return;
+      const tabs = state.quickbaseSettings.tabs || [];
+      tabBar.innerHTML = tabs.map((tab, idx) => {
+        const isActive = idx === state.activeTabIndex;
+        const tabId = String(tab && tab.id || '').trim();
+        // Check if this tab has fresh cache data
+        const tabSettings = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]
+          ? createDefaultSettings(state.quickbaseSettings.settingsByTabId[tabId], {})
+          : null;
+        const hasCachedData = !!(state._tabDataCache && state._tabDataCache[tabId] && Array.isArray(state._tabDataCache[tabId].cachedRows) && state._tabDataCache[tabId].cachedRows.length);
+        const cacheBadge = isActive ? '' : hasCachedData
+          ? '<span class="qb-tab-cache-badge qb-tab-badge-cached">◎</span>'
+          : '';
+        const activeBadge = isActive && hasCachedData ? '<span class="qb-tab-cache-badge qb-tab-badge-live">●</span>' : '';
+        return `<button type="button" data-tab-idx="${idx}" class="qb-tab-btn${isActive ? ' qb-tab-btn-active' : ''}" title="${esc(tab.tabName || `Report ${idx + 1}`)}">${activeBadge}<span class="qb-tab-label">${esc(tab.tabName || `Report ${idx + 1}`)}</span>${cacheBadge}</button>`;
+      }).join('') + '<button type="button" id="qbAddTabBtn" title="Add New Tab" aria-label="Add New Tab" class="qb-tab-add-btn">+</button>';
+    }
+
+    function setSettingsModalView(viewKey) {
+      const allowedViews = new Set(['report-config', 'custom-columns', 'filter-config', 'dashboard-counters', 'virtual-column']);
+      const nextView = allowedViews.has(String(viewKey || '').trim()) ? String(viewKey).trim() : 'custom-columns';
+      state.settingsModalView = nextView;
+
+      root.querySelectorAll('[data-qb-settings-view]').forEach((section) => {
+        const sectionView = String(section.getAttribute('data-qb-settings-view') || '').trim();
+        section.style.display = sectionView === nextView ? 'block' : 'none';
+      });
+
+      root.querySelectorAll('[data-qb-settings-tab]').forEach((btn) => {
+        const tabView = String(btn.getAttribute('data-qb-settings-tab') || '').trim();
+        const isActive = tabView === nextView;
+        btn.classList.toggle('active', isActive);
+        // Support both old inline style tabs and new class-based tabs
+        if (!btn.classList.contains('qb-modal-tab')) {
+          btn.style.color = isActive ? '#fff' : 'rgba(226,232,240,0.78)';
+          btn.style.borderBottom = isActive ? '2px solid #2196F3' : '2px solid transparent';
+          btn.style.background = 'transparent';
+        }
+      });
+    }
+
+    function _isSettingsModalOpen() {
+      const modal = root.querySelector('#qbSettingsModal');
+      if (!modal) return false;
+      const d = modal.style.display;
+      return d === 'flex' || d === 'block';
+    }
+
+    function scrapeModalSettingsIntoActiveTab() {
+      const activeTab = getActiveTab();
+
+      // ── MODAL GUARD ────────────────────────────────────────────────────────
+      // persistQuickbaseSettings() calls this function before every save — even
+      // from the auto-save timer (queuePersistQuickbaseSettings) when the modal
+      // is CLOSED. When closed, #qbCounterRows has no [data-counter-idx] rows,
+      // so scrapeModalCounterInputs() returns [] and WIPES saved counters.
+      //
+      // FIX: Only scrape DOM inputs when the modal is actually OPEN and visible.
+      // When closed, preserve the existing in-memory values from state / activeTab.
+      if (!_isSettingsModalOpen()) {
+        // Modal is closed — use in-memory state, do not touch DOM
+        syncActiveTabFromState();
+        return;
+      }
+
+      const tabNameInput = String((root.querySelector('#qbTabName') || {}).value || '').trim();
+      const tabBaseQidInput = String((root.querySelector('#qbTabBaseQid') || {}).value || '').trim();
+      const reportLink = String((root.querySelector('#qbReportLink') || {}).value || '').trim();
+      const qidInput = String((root.querySelector('#qbQid') || {}).value || '').trim();
+      const tableIdInput = String((root.querySelector('#qbTableId') || {}).value || '').trim();
+      const parsed = parseQuickbaseLink(reportLink);
+      const hasReportLink = !!reportLink;
+      // Scrape counters ONLY while modal is open — guaranteed DOM rows exist
+      const scrapedCounters = normalizeDashboardCounters(scrapeModalCounterInputs());
+      // If scrape returned empty but state has counters (e.g. modal on different tab),
+      // fall back to existing state counters to prevent an accidental wipe
+      const safeCounters = scrapedCounters.length > 0
+        ? scrapedCounters
+        : deepClone(state.dashboardCounters || activeTab.dashboard_counters || []);
+
+      activeTab.tabName = tabNameInput || activeTab.tabName || 'Main Report';
+      activeTab.dashboard_counters = safeCounters;
+      state.tabName = activeTab.tabName;
+      state.dashboardCounters = safeCounters;
+
+      // ── BYPASS GUARD ────────────────────────────────────────────────────
+      // When tab is in bypass mode, reportLink/qid/tableId/realm come from
+      // #qbBypassReportLink (Report Config section), NOT from #qbReportLink.
+      // Scraping #qbReportLink (which is empty for bypass tabs) would wipe the
+      // bypass settings. Only update these fields for non-bypass tabs.
+      const _activeTabId = String(getActiveTabId() || '').trim();
+      const _activeTabSettings = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[_activeTabId];
+      const _isActiveBypassed = !!(_activeTabSettings && _activeTabSettings.bypassGlobal);
+
+      if (!_isActiveBypassed) {
+        // Non-bypass: scrape normally from the standard report link inputs
+        activeTab.reportLink = reportLink;
+        activeTab.qid = hasReportLink ? (tabBaseQidInput || qidInput || parsed.qid || '') : '';
+        activeTab.tableId = hasReportLink ? (tableIdInput || parsed.tableId || '') : '';
+        activeTab.realm = hasReportLink ? (parsed.realm || '') : '';
+        state.reportLink = activeTab.reportLink;
+        state.qid = activeTab.qid;
+        state.tableId = activeTab.tableId;
+        state.realm = activeTab.realm;
+      }
+      // For bypass tabs: reportLink/qid/tableId/realm are preserved from
+      // state.quickbaseSettings.settingsByTabId (already updated in save handler)
+
+      // ── VIRTUAL COLUMN SCRAPE FIX ────────────────────────────────────────
+      // BUG: The modal toggle (#qbVcEnabled) was never read back into state.virtualColumn
+      // during save — _saveVcState() only fires on live toggle change, not on Save click.
+      // FIX: Always sync the enabled state from the DOM toggle into state before persist.
+      const _vcEnabledEl = root.querySelector('#qbVcEnabled');
+      if (_vcEnabledEl) {
+        const _curVc = _getVcState();
+        _curVc.enabled = _vcEnabledEl.checked;
+        state.virtualColumn = deepClone(_curVc);
+        // Also ensure settingsByTabId is in sync for the active tab
+        const _vcTabId = getActiveTabId();
+        if (_vcTabId) {
+          const _vcPrev = createDefaultSettings(
+            (state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[_vcTabId]) || {}, {}
+          );
+          state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, {
+            [_vcTabId]: Object.assign({}, _vcPrev, { virtualColumn: deepClone(_curVc) })
+          });
+        }
+      }
+
+      syncActiveTabFromState();
+    }
+
+    function scrapeModalTabSnapshot() {
+      // Only call when modal is OPEN — returns current state snapshot when closed
+      if (!_isSettingsModalOpen()) {
+        const activeTab = getActiveTab();
+        return {
+          tabName: String(state.tabName || activeTab.tabName || 'Main Report').trim(),
+          reportLink: String(state.reportLink || activeTab.reportLink || '').trim(),
+          qid: String(state.qid || activeTab.qid || '').trim(),
+          tableId: String(state.tableId || activeTab.tableId || '').trim(),
+          realm: String(state.realm || activeTab.realm || '').trim(),
+          dashboard_counters: deepClone(state.dashboardCounters || activeTab.dashboard_counters || [])
+        };
+      }
+      const tabName = String((root.querySelector('#qbTabName') || {}).value || '').trim() || 'Main Report';
+      const reportLink = String((root.querySelector('#qbReportLink') || {}).value || '').trim();
+      const baseQid = String((root.querySelector('#qbTabBaseQid') || {}).value || '').trim();
+      const qid = String((root.querySelector('#qbQid') || {}).value || '').trim();
+      const tableId = String((root.querySelector('#qbTableId') || {}).value || '').trim();
+      const parsed = parseQuickbaseLink(reportLink);
+      const hasReportLink = !!reportLink;
+      const scrapedCounters = normalizeDashboardCounters(scrapeModalCounterInputs());
+      const safeCounters = scrapedCounters.length > 0
+        ? scrapedCounters
+        : deepClone(state.dashboardCounters || []);
+      return {
+        tabName,
+        reportLink,
+        qid: hasReportLink ? (baseQid || qid || parsed.qid || '') : '',
+        tableId: hasReportLink ? (tableId || parsed.tableId || '') : '',
+        realm: hasReportLink ? (parsed.realm || '') : '',
+        dashboard_counters: safeCounters
+      };
+    }
+
+    async function persistQuickbaseSettings(settingsPayload) {
+      if (!me) return;
+      scrapeModalSettingsIntoActiveTab();
+      syncActiveTabFromState();
+      const activeTab = getActiveTab();
+      // For bypass tabs: use settingsByTabId as source of truth for reportLink/qid/realm/tableId
+      const _persistTabId = String(getActiveTabId() || '').trim();
+      const _persistTabSettings = _persistTabId && state.quickbaseSettings.settingsByTabId
+        ? (state.quickbaseSettings.settingsByTabId[_persistTabId] || {})
+        : {};
+      const _isBypassPersist = !!(_persistTabSettings.bypassGlobal);
+      const _effectiveRL = _isBypassPersist
+        ? String(_persistTabSettings.reportLink || activeTab.reportLink || '').trim()
+        : String(activeTab.reportLink || '').trim();
+      const parsed = parseQuickbaseLink(_effectiveRL);
+      const activeSettingsObject = {
+        reportLink: _effectiveRL,
+        qid: (_isBypassPersist ? _persistTabSettings.qid : activeTab.qid) || parsed.qid || '',
+        realm: (_isBypassPersist ? _persistTabSettings.realm : activeTab.realm) || parsed.realm || '',
+        tableId: (_isBypassPersist ? _persistTabSettings.tableId : activeTab.tableId) || parsed.tableId || '',
+        customColumns: activeTab.customColumns,
+        customFilters: activeTab.customFilters,
+        filterMatch: activeTab.filterMatch,
+        dashboardCounters: normalizeDashboardCounters(activeTab.dashboard_counters)
+      };
+
+      const serializedQuickbaseSettings = settingsPayload || serializeQuickbaseSettingsForSave(state.quickbaseSettings, state.activeTabIndex);
+
+      // Ensure payload is an object, not a string
+      const normalizedPayload = typeof serializedQuickbaseSettings === 'string'
+        ? JSON.parse(serializedQuickbaseSettings)
+        : serializedQuickbaseSettings;
+
+      const payload = {
+        qb_report_link: activeSettingsObject.reportLink,
+        qb_qid: activeSettingsObject.qid,
+        qb_realm: activeSettingsObject.realm,
+        qb_table_id: activeSettingsObject.tableId,
+        qb_custom_columns: activeSettingsObject.customColumns,
+        qb_custom_filters: activeSettingsObject.customFilters,
+        qb_filter_match: activeSettingsObject.filterMatch,
+        qb_dashboard_counters: activeSettingsObject.dashboardCounters,
+        quickbase_config: activeSettingsObject,
+        quickbase_settings: normalizedPayload
+      };
+      writeQuickbaseSettingsLocal(me && me.id, normalizedPayload, tabNamespace);
+      if (isSupportStudio) return { ok: true, isolated: true };
+      const authToken = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
+      const response = await fetch('/api/users/update_me', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || data.error || 'Failed to save settings');
+      }
+
+      // Update local cache after successful save
+      if (window.Store && Store.setProfileField) {
+        Store.setProfileField('quickbase_settings', normalizedPayload);
+      } else if (window.Store && Store.setProfile) {
+        Store.setProfile(me.id, Object.assign({}, payload, { updatedAt: Date.now() }));
+      }
+
+      console.log('[Cloud Sync] Multi-Tab Settings Saved');
+      writeQuickbaseSettingsLocal(me && me.id, normalizedPayload, tabNamespace);
+      return data;
+    }
+
+    function queuePersistQuickbaseSettings() {
+      if (!me) return;
+      if (autosaveTimer) clearTimeout(autosaveTimer);
+      autosaveTimer = setTimeout(async () => {
+        try {
+          await persistQuickbaseSettings();
+        } catch (_) {}
+      }, 700);
+    }
+
+
+    // STALE NAV GUARD: If app.js navigated away while we were awaiting
+    // fetchGlobalQbSettings() or refreshProfileFromCloud(), root is no longer
+    // connected to the document. Setting innerHTML on a detached root still
+    // works, but subsequent root.querySelector() calls return elements that
+    // are not in the DOM — addEventListener/onclick throw or silently fail,
+    // leaving a blank page. Bail out early if root is detached.
+    if (!root.isConnected) return;
+
+    root.innerHTML = `
+      <div class="qb-page-shell" id="qbPageShell">
+
+        <!-- TAB BAR -->
+        <div class="qb-tabbar-wrap">
+          <div id="qbTabBar" class="qb-tabs-inner"></div>
+          <button type="button" class="qb-fullscreen-btn" id="qbFullscreenBtn" title="Toggle Fullscreen" aria-label="Toggle Fullscreen">
+            <svg id="qbFsIconExpand" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+            <svg id="qbFsIconCollapse" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
+          </button>
+        </div>
+
+        <!-- HEADER CARD -->
+        <div class="qb-header-card">
+          <div class="qb-header-left">
+            <div class="qb-instance-title" id="qbInstanceTitle">${esc(state.tabName || 'Main Report')}</div>
+            <div class="qb-instance-sub">Active tab instance dashboard</div>
+          </div>
+          <div class="qb-search-wrap">
+            <div class="qb-search-row">
+              <span class="qb-search-ico">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              </span>
+              <input class="qb-search-input" id="qbHeaderSearch" type="search" placeholder="Search across active tab records…" />
+            </div>
+            <div id="qbSearchScopeTag" class="qb-search-scope-tag" aria-live="polite"></div>
+          </div>
+          <div class="qb-header-actions">
+            <button class="qb-btn qb-btn-ghost" id="qbExportCsvBtn" type="button">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export CSV
+            </button>
+            <button class="qb-btn qb-btn-ghost" id="qbReloadBtn" type="button">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Reload
+            </button>
+            <button class="qb-btn qb-btn-force-refresh" id="qbForceRefreshBtn" type="button" title="Force live fetch from Quickbase — bypasses 5-min auto-refresh">
+              <svg id="qbForceRefreshIcon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+              <span id="qbForceRefreshLabel">Active</span>
+            </button>
+            <button class="qb-btn qb-btn-primary" id="qbOpenSettingsBtn" type="button">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Settings
+            </button>
+          </div>
+        </div>
+
+        <!-- DASHBOARD COUNTERS -->
+        <div id="qbDashboardCounters" class="qb-dashboard-counters"></div>
+
+        <!-- TABLE CARD -->
+        <div class="qb-table-card">
+          <div class="qb-table-head">
+            <div class="qb-table-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
+              Quickbase Records
+            </div>
+            <div class="qb-table-meta">
+              <span id="qbDataMeta" class="qb-meta-text">Loading…</span>
+              <span id="qbFreshBadge" class="qb-fresh-badge" style="display:none;">● Live</span>
+              <button id="qbCacheBadge" type="button" class="qb-cache-badge" style="display:none;cursor:pointer;background:none;border:none;padding:2px 8px;font:inherit;" title="Click to refresh live data">◎ Cached — click to refresh</button>
+            </div>
+          </div>
+          <div id="qbDataBody" class="qb-data-body"></div>
+        </div>
+
+      </div>
+
+      <!-- SETTINGS MODAL -->
+      <div class="modal" id="qbSettingsModal" aria-hidden="true" style="position:fixed;inset:0;align-items:center;justify-content:center;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);padding:12px;box-sizing:border-box;overflow:auto;">
+        <div class="qb-modal-panel">
+          <div id="qbSettingsSavingLock" style="display:none;position:absolute;inset:0;z-index:90;align-items:center;justify-content:center;background:rgba(2,6,23,.8);backdrop-filter:blur(4px);border-radius:18px;">
+            <div style="display:flex;align-items:center;gap:10px;padding:12px 20px;border-radius:999px;border:1px solid rgba(255,255,255,.2);background:rgba(15,23,42,.95);font-weight:700;font-size:13px;letter-spacing:.02em;">
+              <svg class="qb-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+              Saving settings…
+            </div>
+          </div>
+
+          <div class="qb-modal-header">
+            <div>
+              <div class="qb-modal-title">Quickbase Settings</div>
+              <div class="qb-modal-sub">Configure report, columns, filters and counters per tab</div>
+            </div>
+            <button class="qb-modal-close" id="qbCloseSettingsBtn" type="button" aria-label="Close">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+
+          <!-- BYPASS GLOBAL TOGGLE -->
+          <div id="qbBypassRow" class="qb-bypass-row">
+            <div class="qb-bypass-info">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <div>
+                <div class="qb-bypass-label">Use Personal QB Config for this tab</div>
+                <div class="qb-bypass-desc">Bypass Global QB Settings — use your own Report URL &amp; QB Token for this tab only</div>
+              </div>
+            </div>
+            <label class="qb-toggle" title="Toggle personal QB config for this tab">
+              <input type="checkbox" id="qbBypassToggle" />
+              <span class="qb-toggle-track"><span class="qb-toggle-thumb"></span></span>
+            </label>
+          </div>
+
+          <div class="qb-modal-tabs">
+            <button type="button" class="qb-modal-tab qb-bypass-only" id="qbTabReportConfig" data-qb-settings-tab="report-config" style="display:none">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:4px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Report Config
+            </button>
+            <button type="button" class="qb-modal-tab active" data-qb-settings-tab="custom-columns">Custom Columns</button>
+            <button type="button" class="qb-modal-tab" data-qb-settings-tab="filter-config">Filter Config</button>
+            <button type="button" class="qb-modal-tab" data-qb-settings-tab="dashboard-counters">Dashboard Counters</button>
+            <button type="button" class="qb-modal-tab" data-qb-settings-tab="virtual-column">⬡ Virtual Column</button>
+          </div>
+
+          <div class="qb-modal-body">
+
+            <!-- REPORT CONFIG (only visible when bypassGlobal=true) -->
+            <section class="qb-modal-section qb-bypass-only" data-qb-settings-view="report-config" style="display:none;">
+              <div class="qb-section-title"><span class="qb-section-num qb-bypass-num">★</span>Personal Report Config</div>
+              <div class="qb-bypass-notice">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                This tab uses your personal QB config. Other tabs still use Global QB Settings.
+              </div>
+              <div class="qb-field" style="margin-bottom:14px;">
+                <label class="qb-field-label">Report Link (URL)</label>
+                <input class="qb-field-input" id="qbBypassReportLink" type="text" placeholder="https://yourcompany.quickbase.com/nav/app/..." autocomplete="off" />
+                <div style="margin-top:6px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                  <div>
+                    <div class="qb-field-label" style="font-size:10px;margin-bottom:3px;">Realm (auto-filled)</div>
+                    <input class="qb-field-input" id="qbBypassRealm" type="text" placeholder="Auto" readonly style="font-size:11px;opacity:.7;"/>
+                  </div>
+                  <div>
+                    <div class="qb-field-label" style="font-size:10px;margin-bottom:3px;">Table ID (auto-filled)</div>
+                    <input class="qb-field-input" id="qbBypassTableId" type="text" placeholder="Auto" readonly style="font-size:11px;opacity:.7;"/>
+                  </div>
+                  <div>
+                    <div class="qb-field-label" style="font-size:10px;margin-bottom:3px;">QID (auto-filled)</div>
+                    <input class="qb-field-input" id="qbBypassQid" type="text" placeholder="Auto" readonly style="font-size:11px;opacity:.7;"/>
+                  </div>
+                </div>
+              </div>
+              <div class="qb-field">
+                <label class="qb-field-label">
+                  Personal QB Token
+                  <span style="font-size:10px;opacity:.6;margin-left:6px;">(Secured — stored in your profile)</span>
+                </label>
+                <!-- AUTOFILL TRAP: Hidden dummy field absorbs browser password-manager autofill.
+                     Chrome/Edge inject credentials into the FIRST password field they find.
+                     This invisible field takes the hit so #qbBypassToken stays clean. -->
+                <input type="password" aria-hidden="true" tabindex="-1" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden;" autocomplete="current-password" />
+                <input class="qb-field-input" id="qbBypassToken" type="password" placeholder="Enter your personal QB User Token" autocomplete="new-password" data-lpignore="true" data-1p-ignore />
+                <div style="margin-top:5px;font-size:11px;opacity:.55;">
+                  ⚡ Realm, Table ID and QID auto-fill from the Report Link URL
+                </div>
+              </div>
+            </section>
+
+            <section class="qb-modal-section" data-qb-settings-view="custom-columns">
+              <div class="qb-section-title"><span class="qb-section-num">1</span>Custom Columns</div>
+              <div class="qb-field" style="margin-bottom:14px;">
+                <label class="qb-field-label">Tab Name</label>
+                <input class="qb-field-input" id="qbTabName" value="${esc(state.tabName)}" placeholder="e.g. My Cases" />
+              </div>
+              <div class="qb-field" style="margin-bottom:12px;">
+                <label class="qb-field-label">Search Columns</label>
+                <input type="text" id="qbColumnSearch" placeholder="Filter available fields…" class="qb-field-input" />
+              </div>
+              <div style="position:relative;">
+                <div class="qb-columns-scroll">
+                  <div id="qbColumnGrid" class="qb-col-grid"></div>
+                </div>
+                <div id="qbSelectedFloatingPanel" style="display:none;position:absolute;top:12px;right:14px;z-index:40;min-width:240px;max-width:320px;background:linear-gradient(140deg,rgba(15,23,42,.95),rgba(30,41,59,.9));backdrop-filter:blur(14px);border:1px solid rgba(148,163,184,.3);border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,.5);">
+                  <div id="qbSelectedFloatingHandle" style="padding:10px 14px;cursor:move;border-bottom:1px solid rgba(148,163,184,.2);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.9);">Selected Columns</div>
+                  <div id="qbSelectedFloatingList" style="display:grid;gap:6px;padding:10px 14px;max-height:230px;overflow:auto;font-size:12px;"></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="qb-modal-section" data-qb-settings-view="filter-config" style="display:none;">
+              <div class="qb-section-header">
+                <div class="qb-section-title" style="margin-bottom:0;"><span class="qb-section-num">2</span>Filter Config</div>
+                <button class="qb-btn qb-btn-ghost qb-btn-sm" id="qbAddFilterBtn" type="button">+ Add Filter</button>
+              </div>
+              <div class="qb-filter-match-row">
+                <span class="qb-field-label" style="margin:0;">Match</span>
+                <select class="qb-field-input qb-select-sm" id="qbFilterMatch">
+                  <option value="ALL" ${state.filterMatch === 'ALL' ? 'selected' : ''}>ALL of the following rules</option>
+                  <option value="ANY" ${state.filterMatch === 'ANY' ? 'selected' : ''}>ANY of the following rules</option>
+                </select>
+              </div>
+              <div id="qbFilterRows" class="qb-filter-rows"></div>
+            </section>
+
+            <section class="qb-modal-section" data-qb-settings-view="dashboard-counters" style="display:none;">
+              <div class="qb-section-header">
+                <div class="qb-section-title" style="margin-bottom:0;"><span class="qb-section-num">3</span>Dashboard Counter Filters</div>
+                <button class="qb-btn qb-btn-primary qb-btn-sm" id="qbAddCounterBtn" type="button">+ Add Counter</button>
+              </div>
+              <div id="qbCounterRows" class="qb-counter-rows"></div>
+            </section>
+
+            <!-- VIRTUAL COLUMN SECTION -->
+            <section class="qb-modal-section" data-qb-settings-view="virtual-column" style="display:none;">
+              <div class="qb-section-title" style="margin-bottom:16px;">
+                <span class="qb-section-num" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);">⬡</span>Virtual Column
+              </div>
+
+              <!-- Enable toggle -->
+              <div class="qb-vc-enable-row">
+                <label class="qb-toggle" title="Enable Virtual Column">
+                  <input type="checkbox" id="qbVcEnabled" />
+                  <span class="qb-toggle-track"><span class="qb-toggle-thumb"></span></span>
+                </label>
+                <div>
+                  <div style="font-size:13px;font-weight:700;color:#e2e8f0;">Enable Virtual Column</div>
+                  <div style="font-size:11px;color:rgba(148,163,184,.7);margin-top:2px;">Adds a dropdown column as the first column of every row</div>
+                </div>
+              </div>
+
+              <!-- Column config (visible when enabled) -->
+              <div id="qbVcConfig" style="display:none;margin-top:16px;">
+                <div class="qb-field" style="margin-bottom:14px;">
+                  <label class="qb-field-label">Column Label</label>
+                  <input class="qb-field-input" id="qbVcLabel" type="text" placeholder="e.g. Status, Action, Priority" />
+                </div>
+
+                <!-- Dropdown items -->
+                <div class="qb-section-header" style="margin-bottom:10px;">
+                  <div class="qb-field-label" style="margin:0;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;">Dropdown Menu Items</div>
+                  <button class="qb-btn qb-btn-ghost qb-btn-sm" id="qbVcAddItem" type="button">+ Add Option</button>
+                </div>
+                <div id="qbVcItems" class="qb-vc-items"></div>
+
+                <!-- Conditional formatting -->
+                <div style="margin-top:18px;">
+                  <div class="qb-vc-enable-row" style="margin-bottom:10px;">
+                    <label class="qb-toggle" title="Enable Conditional Formatting">
+                      <input type="checkbox" id="qbVcCfEnabled" />
+                      <span class="qb-toggle-track"><span class="qb-toggle-thumb"></span></span>
+                    </label>
+                    <div>
+                      <div style="font-size:13px;font-weight:700;color:#e2e8f0;">Conditional Formatting</div>
+                      <div style="font-size:11px;color:rgba(148,163,184,.7);margin-top:2px;">Apply row styles based on selected dropdown value</div>
+                    </div>
+                  </div>
+                  <div id="qbVcCfRules" style="display:none;"></div>
+                </div>
+              </div>
+            </section>
+
+          </div>
+
+          <div class="qb-modal-footer">
+            <button class="qb-btn qb-btn-ghost" id="qbCancelSettingsBtn" type="button">Cancel</button>
+            <button class="qb-btn qb-btn-primary" id="qbSaveSettingsBtn" type="button">Save Settings</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+
+    function renderSelectedFloatingPanel() {
+      const panel = root.querySelector('#qbSelectedFloatingPanel');
+      const list = root.querySelector('#qbSelectedFloatingList');
+      if (!panel || !list) return;
+
+      if (!state.customColumns.length) {
+        panel.style.display = 'none';
+        list.innerHTML = '';
+        return;
+      }
+
+      const byId = new Map(state.allAvailableFields.map((f) => [String(f.id), String(f.label || `Field #${f.id}`)]));
+      list.innerHTML = state.customColumns
+        .map((id, idx) => `<div style="display:flex;gap:8px;align-items:flex-start;"><span style="min-width:18px;color:#38bdf8;font-weight:700;">${idx + 1}.</span><span>${esc(byId.get(String(id)) || `Field #${id}`)}</span></div>`)
+        .join('');
+      panel.style.display = 'block';
+    }
+
+    function applyColumnSearch() {
+      const input = root.querySelector('#qbColumnSearch');
+      const query = String(input && input.value || '').trim().toLowerCase();
+      root.querySelectorAll('#qbColumnGrid .qb-col-card').forEach((card) => {
+        const haystack = String(card.getAttribute('data-col-label') || '').toLowerCase();
+        card.style.display = !query || haystack.includes(query) ? 'flex' : 'none';
+      });
+    }
+
+    function renderColumnGrid() {
+      const grid = root.querySelector('#qbColumnGrid');
+      if (!grid) return;
+      if (!state.allAvailableFields.length) {
+        grid.innerHTML = '<div class="small muted">Load data first to fetch available Quickbase fields.</div>';
+        renderSelectedFloatingPanel();
+        return;
+      }
+
+      const selectedById = new Map();
+      state.customColumns.forEach((id, idx) => selectedById.set(String(id), idx + 1));
+
+      grid.innerHTML = state.allAvailableFields.map((f) => {
+        const id = String(f.id);
+        const order = selectedById.get(id);
+        const label = String(f.label || `Field #${id}`);
+        return `
+          <button type="button" data-col-id="${esc(id)}" data-col-label="${esc(`${label} #${id}`)}" class="qb-col-card" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid ${order ? 'rgba(56,189,248,.72)' : 'rgba(148,163,184,.25)'};background:${order ? 'rgba(14,116,144,.45)' : 'rgba(15,23,42,.45)'};color:inherit;cursor:pointer;text-align:left;min-height:40px;">
+            <span class="small" style="font-weight:${order ? '700' : '500'};">${esc(label)} <span class="muted">(#${esc(id)})</span></span>
+            ${order ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 7px;border-radius:999px;background:rgba(14,165,233,.22);border:1px solid rgba(56,189,248,.55);font-size:12px;font-weight:700;">${order}</span>` : ''}
+          </button>
+        `;
+      }).join('');
+      applyColumnSearch();
+      renderSelectedFloatingPanel();
+
+      grid.querySelectorAll('.qb-col-card').forEach((el) => {
+        el.addEventListener('click', () => {
+          const id = String(el.getAttribute('data-col-id') || '').trim();
+          if (!id) return;
+          if (!state.customColumns.includes(id)) {
+            state.customColumns.push(id);
+          } else {
+            state.customColumns = state.customColumns.filter((v) => v !== id);
+          }
+          syncActiveTabFromState();
+          queuePersistQuickbaseSettings();
+          renderColumnGrid();
+        });
+      });
+    }
+
+    function filterRowTemplate(f, idx) {
+      const knownFields = Array.isArray(state.allAvailableFields) ? state.allAvailableFields.slice() : [];
+      const selectedFieldId = String(f.fieldId || '').trim();
+      if (selectedFieldId && !knownFields.some((x) => String(x && x.id) === selectedFieldId)) {
+        knownFields.unshift({ id: selectedFieldId, label: `Field #${selectedFieldId}` });
+      }
+      const fieldOptions = knownFields.map((x) => `<option value="${esc(String(x.id))}" ${String(f.fieldId) === String(x.id) ? 'selected' : ''}>${esc(x.label)} (#${esc(String(x.id))})</option>`).join('');
+      const activeValue = String(f.value || '').trim();
+      return `
+        <div class="row" data-filter-idx="${idx}" style="gap:8px;align-items:center;flex-wrap:wrap;">
+          <select class="input" data-f="fieldId" style="max-width:300px;"><option value="">Select field</option>${fieldOptions}</select>
+          <select class="input" data-f="operator" style="max-width:120px;">
+            <option value="EX" ${f.operator === 'EX' ? 'selected' : ''}>Is (Exact)</option>
+            <option value="XEX" ${f.operator === 'XEX' ? 'selected' : ''}>Is Not</option>
+            <option value="CT" ${f.operator === 'CT' ? 'selected' : ''}>Contains</option>
+            <option value="XCT" ${f.operator === 'XCT' ? 'selected' : ''}>Does Not Contain</option>
+            <option value="SW" ${f.operator === 'SW' ? 'selected' : ''}>Starts With</option>
+            <option value="XSW" ${f.operator === 'XSW' ? 'selected' : ''}>Does Not Start With</option>
+            <option value="BF" ${f.operator === 'BF' ? 'selected' : ''}>Before</option>
+            <option value="AF" ${f.operator === 'AF' ? 'selected' : ''}>After</option>
+            <option value="IR" ${f.operator === 'IR' ? 'selected' : ''}>In Range</option>
+            <option value="XIR" ${f.operator === 'XIR' ? 'selected' : ''}>Not In Range</option>
+          </select>
+          <input type="text" class="input" data-f="value" value="${esc(activeValue)}" placeholder="Filter value" style="min-width:220px;" />
+          <button class="btn" data-remove-filter="${idx}" type="button">Remove</button>
+        </div>
+      `;
+    }
+
+    function renderFilters() {
+      const rows = root.querySelector('#qbFilterRows');
+      if (!rows) return;
+      if (!state.customFilters.length) {
+        rows.innerHTML = '<div class="small muted">No custom filters configured.</div>';
+      } else {
+        rows.innerHTML = state.customFilters.map((f, idx) => filterRowTemplate(f, idx)).join('');
+      }
+
+      rows.querySelectorAll('[data-remove-filter]').forEach((btn) => {
+        btn.onclick = () => {
+          const idx = Number(btn.getAttribute('data-remove-filter'));
+          state.customFilters = state.customFilters.filter((_, i) => i !== idx);
+          syncActiveTabFromState();
+          queuePersistQuickbaseSettings();
+          renderFilters();
+        };
+      });
+
+      rows.querySelectorAll('[data-filter-idx]').forEach((row) => {
+        const idx = Number(row.getAttribute('data-filter-idx'));
+        row.querySelectorAll('[data-f]').forEach((input) => {
+          const key = String(input.getAttribute('data-f') || '');
+          const eventName = input.tagName === 'SELECT' ? 'change' : 'input';
+          input.addEventListener(eventName, () => {
+            if (!state.customFilters[idx]) return;
+            if (key === 'fieldId') {
+              state.customFilters[idx].fieldId = String(input.value || '').trim();
+              syncActiveTabFromState();
+              queuePersistQuickbaseSettings();
+              return;
+            }
+            if (key === 'value') {
+              state.customFilters[idx].value = String(input.value || '').trim();
+              syncActiveTabFromState();
+              queuePersistQuickbaseSettings();
+              return;
+            }
+            state.customFilters[idx][key] = String(input.value || '').trim();
+            syncActiveTabFromState();
+            queuePersistQuickbaseSettings();
+          });
+        });
+      });
+
+      const match = root.querySelector('#qbFilterMatch');
+      if (match) {
+        match.onchange = () => {
+          state.filterMatch = normalizeFilterMatch(match.value);
+          syncActiveTabFromState();
+          queuePersistQuickbaseSettings();
+        };
+      }
+    }
+
+
+    function getCounterTargetFields() {
+      const candidates = [];
+      const addFromSource = (list) => {
+        if (!Array.isArray(list)) return;
+        list.forEach((item) => {
+          if (!item || typeof item !== 'object') return;
+          const id = String(item.id ?? item.fieldId ?? item.fid ?? '').trim();
+          if (!id) return;
+          const label = String(item.label ?? item.name ?? item.title ?? '').trim() || `Field #${id}`;
+          candidates.push({ id, label });
+        });
+      };
+
+      addFromSource(state.allAvailableFields);
+      if (!candidates.length) {
+        addFromSource(state.rawPayload && state.rawPayload.columns);
+      }
+
+      const seen = new Set();
+      return candidates.filter((field) => {
+        if (seen.has(field.id)) return false;
+        seen.add(field.id);
+        return true;
+      });
+    }
+
+    function counterRowTemplate(counter, idx) {
+      const targetFields = getCounterTargetFields();
+      const fieldOptions = targetFields
+        .map((x) => `<option value="${esc(String(x.id))}" ${String(counter.fieldId) === String(x.id) ? 'selected' : ''}>${esc(x.label)} (#${esc(String(x.id))})</option>`)
+        .join('');
+      return `
+        <div data-counter-idx="${idx}" style="display:grid;gap:8px;padding:10px;border-radius:12px;background:rgba(15,23,42,.35);border:1px solid rgba(255,255,255,.12);">
+          <div class="row" style="justify-content:space-between;align-items:center;">
+            <div class="small muted" style="font-weight:700;">Counter ${idx + 1}</div>
+            <button class="btn" data-remove-counter="${idx}" type="button" aria-label="Delete counter">🗑️</button>
+          </div>
+          <div class="grid cols-2" style="gap:8px;">
+            <label class="field"><div class="label">Target Field</div><select class="input" data-counter-f="fieldId"><option value="">Select field</option>${fieldOptions}</select></label>
+            <label class="field"><div class="label">Operator</div><select class="input" data-counter-f="operator">
+              <option value="EX" ${counter.operator === 'EX' ? 'selected' : ''}>Is Equal To</option>
+              <option value="XEX" ${counter.operator === 'XEX' ? 'selected' : ''}>Is Not Equal To</option>
+              <option value="CT" ${counter.operator === 'CT' ? 'selected' : ''}>Contains</option>
+            </select></label>
+          </div>
+          <label class="field"><div class="label">Glass Color</div><select class="input" data-counter-f="color">
+            <option value="default" ${normalizeCounterColor(counter.color) === 'default' ? 'selected' : ''}>Default (Dark)</option>
+            <option value="blue" ${normalizeCounterColor(counter.color) === 'blue' ? 'selected' : ''}>Blue</option>
+            <option value="green" ${normalizeCounterColor(counter.color) === 'green' ? 'selected' : ''}>Green</option>
+            <option value="red" ${normalizeCounterColor(counter.color) === 'red' ? 'selected' : ''}>Red</option>
+            <option value="purple" ${normalizeCounterColor(counter.color) === 'purple' ? 'selected' : ''}>Purple</option>
+            <option value="orange" ${normalizeCounterColor(counter.color) === 'orange' ? 'selected' : ''}>Orange</option>
+          </select></label>
+          <label class="field"><div class="label">Value</div><input type="text" class="input" data-counter-f="value" value="${esc(counter.value || '')}" placeholder="e.g. Open" /></label>
+          <label class="field"><div class="label">Label</div><input type="text" class="input" data-counter-f="label" value="${esc(counter.label || '')}" placeholder="e.g. Open Cases" /></label>
+        </div>
+      `;
+    }
+
+    function renderCounterFilters() {
+      const rows = root.querySelector('#qbCounterRows');
+      if (!rows) return;
+      if (!state.dashboardCounters.length) {
+        rows.innerHTML = '<div class="small muted">No dashboard counter filters configured.</div>';
+      } else {
+        rows.innerHTML = state.dashboardCounters.map((counter, idx) => counterRowTemplate(counter, idx)).join('');
+      }
+
+      rows.querySelectorAll('[data-remove-counter]').forEach((btn) => {
+        btn.onclick = () => {
+          const idx = Number(btn.getAttribute('data-remove-counter'));
+          state.dashboardCounters = state.dashboardCounters.filter((_, i) => i !== idx);
+          syncActiveTabFromState();
+          queuePersistQuickbaseSettings();
+          renderCounterFilters();
+        };
+      });
+
+      rows.querySelectorAll('[data-counter-idx]').forEach((row) => {
+        const idx = Number(row.getAttribute('data-counter-idx'));
+        row.querySelectorAll('[data-counter-f]').forEach((input) => {
+          const key = String(input.getAttribute('data-counter-f') || '').trim();
+          const eventName = input.tagName === 'SELECT' ? 'change' : 'input';
+          input.addEventListener(eventName, () => {
+            if (!state.dashboardCounters[idx]) return;
+            state.dashboardCounters[idx][key] = String(input.value || '').trim();
+            syncActiveTabFromState();
+            queuePersistQuickbaseSettings();
+          });
+        });
+      });
+    }
+
+    // ── VIRTUAL COLUMN RENDER & WIRE ──────────────────────────────────────────
+    function _getVcState() {
+      const tabId = getActiveTabId();
+      const s = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId];
+      return (s && s.virtualColumn) ? deepClone(s.virtualColumn) : { enabled: false, label: 'Status', items: [], conditionalRules: [] };
+    }
+
+    function _saveVcState(vc) {
+      const tabId = getActiveTabId();
+      if (!tabId) return;
+      const prev = createDefaultSettings((state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]) || {}, {});
+      state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, {
+        [tabId]: Object.assign({}, prev, { virtualColumn: deepClone(vc) })
+      });
+      state.virtualColumn = deepClone(vc);
+      queuePersistQuickbaseSettings();
+    }
+
+    // localStorage key for per-tab virtual column values (dropdown selections per row)
+    function _getVcValuesKey(tabId) {
+      const uid = me && me.id ? String(me.id) : 'anon';
+      return `qb_vc_values:${uid}:${tabId}`;
+    }
+    function _loadVcValues(tabId) {
+      try {
+        const raw = localStorage.getItem(_getVcValuesKey(tabId));
+        return raw ? JSON.parse(raw) : {};
+      } catch (_) { return {}; }
+    }
+    function _saveVcValues(tabId, values) {
+      try { localStorage.setItem(_getVcValuesKey(tabId), JSON.stringify(values)); } catch (_) {}
+    }
+
+    function renderVirtualColumnSettings() {
+      const vc = _getVcState();
+
+      const enabledEl = root.querySelector('#qbVcEnabled');
+      const configEl  = root.querySelector('#qbVcConfig');
+      const labelEl   = root.querySelector('#qbVcLabel');
+      const cfEnabledEl = root.querySelector('#qbVcCfEnabled');
+      const cfRulesEl   = root.querySelector('#qbVcCfRules');
+      const itemsEl   = root.querySelector('#qbVcItems');
+
+      if (!enabledEl || !configEl) return;
+
+      enabledEl.checked = !!vc.enabled;
+      configEl.style.display = vc.enabled ? '' : 'none';
+      if (labelEl) labelEl.value = vc.label || 'Status';
+
+      const cfEnabled = !!(vc.conditionalRules && vc.conditionalRules.length);
+      if (cfEnabledEl) cfEnabledEl.checked = cfEnabled;
+      if (cfRulesEl) cfRulesEl.style.display = cfEnabled ? '' : 'none';
+
+      // Render dropdown items
+      if (itemsEl) {
+        if (!vc.items || !vc.items.length) {
+          itemsEl.innerHTML = '<div class="small muted" style="padding:6px 0;">No options yet. Click "+ Add Option" to begin.</div>';
+        } else {
+          itemsEl.innerHTML = vc.items.map((item, idx) => `
+            <div class="qb-vc-item-row" data-vc-item-idx="${idx}">
+              <span class="qb-vc-item-drag" title="Drag to reorder">⠿</span>
+              <input class="qb-field-input qb-vc-item-input" type="text" value="${esc(item)}" placeholder="Option label" data-vc-idx="${idx}" />
+              <button class="qb-btn qb-btn-ghost qb-btn-sm qb-vc-item-del" data-vc-del="${idx}" type="button" title="Remove">✕</button>
+            </div>
+          `).join('');
+
+          itemsEl.querySelectorAll('.qb-vc-item-input').forEach(inp => {
+            inp.addEventListener('input', () => {
+              const idx = Number(inp.getAttribute('data-vc-idx'));
+              const cur = _getVcState();
+              cur.items[idx] = inp.value.trim();
+              _saveVcState(cur);
+              if (cfRulesEl && cfRulesEl.style.display !== 'none') renderVcCfRules();
+            });
+          });
+          itemsEl.querySelectorAll('[data-vc-del]').forEach(btn => {
+            btn.onclick = () => {
+              const idx = Number(btn.getAttribute('data-vc-del'));
+              const cur = _getVcState();
+              cur.items.splice(idx, 1);
+              // Remove orphaned CF rules
+              cur.conditionalRules = (cur.conditionalRules || []).filter(r => cur.items.includes(r.value));
+              _saveVcState(cur);
+              renderVirtualColumnSettings();
+            };
+          });
+        }
+      }
+
+      if (cfEnabled) renderVcCfRules();
+    }
+
+    function renderVcCfRules() {
+      const cfRulesEl = root.querySelector('#qbVcCfRules');
+      if (!cfRulesEl) return;
+      const vc = _getVcState();
+      const items = vc.items || [];
+      if (!items.length) {
+        cfRulesEl.innerHTML = '<div style="padding:12px 0;font-size:12px;color:rgba(148,163,184,.6);">Add dropdown options first to configure formatting.</div>';
+        return;
+      }
+
+      // PREMIUM ENTERPRISE DESIGN: Card-based per-rule layout with live preview badge
+      // No ugly full-row color swatches — accent bar + subtle tint + badge typography
+      cfRulesEl.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px;">
+          ${items.map((item) => {
+            const rule = (vc.conditionalRules || []).find(r => r.value === item) || { value: item };
+            const bg = rule.bgColor || '';
+            const tc = rule.textColor || '';
+            const fw = rule.fontWeight || 'normal';
+            const fs = rule.fontSize || '12px';
+            const fi = rule.fontStyle || 'normal';
+            const td = rule.textDecoration || 'none';
+            const ta = rule.textAlign || 'left';
+            // Compute preview badge styles — badge uses the user colors directly
+            const badgeBg = bg ? _hexToRgba(bg, 0.22) : 'rgba(255,255,255,.07)';
+            const badgeBorder = bg ? `1px solid ${_hexToRgba(bg, 0.55)}` : '1px solid rgba(255,255,255,.12)';
+            const badgeTxt = tc || '#c8d8f0';
+            const accentBar = bg ? `background:${bg};` : 'background:rgba(255,255,255,.15);';
+            return `
+            <div class="qb-vc-cf-rule" data-cf-value="${esc(item)}" style="
+              background:rgba(15,23,42,0.6);
+              border:1px solid rgba(148,163,184,0.12);
+              border-radius:10px;
+              overflow:hidden;
+              transition:border-color .2s;
+            ">
+              <!-- Rule header: accent bar + badge preview + label -->
+              <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid rgba(148,163,184,0.1);">
+                <div style="width:4px;min-width:4px;height:32px;border-radius:4px;${accentBar}flex-shrink:0;"></div>
+                <span class="qb-vc-cf-badge" data-preview-badge style="
+                  display:inline-flex;align-items:center;
+                  padding:4px 12px;border-radius:20px;
+                  background:${badgeBg};
+                  border:${badgeBorder};
+                  color:${badgeTxt};
+                  font-size:${fs};font-weight:${fw};font-style:${fi};text-decoration:${td};
+                  letter-spacing:.03em;white-space:nowrap;
+                  box-shadow:0 1px 4px rgba(0,0,0,.2);
+                  transition:all .15s;
+                ">${esc(item)}</span>
+                <span style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:rgba(148,163,184,.55);flex:1;">Row formatting when <strong style="color:rgba(226,232,240,.7);">"${esc(item)}"</strong> selected</span>
+              </div>
+              <!-- Controls grid -->
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;padding:12px 14px;">
+                <!-- Accent Color -->
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.6);">Accent Color</span>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="position:relative;width:32px;height:28px;border-radius:6px;border:1px solid rgba(148,163,184,.25);overflow:hidden;cursor:pointer;flex-shrink:0;">
+                      <input type="color" class="qb-vc-cf-color" data-cf-key="bgColor" value="${bg||'#3b82f6'}" style="position:absolute;inset:-4px;width:calc(100% + 8px);height:calc(100% + 8px);border:none;padding:0;cursor:pointer;opacity:0.01;" />
+                      <div data-swatch style="position:absolute;inset:0;border-radius:5px;background:${bg||'rgba(148,163,184,.2)'};pointer-events:none;"></div>
+                    </div>
+                    <span style="font-size:11px;color:rgba(148,163,184,.7);font-family:monospace;">${bg||'—'}</span>
+                  </div>
+                </div>
+                <!-- Text Color -->
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.6);">Text Color</span>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="position:relative;width:32px;height:28px;border-radius:6px;border:1px solid rgba(148,163,184,.25);overflow:hidden;cursor:pointer;flex-shrink:0;">
+                      <input type="color" class="qb-vc-cf-color" data-cf-key="textColor" value="${tc||'#e2e8f0'}" style="position:absolute;inset:-4px;width:calc(100% + 8px);height:calc(100% + 8px);border:none;padding:0;cursor:pointer;opacity:0.01;" />
+                      <div data-swatch style="position:absolute;inset:0;border-radius:5px;background:${tc||'rgba(148,163,184,.2)'};pointer-events:none;"></div>
+                    </div>
+                    <span style="font-size:11px;color:rgba(148,163,184,.7);font-family:monospace;">${tc||'—'}</span>
+                  </div>
+                </div>
+                <!-- Weight -->
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.6);">Weight</span>
+                  <select class="qb-field-input qb-vc-cf-sel" data-cf-key="fontWeight" style="font-size:11px;padding:4px 7px;height:28px;border-radius:6px;">
+                    <option value="normal" ${fw==='normal'?'selected':''}>Normal</option>
+                    <option value="600" ${fw==='600'?'selected':''}>Semi-Bold</option>
+                    <option value="700" ${fw==='700'?'selected':''}>Bold</option>
+                    <option value="800" ${fw==='800'?'selected':''}>Extra Bold</option>
+                  </select>
+                </div>
+                <!-- Style -->
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.6);">Style</span>
+                  <select class="qb-field-input qb-vc-cf-sel" data-cf-key="fontStyle" style="font-size:11px;padding:4px 7px;height:28px;border-radius:6px;">
+                    <option value="normal" ${fi==='normal'?'selected':''}>Normal</option>
+                    <option value="italic" ${fi==='italic'?'selected':''}>Italic</option>
+                  </select>
+                </div>
+                <!-- Decoration -->
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.6);">Decoration</span>
+                  <select class="qb-field-input qb-vc-cf-sel" data-cf-key="textDecoration" style="font-size:11px;padding:4px 7px;height:28px;border-radius:6px;">
+                    <option value="none" ${td==='none'?'selected':''}>None</option>
+                    <option value="underline" ${td==='underline'?'selected':''}>Underline</option>
+                    <option value="line-through" ${td==='line-through'?'selected':''}>Strike</option>
+                  </select>
+                </div>
+                <!-- Font Size -->
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(148,163,184,.6);">Size</span>
+                  <select class="qb-field-input qb-vc-cf-sel" data-cf-key="fontSize" style="font-size:11px;padding:4px 7px;height:28px;border-radius:6px;">
+                    <option value="11px" ${fs==='11px'?'selected':''}>11px</option>
+                    <option value="12px" ${fs==='12px'?'selected':''}>12px</option>
+                    <option value="13px" ${fs==='13px'?'selected':''}>13px</option>
+                    <option value="14px" ${fs==='14px'?'selected':''}>14px</option>
+                  </select>
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+
+      // Wire all controls with live preview update
+      cfRulesEl.querySelectorAll('[data-cf-key]').forEach(input => {
+        const evtName = input.tagName === 'SELECT' ? 'change' : 'input';
+        input.addEventListener(evtName, () => {
+          const ruleEl = input.closest('[data-cf-value]');
+          if (!ruleEl) return;
+          const val = ruleEl.getAttribute('data-cf-value');
+          const key = input.getAttribute('data-cf-key');
+          const cur = _getVcState();
+          let rule = (cur.conditionalRules || []).find(r => r.value === val);
+          if (!rule) { rule = { value: val }; (cur.conditionalRules = cur.conditionalRules || []).push(rule); }
+          rule[key] = input.value;
+          _saveVcState(cur);
+
+          // Update swatch preview next to color input
+          const swatch = input.parentElement && input.parentElement.querySelector('[data-swatch]');
+          if (swatch) swatch.style.background = input.value;
+          // Update hex label
+          const hexLabel = input.parentElement && input.parentElement.nextElementSibling;
+          if (hexLabel && hexLabel.tagName !== 'SELECT') hexLabel.textContent = input.value;
+
+          // Live badge preview update
+          const r2 = (cur.conditionalRules || []).find(r => r.value === val) || {};
+          const badge = ruleEl.querySelector('[data-preview-badge]');
+          if (badge) {
+            const nb = r2.bgColor ? _hexToRgba(r2.bgColor, 0.22) : 'rgba(255,255,255,.07)';
+            const nb2 = r2.bgColor ? `1px solid ${_hexToRgba(r2.bgColor, 0.55)}` : '1px solid rgba(255,255,255,.12)';
+            badge.style.background = nb;
+            badge.style.border = nb2;
+            badge.style.color = r2.textColor || '#c8d8f0';
+            badge.style.fontWeight = r2.fontWeight || 'normal';
+            badge.style.fontStyle = r2.fontStyle || 'normal';
+            badge.style.textDecoration = r2.textDecoration || 'none';
+            badge.style.fontSize = r2.fontSize || '12px';
+          }
+          // Update accent bar color
+          const accentBar = ruleEl.querySelector('[data-cf-value] div');
+          const firstDiv = ruleEl.querySelector('div > div');
+          if (firstDiv && r2.bgColor) firstDiv.style.background = r2.bgColor;
+        });
+      });
+    }
+
+    // Wire virtual column modal controls (called once after HTML is rendered)
+    function bindVirtualColumnControls() {
+      const enabledEl   = root.querySelector('#qbVcEnabled');
+      const labelEl     = root.querySelector('#qbVcLabel');
+      const addItemBtn  = root.querySelector('#qbVcAddItem');
+      const cfEnabledEl = root.querySelector('#qbVcCfEnabled');
+      const cfRulesEl   = root.querySelector('#qbVcCfRules');
+      const configEl    = root.querySelector('#qbVcConfig');
+
+      if (enabledEl) {
+        enabledEl.addEventListener('change', () => {
+          const cur = _getVcState();
+          cur.enabled = enabledEl.checked;
+          _saveVcState(cur);
+          if (configEl) configEl.style.display = cur.enabled ? '' : 'none';
+        });
+      }
+      if (labelEl) {
+        labelEl.addEventListener('input', () => {
+          const cur = _getVcState();
+          cur.label = labelEl.value.trim() || 'Status';
+          _saveVcState(cur);
+        });
+      }
+      if (addItemBtn) {
+        addItemBtn.onclick = () => {
+          const cur = _getVcState();
+          cur.items = cur.items || [];
+          cur.items.push('New Option');
+          _saveVcState(cur);
+          renderVirtualColumnSettings();
+        };
+      }
+      if (cfEnabledEl) {
+        cfEnabledEl.addEventListener('change', () => {
+          const cur = _getVcState();
+          if (!cfEnabledEl.checked) cur.conditionalRules = [];
+          _saveVcState(cur);
+          if (cfRulesEl) cfRulesEl.style.display = cfEnabledEl.checked ? '' : 'none';
+          if (cfEnabledEl.checked) renderVcCfRules();
+        });
+      }
+    }
+
+    function bindColumnSearch() {
+      const input = root.querySelector('#qbColumnSearch');
+      if (!input || modalBindingsActive) return;
+      const onKeyUp = () => applyColumnSearch();
+      input.addEventListener('keyup', onKeyUp);
+      cleanupHandlers.push(() => input.removeEventListener('keyup', onKeyUp));
+    }
+
+    function bindFloatingDrag() {
+      const panel = root.querySelector('#qbSelectedFloatingPanel');
+      const handle = root.querySelector('#qbSelectedFloatingHandle');
+      if (!panel || !handle || modalBindingsActive) return;
+
+      let dragging = false;
+      let startX = 0;
+      let startY = 0;
+      let originLeft = 0;
+      let originTop = 0;
+
+      const onMouseMove = (event) => {
+        if (!dragging) return;
+        const nextLeft = originLeft + (event.clientX - startX);
+        const nextTop = originTop + (event.clientY - startY);
+        panel.style.left = `${Math.max(6, nextLeft)}px`;
+        panel.style.top = `${Math.max(6, nextTop)}px`;
+        panel.style.right = 'auto';
+      };
+      const onMouseUp = () => {
+        dragging = false;
+      };
+      const onMouseDown = (event) => {
+        dragging = true;
+        startX = event.clientX;
+        startY = event.clientY;
+        originLeft = panel.offsetLeft;
+        originTop = panel.offsetTop;
+        event.preventDefault();
+      };
+
+      handle.addEventListener('mousedown', onMouseDown);
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      cleanupHandlers.push(() => {
+        handle.removeEventListener('mousedown', onMouseDown);
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      });
+    }
+
+    function bindReportLinkAutoExtract() {
+      const reportLinkEl = root.querySelector('#qbReportLink');
+      const tableIdEl = root.querySelector('#qbTableId');
+      const qidEl = root.querySelector('#qbQid');
+      const tabBaseQidEl = root.querySelector('#qbTabBaseQid');
+      if (!reportLinkEl || !tableIdEl || !qidEl || !tabBaseQidEl || modalBindingsActive) return;
+
+      let lastAutoFillToastAt = 0;
+      let fetchFieldsTimer = null;
+      let lastFetchedLink = '';
+      const applyAutoExtract = async () => {
+        const nextLink = String(reportLinkEl.value || '').trim();
+        const prevLink = String(state.reportLink || '').trim();
+        const prevQid = String(state.qid || '').trim();
+        const prevTableId = String(state.tableId || '').trim();
+        const prevRealm = String(state.realm || '').trim();
+        handleReportLinkChange(getActiveTabId(), nextLink);
+        const didAutoFill = prevQid !== String(state.qid || '').trim()
+          || prevTableId !== String(state.tableId || '').trim()
+          || prevRealm !== String(state.realm || '').trim();
+        syncActiveTabFromState();
+        queuePersistQuickbaseSettings();
+        if (didAutoFill && window.UI && UI.toast && (Date.now() - lastAutoFillToastAt) > 1200) {
+          UI.toast('Auto-filled from Link');
+          lastAutoFillToastAt = Date.now();
+        }
+        // FIX: [Issue 3] - Real-time field detection should refresh for any changed/pasted link,
+        // even when qid/tableId stay the same (realm-only change, or repasting same link after tab switch).
+        if (fetchFieldsTimer) clearTimeout(fetchFieldsTimer);
+        const normalizedNextLink = String(nextLink || '').trim();
+        const shouldRefreshFields = !!normalizedNextLink && (normalizedNextLink !== prevLink || normalizedNextLink !== lastFetchedLink);
+        if (shouldRefreshFields) {
+          fetchFieldsTimer = setTimeout(async () => {
+            try {
+              await refreshAvailableFieldsForActiveTab(getActiveTabId());
+              lastFetchedLink = normalizedNextLink;
+              renderColumnGrid();
+              renderFilters();
+              renderCounterFilters();
+            } catch (_) {}
+          }, 250);
+        }
+      };
+
+      const onPaste = () => setTimeout(applyAutoExtract, 0);
+      reportLinkEl.addEventListener('input', applyAutoExtract);
+      reportLinkEl.addEventListener('paste', onPaste);
+      cleanupHandlers.push(() => {
+        if (fetchFieldsTimer) clearTimeout(fetchFieldsTimer);
+        reportLinkEl.removeEventListener('input', applyAutoExtract);
+        reportLinkEl.removeEventListener('paste', onPaste);
+      });
+    }
+
+    function cleanupModalBindings() {
+      while (cleanupHandlers.length) {
+        const fn = cleanupHandlers.pop();
+        if (typeof fn === 'function') fn();
+      }
+      modalBindingsActive = false;
+    }
+
+
+    async function refreshAvailableFieldsForActiveTab(tabId) {
+      const safeTabId = String(tabId || getActiveTabId() || '').trim();
+      if (!safeTabId) return;
+      const managerSettings = tabManager && typeof tabManager.getTab === 'function'
+        ? ((tabManager.getTab(safeTabId) || {}).settings || {})
+        : {};
+      const fallbackSettings = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[safeTabId]
+        ? state.quickbaseSettings.settingsByTabId[safeTabId]
+        : {};
+      const tabSettings = createDefaultSettings(Object.assign({}, fallbackSettings, managerSettings), {});
+      // FIX[QB-NameFilter]: Fall back to globalQbSettings for qid/tableId/realm.
+      // New users / new tabs have empty tab-level settings — without this fallback
+      // the field list stays empty and the Settings modal shows "Load data first".
+      const _isBypassTab = !!(tabSettings.bypassGlobal);
+      const parsed = parseQuickbaseLink(String(
+        _isBypassTab ? (tabSettings.reportLink || '') : (globalQbSettings.reportLink || tabSettings.reportLink || '')
+      ));
+      const qid = _isBypassTab
+        ? String(tabSettings.qid || parsed.qid || '').trim()
+        : String(globalQbSettings.qid || tabSettings.qid || parsed.qid || '').trim();
+      const tableId = _isBypassTab
+        ? String(tabSettings.tableId || parsed.tableId || '').trim()
+        : String(globalQbSettings.tableId || tabSettings.tableId || parsed.tableId || '').trim();
+      const realm = _isBypassTab
+        ? String(tabSettings.realm || parsed.realm || '').trim()
+        : String(globalQbSettings.realm || tabSettings.realm || parsed.realm || '').trim();
+
+      if (!qid || !tableId || !realm) {
+        state.allAvailableFields = [];
+        renderColumnGrid();
+        renderFilters();
+        renderCounterFilters();
+        return;
+      }
+
+      try {
+        const data = await window.QuickbaseAdapter.fetchMonitoringData({
+          bust: Date.now(),
+          limit: 1,
+          qid,
+          tableId,
+          realm,
+          customFilters: [],
+          filterMatch: 'ALL',
+          search: ''
+        });
+        state.allAvailableFields = Array.isArray(data && data.allAvailableFields) ? data.allAvailableFields : [];
+      } catch (_) {
+        state.allAvailableFields = [];
+      }
+      renderColumnGrid();
+      renderFilters();
+      renderCounterFilters();
+    }
+
+    async function loadQuickbaseData(options) {
+      const opts = options && typeof options === 'object' ? options : {};
+      const silent = !!opts.silent;
+      const forceRefresh = !!opts.forceRefresh;
+      const host = root.querySelector('#qbDataBody');
+      const meta = root.querySelector('#qbDataMeta');
+      const reloadBtn = root.querySelector('#qbReloadBtn');
+
+      const activeTabId = String(getActiveTabId() || '').trim();
+      const stateTabSettingsForGuard = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[activeTabId]
+        ? createDefaultSettings(state.quickbaseSettings.settingsByTabId[activeTabId], {})
+        : createDefaultSettings({}, {});
+      // FIX[QB-NameFilter]: Use globalQbSettings.reportLink as primary source.
+      // The outer guard was only checking the tab-level reportLink and returning
+      // early before the inner logic could apply the global report link.
+      // Members with a qb_name set should auto-load using the global report config.
+      const _guardBypassed = !!(stateTabSettingsForGuard.bypassGlobal);
+      const activeReportLink = _guardBypassed
+        ? String(stateTabSettingsForGuard.reportLink || '').trim()
+        : String(globalQbSettings.reportLink || stateTabSettingsForGuard.reportLink || '').trim();
+      if (!activeReportLink) {
+        const recordsContainer = document.querySelector('[data-qb-records-container]')
+          || document.querySelector('.qb-records-body')
+          || document.querySelector('#qbRecordsBody')
+          || document.querySelector('.quickbase-records-container')
+          || host;
+        if (recordsContainer) {
+          recordsContainer.innerHTML = '<div style="padding:40px;text-align:center;color:rgba(255,255,255,0.5);font-size:15px;">No records Loaded — Please configure a Report Link in Settings.</div>';
+        }
+        if (meta) meta.textContent = 'No Report Link configured';
+        return;
+      }
+
+      if (quickbaseLoadInFlight) return quickbaseLoadInFlight;
+
+      if (!silent) {
+        if (host) host.innerHTML = '<div class="small muted" style="padding:8px;">Loading Quickbase data...</div>';
+        if (meta) meta.textContent = 'Loading...';
+      }
+
+      // Stale-response guard: stamp this load with the current tab ID.
+      // If the tab changes while the fetch is in-flight, the response is discarded.
+      const loadToken = activeTabId;
+      state._currentLoadToken = loadToken;
+
+      quickbaseLoadInFlight = (async () => {
+        if (reloadBtn) reloadBtn.disabled = true;
+        const startedAt = performance.now();
+        try {
+          if (!window.QuickbaseAdapter || typeof window.QuickbaseAdapter.fetchMonitoringData !== 'function') {
+            throw new Error('Quickbase adapter unavailable');
+          }
+          // Snapshot tab ID for stale-response check inside the async block
+          const thisLoadTabId = loadToken;
+
+          // ── ALWAYS use state.quickbaseSettings.settingsByTabId as the single source of truth.
+          // TabManager (managerTab) is a secondary write-through cache and MUST NOT override
+          // state.settingsByTabId — it may not be seeded for all tabs and can return stale defaults.
+          const freshTabSettings = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[thisLoadTabId]
+            ? createDefaultSettings(state.quickbaseSettings.settingsByTabId[thisLoadTabId], {})
+            : createDefaultSettings({}, {});
+
+          // ── BYPASS or GLOBAL report config resolution ────────────────────
+          // Per-tab isolation: each tab independently decides if it bypasses global.
+          // bypassGlobal=true → use tab's own reportLink + profile.qb_token (via server)
+          // bypassGlobal=false → use Global QB Settings as usual
+          const isTabBypassed = !!(freshTabSettings.bypassGlobal);
+          const globalReportLink = String(globalQbSettings.reportLink || '').trim();
+          const effectiveReportLink = isTabBypassed
+            ? String(freshTabSettings.reportLink || '').trim()
+            : (globalReportLink || String(freshTabSettings.reportLink || '').trim());
+
+          const reportLink = effectiveReportLink;
+          if (!reportLink) {
+            state.allAvailableFields = [];
+            state.baseRecords = [];
+            state.rawPayload = { columns: [], records: [] };
+            state.currentPayload = { columns: [], records: [] };
+            renderColumnGrid();
+            renderFilters();
+            applySearchAndRender();
+            const emptyMsg = isTabBypassed
+              ? 'No records — configure your personal Report Link in Settings → Report Config tab.'
+              : 'No records Loaded — Please configure a Report Link in Settings.';
+            renderEmptyState(root, emptyMsg);
+            return;
+          }
+          const shouldApplyFilters = shouldApplyServerFilters(opts);
+          const tabCustomFilters = Array.isArray(freshTabSettings.customFilters) ? normalizeFilters(freshTabSettings.customFilters) : [];
+
+          const tabFilterMatch = normalizeFilterMatch(freshTabSettings.filterMatch);
+          const mergedFilters = shouldApplyFilters ? tabCustomFilters : [];
+          // Derive qid/tableId/realm — bypass tab uses its own, non-bypass uses global first
+          const _tabParsed = parseQuickbaseLink(effectiveReportLink);
+          const activeQid = isTabBypassed
+            ? String(freshTabSettings.qid || _tabParsed.qid || '').trim()
+            : String(globalQbSettings.qid || freshTabSettings.qid || _tabParsed.qid || '').trim();
+          const activeTableId = isTabBypassed
+            ? String(freshTabSettings.tableId || _tabParsed.tableId || '').trim()
+            : String(globalQbSettings.tableId || freshTabSettings.tableId || _tabParsed.tableId || '').trim();
+          const activeRealm = isTabBypassed
+            ? String(freshTabSettings.realm || _tabParsed.realm || '').trim()
+            : String(globalQbSettings.realm || freshTabSettings.realm || _tabParsed.realm || '').trim();
+          const hasExplicitLoadMore = Number(opts.offset || 0) >= 100;
+          const hasActiveSearch = !!String(getActiveSearchTerm() || '').trim();
+          // BYPASS FIX: For bypass mode, fetch the full report in one shot (limit 500).
+          // The server uses /v1/reports/{id}/run which handles pagination on QB's side.
+          // For global mode: keep the 100-record first-load + background progressive fetch.
+          const requestLimit = isTabBypassed ? 500 : 100;
+          const cacheKey = getQuickbaseCacheKey({
+            tabId: activeTabId,
+            tableId: activeTableId,
+            qid: activeQid || '',
+            filters: mergedFilters,
+            filterMatch: tabFilterMatch
+          });
+          // FIX: [Issue 2] - Reuse cache if fetched within 2 minutes.
+          const cachedPayload = forceRefresh ? null : readQuickbaseCache(cacheKey, thisLoadTabId);
+          if (cachedPayload) {
+            // ── STALE GUARD (cache hit path) ──────────────────────────────
+            // Cache hit is also async — verify we're still on the same tab
+            // before writing to shared state.
+            if (state._currentLoadToken !== thisLoadTabId) {
+              console.info('[Quickbase] discarding stale cache hit for tab', thisLoadTabId);
+              return;
+            }
+            state.allAvailableFields = Array.isArray(cachedPayload.allAvailableFields) ? cachedPayload.allAvailableFields : [];
+            state.baseRecords = Array.isArray(cachedPayload.records) ? cachedPayload.records.slice() : [];
+            state._loadedForTabId = thisLoadTabId;
+            if (thisLoadTabId) {
+              state._tabDataCache = Object.assign({}, state._tabDataCache || {}, {
+                [thisLoadTabId]: Object.assign({}, state._tabDataCache && state._tabDataCache[thisLoadTabId] || {}, {
+                  cachedRows: state.baseRecords.slice()
+                })
+              });
+            }
+            state.rawPayload = {
+              columns: Array.isArray(cachedPayload.columns) ? cachedPayload.columns : [],
+              records: state.baseRecords.slice()
+            };
+            renderColumnGrid();
+            renderFilters();
+            state.currentPage = 1;
+            state.isDefaultReportMode = !shouldApplyFilters && !getActiveSearchTerm();
+            applySearchAndRender();
+            lastQuickbaseLoadAt = Date.now();
+            if (typeof updateDataFreshnessBadge === 'function') updateDataFreshnessBadge(true);
+            renderTabBar();
+            console.info(`[Quickbase] cache hit (${state.baseRecords.length} records) in ${Math.round(performance.now() - startedAt)}ms`);
+            return;
+          }
+          const requestPayload = {
+            bust: Date.now(),
+            limit: requestLimit,
+            qid: activeQid || '',
+            tableId: activeTableId,
+            realm: activeRealm
+          };
+          if (!requestPayload.qid || !requestPayload.tableId || !requestPayload.realm) {
+            state.allAvailableFields = [];
+            state.baseRecords = [];
+            state.rawPayload = { columns: [], records: [] };
+            state.currentPayload = { columns: [], records: [] };
+            renderColumnGrid();
+            renderFilters();
+            applySearchAndRender();
+            lastQuickbaseLoadAt = Date.now();
+            return;
+          }
+          // FIX[GLOBAL-OVERRIDE]: When tab is not bypassed AND global QB has customColumns set,
+          // send empty customColumns [] so the server uses its global column config.
+          // This prevents stale old tab column configs (from before global QB was set up)
+          // from silently overriding the SA's global settings.
+          // When bypassed: always send the tab's own columns (personal report mode).
+          const _effectiveCustomCols = isTabBypassed
+            ? (Array.isArray(freshTabSettings.customColumns) ? freshTabSettings.customColumns : [])
+            : (Array.isArray(globalQbSettings.customColumns) && globalQbSettings.customColumns.length
+                ? []   // Non-bypass + global has columns → let server apply global (don't send stale tab cols)
+                : (Array.isArray(freshTabSettings.customColumns) ? freshTabSettings.customColumns : []));
+
+          const data = await window.QuickbaseAdapter.fetchMonitoringData({
+            ...requestPayload,
+            tab_id: activeTabId,
+            reportLink,
+            bypassGlobal: isTabBypassed,
+            customColumns: _effectiveCustomCols,
+            customFilters: mergedFilters,
+            filterMatch: tabFilterMatch,
+            search: ''
+          });
+
+          // ── STALE-RESPONSE GUARD ─────────────────────────────────────────
+          // If the user switched tabs while this fetch was in-flight, discard
+          // the response — it belongs to a different tab.
+          if (state._currentLoadToken !== thisLoadTabId) {
+            console.info('[Quickbase] discarding stale response for tab', thisLoadTabId, '(now on', state._currentLoadToken, ')');
+            return;
+          }
+
+          state.allAvailableFields = Array.isArray(data && data.allAvailableFields) ? data.allAvailableFields : [];
+          renderColumnGrid();
+          renderFilters();
+          const incomingColumns = Array.isArray(data && data.columns) ? data.columns : [];
+          const incomingRecords = Array.isArray(data && data.records) ? data.records : [];
+          state.baseRecords = incomingRecords.slice();
+          // Expose records globally so notification system can read them
+          window.__mumsQbRecords = {
+            records: state.baseRecords.slice(),
+            columns: incomingColumns.slice(),
+            loadedAt: Date.now()
+          };
+          try { window.dispatchEvent(new CustomEvent('mums:qb_records_loaded', { detail: window.__mumsQbRecords })); } catch(_) {}
+          state._loadedForTabId = thisLoadTabId;
+          if (thisLoadTabId) {
+            state._tabDataCache = Object.assign({}, state._tabDataCache || {}, {
+              [thisLoadTabId]: Object.assign({}, state._tabDataCache && state._tabDataCache[thisLoadTabId] || {}, {
+                cachedRows: incomingRecords.slice()
+              })
+            });
+          }
+          state.rawPayload = { columns: incomingColumns, records: state.baseRecords.slice() };
+          state.isDefaultReportMode = !shouldApplyFilters && !getActiveSearchTerm();
+          state.currentPage = 1;
+          applySearchAndRender();
+          if (typeof updateDataFreshnessBadge === 'function') updateDataFreshnessBadge(false);
+          renderTabBar();
+          writeQuickbaseCache(cacheKey, {
+            columns: incomingColumns,
+            records: state.baseRecords.slice(),
+            allAvailableFields: state.allAvailableFields
+          }, thisLoadTabId);
+          // BYPASS FIX: Progressive background fetch is DISABLED for bypass mode.
+          // Bypass tabs use POST /v1/reports/{id}/run (server-side) which already returns
+          // the complete report dataset in one call. The background fetch uses the old
+          // /v1/records/query path which ignores report filters → fetches 500 raw table
+          // records → merges them with correct 80 bypass records → corrupts the display.
+          // For global mode: progressive fetch still works as before (no change).
+          if (!isTabBypassed && requestLimit < QUICKBASE_BACKGROUND_LIMIT && !hasExplicitLoadMore && !hasActiveSearch) {
+            setTimeout(async () => {
+              try {
+                const bgData = await window.QuickbaseAdapter.fetchMonitoringData({
+                  ...requestPayload,
+                  tab_id: activeTabId,
+                  reportLink,
+                  bust: Date.now(),
+                  limit: QUICKBASE_BACKGROUND_LIMIT,
+                  customColumns: Array.isArray(freshTabSettings.customColumns) ? freshTabSettings.customColumns : [],
+                  customFilters: mergedFilters,
+                  filterMatch: tabFilterMatch,
+                  search: ''
+                });
+                const bgRecords = Array.isArray(bgData && bgData.records) ? bgData.records : [];
+                if (!bgRecords.length) return;
+                state.baseRecords = mergeRecordsById(state.baseRecords, bgRecords);
+                // Keep global QB records in sync after background merge
+                window.__mumsQbRecords = { records: state.baseRecords.slice(), columns: incomingColumns.slice(), loadedAt: Date.now() };
+                try { window.dispatchEvent(new CustomEvent('mums:qb_records_loaded', { detail: window.__mumsQbRecords })); } catch(_) {}
+                if (activeTabId) {
+                  state._tabDataCache = Object.assign({}, state._tabDataCache || {}, {
+                    [activeTabId]: Object.assign({}, state._tabDataCache && state._tabDataCache[activeTabId] || {}, {
+                      cachedRows: state.baseRecords.slice()
+                    })
+                  });
+                }
+                state.rawPayload = { columns: incomingColumns, records: state.baseRecords.slice() };
+                writeQuickbaseCache(cacheKey, {
+                  columns: incomingColumns,
+                  records: state.baseRecords.slice(),
+                  allAvailableFields: state.allAvailableFields
+                }, activeTabId);
+                applySearchAndRender();
+                console.info(`[Quickbase] progressive load merged ${bgRecords.length} records`);
+              } catch (_) {}
+            }, 0);
+          }
+          lastQuickbaseLoadAt = Date.now();
+          console.info(`[Quickbase] loaded ${state.baseRecords.length} records in ${Math.round(performance.now() - startedAt)}ms`);
+        } catch (err) {
+          if (meta) meta.textContent = 'Check Connection';
+          if (host) host.innerHTML = `<div class="small" style="padding:10px;color:#fecaca;">${esc(String(err && err.message || 'Unable to load Quickbase records'))}</div>`;
+          renderDashboardCounters(root, [], { dashboard_counters: [] }, state);
+        } finally {
+          quickbaseLoadInFlight = null;
+          if (reloadBtn) reloadBtn.disabled = false;
+        }
+      })();
+
+      return quickbaseLoadInFlight;
+    }
+
+    function applySearchAndRender() {
+      // ── TAB OWNERSHIP GUARD ─────────────────────────────────────────────
+      // Never render data from a different tab. _loadedForTabId tracks which
+      // tab's records are currently in state.baseRecords. If it doesn't match
+      // the active tab, skip rendering stale data.
+      const _renderForTabId = getActiveTabId();
+      if (state._loadedForTabId && state._loadedForTabId !== _renderForTabId) {
+        console.info('[Quickbase] applySearchAndRender skipped — data is for tab', state._loadedForTabId, 'but active is', _renderForTabId);
+        return;
+      }
+
+      const normalizedSearch = getActiveSearchTerm();
+      const activeCounter = state.activeCounterIndex >= 0 ? state.dashboardCounters[state.activeCounterIndex] : null;
+      state.searchTerm = normalizedSearch;
+
+      const activeTabId = _renderForTabId;
+      const freshTabSettings = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[activeTabId]
+        ? createDefaultSettings(state.quickbaseSettings.settingsByTabId[activeTabId], {})
+        : createDefaultSettings({}, {});
+
+      let filteredBase = Array.isArray(state.baseRecords) ? state.baseRecords : [];
+      if (Array.isArray(freshTabSettings.customFilters) && freshTabSettings.customFilters.length > 0) {
+        const filterMatch = normalizeFilterMatch(freshTabSettings.filterMatch);
+
+        // INCLUSION operators (EX, CT): same-field values → OR'd (record passes if it matches ANY value)
+        // EXCLUSION operators (XEX, XCT): each must individually pass → AND'd
+        // e.g. Status!=Resolved AND Status!=Bug — using some() here would be always-true
+        var CLIENT_INCLUSION_OPS = { EX: 1, CT: 1, SW: 1, TV: 1, BF: 1, AF: 1, LT: 1, LTE: 1, GT: 1, GTE: 1, IR: 1 };
+
+        var inclusionByField = new Map();
+        var exclusionFilters = [];
+        freshTabSettings.customFilters.forEach(function(filter) {
+          var fid = String(filter.fieldId || '').trim();
+          if (!fid) return;
+          var op = String(filter.operator || 'EX').trim().toUpperCase();
+          if (CLIENT_INCLUSION_OPS[op]) {
+            if (!inclusionByField.has(fid)) inclusionByField.set(fid, []);
+            inclusionByField.get(fid).push(filter);
+          } else {
+            exclusionFilters.push(filter);
+          }
+        });
+
+        function evalFilter(filter, record) {
+          var field = record && record.fields ? record.fields[String(filter.fieldId)] : null;
+          var sourceValue = String(field && field.value != null ? field.value : '').toLowerCase();
+          var matcherValue = String(filter.value || '').toLowerCase();
+          var op = String(filter.operator || 'EX').trim().toUpperCase();
+          if (op === 'XEX') return sourceValue !== matcherValue;
+          if (op === 'CT') return sourceValue.includes(matcherValue);
+          if (op === 'XCT') return !sourceValue.includes(matcherValue);
+          if (op === 'SW') return sourceValue.startsWith(matcherValue);
+          if (op === 'XSW') return !sourceValue.startsWith(matcherValue);
+          return sourceValue === matcherValue;
+        }
+
+        filteredBase = filteredBase.filter(function(record) {
+          if (filterMatch === 'ANY') {
+            // ANY mode: record passes if any single filter condition is true
+            return freshTabSettings.customFilters.some(function(f) { return evalFilter(f, record); });
+          } else {
+            // ALL mode, two-phase evaluation:
+            // Phase 1 — INCLUSION: each field group needs at least one match (OR within field)
+            var inclusionOk = Array.from(inclusionByField.entries()).every(function(entry) {
+              return entry[1].some(function(f) { return evalFilter(f, record); });
+            });
+            if (!inclusionOk) return false;
+            // Phase 2 — EXCLUSION: every exclusion must individually pass (AND'd)
+            return exclusionFilters.every(function(f) { return evalFilter(f, record); });
+          }
+        });
+      }
+
+      const basePayload = {
+        columns: Array.isArray(state.rawPayload && state.rawPayload.columns) ? state.rawPayload.columns : [],
+        records: filteredBase
+      };
+      const counterFilteredPayload = filterRecordsByCounter(basePayload, activeCounter);
+      state.currentPayload = normalizedSearch
+        ? filterRecordsBySearch(counterFilteredPayload, normalizedSearch)
+        : counterFilteredPayload;
+      // ── SORT BY CASE NOTES MOST-RECENT DATE (default for all users) ──────────
+      // Extracts the most recent [MON-DD-YY HH:MM] timestamp from each record's
+      // Case Notes field and sorts DESC (newest first). Records with no date sort last.
+      if (Array.isArray(state.currentPayload.records) && state.currentPayload.records.length > 1) {
+        const _caseNotesCol = (state.currentPayload.columns || []).find(c =>
+          ['case notes','notes'].includes(String(c && c.label || '').trim().toLowerCase())
+        );
+        if (_caseNotesCol) {
+          const _cnFid = String(_caseNotesCol.id);
+          state.currentPayload.records = state.currentPayload.records.slice().sort((a, b) => {
+            const ta = _caseNotesSortKey(a && a.fields && a.fields[_cnFid] ? String(a.fields[_cnFid].value || '') : '');
+            const tb = _caseNotesSortKey(b && b.fields && b.fields[_cnFid] ? String(b.fields[_cnFid].value || '') : '');
+            return tb - ta; // DESC — most recent first
+          });
+        }
+      }
+      // ── END SORT ─────────────────────────────────────────────────────────────
+
+      const totalRows = Array.isArray(state.currentPayload.records) ? state.currentPayload.records.length : 0;
+      const maxPage = Math.max(1, Math.ceil(totalRows / state.pageSize));
+      state.currentPage = Math.min(Math.max(state.currentPage, 1), maxPage);
+
+      // Virtual Column: load per-tab saved values for dropdown selections
+      const _vcActiveTabId = getActiveTabId();
+      const _vcSettings = state.virtualColumn && state.virtualColumn.enabled ? state.virtualColumn : null;
+      const _vcValues = _vcSettings ? _loadVcValues(_vcActiveTabId) : {};
+
+      // Pass current user's QB name so own case note entries get gray-glass highlight
+      renderRecords(root, state.currentPayload, {
+        myQbName: _userQbName,
+        userInitiatedSearch: !!getActiveUserSearched() && !!normalizedSearch.length,
+        page: state.currentPage,
+        pageSize: state.pageSize,
+        virtualColumnSettings: _vcSettings,
+        virtualColumnValues: _vcValues,
+        onVirtualColumnChange: (recordId, value) => {
+          const cur = _loadVcValues(_vcActiveTabId);
+          cur[recordId] = value;
+          _saveVcValues(_vcActiveTabId, cur);
+          // Re-render to apply conditional formatting instantly
+          applySearchAndRender();
+        },
+        onPageChange: (nextPage) => {
+          state.currentPage = nextPage;
+          applySearchAndRender();
+        }
+      });
+      renderDashboardCounters(root, state.baseRecords, { dashboard_counters: state.dashboardCounters }, state, (idx) => {
+        state.activeCounterIndex = state.activeCounterIndex === idx ? -1 : idx;
+        state.currentPage = 1;
+        applySearchAndRender();
+      });
+
+      // ── SEARCH SCOPE INDICATOR ────────────────────────────────────────────
+      // When a counter filter is active, show a scoped-search tag below the
+      // search input so the user knows the search operates on the filtered
+      // subset ONLY. Releasing the counter automatically resets the scope.
+      const _scopeTagEl   = root.querySelector('#qbSearchScopeTag');
+      const _searchInputEl = root.querySelector('#qbHeaderSearch');
+      if (activeCounter) {
+        const _cLabel       = String(activeCounter.label || activeCounter.value || 'Filter').trim();
+        const _cCount       = Array.isArray(counterFilteredPayload.records) ? counterFilteredPayload.records.length : 0;
+        const _cColor       = normalizeCounterColor(activeCounter.color);
+        const _colorMap     = { blue: '#60a5fa', green: '#4ade80', red: '#f87171', purple: '#c084fc', orange: '#fb923c', default: '#94a3b8' };
+        const _accentColor  = _colorMap[_cColor] || _colorMap.default;
+        if (_scopeTagEl) {
+          _scopeTagEl.innerHTML = `
+            <svg class="qb-scope-ico" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${_accentColor}" stroke-width="2.5" stroke-linecap="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            <span style="color:rgba(148,163,184,.75);">Scope:</span>
+            <span class="qb-scope-lbl" style="color:${_accentColor};" title="${esc(_cLabel)}">${esc(_cLabel)}</span>
+            <span class="qb-scope-count">&nbsp;(${_cCount} record${_cCount === 1 ? '' : 's'})</span>
+            <button class="qb-scope-dismiss" type="button" title="Clear counter filter" data-qb-scope-dismiss="1">×</button>
+          `;
+          _scopeTagEl.classList.add('is-visible');
+          _scopeTagEl.style.borderColor = `${_accentColor}44`;
+          _scopeTagEl.style.background  = `${_accentColor}12`;
+          // Bind dismiss — clears the counter filter without removing search text
+          const _dismissBtn = _scopeTagEl.querySelector('[data-qb-scope-dismiss]');
+          if (_dismissBtn) {
+            _dismissBtn.onclick = (e) => {
+              e.stopPropagation();
+              state.activeCounterIndex = -1;
+              state.currentPage = 1;
+              applySearchAndRender();
+            };
+          }
+        }
+        if (_searchInputEl) {
+          _searchInputEl.placeholder = `Search within "${_cLabel}"…`;
+          _searchInputEl.classList.add('qb-search-scoped');
+        }
+      } else {
+        if (_scopeTagEl) {
+          _scopeTagEl.classList.remove('is-visible');
+          _scopeTagEl.innerHTML = '';
+          _scopeTagEl.style.borderColor = '';
+          _scopeTagEl.style.background  = '';
+        }
+        if (_searchInputEl) {
+          _searchInputEl.placeholder = 'Search across active tab records…';
+          _searchInputEl.classList.remove('qb-search-scoped');
+        }
+      }
+    }
+
+    function setupAutoRefresh() {
+      if (quickbaseRefreshTimer) clearInterval(quickbaseRefreshTimer);
+      quickbaseRefreshTimer = setInterval(() => {
+        if (document.hidden) return;
+        // forceRefresh:true bypasses the 2-min cache so every tick fetches live data
+        loadQuickbaseData({ silent: true, forceRefresh: true });
+      }, AUTO_REFRESH_MS);
+
+      const onVisibilityChange = () => {
+        if (document.hidden) return;
+        const shouldRefresh = !lastQuickbaseLoadAt || (Date.now() - lastQuickbaseLoadAt) >= AUTO_REFRESH_MS;
+        if (shouldRefresh) loadQuickbaseData({ silent: true, forceRefresh: true });
+      };
+
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      window.addEventListener('focus', onVisibilityChange);
+
+      const prevCleanup = root._cleanup;
+      root._cleanup = () => {
+        try { if (prevCleanup) prevCleanup(); } catch (_) {}
+        try { cleanupModalBindings(); } catch (_) {}
+        try { if (quickbaseRefreshTimer) clearInterval(quickbaseRefreshTimer); } catch (_) {}
+        try { if (state.searchDebounceTimer) clearTimeout(state.searchDebounceTimer); } catch (_) {}
+        try { if (autosaveTimer) clearTimeout(autosaveTimer); } catch (_) {}
+        // Layer 3: Standard cleanup — clear inline layout styles and remove class.
+        // (Layers 1+2 already handled by MutationObserver the moment shell was removed.)
+        try { root.style.padding  = ''; } catch (_) {}
+        try { root.style.overflow = ''; } catch (_) {}
+        try { document.body.style.overflow = ''; } catch (_) {}
+        try { root.classList.remove('page-qb'); } catch (_) {}
+        try { if (_qbLayoutGuardObs) { _qbLayoutGuardObs.disconnect(); _qbLayoutGuardObs = null; } } catch (_) {}
+        quickbaseRefreshTimer = null;
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+        window.removeEventListener('focus', onVisibilityChange);
+      };
+    }
+
+    function openSettings() {
+      const currentTab = deepClone(getActiveTab() || {});
+      state.settingsEditingTabId = String(currentTab.id || getActiveTabId() || '').trim();
+      state.modalDraft = {
+        tabName: deepClone(currentTab.tabName) || '',
+        reportLink: deepClone(currentTab.reportLink) || '',
+        qid: deepClone(currentTab.qid) || '',
+        tableId: deepClone(currentTab.tableId) || '',
+        realm: deepClone(currentTab.realm) || '',
+        customColumns: deepClone(currentTab.customColumns || []),
+        customFilters: deepClone(currentTab.customFilters || []),
+        filterMatch: currentTab.filterMatch || 'ALL',
+        dashboard_counters: deepClone(currentTab.dashboard_counters || [])
+      };
+      syncSettingsInputsFromState();
+      renderColumnGrid();
+      renderFilters();
+      renderCounterFilters();
+      renderVirtualColumnSettings();
+      setSettingsModalView('report-config');
+      if (window.UI && UI.openModal) UI.openModal('qbSettingsModal');
+      bindColumnSearch();
+      bindFloatingDrag();
+      bindReportLinkAutoExtract();
+      bindVirtualColumnControls();
+      modalBindingsActive = true;
+      // Sync bypass UI state when opening settings modal
+      const _openTabId = state.settingsEditingTabId || getActiveTabId();
+      const _openTabSettings = createDefaultSettings((state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[_openTabId]) || {}, {});
+      const _isBypassed = !!_openTabSettings.bypassGlobal;
+      applyBypassUIState(_isBypassed);
+      syncBypassInputsFromState();
+
+      // TOKEN MASK FIX: Apply masked-dots or empty state on every modal open.
+      // Force-clear any browser autofill first, then re-apply correct visual state.
+      const _tokEl = root.querySelector('#qbBypassToken');
+      if (_tokEl) {
+        // Wipe any browser-autofilled value first
+        _tokEl.value = '';
+        _tokEl.removeAttribute('data-token-masked');
+        // Then apply the correct visual state (dots if saved, empty if not)
+        _applyTokenSavedUI(_tokEl);
+      }
+
+      // FIX[Bug2]: If reportLink is already configured, prefetch fields in realtime so
+      // Custom Columns, Filter Config, and Dashboard Counter dropdowns populate immediately
+      // without requiring the user to re-type or re-paste the link.
+      // FIX[QB-NameFilter]: Also check globalQbSettings.reportLink — members with a
+      // qb_name set never have a tab-level reportLink but global settings does.
+      const existingReportLink = String(
+        _isBypassed ? (_openTabSettings.reportLink || '') : (globalQbSettings.reportLink || state.reportLink || '')
+      ).trim();
+      if (existingReportLink && state.allAvailableFields.length === 0) {
+        refreshAvailableFieldsForActiveTab(state.settingsEditingTabId || getActiveTabId()).catch(() => {});
+      }
+    }
+
+    function closeSettings() {
+      if (state.isSaving) return;
+      state.settingsEditingTabId = '';
+      cleanupModalBindings();
+      if (window.UI && UI.closeModal) UI.closeModal('qbSettingsModal');
+    }
+
+    async function deleteTabAtIndex(tabIndex) {
+      const tabs = Array.isArray(state.quickbaseSettings && state.quickbaseSettings.tabs) ? state.quickbaseSettings.tabs : [];
+      if (tabs.length <= 1) {
+        if (window.UI && UI.toast) UI.toast('At least one tab must remain.', 'error');
+        return;
+      }
+      const idx = Number(tabIndex);
+      if (!Number.isFinite(idx) || idx < 0 || idx >= tabs.length) return;
+      const target = tabs[idx] || {};
+      const targetTabId = String(target.id || '').trim();
+      const isDeletingActiveTab = state.activeTabIndex === idx;
+      if (!targetTabId) return;
+
+      try {
+        if (tabManager) await tabManager.deleteTab(targetTabId);
+        delete state.quickbaseSettings.settingsByTabId[targetTabId];
+        if (state._tabDataCache && Object.prototype.hasOwnProperty.call(state._tabDataCache, targetTabId)) {
+          delete state._tabDataCache[targetTabId];
+        }
+        state.quickbaseSettings.tabs = tabs.filter((_, i) => i !== idx);
+        const nextLen = state.quickbaseSettings.tabs.length;
+        if (!nextLen) {
+          state.activeTabIndex = 0;
+        } else if (isDeletingActiveTab) {
+          state.activeTabIndex = 0;
+        } else if (state.activeTabIndex > idx) {
+          state.activeTabIndex = Math.max(0, state.activeTabIndex - 1);
+        }
+        state.activeTabIndex = Math.min(state.activeTabIndex, Math.max(0, nextLen - 1));
+        state.quickbaseSettings.activeTabIndex = state.activeTabIndex;
+        syncStateFromActiveTab();
+        syncSettingsInputsFromState();
+        queuePersistQuickbaseSettings();
+        await persistQuickbaseSettings();
+        renderTabBar();
+        renderColumnGrid();
+        renderFilters();
+        renderCounterFilters();
+        await loadQuickbaseData({ applyFilters: true, forceRefresh: true });
+        if (window.UI && UI.toast) UI.toast('Tab deleted successfully.');
+      } catch (err) {
+        if (window.UI && UI.toast) UI.toast('Failed to delete tab: ' + String(err && err.message || err), 'error');
+      }
+    }
+
+    async function renderDefaultReport() {
+      state.didInitialDefaultRender = true;
+      setActiveUserSearched(false);
+      setActiveSearchTerm('');
+      state.searchTerm = '';
+      return loadQuickbaseData({ applyFilters: true });
+    }
+
+    // STALE NAV GUARD: Re-check after all async setup is complete.
+    // Covers the case where navigation happened during state initialization.
+    if (!root.isConnected) return;
+
+    try {
+    root.querySelector('#qbOpenSettingsBtn').onclick = openSettings;
+
+    // ── QB CASE DETAIL MODAL CONTROLLER ──────────────────────────────────────
+    // Wired ONCE per page-load via a delegated 'click' listener on #qbDataBody.
+    // Survives every renderRecords() call without rebinding.
+    // Survives SPA re-navigation: window.Pages.my_quickbase() is called fresh,
+    // root.innerHTML is rebuilt, and this IIFE runs again capturing the new root.
+    // NO window-level flags (no __qbcdInited) — scope is entirely local.
+    (function _initQbCaseDetailModal() {
+      var _snaps = [];
+      var _idx   = 0;
+
+      function _field(snap, keys) {
+        if (!snap || !snap.fields || !snap.columnMap) return '';
+        var colId = Object.keys(snap.columnMap).find(function(id) {
+          return keys.some(function(k) { return (snap.columnMap[id] || '').toLowerCase().includes(k); });
+        });
+        if (!colId) return '';
+        var f = snap.fields[colId];
+        return f && f.value != null ? String(f.value) : '';
+      }
+
+      function _dur(val) {
+        var n = Number(val);
+        if (!isFinite(n) || n < 0) return String(val == null ? '' : val);
+        var d = Math.round(n / (1000 * 60 * 60 * 24));
+        if (d < 1) return '< 1 day';
+        return d + ' day' + (d === 1 ? '' : 's');
+      }
+
+      function _badge(s) {
+        var sl = (s || '').toLowerCase();
+        var cls = 'qb-status-default';
+        if      (sl.includes('investigating'))                               cls = 'qb-status-investigating';
+        else if (sl.includes('waiting'))                                     cls = 'qb-status-waiting';
+        else if (sl.includes('initial'))                                     cls = 'qb-status-initial';
+        else if (sl.includes('soft close') || sl.includes('soft-close'))    cls = 'qb-status-soft-close';
+        else if (sl.includes('response received') || sl.includes('for support')) cls = 'qb-status-response';
+        else if (sl.includes('closed') || sl.startsWith('c -'))             cls = 'qb-status-closed';
+        else if (sl.startsWith('s -'))                                       cls = 'qb-status-soft-close';
+        else if (sl.startsWith('o -'))                                       cls = 'qb-status-investigating';
+        var safe = String(s || '—').replace(/[&<>"']/g, function(c) {
+          return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+        });
+        return '<span class="qb-status-badge ' + cls + '"><span class="qb-status-dot"></span>' + safe + '</span>';
+      }
+
+      function _set(id, v)  { var el = document.getElementById(id); if (el) el.textContent = v; }
+      function _html(id, h) { var el = document.getElementById(id); if (el) el.innerHTML  = h; }
+
+      // Known field key groups — used to identify and map fixed KPI slots
+      // Each group = an array of label keywords (lowercase, partial match)
+      var _KNOWN_GROUPS = {
+        desc:    ['short description','description','concern','subject','title'],
+        assign:  ['assigned to','assigned','agent'],
+        contact: ['contact','full name','customer name'],
+        endUser: ['end user','client','account','customer'],
+        type:    ['type','category'],
+        status:  ['case status','status'],
+        age:     ['age'],
+        lastUpd: ['last update days','last update','update days'],
+        latest:  ['latest update','last comment','latest','update on the case'],
+        notes:   ['case notes','notes'],
+      };
+
+      // Escape HTML for dynamic sections
+      function _esc(v) {
+        return String(v == null ? '' : v)
+          .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+      }
+
+      // Find colId that matches ANY of the keyword groups
+      function _matchGroup(snap, keys) {
+        if (!snap || !snap.columnMap) return null;
+        return Object.keys(snap.columnMap).find(function(id) {
+          var lbl = (snap.columnMap[id] || '').toLowerCase();
+          return keys.some(function(k) { return lbl.includes(k); });
+        }) || null;
+      }
+
+      function _populate(snap) {
+        if (!snap) return;
+
+        // ── Resolve all known field colIds ──────────────────────────────────
+        var knownColIds = new Set();
+        var resolved = {};
+        Object.keys(_KNOWN_GROUPS).forEach(function(key) {
+          var colId = _matchGroup(snap, _KNOWN_GROUPS[key]);
+          resolved[key] = colId;
+          if (colId) knownColIds.add(colId);
+        });
+
+        function _val(key) {
+          var colId = resolved[key];
+          if (!colId) return '';
+          var f = snap.fields[colId];
+          return f && f.value != null ? String(f.value) : '';
+        }
+
+        // ── Fixed fields ─────────────────────────────────────────────────────
+        var caseId  = snap.recordId || '—';
+        var desc    = _val('desc')    || '—';
+        var assign  = _val('assign')  || '—';
+        var contact = _val('contact') || '—';
+        var endUser = _val('endUser') || '—';
+        var type    = _val('type')    || '—';
+        var status  = _val('status')  || '—';
+        var age     = _val('age');
+        var lastUpd = _val('lastUpd');
+        // Convert EST→PHT for all timestamp-bearing text fields
+        var latest  = _convertNotesESTtoPHT(_val('latest')  || '') || '—';
+        var notes   = _convertNotesESTtoPHT(_val('notes')   || '');
+
+        // ── Populate fixed DOM slots ─────────────────────────────────────────
+        _set('qbcdRowBadge',  snap.rowNum || '—');
+        _set('qbcdCaseId',    caseId);
+        _set('qbcdDesc',      desc);
+        _html('qbcdStatusBadge', _badge(status));
+        _set('qbcdMeta',      'Row ' + snap.rowNum + ' · ' + endUser);
+        _set('qbcdKpiAge',    age     ? _dur(age)     : '—');
+        _set('qbcdKpiLast',   lastUpd ? _dur(lastUpd) : '—');
+        _set('qbcdKpiType',   type);
+        _set('qbcdKpiEndUser',endUser);
+        _set('qbcdAssigned',  assign);
+        _set('qbcdContact',   contact);
+        _set('qbcdEndUser',   endUser);
+        _set('qbcdCaseId2',   caseId);
+        _set('qbcdType2',     type);
+        _html('qbcdStatus2',  _badge(status));
+        _set('qbcdLatest',    latest);
+
+        // ── Case Notes slot (dedicated) ───────────────────────────────────────
+        var notesBlock = document.getElementById('qbcdNotesBlock');
+        if (notes && notes !== 'N/A') {
+          _set('qbcdNotes', notes);
+          if (notesBlock) notesBlock.style.display = '';
+        } else {
+          if (notesBlock) notesBlock.style.display = 'none';
+        }
+
+        // ── DYNAMIC EXTRA FIELDS ──────────────────────────────────────────────
+        // Render any columns that are NOT in the known groups above
+        var extraContainer = document.getElementById('qbcdExtraFields');
+        if (extraContainer && snap.columnMap) {
+          var extraCols = Object.keys(snap.columnMap).filter(function(id) {
+            return !knownColIds.has(id);
+          });
+          if (extraCols.length) {
+            var extraHtml = extraCols.map(function(colId) {
+              var label = snap.columnMap[colId] || ('Field #' + colId);
+              var f     = snap.fields[colId];
+              var val   = (f && f.value != null) ? String(f.value) : '—';
+              if (!val || val === 'N/A') return '';
+              return '<div class="qbcd-kv">' +
+                '<span class="qbcd-kv-lbl">' + _esc(label) + '</span>' +
+                '<span class="qbcd-kv-val">' + _esc(val)   + '</span>' +
+              '</div>';
+            }).filter(Boolean).join('');
+            extraContainer.innerHTML = extraHtml || '';
+            var extraBlock = document.getElementById('qbcdExtraBlock');
+            if (extraBlock) extraBlock.style.display = extraHtml ? '' : 'none';
+          } else {
+            var extraBlock2 = document.getElementById('qbcdExtraBlock');
+            if (extraBlock2) extraBlock2.style.display = 'none';
+          }
+        }
+
+        // ── Nav position ─────────────────────────────────────────────────────
+        var posEl   = document.getElementById('qbcdPos');
+        var prevBtn = document.getElementById('qbcdPrevBtn');
+        var nextBtn = document.getElementById('qbcdNextBtn');
+        if (posEl)   posEl.textContent = (_idx + 1) + ' of ' + _snaps.length;
+        if (prevBtn) prevBtn.disabled  = _idx <= 0;
+        if (nextBtn) nextBtn.disabled  = _idx >= _snaps.length - 1;
+      }
+
+      function _nav(dir) {
+        var next = _idx + dir;
+        if (next < 0 || next >= _snaps.length) return;
+        _idx = next;
+        _populate(_snaps[_idx]);
+      }
+
+      function _close() {
+        var m = document.getElementById('qbCaseDetailModal');
+        if (!m) return;
+        m.classList.remove('open');
+        m.removeAttribute('style');
+        try { if (!document.querySelector('.modal.open')) document.body.classList.remove('modal-open'); } catch(ee) {}
+      }
+
+      function _open(snap, allSnaps) {
+        _snaps = Array.isArray(allSnaps) ? allSnaps : [snap];
+        _idx   = _snaps.findIndex(function(s) { return s && s.rowNum === snap.rowNum; });
+        if (_idx < 0) _idx = 0;
+        _populate(snap);
+        var m = document.getElementById('qbCaseDetailModal');
+        if (!m) { return; }
+        // Direct DOM manipulation — no dependency on UI.openModal
+        // Clear all inline styles that could block visibility
+        m.removeAttribute('style');
+        // Force display before adding open class
+        m.style.cssText = 'display:flex!important;position:fixed!important;inset:0!important;' +
+          'z-index:2147483647!important;align-items:center!important;justify-content:center!important;' +
+          'background:rgba(6,12,24,.88)!important;padding:16px!important;box-sizing:border-box!important;';
+        m.classList.add('open');
+        try { document.body.classList.add('modal-open'); } catch(ee) {}
+        // Re-append to body to escape any stacking context
+        if (m.parentElement !== document.body) document.body.appendChild(m);
+      }
+
+      // Expose _open on root so renderRecords can call it directly (belt+suspenders)
+      // root is per-page-load (not window), so this resets cleanly on SPA re-navigation
+      root._qbcdOpen = _open;
+      function openCaseDetailModal(payload) {
+        payload = payload || {};
+        var host = root.querySelector('#qbDataBody');
+        var snaps = host && Array.isArray(host._qbRowSnaps) ? host._qbRowSnaps : [];
+        if (!snaps.length) return;
+        var rid = String(payload.qbRecordId || payload.recordId || '');
+        var snap = rid
+          ? snaps.find(function(s) { return s && String(s.recordId) === rid; })
+          : null;
+        if (!snap) snap = snaps[0];
+        if (!snap) return;
+        _open(snap, snaps);
+      }
+      root._qbcdOpenCaseDetailModal = openCaseDetailModal;
+      window.MQ = window.MQ || {};
+      window.MQ.openCaseDetailModal = openCaseDetailModal;
+
+      // Wire modal's own buttons (close, prev, next, copy, backdrop)
+      var _modal = document.getElementById('qbCaseDetailModal');
+      if (_modal) {
+        [
+          { id: 'qbcdCloseBtn',  fn: _close },
+          { id: 'qbcdCloseBtn2', fn: _close },
+          { id: 'qbcdPrevBtn',   fn: function() { _nav(-1); } },
+          { id: 'qbcdNextBtn',   fn: function() { _nav(1);  } },
+        ].forEach(function(item) {
+          var el = document.getElementById(item.id);
+          if (el) el.addEventListener('click', item.fn);
+        });
+        var _copyBtn = document.getElementById('qbcdCopyBtn');
+        if (_copyBtn) {
+          _copyBtn.addEventListener('click', function() {
+            var id = (document.getElementById('qbcdCaseId') || {}).textContent || '';
+            if (!id || id === '—') return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(id).then(function() {
+                _copyBtn.textContent = 'Copied!';
+                setTimeout(function() { _copyBtn.textContent = 'Copy Case #'; }, 1800);
+              }).catch(function() {});
+            }
+          });
+        }
+        // Backdrop click
+        _modal.addEventListener('mousedown', function(e) {
+          if (e.target === _modal) _close();
+        });
+      }
+
+      // Keyboard: Escape / ArrowLeft / ArrowRight
+      document.addEventListener('keydown', function(e) {
+        var m = document.getElementById('qbCaseDetailModal');
+        if (!m || !m.classList.contains('open')) return;
+        if      (e.key === 'Escape')     _close();
+        else if (e.key === 'ArrowLeft')  _nav(-1);
+        else if (e.key === 'ArrowRight') _nav(1);
+      });
+
+      // ── Single delegated listener on #qbDataBody ──────────────────────────
+      // Handles ALL .qb-row-detail-btn clicks regardless of re-renders.
+      var _dataBody = root.querySelector('#qbDataBody');
+      if (_dataBody) {
+        _dataBody.addEventListener('click', function(e) {
+          // Walk up from click target to find .qb-row-detail-btn
+          var btn = null;
+          var t = e.target;
+          while (t && t !== _dataBody) {
+            if (t.classList && t.classList.contains('qb-row-detail-btn')) { btn = t; break; }
+            t = t.parentElement;
+          }
+          if (!btn) return;
+          e.stopPropagation();
+          // Use index-based lookup from host._qbRowSnaps (no JSON parse)
+          var host = _dataBody;
+          var snaps = host._qbRowSnaps || [];
+          var idx = parseInt(btn.getAttribute('data-qb-snap-idx'), 10);
+          if (isNaN(idx) || !snaps[idx]) return;
+          _open(snaps[idx], snaps);
+        });
+      }
+    })();
+    // ── END _initQbCaseDetailModal ────────────────────────────────────────────
+    root.querySelector('#qbCloseSettingsBtn').onclick = closeSettings;
+    root.querySelector('#qbCancelSettingsBtn').onclick = closeSettings;
+    root.querySelector('#qbSettingsModal').addEventListener('mousedown', (event) => {
+      if (state.isSaving) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (event.target && event.target.id === 'qbSettingsModal') cleanupModalBindings();
+    });
+    root.querySelector('#qbReloadBtn').onclick = () => loadQuickbaseData({ applyFilters: true });
+
+    // ── BYPASS TOGGLE LOGIC ───────────────────────────────────────────────────
+    // Controls per-tab bypass of Global QB Settings.
+    // When ON: shows Report Config tab, allows personal reportLink + qb_token.
+    // Isolation: each tab stores its own bypassGlobal flag independently.
+
+    function getActiveTabBypassState() {
+      const tabId = getActiveTabId();
+      const s = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId];
+      return !!(s && s.bypassGlobal);
+    }
+
+    function applyBypassUIState(isBypassed) {
+      const toggle = root.querySelector('#qbBypassToggle');
+      const reportConfigTab = root.querySelector('#qbTabReportConfig');
+      const bypassOnlyEls = root.querySelectorAll('.qb-bypass-only');
+      if (toggle) toggle.checked = !!isBypassed;
+      bypassOnlyEls.forEach(el => { el.style.display = isBypassed ? '' : 'none'; });
+      if (reportConfigTab) {
+        reportConfigTab.style.display = isBypassed ? '' : 'none';
+      }
+      // If bypass just turned on, auto-switch to Report Config tab
+      if (isBypassed) {
+        const currentView = state.settingsModalView;
+        if (currentView !== 'report-config') setSettingsModalView('report-config');
+      } else {
+        // If bypass turned off while on report-config, switch to custom-columns
+        if (state.settingsModalView === 'report-config') setSettingsModalView('custom-columns');
+      }
+    }
+
+    // Sentinel value used internally to mark "token is saved in DB".
+    // This is NEVER sent to the server — it's stripped in the save handler.
+    // Its only purpose is to show the password dots so users see the token is saved.
+    const _QB_TOKEN_SAVED_SENTINEL = '__QB_TOKEN_SAVED__';
+
+    function _applyTokenSavedUI(tokEl) {
+      if (!tokEl) return;
+      const _hasRealToken = !!(profile && (profile.qb_token_set || String(profile.qb_token || '').trim()));
+      if (_hasRealToken) {
+        // Show masked dots so user clearly sees a token is stored
+        tokEl.value = _QB_TOKEN_SAVED_SENTINEL;
+        tokEl.placeholder = '';
+        tokEl.setAttribute('data-token-masked', '1');
+        // On focus: clear so user can type a new token
+        if (!tokEl._maskFocusBound) {
+          tokEl._maskFocusBound = true;
+          tokEl.addEventListener('focus', function _clearOnFocus() {
+            if (tokEl.value === _QB_TOKEN_SAVED_SENTINEL) {
+              tokEl.value = '';
+              tokEl.removeAttribute('data-token-masked');
+            }
+          });
+          tokEl.addEventListener('blur', function _restoreOnBlur() {
+            if (tokEl.value === '') {
+              const _stillHasToken = !!(profile && (profile.qb_token_set || String(profile.qb_token || '').trim()));
+              if (_stillHasToken) {
+                tokEl.value = _QB_TOKEN_SAVED_SENTINEL;
+                tokEl.setAttribute('data-token-masked', '1');
+              }
+            }
+          });
+        }
+      } else {
+        tokEl.value = '';
+        tokEl.placeholder = 'Enter your personal QB User Token';
+        tokEl.removeAttribute('data-token-masked');
+      }
+    }
+
+    function syncBypassInputsFromState() {
+      const tabId = getActiveTabId();
+      const s = createDefaultSettings((state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]) || {}, {});
+      const rlEl = root.querySelector('#qbBypassReportLink');
+      const realmEl = root.querySelector('#qbBypassRealm');
+      const tableEl = root.querySelector('#qbBypassTableId');
+      const qidEl = root.querySelector('#qbBypassQid');
+      if (rlEl) rlEl.value = s.reportLink || '';
+      if (realmEl) realmEl.value = s.realm || '';
+      if (tableEl) tableEl.value = s.tableId || '';
+      if (qidEl) qidEl.value = s.qid || '';
+      // TOKEN MASK FIX: Show masked dots (password field filled) when token is saved in DB.
+      // Empty field = confusing to users ("did my token save?"). Filled dots = clear confirmation.
+      // The sentinel value is stripped before any save — never reaches the server.
+      _applyTokenSavedUI(root.querySelector('#qbBypassToken'));
+    }
+
+    // Wire bypass toggle
+    const bypassToggle = root.querySelector('#qbBypassToggle');
+    if (bypassToggle) {
+      bypassToggle.addEventListener('change', () => {
+        const tabId = getActiveTabId();
+        const isBypassed = bypassToggle.checked;
+        // Update state for this tab only
+        const prev = createDefaultSettings((state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]) || {}, {});
+        const next = Object.assign({}, prev, { bypassGlobal: isBypassed });
+        state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, { [tabId]: next });
+        applyBypassUIState(isBypassed);
+        syncBypassInputsFromState();
+        queuePersistQuickbaseSettings();
+      });
+    }
+
+    // Wire bypass Report Link auto-extract
+    const bypassRLInput = root.querySelector('#qbBypassReportLink');
+    if (bypassRLInput) {
+      bypassRLInput.addEventListener('input', () => {
+        const tabId = getActiveTabId();
+        const link = bypassRLInput.value.trim();
+        const parsed = parseQuickbaseLink(link);
+        const realmEl = root.querySelector('#qbBypassRealm');
+        const tableEl = root.querySelector('#qbBypassTableId');
+        const qidEl = root.querySelector('#qbBypassQid');
+        if (realmEl) realmEl.value = parsed.realm || '';
+        if (tableEl) tableEl.value = parsed.tableId || '';
+        if (qidEl) qidEl.value = parsed.qid || '';
+        // Update tab settings with parsed values
+        const prev = createDefaultSettings((state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[tabId]) || {}, {});
+        const next = Object.assign({}, prev, {
+          bypassGlobal: true,
+          reportLink: link,
+          realm: parsed.realm || prev.realm,
+          tableId: parsed.tableId || prev.tableId,
+          qid: parsed.qid || prev.qid
+        });
+        state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, { [tabId]: next });
+      });
+    }
+
+    // ── FORCE REFRESH "ACTIVE" BUTTON — wired once ──────────────────────────
+    // Manual force-fetch from Quickbase. Bypasses the 300s auto-refresh.
+    // Use case: user needs latest data immediately without waiting for next cycle.
+    // Behavior:
+    //   1. Kills any in-flight request (same as cache badge)
+    //   2. Clears ALL tab caches (not just active tab)
+    //   3. Triggers live fetch: forceRefresh:true + applyFilters:true
+    //   4. Button shows spinning animation + "Fetching…" label while loading
+    //   5. Reverts to "Active" with pulse animation on success
+    const _forceRefreshBtn = root.querySelector('#qbForceRefreshBtn');
+    const _forceRefreshIcon = root.querySelector('#qbForceRefreshIcon');
+    const _forceRefreshLabel = root.querySelector('#qbForceRefreshLabel');
+    let _forceRefreshCooldown = false;
+
+    if (_forceRefreshBtn) {
+      _forceRefreshBtn.addEventListener('click', async () => {
+        if (_forceRefreshCooldown) return;
+        _forceRefreshCooldown = true;
+
+        // Visual: spinning state
+        _forceRefreshBtn.classList.add('qb-force-fetching');
+        if (_forceRefreshIcon) _forceRefreshIcon.classList.add('qb-spin');
+        if (_forceRefreshLabel) _forceRefreshLabel.textContent = 'Fetching…';
+        _forceRefreshBtn.disabled = true;
+
+        try {
+          // Kill inflight + clear ALL caches across all tabs
+          quickbaseLoadInFlight = null;
+          if (state.qbCache) { Object.keys(state.qbCache).forEach(k => { delete state.qbCache[k]; }); }
+          if (state._tabDataCache) { Object.keys(state._tabDataCache).forEach(k => { delete state._tabDataCache[k]; }); }
+
+          await loadQuickbaseData({ forceRefresh: true, applyFilters: true, silent: false });
+
+          // Visual: success pulse
+          _forceRefreshBtn.classList.remove('qb-force-fetching');
+          _forceRefreshBtn.classList.add('qb-force-success');
+          if (_forceRefreshIcon) _forceRefreshIcon.classList.remove('qb-spin');
+          if (_forceRefreshLabel) _forceRefreshLabel.textContent = 'Active';
+          setTimeout(() => { _forceRefreshBtn.classList.remove('qb-force-success'); }, 1500);
+        } catch (_) {
+          _forceRefreshBtn.classList.remove('qb-force-fetching');
+          if (_forceRefreshIcon) _forceRefreshIcon.classList.remove('qb-spin');
+          if (_forceRefreshLabel) _forceRefreshLabel.textContent = 'Active';
+        } finally {
+          _forceRefreshBtn.disabled = false;
+          // 10s cooldown — prevent spam clicking
+          setTimeout(() => { _forceRefreshCooldown = false; }, 10000);
+        }
+      });
+    }
+
+    // ── CACHE BADGE CLICK — wired once, permanent. ─────────────────────────
+    // Cannot use onclick set inside updateDataFreshnessBadge because the
+    // quickbaseLoadInFlight guard silently blocks re-entry. Fix: kill the
+    // inflight reference first, then call forceRefresh.
+    const _cacheBadgeBtn = root.querySelector('#qbCacheBadge');
+    if (_cacheBadgeBtn) {
+      _cacheBadgeBtn.addEventListener('click', () => {
+        // Kill any in-flight promise so the guard doesn't block us
+        quickbaseLoadInFlight = null;
+        // Clear all QB cache entries for the active tab
+        const _tabId = getActiveTabId();
+        if (state.qbCache) {
+          Object.keys(state.qbCache).forEach(k => { delete state.qbCache[k]; });
+        }
+        if (state._tabDataCache && _tabId) {
+          delete state._tabDataCache[_tabId];
+        }
+        loadQuickbaseData({ forceRefresh: true, silent: false });
+      });
+    }
+    root.querySelector('#qbSettingsModal').addEventListener('click', (event) => {
+      const target = event.target;
+      if (!target || !(target instanceof HTMLElement)) return;
+      const tabBtn = target.closest('[data-qb-settings-tab]');
+      if (!tabBtn) return;
+      const nextView = String(tabBtn.getAttribute('data-qb-settings-tab') || '').trim();
+      if (!nextView) return;
+      setSettingsModalView(nextView);
+    });
+    root.querySelector('#qbTabBar').oncontextmenu = async (event) => {
+      const target = event.target;
+      if (!target || !(target instanceof HTMLElement)) return;
+      const tabBtn = target.closest('[data-tab-idx]');
+      if (!tabBtn) return;
+      event.preventDefault();
+      const idx = Number(tabBtn.getAttribute('data-tab-idx'));
+      if (!Number.isFinite(idx)) return;
+      const tabs = Array.isArray(state.quickbaseSettings && state.quickbaseSettings.tabs) ? state.quickbaseSettings.tabs : [];
+      const tab = tabs[idx] || {};
+      const label = String(tab.tabName || `Report ${idx + 1}`);
+      const confirmed = window.confirm(`Delete tab "${label}"? This cannot be undone.`);
+      if (!confirmed) return;
+      await deleteTabAtIndex(idx);
+    };
+
+    root.querySelector('#qbTabBar').onclick = async (event) => {
+      const target = event.target;
+      if (!target || !(target instanceof HTMLElement)) return;
+      if (target.id === 'qbAddTabBtn') {
+        // Only capture modal inputs when modal is actually open
+        const isModalOpenForAdd = (() => {
+          const modal = root.querySelector('#qbSettingsModal');
+          if (!modal) return false;
+          const display = modal.style.display;
+          return display === 'flex' || display === 'block';
+        })();
+        if (isModalOpenForAdd) captureSettingsDraftFromInputs();
+        // Reset inflight before new tab load
+        quickbaseLoadInFlight = null;
+        const managedTabId = tabManager ? tabManager.createTab({ tabName: 'New Report' }) : '';
+        // ISOLATION: always create a fresh empty settings object — never inherit from any other tab
+        const newTabId = managedTabId || generateUUID();
+        const newTab = {
+          id: newTabId,
+          tabName: 'New Report',
+          reportLink: '',
+          qid: '',
+          tableId: '',
+          realm: '',
+          dashboard_counters: [],
+          customColumns: [],
+          customFilters: [],
+          filterMatch: 'ALL'
+        };
+        // ISOLATION: new tab settings are a standalone empty object — deepClone to prevent reference sharing
+        const newTabSettings = deepClone(createDefaultSettings({}, {}));
+        state.quickbaseSettings.tabs.push(deepClone(newTab));
+        state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, {
+          [newTabId]: newTabSettings
+        });
+        state.activeTabIndex = state.quickbaseSettings.tabs.length - 1;
+        if (tabManager) {
+          tabManager.clearNewTabFields();
+          syncTabManagerFromState(newTabId);
+        }
+        state.modalDraft = deepClone(Object.assign({}, newTab, state.quickbaseSettings.settingsByTabId[newTabId])) || buildDefaultTab();
+        syncStateFromActiveTab();
+        syncSettingsInputsFromState();
+        queuePersistQuickbaseSettings();
+        renderTabBar();
+        renderColumnGrid();
+        renderFilters();
+        renderCounterFilters();
+        try {
+          await persistQuickbaseSettings();
+          await loadQuickbaseData({ applyFilters: true });
+          if (window.UI && UI.toast) UI.toast('New tab added and synced.');
+        } catch (err) {
+          if (window.UI && UI.toast) UI.toast('Failed to add tab: ' + String(err && err.message || err), 'error');
+        }
+        return;
+      }
+      const idx = Number(target.getAttribute('data-tab-idx'));
+      if (!Number.isFinite(idx) || idx === state.activeTabIndex) return;
+
+      // FIX[TabSwitch-1]: Only capture modal inputs when the modal is actually OPEN.
+      // Calling captureSettingsDraftFromInputs() when modal is closed reads stale DOM
+      // values and overwrites the current tab's settings with garbage.
+      const isModalOpen = (() => {
+        const modal = root.querySelector('#qbSettingsModal');
+        if (!modal) return false;
+        const display = modal.style.display;
+        return display === 'flex' || display === 'block';
+      })();
+      if (isModalOpen) captureSettingsDraftFromInputs();
+
+      // FIX[TabSwitch-2]: Cancel any inflight request for the previous tab.
+      // If we don't reset this, loadQuickbaseData returns the old promise which
+      // renders the WRONG tab's data, leaving the new tab stuck on "Loading...".
+      quickbaseLoadInFlight = null;
+      // Clear tab data ownership so applySearchAndRender doesn't block the new tab's load
+      state._loadedForTabId = null;
+
+      // ISOLATION: clear stale data from previous tab before switching
+      state.allAvailableFields = [];
+      state.baseRecords = [];
+      state.rawPayload = { columns: [], records: [] };
+      state.currentPayload = { columns: [], records: [] };
+      state.currentPage = 1;
+      state.activeCounterIndex = -1;
+
+      renderEmptyState(root, 'Loading records for selected tab...');
+      renderDashboardCounters(root, [], { dashboard_counters: [] }, state);
+
+      // Switch to the new tab index
+      state.activeTabIndex = idx;
+      state.quickbaseSettings.activeTabIndex = idx;
+
+      // FIX[TabSwitch-3]: syncStateFromActiveTab() reads directly from
+      // state.quickbaseSettings.settingsByTabId which is the authoritative source.
+      // Do NOT override state with tabManager.getTab() after this — TabManager is
+      // a secondary cache and may return empty defaults if the tab was not seeded.
+      syncStateFromActiveTab();
+
+      // ── FIX BUG 2: Render dashboard counters immediately after sync ──────
+      // Counters are stored in state.dashboardCounters after syncStateFromActiveTab().
+      // We render them right away so they appear even before records finish loading.
+      // Pass baseRecords from cache (may be empty if no cache — that's OK, count = 0).
+      renderDashboardCounters(root, state.baseRecords, { dashboard_counters: state.dashboardCounters }, state, (idx) => {
+        state.activeCounterIndex = state.activeCounterIndex === idx ? -1 : idx;
+        state.currentPage = 1;
+        applySearchAndRender();
+      });
+
+      // SMART LOADING: if fresh cache exists for this tab, render immediately
+      // without showing a loading spinner. Only show loading if no cache.
+      const switchTabId = getActiveTabId();
+      const switchTabSettings = state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[switchTabId]
+        ? createDefaultSettings(state.quickbaseSettings.settingsByTabId[switchTabId], {})
+        : createDefaultSettings({}, {});
+      const switchParsed = parseQuickbaseLink(String(switchTabSettings.reportLink || ''));
+      const switchCacheKey = getQuickbaseCacheKey({
+        tabId: switchTabId,
+        tableId: String(switchTabSettings.tableId || switchParsed.tableId || '').trim(),
+        qid: String(switchTabSettings.qid || switchParsed.qid || '').trim(),
+        filters: normalizeFilters(switchTabSettings.customFilters || []),
+        filterMatch: normalizeFilterMatch(switchTabSettings.filterMatch || 'ALL')
+      });
+      const switchCacheHit = readQuickbaseCache(switchCacheKey, switchTabId);
+      if (!switchCacheHit) {
+        // No cache — show loading placeholder
+        renderEmptyState(root, 'Loading records for selected tab…');
+        renderDashboardCounters(root, [], { dashboard_counters: [] }, state);
+      }
+      // If cache hit — leave the previous content visible during load (smooth transition)
+
+      const newActiveTabId = getActiveTabId();
+      // FIX[TabName]: Do NOT overwrite settingsEditingTabId when settings modal is open.
+      // If user clicks a QB tab WHILE editing settings, the modal is still editing the
+      // ORIGINAL tab. Overwriting settingsEditingTabId causes Save to write tabName
+      // to the WRONG tab, silently discarding the rename.
+      if (!_isSettingsModalOpen()) {
+        state.settingsEditingTabId = newActiveTabId;
+        state.modalDraft = deepClone(getActiveTab()) || buildDefaultTab();
+      }
+
+      syncSettingsInputsFromState();
+      queuePersistQuickbaseSettings();
+      renderTabBar();
+      renderColumnGrid();
+      renderFilters();
+      renderCounterFilters();
+      await loadQuickbaseData({ applyFilters: true });
+    };
+    root.querySelector('#qbAddFilterBtn').onclick = () => {
+      state.customFilters.push({ fieldId: '', operator: 'EX', value: '' });
+      syncActiveTabFromState();
+      queuePersistQuickbaseSettings();
+      renderFilters();
+    };
+    root.querySelector('#qbAddCounterBtn').onclick = () => {
+      state.dashboardCounters.push({ fieldId: '', operator: 'EX', value: '', label: '', color: 'default' });
+      syncActiveTabFromState();
+      queuePersistQuickbaseSettings();
+      renderCounterFilters();
+    };
+
+
+    const headerSearch = root.querySelector('#qbHeaderSearch');
+    if (headerSearch) {
+      headerSearch.value = getActiveSearchTerm();
+      state.searchTerm = getActiveSearchTerm();
+      headerSearch.oninput = () => {
+        const nextValue = String(headerSearch.value || '').trim();
+        setActiveSearchTerm(nextValue);
+        setActiveUserSearched(nextValue.length > 0);
+        state.searchTerm = nextValue;
+        state.hasUserSearched = nextValue.length > 0;
+        if (state.searchDebounceTimer) clearTimeout(state.searchDebounceTimer);
+        state.searchDebounceTimer = setTimeout(() => {
+          applySearchAndRender();
+        }, 500);
+      };
+    }
+
+    const exportBtn = root.querySelector('#qbExportCsvBtn');
+    if (exportBtn) {
+      exportBtn.onclick = () => {
+        const rows = state.currentPayload && Array.isArray(state.currentPayload.records) ? state.currentPayload.records : [];
+        const columns = state.currentPayload && Array.isArray(state.currentPayload.columns) ? state.currentPayload.columns : [];
+        const csv = rowsToCsv(rows, columns);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'my_quickbase_export.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      };
+    }
+
+    const saveBtn = root.querySelector('#qbSaveSettingsBtn');
+    const saveLock = root.querySelector('#qbSettingsSavingLock');
+    saveBtn.onclick = async () => {
+      if (!me) return;
+      const tabSnapshot = scrapeModalTabSnapshot();
+      // FIX[TabName]: Use settingsEditingTabId as the authoritative source for which tab
+      // is being edited. state.activeTabIndex can change if user clicks another tab
+      // while the settings modal is open — that must NOT redirect the save to the wrong tab.
+      const _editingTabId = String(state.settingsEditingTabId || getActiveTabId() || '').trim();
+      const activeIdx = state.quickbaseSettings.tabs.findIndex(
+        (t) => String(t && t.id || '').trim() === _editingTabId
+      );
+      const safeActiveIdx = activeIdx >= 0 ? activeIdx : Number(state.activeTabIndex || 0);
+      const saveTabId = _editingTabId || String(getActiveTabId() || '').trim();
+
+      // ── BYPASS: Read bypass toggle + personal config inputs ─────────────
+      const bypassToggleEl = root.querySelector('#qbBypassToggle');
+      const isBypass = !!(bypassToggleEl && bypassToggleEl.checked);
+      const bypassRL   = String((root.querySelector('#qbBypassReportLink') || {}).value || '').trim();
+      const bypassTokEl = root.querySelector('#qbBypassToken');
+      // SENTINEL STRIP: If value is the masked-dots sentinel, treat as empty (no new token entered).
+      // The sentinel is only a visual indicator — it must NEVER be sent to the server.
+      const _rawTokVal = String((bypassTokEl && bypassTokEl.value) || '').trim();
+      const bypassTok  = (_rawTokVal === _QB_TOKEN_SAVED_SENTINEL) ? '' : _rawTokVal;
+
+      // If bypass ON, merge personal report config into snapshot
+      if (isBypass && bypassRL) {
+        const parsedBypass = parseQuickbaseLink(bypassRL);
+        tabSnapshot.reportLink = bypassRL;
+        tabSnapshot.realm      = parsedBypass.realm || tabSnapshot.realm;
+        tabSnapshot.tableId    = parsedBypass.tableId || tabSnapshot.tableId;
+        tabSnapshot.qid        = parsedBypass.qid || tabSnapshot.qid;
+      }
+      // Always carry bypassGlobal flag in the tab snapshot
+      tabSnapshot.bypassGlobal = isBypass;
+
+      if (Array.isArray(state.quickbaseSettings.tabs) && state.quickbaseSettings.tabs[safeActiveIdx]) {
+        state.quickbaseSettings.tabs[safeActiveIdx] = deepClone({
+          ...state.quickbaseSettings.tabs[safeActiveIdx],
+          ...tabSnapshot
+        });
+      }
+      const activeTabId = saveTabId;
+      if (activeTabId) {
+        state.quickbaseSettings.settingsByTabId = state.quickbaseSettings.settingsByTabId || {};
+        const prevTabSettings = createDefaultSettings(state.quickbaseSettings.settingsByTabId[activeTabId] || {}, {});
+        const _newBypassRL = (isBypass && bypassRL) ? bypassRL : (tabSnapshot.reportLink || prevTabSettings.reportLink || '');
+        const _newParsed   = parseQuickbaseLink(_newBypassRL);
+        state.quickbaseSettings.settingsByTabId[activeTabId] = createDefaultSettings({
+          ...prevTabSettings,
+          ...tabSnapshot,
+          bypassGlobal: isBypass,
+          // When bypass, persist the bypass reportLink into the tab's own settings
+          reportLink: isBypass ? _newBypassRL : (tabSnapshot.reportLink || prevTabSettings.reportLink || ''),
+          qid:        isBypass ? (_newParsed.qid || prevTabSettings.qid || '') : (tabSnapshot.qid || prevTabSettings.qid || ''),
+          tableId:    isBypass ? (_newParsed.tableId || prevTabSettings.tableId || '') : (tabSnapshot.tableId || prevTabSettings.tableId || ''),
+          realm:      isBypass ? (_newParsed.realm || prevTabSettings.realm || '') : (tabSnapshot.realm || prevTabSettings.realm || ''),
+          customColumns: deepClone(state.customColumns || prevTabSettings.customColumns || []),
+          customFilters: deepClone(state.customFilters || prevTabSettings.customFilters || []),
+          filterMatch: state.filterMatch || prevTabSettings.filterMatch || 'ALL',
+          dashboard_counters: deepClone(state.dashboardCounters || prevTabSettings.dashboard_counters || [])
+        }, {});
+      }
+      state.tabName = tabSnapshot.tabName;
+      // Bypass tab: keep its own reportLink/qid/tableId/realm isolated from global state
+      if (tabSnapshot.bypassGlobal) {
+        // Only update per-tab settings, don't stomp global state.reportLink
+        const _btid = String(getActiveTabId() || '').trim();
+        if (_btid) {
+          state.quickbaseSettings.settingsByTabId = state.quickbaseSettings.settingsByTabId || {};
+          state.quickbaseSettings.settingsByTabId[_btid] = Object.assign(
+            {},
+            state.quickbaseSettings.settingsByTabId[_btid] || {},
+            {
+              bypassGlobal: true,
+              reportLink: tabSnapshot.reportLink,
+              qid: tabSnapshot.qid,
+              tableId: tabSnapshot.tableId,
+              realm: tabSnapshot.realm
+            }
+          );
+        }
+      } else {
+        state.reportLink = tabSnapshot.reportLink;
+        state.qid = tabSnapshot.qid;
+        state.tableId = tabSnapshot.tableId;
+        state.realm = tabSnapshot.realm;
+      }
+      state.dashboardCounters = normalizeDashboardCounters(tabSnapshot.dashboard_counters);
+      syncActiveTabFromState();
+
+      // Read bypass state once — used in validation AND pendingTabSettings below
+      const _bypassToggleAtSave = root.querySelector('#qbBypassToggle');
+      const _isBypassAtSave = !!(_bypassToggleAtSave && _bypassToggleAtSave.checked);
+      const _bypassRLAtSave = String((root.querySelector('#qbBypassReportLink') || {}).value || '').trim();
+
+      state.isSaving = true;
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+      if (saveLock) saveLock.style.display = 'flex';
+      try {
+        // Bypass tab: validate against personal reportLink, not global
+        const _validationTab = _isBypassAtSave
+          ? Object.assign({}, getActiveTab(), { reportLink: _bypassRLAtSave, bypassGlobal: true })
+          : getActiveTab();
+        const validation = validateQuickbaseTabSettings(_validationTab);
+        if (!validation.ok) throw new Error(validation.message);
+        const nextActiveTabId = String(getActiveTabId() || '').trim();
+        const targetTabId = String(state.settingsEditingTabId || nextActiveTabId || '').trim();
+        // ── VIRTUAL COLUMN: capture current VC state from modal toggle BEFORE building pendingTabSettings ──
+        // BUG FIX: virtualColumn was missing from pendingTabSettings — causing tabManager.saveTab()
+        // to persist settings WITHOUT virtualColumn, wiping it on next refresh.
+        const _vcToggleAtSave = root.querySelector('#qbVcEnabled');
+        if (_vcToggleAtSave) {
+          const _vcAtSave = _getVcState();
+          _vcAtSave.enabled = _vcToggleAtSave.checked;
+          state.virtualColumn = deepClone(_vcAtSave);
+          const _vcSaveTabId = String(getActiveTabId() || '').trim();
+          if (_vcSaveTabId) {
+            const _vcSavePrev = createDefaultSettings(
+              (state.quickbaseSettings.settingsByTabId && state.quickbaseSettings.settingsByTabId[_vcSaveTabId]) || {}, {}
+            );
+            state.quickbaseSettings.settingsByTabId = Object.assign({}, state.quickbaseSettings.settingsByTabId || {}, {
+              [_vcSaveTabId]: Object.assign({}, _vcSavePrev, { virtualColumn: deepClone(_vcAtSave) })
+            });
+          }
+        }
+
+        // FIX[TabName]: Read tabName directly from the modal input — state.tabName
+        // may have been reset by syncActiveTabFromState() if user switched tabs.
+        const _tabNameInputEl = root.querySelector('#qbTabName');
+        const _finalTabName = (_tabNameInputEl && _tabNameInputEl.value.trim())
+          ? _tabNameInputEl.value.trim()
+          : (tabSnapshot.tabName || state.tabName || 'Main Report');
+        // Force-write the correct name to the editing tab in tabs array RIGHT NOW
+        const _editingTabIdx = state.quickbaseSettings.tabs.findIndex(
+          (t) => String(t && t.id || '').trim() === targetTabId
+        );
+        if (_editingTabIdx >= 0) {
+          state.quickbaseSettings.tabs[_editingTabIdx] = deepClone({
+            ...state.quickbaseSettings.tabs[_editingTabIdx],
+            tabName: _finalTabName
+          });
+        }
+        // Also ensure state.tabName is correct for serialization
+        state.tabName = _finalTabName;
+
+        const pendingTabSettings = {
+          tabName: _finalTabName,
+          // When bypass ON: use the bypass reportLink from the Report Config input
+          reportLink: _isBypassAtSave
+            ? (_bypassRLAtSave || deepClone(state.reportLink) || '')
+            : (deepClone(state.reportLink) || ''),
+          qid: deepClone(state.qid) || '',
+          tableId: deepClone(state.tableId) || '',
+          realm: deepClone(state.realm) || '',
+          bypassGlobal: _isBypassAtSave,
+          customColumns: deepClone(state.customColumns || []),
+          customFilters: deepClone(state.customFilters || []),
+          filterMatch: state.filterMatch || 'ALL',
+          dashboard_counters: deepClone(state.dashboardCounters || []),
+          // FIX: Always include virtualColumn — was missing, causing wipe-on-refresh
+          virtualColumn: deepClone(state.virtualColumn || { enabled: false, label: 'Status', items: [], conditionalRules: [] })
+        };
+        // Sync parsed fields from bypass reportLink
+        if (_isBypassAtSave && _bypassRLAtSave) {
+          const _p = parseQuickbaseLink(_bypassRLAtSave);
+          if (_p.qid) pendingTabSettings.qid = _p.qid;
+          if (_p.tableId) pendingTabSettings.tableId = _p.tableId;
+          if (_p.realm) pendingTabSettings.realm = _p.realm;
+        }
+        const tabIndex = state.quickbaseSettings.tabs.findIndex((t) => String(t && t.id || '').trim() === targetTabId);
+        if (tabIndex !== -1) {
+          state.quickbaseSettings.tabs[tabIndex] = deepClone({
+            ...state.quickbaseSettings.tabs[tabIndex],
+            tabName: pendingTabSettings.tabName,
+            reportLink: pendingTabSettings.reportLink,
+            qid: pendingTabSettings.qid,
+            tableId: pendingTabSettings.tableId,
+            realm: pendingTabSettings.realm,
+            bypassGlobal: pendingTabSettings.bypassGlobal,
+            customColumns: deepClone(pendingTabSettings.customColumns || []),
+            customFilters: deepClone(pendingTabSettings.customFilters || []),
+            filterMatch: pendingTabSettings.filterMatch || 'ALL',
+            dashboard_counters: deepClone(pendingTabSettings.dashboard_counters || []),
+            id: targetTabId
+          });
+        }
+        if (tabManager && targetTabId) {
+          const currentManagedTab = tabManager.getTab(targetTabId);
+          const currentManagedSettings = currentManagedTab && currentManagedTab.settings ? currentManagedTab.settings : {};
+          const managedSettings = {
+            ...currentManagedSettings,
+            ...pendingTabSettings,
+            tabName: String(pendingTabSettings.tabName || 'Main Report').trim() || 'Main Report',
+            reportLink: String(pendingTabSettings.reportLink || '').trim(),
+            baseReportQid: String(pendingTabSettings.qid || '').trim(),
+            qid: String(pendingTabSettings.qid || '').trim(),
+            tableId: String(pendingTabSettings.tableId || '').trim(),
+            realm: String(pendingTabSettings.realm || '').trim(),
+            bypassGlobal: !!pendingTabSettings.bypassGlobal,
+            customColumns: deepClone(pendingTabSettings.customColumns || []),
+            customFilters: deepClone(pendingTabSettings.customFilters || []),
+            filterMatch: pendingTabSettings.filterMatch || 'ALL',
+            dashboard_counters: deepClone(pendingTabSettings.dashboard_counters || []),
+            // FIX: Explicitly carry virtualColumn through tabManager so it survives saveTab()
+            virtualColumn: deepClone(pendingTabSettings.virtualColumn || state.virtualColumn || { enabled: false, label: 'Status', items: [], conditionalRules: [] })
+          };
+          tabManager.updateTabLocal(targetTabId, managedSettings);
+          await tabManager.saveTab(targetTabId);
+        }
+        // ── BYPASS TOKEN SAVE: store personal QB token in profile if changed ──
+        // Token is stored in profile.qb_token (server-side, service-role).
+        // Only saved when bypass is ON and user entered a new token.
+        if (isBypass && bypassTok && bypassTok.length > 0) {
+          try {
+            const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
+            const tokRes = await fetch('/api/users/update_me', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+              body: JSON.stringify({ qb_token: bypassTok })
+            });
+            const tokData = await tokRes.json().catch(() => ({}));
+            if (tokRes.ok && tokData.ok) {
+              // TOKEN FIX: Update local profile cache so syncBypassInputsFromState reads
+              // the correct state on next open — set qb_token_set:true (never store actual value).
+              profile = Object.assign({}, profile, { qb_token_set: true });
+              if (window.Store && typeof Store.setProfile === 'function' && me) {
+                Store.setProfile(me.id, Object.assign({}, profile, { qb_token_set: true, updatedAt: Date.now() }));
+              }
+              // Restore masked-dots visual so user sees the token is saved
+              if (bypassTokEl) _applyTokenSavedUI(bypassTokEl);
+              console.log('[Bypass] QB token saved to profile');
+            } else {
+              console.warn('[Bypass] QB token save failed:', tokData);
+              if (window.UI && UI.toast) UI.toast('⚠️ Settings saved but QB token failed to save. Please re-enter it.', 'error');
+            }
+          } catch(tokErr) {
+            console.error('[Bypass] QB token save error:', tokErr);
+          }
+        }
+
+        await persistQuickbaseSettings();
+        await refreshAvailableFieldsForActiveTab(targetTabId || getActiveTabId());
+        const savedSettings = tabManager && targetTabId && typeof tabManager.getTab === 'function'
+          ? ((tabManager.getTab(targetTabId) || {}).settings || {})
+          : {};
+        const newReportLink = String(savedSettings.reportLink || '').trim();
+        if (newReportLink && typeof populateFieldDropdowns === 'function') {
+          populateFieldDropdowns(savedSettings.realm, savedSettings.tableId, savedSettings.qid);
+        }
+        // FIX[TabName]: Explicitly sync the editing tab's new name into the tabs array
+        // BEFORE renderTabBar() — ensures the tab bar shows the updated name immediately.
+        const _postSaveEditingIdx = state.quickbaseSettings.tabs.findIndex(
+          (t) => String(t && t.id || '').trim() === targetTabId
+        );
+        if (_postSaveEditingIdx >= 0 && _finalTabName) {
+          state.quickbaseSettings.tabs[_postSaveEditingIdx] = deepClone({
+            ...state.quickbaseSettings.tabs[_postSaveEditingIdx],
+            tabName: _finalTabName
+          });
+        }
+        renderTabBar();
+        if (window.UI && UI.toast) UI.toast('Quickbase settings saved successfully!');
+        closeSettings();
+
+        // ── INSTANT REALTIME APPLY: re-render current cached records immediately ──
+        // Virtual Column changes (enable/disable/formatting) must be visible WITHOUT
+        // waiting for loadQuickbaseData to finish. Sync state from the freshly saved
+        // settingsByTabId, then re-render with existing baseRecords.
+        syncStateFromActiveTab();
+        if (Array.isArray(state.baseRecords) && state.baseRecords.length) {
+          applySearchAndRender();
+        }
+
+        // FIX[Bug1]: Render counters immediately with current cached records so they
+        // appear INSTANTLY after save — no page refresh needed.
+        const _savedCounters = deepClone(state.dashboardCounters || []);
+        if (_savedCounters.length) {
+          renderDashboardCounters(root, state.baseRecords, { dashboard_counters: _savedCounters }, state, (idx) => {
+            state.activeCounterIndex = state.activeCounterIndex === idx ? -1 : idx;
+            state.currentPage = 1;
+            applySearchAndRender();
+          });
+        }
+        await loadQuickbaseData({ forceRefresh: true });
+      } catch (err) {
+        if (window.UI && UI.toast) UI.toast('Failed to save settings: ' + String(err && err.message || err), 'error');
+      } finally {
+        state.isSaving = false;
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Settings';
+        if (saveLock) saveLock.style.display = 'none';
+      }
+    };
+
+    const searchInput = document.querySelector('#quickbase-search')?.value || root.querySelector('#qbHeaderSearch')?.value || '';
+    syncStateFromActiveTab();
+    renderTabBar();
+    if (shouldApplyInitialFilters(searchInput)) {
+      setActiveSearchTerm(String(searchInput).trim());
+      setActiveUserSearched(true);
+      state.searchTerm = String(searchInput).trim();
+      state.hasUserSearched = true;
+      await loadQuickbaseData({ applyFilters: true });
+    } else {
+      await renderDefaultReport();
+    }
+    setupAutoRefresh();
+
+    // ── FULLSCREEN TOGGLE + DYNAMIC SHELL HEIGHT ──────────────────────
+    const fsBtn = root.querySelector('#qbFullscreenBtn');
+    const fsExpand = root.querySelector('#qbFsIconExpand');
+    const fsCollapse = root.querySelector('#qbFsIconCollapse');
+    const qbShell = root.querySelector('#qbPageShell');
+
+    // ── RESIZEOBSERVER: Dynamically fit shell height to container ──────
+    // Sets shell.style.height = root.offsetHeight so the QB page always fills
+    // its grid cell exactly — regardless of topbar, theme, or density changes.
+    // More robust than calc(100vh - Npx) which can't know the real available
+    // height at runtime. Skipped when fullscreen is active (CSS uses 100vh).
+    let _qbShellResizeObs = null;
+    function _fitQbShellHeight() {
+      if (!qbShell || qbShell.classList.contains('qb-is-fullscreen')) return;
+      const h = root.offsetHeight;
+      if (h > 0) qbShell.style.height = h + 'px';
+    }
+    if (window.ResizeObserver) {
+      _qbShellResizeObs = new ResizeObserver(_fitQbShellHeight);
+      _qbShellResizeObs.observe(root);
+    }
+    // Initial fit — defer one frame so layout has settled after page render
+    requestAnimationFrame(_fitQbShellHeight);
+
+    if (fsBtn && qbShell) {
+      // CSS-only in-browser fullscreen: position:fixed inset:0 z-index:100000
+      //
+      // ROOT CAUSE FIX (aurora_midnight theme):
+      //   aurora_midnight adds `position: relative` to .main.card.
+      //   My previous fix set overflow:clip on .main.card.pad.page-qb.
+      //   In Chrome 108+ / Safari 16+, position:relative + overflow:clip/hidden
+      //   creates a clipping context that TRAPS position:fixed descendants.
+      //   → The fullscreen shell was being clipped inside #main.
+      //
+      // SOLUTION: On fullscreen enter, set root.style.overflow = 'visible'
+      //   so the fixed-position shell is no longer clipped by its parent.
+      //   Restore on exit. The ResizeObserver handles re-fitting the height.
+      let _qbIsFs = false;
+
+      function _applyQbFs(enable) {
+        _qbIsFs = enable;
+        qbShell.classList.toggle('qb-is-fullscreen', enable);
+        if (enable) {
+          // Clear JS-set inline height so CSS height:100vh !important takes over
+          qbShell.style.height = '';
+          // Unlock parent overflow so fixed child escapes the clipping context
+          root.style.overflow = 'visible';
+        } else {
+          // Restore overflow:clip (NOT '' — empty would fall back to CSS which
+          // might re-apply overflow:hidden from other rules and trap fixed children)
+          root.style.overflow = 'clip';
+          // Re-measure shell height for normal mode
+          requestAnimationFrame(_fitQbShellHeight);
+        }
+        if (fsExpand)   fsExpand.style.display   = enable ? 'none' : '';
+        if (fsCollapse) fsCollapse.style.display  = enable ? '' : 'none';
+        // Lock/unlock body scroll when in fullscreen
+        try { document.body.style.overflow = enable ? 'hidden' : ''; } catch (_) {}
+      }
+
+      fsBtn.onclick = () => _applyQbFs(!_qbIsFs);
+
+      // Escape key closes fullscreen (mimics native fullscreen UX)
+      const _qbEscHandler = (e) => {
+        if (e.key === 'Escape' && _qbIsFs) _applyQbFs(false);
+      };
+      document.addEventListener('keydown', _qbEscHandler);
+
+      // Cleanup on page navigation away
+      const prevCleanupFs = root._cleanup;
+      root._cleanup = () => {
+        try { if (prevCleanupFs) prevCleanupFs(); } catch (_) {}
+        try { if (_qbShellResizeObs) _qbShellResizeObs.disconnect(); } catch (_) {}
+        document.removeEventListener('keydown', _qbEscHandler);
+        // Restore body scroll + ALL parent inline styles if navigating away
+        try { document.body.style.overflow = ''; } catch (_) {}
+        try { root.style.overflow = ''; } catch (_) {}
+        try { root.style.padding  = ''; } catch (_) {}
+      };
+    }
+
+    // ── FRESH / CACHED BADGE UPDATER ───────────────────────────────────
+    function updateDataFreshnessBadge(fromCache) {
+      const freshBadge = root.querySelector('#qbFreshBadge');
+      const cacheBadge = root.querySelector('#qbCacheBadge');
+      if (!freshBadge || !cacheBadge) return;
+      if (fromCache) {
+        freshBadge.style.display = 'none';
+        cacheBadge.style.display = '';
+        // Click handler is wired ONCE at init time (after root.innerHTML).
+        // No onclick re-assignment here — avoids the quickbaseLoadInFlight block.
+      } else {
+        freshBadge.style.display = '';
+        cacheBadge.style.display = 'none';
+      }
+    }
+    } catch(pageInitErr) {
+      // Surface async errors that would otherwise leave a blank page silently.
+      // This catches querySelector failures when elements are missing from the
+      // shell HTML and any other unexpected init errors.
+      if (root.isConnected) {
+        root.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:40px;text-align:center;">
+          <div>
+            <div style="font-size:17px;font-weight:700;color:rgba(255,80,80,0.9);margin-bottom:8px;">My Quickbase failed to load</div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.5);max-width:400px;line-height:1.6;">
+              ${String(pageInitErr && (pageInitErr.message || pageInitErr) || 'Unknown error')}
+              <br><br>Try refreshing the page. If this persists, contact your Super Admin.
+            </div>
+          </div>
+        </div>`;
+      }
+    }
+  };
+})();

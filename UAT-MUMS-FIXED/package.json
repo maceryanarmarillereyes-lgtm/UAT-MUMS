@@ -1,0 +1,27 @@
+{
+  "name": "mums-realtime-green-mandatory",
+  "private": true,
+  "description": "MUMS static webapp + Vercel Serverless API routes (Supabase-backed)",
+  "engines": {
+    "node": "20.x"
+  },
+  "version": "1.0.0",
+  "scripts": {
+    "vercel-build": "echo \"Static site deployment \u2014 no build step required\"",
+    "build": "npm run vercel-build",
+    "start": "node -e \"console.log(\\\"Static site: no start script\\\")\"",
+    "test:env": "node scripts/test-env.js",
+    "test:login": "playwright test tests/login.spec.js",
+    "package:phase1": "node tools/package_phase1_release.js",
+    "qa:deploy": "bash scripts/qa-deploy.sh",
+    "test:routes": "node scripts/validate_routes_json.js",
+    "test": "node tests/normalizeFilters.test.js && node tests/escape.test.js && node tests/update_me.integration.test.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "pg": "^8.13.1"
+  }
+}

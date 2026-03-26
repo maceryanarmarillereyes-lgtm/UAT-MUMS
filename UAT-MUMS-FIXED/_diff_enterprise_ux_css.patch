@@ -1,0 +1,214 @@
+--- /mnt/data/_baseline600/public/css/enterprise_ux.css	2026-02-06 08:40:44.000000000 +0000
++++ /mnt/data/mums_phase1_602_work/public/css/enterprise_ux.css	2026-02-07 11:12:36.248495219 +0000
+@@ -1842,3 +1842,211 @@
+ .members-page .sched-toolbar{gap:10px}
+ .members-page .sched-toolbar .left{gap:8px}
+ .members-page .coverage-panel{margin-top:8px !important}
++
++/* =====================================================================
++   MEMBERS — ENTERPRISE FULLSCREEN OVERLAY (Option A + Dark Glass Mode)
++   ===================================================================== */
++
++body.members-fullscreen-active {
++  overflow: hidden; /* lock page scroll (panels retain their own scrolling) */
++}
++
++.members-fullscreen-overlay {
++  position: fixed;
++  inset: 0;
++  width: 100vw;
++  height: 100vh;
++  z-index: 9999;
++  display: flex;
++  flex-direction: column;
++  gap: 0;
++  background:
++    radial-gradient(1200px 800px at 18% 0%, rgba(90, 170, 255, 0.12), transparent 60%),
++    radial-gradient(1000px 700px at 82% 8%, rgba(120, 255, 210, 0.08), transparent 55%),
++    linear-gradient(180deg, rgba(4, 7, 12, 0.92) 0%, rgba(4, 7, 12, 0.88) 45%, rgba(4, 7, 12, 0.94) 100%);
++  backdrop-filter: blur(18px) saturate(130%);
++  -webkit-backdrop-filter: blur(18px) saturate(130%);
++}
++
++.members-fullscreen-overlay .members-topbar,
++.members-fullscreen-overlay .daytabs {
++  flex: 0 0 auto;
++}
++
++.members-fullscreen-overlay .members-enterprise-grid {
++  --members-gap: 16px;
++  --members-left: 280px;
++  --members-right: 320px;
++
++  flex: 1 1 auto;
++  min-height: 0;
++
++  display: grid;
++  grid-template-columns: var(--members-left) 10px 1fr 10px var(--members-right);
++  grid-template-rows: 1fr;
++  gap: 0;
++
++  height: 100%;
++  padding: var(--members-gap);
++  box-sizing: border-box;
++}
++
++/* Panels */
++.members-fullscreen-overlay .card {
++  border: 1px solid rgba(255,255,255,0.07);
++  background: rgba(10, 16, 26, 0.60);
++  box-shadow: 0 18px 40px rgba(0,0,0,0.35);
++  backdrop-filter: blur(14px) saturate(135%);
++  -webkit-backdrop-filter: blur(14px) saturate(135%);
++}
++
++.members-fullscreen-overlay .members-roster,
++.members-fullscreen-overlay .members-timeline,
++.members-fullscreen-overlay .members-analytics-rail {
++  display: flex;
++  flex-direction: column;
++  min-height: 0; /* enables internal scrolling */
++  overflow: hidden; /* scrolling happens on child containers */
++}
++
++/* Sticky headers / toolbars */
++.members-fullscreen-overlay .members-roster-header {
++  position: sticky;
++  top: 0;
++  z-index: 15;
++  background: rgba(10, 16, 26, 0.70);
++  border-bottom: 1px solid rgba(255,255,255,0.06);
++  backdrop-filter: blur(10px) saturate(130%);
++  -webkit-backdrop-filter: blur(10px) saturate(130%);
++}
++
++.members-fullscreen-overlay .members-timeline-toolbar {
++  position: sticky;
++  top: 0;
++  z-index: 30;
++  background: rgba(10, 16, 26, 0.68);
++  border: 1px solid rgba(255,255,255,0.06);
++  border-radius: 12px;
++  margin: 10px 10px 0 10px;
++  backdrop-filter: blur(12px) saturate(135%);
++  -webkit-backdrop-filter: blur(12px) saturate(135%);
++}
++
++.members-fullscreen-overlay .members-analytics-header {
++  position: sticky;
++  top: 0;
++  z-index: 15;
++  background: rgba(10, 16, 26, 0.70);
++  border-bottom: 1px solid rgba(255,255,255,0.06);
++  backdrop-filter: blur(10px) saturate(130%);
++  -webkit-backdrop-filter: blur(10px) saturate(130%);
++}
++
++/* Panel scrolling */
++.members-fullscreen-overlay .members-roster-list {
++  overflow-y: auto;
++  min-height: 0;
++  padding-bottom: 8px;
++}
++
++.members-fullscreen-overlay .members-timeline-scroll {
++  overflow-y: auto;
++  min-height: 0;
++  padding: 10px;
++}
++
++.members-fullscreen-overlay .members-analytics-body {
++  overflow-y: auto;
++  min-height: 0;
++  padding: 0 14px 14px;
++}
++
++/* Splitters */
++.members-fullscreen-overlay .members-splitter {
++  border-radius: 999px;
++  background: rgba(255,255,255,0.06);
++  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.30);
++  cursor: col-resize;
++}
++
++.members-fullscreen-overlay .members-splitter:hover {
++  background: rgba(255,255,255,0.10);
++}
++
++.members-fullscreen-overlay .members-splitter:focus {
++  outline: 2px solid rgba(120, 190, 255, 0.55);
++  outline-offset: 2px;
++}
++
++/* Timeline legend chips (Option B) */
++.members-fullscreen-overlay .timeline-legend {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 8px;
++  align-items: center;
++}
++
++.members-fullscreen-overlay .legend-item {
++  display: inline-flex;
++  align-items: center;
++  gap: 6px;
++  padding: 6px 10px;
++  border-radius: 999px;
++  background: rgba(255,255,255,0.06);
++  border: 1px solid rgba(255,255,255,0.07);
++}
++
++.members-fullscreen-overlay .legend-item:hover {
++  background: rgba(255,255,255,0.09);
++}
++
++/* Z-index policy (local to overlay) */
++.members-fullscreen-overlay .members-row,
++.members-fullscreen-overlay .timeline {
++  position: relative;
++  z-index: 10;
++}
++
++.members-fullscreen-overlay .seg {
++  position: absolute;
++  z-index: 10;
++}
++
++.members-fullscreen-overlay .timeline-heatmap,
++.members-fullscreen-overlay .timeline-overlay,
++.members-fullscreen-overlay .heatmap-overlay,
++.members-fullscreen-overlay .coverage-panel .heatmap-overlay,
++.members-fullscreen-overlay .coverage-panel .timeline-heatmap {
++  z-index: 20;
++  pointer-events: none;
++}
++
++.members-fullscreen-overlay .tooltip,
++.members-fullscreen-overlay .dropdown-menu,
++.members-fullscreen-overlay .reports-menu {
++  z-index: 40;
++}
++
++/* Coverage meter + heatmap ready */
++.members-fullscreen-overlay .coverage-panel {
++  border-radius: 14px;
++  background: rgba(255,255,255,0.04);
++  border: 1px solid rgba(255,255,255,0.06);
++}
++
++.members-fullscreen-overlay .coverage-panel .bar,
++.members-fullscreen-overlay .coverage-panel .cell {
++  transition: transform 120ms ease, filter 120ms ease;
++}
++
++.members-fullscreen-overlay .coverage-panel .bar:hover,
++.members-fullscreen-overlay .coverage-panel .cell:hover {
++  transform: translateY(-1px);
++  filter: brightness(1.05);
++}
++
++/* Focus / accessibility */
++.members-fullscreen-overlay :focus-visible {
++  outline: 2px solid rgba(120, 190, 255, 0.55);
++  outline-offset: 2px;
++}
