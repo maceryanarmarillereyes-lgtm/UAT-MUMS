@@ -685,17 +685,23 @@
   // If myQbName is provided and the bracket name matches the current user,
   // uses <mark class="qb-date-today qb-date-mine"> (Premium Gray Glass) instead.
   // Returns highlighted HTML string, or null if today not found in text.
+  //
+  // FIX (v3.9.28): Only the FIRST (topmost / most-recent) matching bracket per
+  // cell is highlighted. Previously every today-date bracket in the cell was
+  // wrapped in <mark>, causing multiple highlights per row item. Since notes are
+  // written newest-first, the first match is always the latest update.
   function _highlightTodayInNotes(rawText, todayStr, myQbName) {
     if (!todayStr || !rawText) return null;
     const myNameLower = String(myQbName || '').trim().toLowerCase();
     const escapedSafe = rawText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const re = /\[([A-Z]{3}-\d{1,2}-\d{2}\s[^\]]*)\]/g;
-    let hasHighlight = false;
+    let hasHighlight  = false;
+    let firstDone     = false; // guard — only the FIRST today-match gets the mark
     const result = escapedSafe.replace(re, (full, inner) => {
       const tok = inner.trim().split(/\s/)[0];
-      if (tok === todayStr) {
+      if (tok === todayStr && !firstDone) {
         hasHighlight = true;
-        // Check if this bracket belongs to the current user
+        firstDone    = true; // lock — all subsequent today-brackets stay plain
         const isMine = myNameLower && inner.toLowerCase().includes(myNameLower);
         if (isMine) {
           return '<mark class="qb-date-today qb-date-mine">[' + inner + ']<span class="qb-date-mine-badge">me</span></mark>';
