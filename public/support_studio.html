@@ -5511,25 +5511,37 @@
       // ENFORCE ISOLATION NAMESPACE
       root.setAttribute('data-page', 'quickbase_s');
       root.dataset.page = 'quickbase_s';
-      try {
-        var _qbsInitResult = window.Pages.my_quickbase(root);
-        _qbsPageMounted = true;
-        Promise.resolve(_qbsInitResult).then(function() {
-          // Expose root._qbcdOpen globally so support_studio_patches.js can call it
-          if (typeof root._qbcdOpen === 'function') {
-            window.__studioQbCdOpen = function(snap) {
-              return root._qbcdOpen(snap, root.querySelector('#qbDataBody') && root.querySelector('#qbDataBody')._qbRowSnaps || [snap]);
-            };
-          }
-          // Re-check after 2s (renderRecords may run after async data load)
-          setTimeout(function() {
-            if (typeof root._qbcdOpen === 'function' && typeof window.__studioQbCdOpen !== 'function') {
-              window.__studioQbCdOpen = function(snap) {
-                return root._qbcdOpen(snap, [snap]);
-              };
-            }
-          }, 2000);
-        }).catch(function(){});
+            try {
+              var _qbsInitResult = window.Pages.my_quickbase(root);
+              _qbsPageMounted = true;
+              
+              // Robust polling to expose root._qbcdOpen as window.__studioQbCdOpen
+              // root._qbcdOpen is set by my_quickbase.js only AFTER async data loads + renderRecords
+              function _exposeQbCdOpen() {
+                if (typeof root._qbcdOpen === 'function') {
+                  window.__studioQbCdOpen = function(snap) {
+                    var host = root.querySelector('#qbDataBody');
+                    var snaps = host && Array.isArray(host._qbRowSnaps) ? host._qbRowSnaps : [snap];
+                    return root._qbcdOpen(snap, snaps);
+                  };
+                  console.log('[SupportStudio] __studioQbCdOpen exposed successfully');
+                  return true;
+                }
+                return false;
+              }
+              
+              // Try immediately after init
+              Promise.resolve(_qbsInitResult).then(function() {
+                if (_exposeQbCdOpen()) return;
+                // Poll every 1s for up to 20s (covers slow data loads)
+                var attempts = 0;
+                var poller = setInterval(function() {
+                  attempts++;
+                  if (_exposeQbCdOpen() || attempts >= 20) {
+                    clearInterval(poller);
+                  }
+                }, 1000);
+              }).catch(function(){});
       } catch (e) {
         root.innerHTML =
           '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:#f85149;padding:24px;text-align:center;">' +
