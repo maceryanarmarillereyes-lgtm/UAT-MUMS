@@ -5593,7 +5593,7 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
       try {
         var tag = document.getElementById('msBrightnessTag');
         var raw = JSON.parse(localStorage.getItem('mums_brightness_v1') || '{}');
-        var val = raw.useDefault ? 100 : (Number(raw.value) || 100);
+        var val = raw.useDefault ? 130 : (Number(raw.value) || 130);
         var label = document.getElementById('brightnessStatusLabel');
         if (tag) {
           if (!raw.useDefault && val !== 100) {
@@ -5637,7 +5637,10 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
       document.documentElement.style.setProperty('--mums-brightness', effective / 100);
       app.setAttribute('data-brightness', String(effective));
       // Apply filter proportionally to ALL UI elements via root element
-      if (effective === DEFAULT_VAL) {
+      // FIX: Clear filter only at true neutral (100%), not at DEFAULT_VAL.
+      // Previously this was `effective === DEFAULT_VAL` which incorrectly
+      // skipped the CSS filter when brightness was 130, making it look like 100%.
+      if (effective === 100) {
         app.style.filter = '';
       } else {
         app.style.filter = `brightness(${effective / 100})`;
@@ -5672,7 +5675,7 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
         slider.value    = cur.value;
         useDefChk.checked = cur.useDefault;
         slider.disabled = cur.useDefault;
-        valLabel.textContent = cur.useDefault ? '100%' : cur.value + '%';
+        valLabel.textContent = cur.useDefault ? DEFAULT_VAL + '%' : cur.value + '%';
         updateSliderTrack(slider);
 
         // Guard: bind only once per element
@@ -5692,7 +5695,7 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
           const isDefault = useDefChk.checked;
           slider.disabled = isDefault;
           if (isDefault) {
-            valLabel.textContent = '100%';
+            valLabel.textContent = DEFAULT_VAL + '%';
             applyBrightness(DEFAULT_VAL, true);
             saveBrightness(Number(slider.value), true);
           } else {
