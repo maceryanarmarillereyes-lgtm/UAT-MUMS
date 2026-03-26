@@ -5511,9 +5511,37 @@
       // ENFORCE ISOLATION NAMESPACE
       root.setAttribute('data-page', 'quickbase_s');
       root.dataset.page = 'quickbase_s';
-      try {
-        window.Pages.my_quickbase(root);
-        _qbsPageMounted = true;
+            try {
+              var _qbsInitResult = window.Pages.my_quickbase(root);
+              _qbsPageMounted = true;
+              
+              // Robust polling to expose root._qbcdOpen as window.__studioQbCdOpen
+              // root._qbcdOpen is set by my_quickbase.js only AFTER async data loads + renderRecords
+              function _exposeQbCdOpen() {
+                if (typeof root._qbcdOpen === 'function') {
+                  window.__studioQbCdOpen = function(snap) {
+                    var host = root.querySelector('#qbDataBody');
+                    var snaps = host && Array.isArray(host._qbRowSnaps) ? host._qbRowSnaps : [snap];
+                    return root._qbcdOpen(snap, snaps);
+                  };
+                  console.log('[SupportStudio] __studioQbCdOpen exposed successfully');
+                  return true;
+                }
+                return false;
+              }
+              
+              // Try immediately after init
+              Promise.resolve(_qbsInitResult).then(function() {
+                if (_exposeQbCdOpen()) return;
+                // Poll every 1s for up to 20s (covers slow data loads)
+                var attempts = 0;
+                var poller = setInterval(function() {
+                  attempts++;
+                  if (_exposeQbCdOpen() || attempts >= 20) {
+                    clearInterval(poller);
+                  }
+                }, 1000);
+              }).catch(function(){});
       } catch (e) {
         root.innerHTML =
           '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:#f85149;padding:24px;text-align:center;">' +
@@ -5745,6 +5773,94 @@
   // ── Deep Search — searches ALL QB records via /api/studio/qb_search ──
   // Results sorted by Case # DESCENDING (highest = newest case first).
   // Renders clickable cards in #qbs-search-results.
+  function _qbsReadContextConfig() {
+    var reportLink = ((document.getElementById('sqb-report-link') || {}).value || '').trim();
+    var realm = ((document.getElementById('sqb-realm') || {}).value || '').trim();
+    var tableId = ((document.getElementById('sqb-table-id') || {}).value || '').trim();
+    var appId = '';
+    if (reportLink) {
+      try {
+        var u = new URL(reportLink);
+        var segs = String(u.pathname || '').split('/').filter(Boolean);
+        var ai = segs.findIndex(function(seg) { return String(seg).toLowerCase() === 'app'; });
+        if (ai >= 0 && segs[ai + 1]) appId = String(segs[ai + 1]).trim();
+      } catch(_) {}
+    }
+    var tabConfig = { reportLink: reportLink, realm: realm, tableId: tableId };
+    return { tabConfig: tabConfig, realm: realm, appId: appId, tableId: tableId };
+  }
+
+  function _qbsBuildDeepSearchSnaps(records, labelMap) {
+    var context = _qbsReadContextConfig();
+    var cols = Object.keys(labelMap || {}).map(function(id) {
+      return { id: Number(id) || id, label: labelMap[id] || ('Field #' + id) };
+    });
+    return (Array.isArray(records) ? records : []).map(function(rec, idx) {
+      return {
+        rowNum: idx + 1,
+        recordId: rec && (rec.qbRecordId || rec.recordId || rec.id) ? String(rec.qbRecordId || rec.recordId || rec.id) : '',
+        qbRecordId: rec && rec.qbRecordId ? rec.qbRecordId : '',
+        fields: rec && rec.fields ? rec.fields : {},
+        columns: cols,
+        columnMap: Object.assign({}, labelMap || {}),
+        tabConfig: context.tabConfig,
+        realm: context.realm,
+        appId: context.appId,
+        tableId: context.tableId
+      };
+    });
+  }
+
+  /*
+    DIAGNOSTIC (Q1-Q4)
+    Q1: my_quickbase case detail opener was not exposed on window; it was an internal _open closure inside _initQbCaseDetailModal with root._qbcdOpen only.
+    Q2: QB_S row number click handler exists via .qb-row-detail-btn (direct onclick + delegated #qbDataBody listener), but cross-module callers could not reliably access the opener.
+    Q3: Deep Search cards had a CASE VIEW DETAILS button (.qbs-case-detail-btn) but it used only data-qbs-result-idx and local fallback openers.
+    Q4: Timing issue risk existed for cross-module calls because no stable window-level modal opener was guaranteed before external handlers fired.
+  */
+  function _qbsEnsureDeepSearchCaseDetailBinding(resultsEl) {
+    if (!resultsEl || resultsEl._qbsCaseDetailBound) return;
+    resultsEl._qbsCaseDetailBound = true;
+    resultsEl.addEventListener('click', function(e) {
+      var btn = e.target && e.target.closest && e.target.closest('[data-action="ds-case-view-details"]');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var row = (function() {
+        try { return JSON.parse(btn.getAttribute('data-row') || '{}'); }
+        catch(_) { return {}; }
+      })();
+      var rid = btn.getAttribute('data-rid') || row.qbRecordId || row.recordId || '';
+      // Try direct opener first (works even if QB table page not loaded)
+      if (typeof window.__studioQbCdOpen === 'function') {
+        var snap = {
+          rowNum: 0,
+          recordId: rid,
+          fields: row.fields || {},
+          columnMap: {}
+        };
+        window.__studioQbCdOpen(snap);
+        return;
+      }
+      if (window.MQ && typeof window.MQ.openCaseDetailModal === 'function') {
+        var ctx = _qbsReadContextConfig();
+        window.MQ.openCaseDetailModal({
+          qbRecordId: rid,
+          fields: row.fields || {},
+          columns: (resultsEl._qbsDeepSearchColumns || []),
+          tabConfig: ctx.tabConfig || {},
+          realm: ctx.realm || '',
+          appId: ctx.appId || '',
+          tableId: ctx.tableId || ''
+        });
+        return;
+      }
+      var idx = parseInt(btn.getAttribute('data-qbs-result-idx') || '', 10);
+      var snaps = resultsEl._qbsDeepSearchSnaps || [];
+      if (!isNaN(idx) && snaps[idx]) window._qbsOpenCaseDetail(snaps[idx], snaps);
+    });
+  }
+
   window._qbsDeepSearch = function(term, skip) {
     term = String(term || '').trim();
     if (!term) {
@@ -5843,7 +5959,7 @@
             '<i class="fas fa-search" style="font-size:20px;opacity:.3;display:block;margin-bottom:8px;"></i>' +
             'No results for <strong>' + _dsEsc2(term) + '</strong></div>';
         } else {
-          records.forEach(function(rec) {
+          records.forEach(function(rec, resultIdx) {
             var caseNum   = rec.qbRecordId || '—';
             var status    = getFieldValue(rec.fields, 'case status') || getFieldValue(rec.fields, 'status');
             var desc      = getFieldValue(rec.fields, 'short description') || getFieldValue(rec.fields, 'description') || getFieldValue(rec.fields, 'latest update') || '';
@@ -5860,7 +5976,7 @@
 
             var descTrunc = desc.length > 110 ? desc.slice(0, 107) + '…' : desc;
 
-            html += '<div onclick="window._qbsOpenDeepResult(\'' + _dsEsc2(caseNum) + '\')" ' +
+            html += '<div onclick="window._qbsOpenDeepResult(\'' + _dsEsc2(caseNum) + '\',' + resultIdx + ')" ' +
               'style="padding:10px 11px;margin-bottom:6px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:7px;cursor:pointer;transition:background .12s,border-color .12s;" ' +
               'onmouseover="this.style.background=\'rgba(88,166,255,.07)\';this.style.borderColor=\'rgba(88,166,255,.25)\';" ' +
               'onmouseout="this.style.background=\'rgba(255,255,255,.03)\';this.style.borderColor=\'rgba(255,255,255,.07)\';">' +
@@ -5877,6 +5993,14 @@
               '</div>' : '') +
 
               (descTrunc ? '<div style="font-size:10px;color:var(--ss-muted);line-height:1.5;opacity:.85;">' + _dsEsc2(descTrunc) + '</div>' : '') +
+
+              '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,.07);">' +
+                '<div style="display:flex;align-items:center;gap:6px;min-width:0;">' +
+                  '<span class="ds-card-label" style="font-size:9px;font-weight:700;color:var(--ss-muted);text-transform:uppercase;letter-spacing:.04em;">Assigned to</span>' +
+                  '<span class="ds-card-value" style="font-size:10px;color:#e6edf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;">' + _dsEsc2(assignee || '—') + '</span>' +
+                '</div>' +
+                '<button type="button" class="qb-row-num-pill qb-row-detail-btn qbs-case-detail-btn ds-case-view-btn" data-action="ds-case-view-details" data-rid="' + _dsEsc2(String(caseNum || '')) + '" data-row=\'' + _dsEsc2(JSON.stringify(rec).replace(/'/g, '&#39;')) + '\' data-qbs-result-idx="' + resultIdx + '" style="border-radius:999px;padding:5px 10px;min-width:auto;font-size:9px;font-weight:800;letter-spacing:.02em;" onclick="event.stopPropagation();" title="View case details" aria-label="CASE VIEW DETAILS for case #' + _dsEsc2(String(caseNum)) + '">CASE VIEW DETAILS</button>' +
+              '</div>' +
 
               '</div>';
           });
@@ -5897,7 +6021,12 @@
         if (skip > 0) countText = 'Showing ' + (skip + 1) + '–' + (skip + records.length);
 
         if (statusEl) statusEl.textContent = countText;
-        if (resultsEl) resultsEl.innerHTML = html + paginationHtml;
+        if (resultsEl) {
+          resultsEl.innerHTML = html + paginationHtml;
+          resultsEl._qbsDeepSearchSnaps = _qbsBuildDeepSearchSnaps(records, labelMap);
+          resultsEl._qbsDeepSearchColumns = cols;
+          _qbsEnsureDeepSearchCaseDetailBinding(resultsEl);
+        }
       })
       .catch(function(err) {
         if (btn) btn.disabled = false;
@@ -5909,8 +6038,32 @@
   };
 
   // Helper: open a deep search result as a case detail
-  window._qbsOpenDeepResult = function(caseNum) {
-    // Try to find the case in the currently loaded records first
+  window._qbsOpenDeepResult = function(caseNum, resultIdx) {
+    // Preferred path: open Case Details directly from current deep-search snapshots.
+    var resultsEl = document.getElementById('qbs-search-results');
+    var snaps = resultsEl && Array.isArray(resultsEl._qbsDeepSearchSnaps) ? resultsEl._qbsDeepSearchSnaps : [];
+    var idx = Number(resultIdx);
+    if (!isNaN(idx) && snaps[idx]) {
+      var snap = snaps[idx];
+      if (window.MQ && typeof window.MQ.openCaseDetailModal === 'function') {
+        var ctx = _qbsReadContextConfig();
+        window.MQ.openCaseDetailModal({
+          qbRecordId: snap.qbRecordId || snap.recordId || String(caseNum || ''),
+          fields: snap.fields || {},
+          columns: (resultsEl && resultsEl._qbsDeepSearchColumns) || [],
+          tabConfig: ctx.tabConfig || {},
+          realm: ctx.realm || '',
+          appId: ctx.appId || '',
+          tableId: ctx.tableId || ''
+        });
+        return;
+      }
+      if (typeof window._qbsOpenCaseDetail === 'function') {
+        window._qbsOpenCaseDetail(snap, snaps);
+        return;
+      }
+    }
+    // Try to find the case in the currently loaded records as fallback.
     var root = document.getElementById('qbs-root');
     if (root && typeof root._searchByCaseNum === 'function') {
       root._searchByCaseNum(String(caseNum));
@@ -9133,6 +9286,460 @@
 })();
 </script>
 <script src="/js/pages/support_studio_patches.js"></script>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     QB CASE DETAIL MODAL
+     Used by: QB row number clicks, deep search card clicks, CASE VIEW DETAILS btn
+     Populated by: _initQbCaseDetailModal() in my_quickbase.js
+                   _qbsOpenCaseDetail() fallback in support_studio.html
+     ALL IDs below are required — do not rename or remove any.
+═══════════════════════════════════════════════════════════════════ -->
+<style>
+  /* ── Case Detail Modal Base Styles ──────────────────────────────── */
+  #qbCaseDetailModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    align-items: center;
+    justify-content: center;
+    background: rgba(6,12,24,.88);
+    padding: 16px;
+    box-sizing: border-box;
+  }
+  #qbCaseDetailModal.open {
+    display: flex !important;
+  }
+  .qbcd-shell {
+    position: relative;
+    width: 100%;
+    max-width: 820px;
+    max-height: 90vh;
+    background: #0d1117;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06);
+    font-family: var(--ss-font, 'Inter', system-ui, sans-serif);
+  }
+  /* Header */
+  .qbcd-header {
+    flex-shrink: 0;
+    padding: 18px 22px 14px;
+    background: linear-gradient(135deg, rgba(88,166,255,.06) 0%, rgba(34,211,238,.04) 100%);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .qbcd-row-badge {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: rgba(88,166,255,.15);
+    border: 1px solid rgba(88,166,255,.3);
+    color: #58a6ff;
+    font-size: 15px;
+    font-weight: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    letter-spacing: -.02em;
+  }
+  .qbcd-header-main { flex: 1; min-width: 0; }
+  .qbcd-label {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #58a6ff;
+    margin-bottom: 3px;
+  }
+  .qbcd-case-num {
+    font-size: 22px;
+    font-weight: 900;
+    color: #e6edf3;
+    letter-spacing: -.03em;
+    line-height: 1.1;
+    margin-bottom: 4px;
+  }
+  .qbcd-case-num span { color: #22d3ee; }
+  .qbcd-desc {
+    font-size: 11px;
+    color: #7d8590;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 560px;
+  }
+  .qbcd-header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .qbcd-close-x {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    color: #7d8590;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s;
+  }
+  .qbcd-close-x:hover { background: rgba(248,81,73,.12); border-color: rgba(248,81,73,.3); color: #f85149; }
+  .qbcd-meta-line { font-size: 10px; color: #7d8590; text-align: right; }
+  /* Status strip */
+  .qbcd-status-strip {
+    flex-shrink: 0;
+    padding: 8px 22px;
+    background: rgba(255,255,255,.02);
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .qbcd-status-label { font-size: 9px; font-weight: 700; color: #7d8590; text-transform: uppercase; letter-spacing: .07em; }
+  /* KPI cards */
+  .qbcd-kpis {
+    flex-shrink: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+  .qbcd-kpi {
+    padding: 12px 16px;
+    border-right: 1px solid rgba(255,255,255,.06);
+  }
+  .qbcd-kpi:last-child { border-right: none; }
+  .qbcd-kpi-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: #7d8590;
+    margin-bottom: 4px;
+  }
+  .qbcd-kpi-val {
+    font-size: 16px;
+    font-weight: 800;
+    color: #e6edf3;
+    letter-spacing: -.02em;
+    line-height: 1.2;
+  }
+  .qbcd-kpi-sub { font-size: 9px; color: #7d8590; margin-top: 2px; }
+  .qbcd-kpi-val.age-val { color: #58a6ff; }
+  .qbcd-kpi-val.last-val { color: #d29922; }
+  .qbcd-kpi-val.type-val { color: #a78bfa; font-size: 12px; }
+  .qbcd-kpi-val.user-val { color: #3fb950; font-size: 12px; }
+  /* Scrollable body */
+  .qbcd-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .qbcd-body::-webkit-scrollbar { width: 4px; }
+  .qbcd-body::-webkit-scrollbar-track { background: rgba(255,255,255,.02); }
+  .qbcd-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+  /* Section cards */
+  .qbcd-section {
+    background: rgba(255,255,255,.025);
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .qbcd-section-header {
+    padding: 8px 14px;
+    background: rgba(255,255,255,.03);
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #7d8590;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .qbcd-section-header i { opacity: .6; }
+  .qbcd-section-body { padding: 14px; }
+  /* KV pairs */
+  .qbcd-kv-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .qbcd-kv { display: flex; flex-direction: column; gap: 3px; }
+  .qbcd-kv-lbl { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #7d8590; }
+  .qbcd-kv-val { font-size: 12px; font-weight: 700; color: #e6edf3; }
+  .qbcd-kv-val.accent-blue { color: #58a6ff; }
+  .qbcd-kv-val.accent-green { color: #3fb950; }
+  /* Notes / text blocks */
+  .qbcd-notes-text {
+    font-size: 11px;
+    line-height: 1.7;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 180px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .qbcd-notes-text::-webkit-scrollbar { width: 3px; }
+  .qbcd-notes-text::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); }
+  .qbcd-latest-text {
+    font-size: 12px;
+    line-height: 1.6;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .qbcd-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #3fb950;
+    box-shadow: 0 0 6px #3fb950;
+    display: inline-block;
+    margin-right: 6px;
+  }
+  /* Footer */
+  .qbcd-footer {
+    flex-shrink: 0;
+    padding: 12px 22px;
+    background: rgba(255,255,255,.02);
+    border-top: 1px solid rgba(255,255,255,.08);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .qbcd-nav-btn {
+    padding: 6px 14px;
+    border-radius: 7px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    color: #e6edf3;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: var(--ss-font, inherit);
+    transition: all .15s;
+  }
+  .qbcd-nav-btn:hover:not(:disabled) { background: rgba(88,166,255,.12); border-color: rgba(88,166,255,.3); color: #58a6ff; }
+  .qbcd-nav-btn:disabled { opacity: .3; cursor: default; }
+  .qbcd-pos { font-size: 11px; color: #7d8590; font-weight: 600; min-width: 60px; text-align: center; }
+  .qbcd-footer-right { margin-left: auto; display: flex; gap: 8px; }
+  .qbcd-copy-btn {
+    padding: 6px 14px;
+    border-radius: 7px;
+    background: rgba(34,211,238,.1);
+    border: 1px solid rgba(34,211,238,.25);
+    color: #22d3ee;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: var(--ss-font, inherit);
+    transition: all .15s;
+  }
+  .qbcd-copy-btn:hover { background: rgba(34,211,238,.18); }
+  .qbcd-close-btn {
+    padding: 6px 14px;
+    border-radius: 7px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    color: #7d8590;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: var(--ss-font, inherit);
+    transition: all .15s;
+  }
+  .qbcd-close-btn:hover { background: rgba(248,81,73,.1); border-color: rgba(248,81,73,.25); color: #f85149; }
+  /* Status badge (base — overridden by theme CSS in styles.css) */
+  .qb-status-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 20px;
+    font-size: 10px; font-weight: 700; letter-spacing: .02em;
+  }
+  .qb-status-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .qb-status-investigating { background: rgba(88,166,255,.12); color: #58a6ff; border: 1px solid rgba(88,166,255,.3); }
+  .qb-status-investigating .qb-status-dot { background: #58a6ff; box-shadow: 0 0 5px #58a6ff; }
+  .qb-status-waiting { background: rgba(249,115,22,.1); color: #f97316; border: 1px solid rgba(249,115,22,.25); }
+  .qb-status-waiting .qb-status-dot { background: #f97316; }
+  .qb-status-initial { background: rgba(245,158,11,.1); color: #f59e0b; border: 1px solid rgba(245,158,11,.25); }
+  .qb-status-initial .qb-status-dot { background: #f59e0b; }
+  .qb-status-soft-close { background: rgba(139,148,158,.1); color: #8b949e; border: 1px solid rgba(139,148,158,.25); }
+  .qb-status-soft-close .qb-status-dot { background: #8b949e; }
+  .qb-status-response { background: rgba(167,139,250,.1); color: #a78bfa; border: 1px solid rgba(167,139,250,.25); }
+  .qb-status-response .qb-status-dot { background: #a78bfa; }
+  .qb-status-closed { background: rgba(63,185,80,.1); color: #3fb950; border: 1px solid rgba(63,185,80,.25); }
+  .qb-status-closed .qb-status-dot { background: #3fb950; box-shadow: 0 0 5px #3fb950; }
+  .qb-status-default { background: rgba(125,133,144,.1); color: #7d8590; border: 1px solid rgba(125,133,144,.2); }
+  .qb-status-default .qb-status-dot { background: #7d8590; }
+</style>
+
+<div id="qbCaseDetailModal">
+  <div class="qbcd-shell">
+
+    <!-- ── HEADER ─────────────────────────────────────────────────── -->
+    <div class="qbcd-header">
+      <div class="qbcd-row-badge" id="qbcdRowBadge">—</div>
+      <div class="qbcd-header-main">
+        <div class="qbcd-label">Case Detail View</div>
+        <div class="qbcd-case-num">CASE# <span id="qbcdCaseId">—</span></div>
+        <div class="qbcd-desc" id="qbcdDesc">—</div>
+      </div>
+      <div class="qbcd-header-right">
+        <button class="qbcd-close-x" id="qbcdCloseBtn" title="Close">✕</button>
+        <div class="qbcd-meta-line" id="qbcdMeta"></div>
+      </div>
+    </div>
+
+    <!-- ── STATUS STRIP ───────────────────────────────────────────── -->
+    <div class="qbcd-status-strip">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="qbcd-status-label">Status:</span>
+        <span id="qbcdStatusBadge"></span>
+      </div>
+      <div id="qbcdMeta2" style="font-size:10px;color:#7d8590;"></div>
+    </div>
+
+    <!-- ── KPI CARDS ──────────────────────────────────────────────── -->
+    <div class="qbcd-kpis">
+      <div class="qbcd-kpi">
+        <div class="qbcd-kpi-label">Case Age</div>
+        <div class="qbcd-kpi-val age-val" id="qbcdKpiAge">—</div>
+        <div class="qbcd-kpi-sub">Open duration</div>
+      </div>
+      <div class="qbcd-kpi">
+        <div class="qbcd-kpi-label">Last Updated</div>
+        <div class="qbcd-kpi-val last-val" id="qbcdKpiLast">—</div>
+        <div class="qbcd-kpi-sub">Days since update</div>
+      </div>
+      <div class="qbcd-kpi">
+        <div class="qbcd-kpi-label">Type</div>
+        <div class="qbcd-kpi-val type-val" id="qbcdKpiType">—</div>
+        <div class="qbcd-kpi-sub">Case category</div>
+      </div>
+      <div class="qbcd-kpi">
+        <div class="qbcd-kpi-label">End User</div>
+        <div class="qbcd-kpi-val user-val" id="qbcdKpiEndUser">—</div>
+        <div class="qbcd-kpi-sub">Client account</div>
+      </div>
+    </div>
+
+    <!-- ── SCROLLABLE BODY ────────────────────────────────────────── -->
+    <div class="qbcd-body">
+
+      <!-- Row 1: Assignment + Classification -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+
+        <!-- Case Assignment -->
+        <div class="qbcd-section">
+          <div class="qbcd-section-header">
+            <i class="fas fa-user-tag"></i> Case Assignment
+          </div>
+          <div class="qbcd-section-body">
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div class="qbcd-kv">
+                <span class="qbcd-kv-lbl">Assigned To</span>
+                <span class="qbcd-kv-val accent-blue" id="qbcdAssigned">—</span>
+              </div>
+              <div class="qbcd-kv">
+                <span class="qbcd-kv-lbl">Contact — Full Name</span>
+                <span class="qbcd-kv-val" id="qbcdContact">—</span>
+              </div>
+              <div class="qbcd-kv">
+                <span class="qbcd-kv-lbl">End User / Client</span>
+                <span class="qbcd-kv-val accent-green" id="qbcdEndUser">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Case Classification -->
+        <div class="qbcd-section">
+          <div class="qbcd-section-header">
+            <i class="fas fa-tag"></i> Case Classification
+          </div>
+          <div class="qbcd-section-body">
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div class="qbcd-kv">
+                <span class="qbcd-kv-lbl">Case #</span>
+                <span class="qbcd-kv-val accent-blue" id="qbcdCaseId2">—</span>
+              </div>
+              <div class="qbcd-kv">
+                <span class="qbcd-kv-lbl">Case Type</span>
+                <span class="qbcd-kv-val" id="qbcdType2">—</span>
+              </div>
+              <div class="qbcd-kv">
+                <span class="qbcd-kv-lbl">Case Status</span>
+                <span id="qbcdStatus2"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Case Notes block -->
+      <div class="qbcd-section" id="qbcdNotesBlock">
+        <div class="qbcd-section-header">
+          <span class="qbcd-dot"></span> Case Notes
+        </div>
+        <div class="qbcd-section-body">
+          <div class="qbcd-notes-text" id="qbcdNotes"></div>
+        </div>
+      </div>
+
+      <!-- Latest Update block -->
+      <div class="qbcd-section">
+        <div class="qbcd-section-header">
+          <i class="fas fa-comment-alt"></i> Latest Update on the Case
+        </div>
+        <div class="qbcd-section-body">
+          <div class="qbcd-latest-text" id="qbcdLatest">—</div>
+        </div>
+      </div>
+
+      <!-- Extra / dynamic fields block -->
+      <div class="qbcd-section" id="qbcdExtraBlock" style="display:none;">
+        <div class="qbcd-section-header">
+          <i class="fas fa-th-list"></i> Additional Fields
+        </div>
+        <div class="qbcd-section-body">
+          <div class="qbcd-kv-grid" id="qbcdExtraFields"></div>
+        </div>
+      </div>
+
+    </div><!-- /qbcd-body -->
+
+    <!-- ── FOOTER ─────────────────────────────────────────────────── -->
+    <div class="qbcd-footer">
+      <button class="qbcd-nav-btn" id="qbcdPrevBtn">← Prev</button>
+      <span class="qbcd-pos" id="qbcdPos">— of —</span>
+      <button class="qbcd-nav-btn" id="qbcdNextBtn">Next →</button>
+      <div class="qbcd-footer-right">
+        <button class="qbcd-copy-btn" id="qbcdCopyBtn">Copy Case #</button>
+        <button class="qbcd-close-btn" id="qbcdCloseBtn2">Close</button>
+      </div>
+    </div>
+
+  </div><!-- /qbcd-shell -->
+</div><!-- /qbCaseDetailModal -->
 
 </body>
 </html>
