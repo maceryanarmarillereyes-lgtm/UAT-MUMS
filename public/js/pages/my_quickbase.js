@@ -3830,15 +3830,13 @@
     // Covers the case where navigation happened during state initialization.
     if (!root.isConnected) return;
 
-    try {
-    root.querySelector('#qbOpenSettingsBtn').onclick = openSettings;
-
-    // ── QB CASE DETAIL MODAL CONTROLLER ──────────────────────────────────────
-    // Wired ONCE per page-load via a delegated 'click' listener on #qbDataBody.
-    // Survives every renderRecords() call without rebinding.
-    // Survives SPA re-navigation: window.Pages.my_quickbase() is called fresh,
-    // root.innerHTML is rebuilt, and this IIFE runs again capturing the new root.
-    // NO window-level flags (no __qbcdInited) — scope is entirely local.
+    // ── QB CASE DETAIL MODAL CONTROLLER — hoisted before try{} ─────────────────
+    // CRITICAL FIX v3.9.29: _initQbCaseDetailModal must run BEFORE the try{}
+    // block below. Previously it sat inside try{} after querySelector wiring;
+    // if any querySelector threw (missing element), this IIFE never ran,
+    // root._qbcdOpen was never set, and deep-search case detail showed all dashes.
+    // Moving it here guarantees root._qbcdOpen is ALWAYS available immediately
+    // after root.innerHTML is built, regardless of later DOM-wiring errors.
     (function _initQbCaseDetailModal() {
       var _snaps = [];
       var _idx   = 0;
@@ -4127,6 +4125,18 @@
       }
     })();
     // ── END _initQbCaseDetailModal ────────────────────────────────────────────
+
+
+    try {
+    root.querySelector('#qbOpenSettingsBtn').onclick = openSettings;
+
+    // ── QB CASE DETAIL MODAL CONTROLLER ──────────────────────────────────────
+    // Wired ONCE per page-load via a delegated 'click' listener on #qbDataBody.
+    // Survives every renderRecords() call without rebinding.
+    // Survives SPA re-navigation: window.Pages.my_quickbase() is called fresh,
+    // root.innerHTML is rebuilt, and this IIFE runs again capturing the new root.
+    // NO window-level flags (no __qbcdInited) — scope is entirely local.
+
     root.querySelector('#qbCloseSettingsBtn').onclick = closeSettings;
     root.querySelector('#qbCancelSettingsBtn').onclick = closeSettings;
     root.querySelector('#qbSettingsModal').addEventListener('mousedown', (event) => {

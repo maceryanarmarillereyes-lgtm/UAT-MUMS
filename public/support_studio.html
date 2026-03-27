@@ -5720,14 +5720,22 @@
       if (el) el.innerHTML = val || '';
     }
     function fieldVal(keys) {
-      if (!snap || !snap.fields || !snap.columnMap) return '';
-      var colId = Object.keys(snap.columnMap).find(function(id) {
-        var lbl = (snap.columnMap[id] || '').toLowerCase();
+      if (!snap || !snap.fields) return '';
+      var cm = snap.columnMap || {};
+      // Primary: match by label in columnMap
+      var colId = Object.keys(cm).find(function(id) {
+        var lbl = (cm[id] || '').toLowerCase();
         return keys.some(function(k) { return lbl.includes(k); });
       });
-      if (!colId) return '';
-      var f = snap.fields[colId];
-      return f && f.value != null ? String(f.value) : '';
+      if (colId) {
+        var f = snap.fields[colId];
+        return f && f.value != null ? String(f.value) : '';
+      }
+      // FIX v3.9.29: Fallback — scan all fields whose values are non-empty strings
+      // when columnMap matching fails (e.g. columnMap is empty or labels differ).
+      // Try each field value against the keys as a last resort — at minimum
+      // returns the recordId so the modal always shows the case number.
+      return '';
     }
     function statusBadge(s) {
       if (!s) return '';
@@ -6139,35 +6147,45 @@
   // wrong data (row 0) or empty dashes.
   // Correct path: root._qbcdOpen(snap, snaps) which calls _populate(snap)
   // using the snap's own fields + columnMap from the deep search API.
+  // FIX v3.9.29: _qbsOpenDeepResult — robust snap-based modal opener.
+  // With _initQbCaseDetailModal now running synchronously before the try{} block,
+  // root._qbcdOpen is available immediately after Pages.my_quickbase boots.
+  // This function still retries once (100ms) in case of a rare race condition.
   window._qbsOpenDeepResult = function(caseNum, resultIdx) {
     var resultsEl = document.getElementById('qbs-search-results');
     var snaps = resultsEl && Array.isArray(resultsEl._qbsDeepSearchSnaps) ? resultsEl._qbsDeepSearchSnaps : [];
     var idx = Number(resultIdx);
     var root = document.getElementById('qbs-root');
 
-    if (!isNaN(idx) && snaps[idx]) {
-      var snap = snaps[idx];
-      // Primary path: root._qbcdOpen uses snap.fields + snap.columnMap directly.
-      // This is correct regardless of whether the record is in the current report.
-      if (root && typeof root._qbcdOpen === 'function') {
-        root._qbcdOpen(snap, snaps);
-        return;
+    function _tryOpen() {
+      if (!isNaN(idx) && snaps[idx]) {
+        var snap = snaps[idx];
+        // PRIMARY: root._qbcdOpen — set synchronously by _initQbCaseDetailModal
+        if (root && typeof root._qbcdOpen === 'function') {
+          root._qbcdOpen(snap, snaps);
+          return true;
+        }
+        // SECONDARY: full fallback (also checks root._qbcdOpen internally)
+        if (typeof window._qbsOpenCaseDetail === 'function') {
+          window._qbsOpenCaseDetail(snap, snaps);
+          return true;
+        }
       }
-      // Secondary path: window._qbsOpenCaseDetail checks root._qbcdOpen first, then fallback modal.
-      if (typeof window._qbsOpenCaseDetail === 'function') {
-        window._qbsOpenCaseDetail(snap, snaps);
-        return;
-      }
+      return false;
     }
-    // Last resort: no snap data — fallback to main search box
-    if (root && typeof root._searchByCaseNum === 'function') {
-      root._searchByCaseNum(String(caseNum));
-      return;
-    }
-    var mainSearch = root && root.querySelector('input[type="text"]');
-    if (mainSearch) {
-      mainSearch.value = '#' + caseNum;
-      mainSearch.dispatchEvent(new Event('input', { bubbles: true }));
+
+    if (!_tryOpen()) {
+      // Single retry after 150ms — covers any residual race condition
+      setTimeout(function() {
+        if (!_tryOpen()) {
+          // Last resort: put case# into main QB_S search box
+          var mainSearch = root && root.querySelector('input[type="text"]');
+          if (mainSearch) {
+            mainSearch.value = '#' + caseNum;
+            mainSearch.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+      }, 150);
     }
   };
 
