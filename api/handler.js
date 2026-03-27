@@ -98,6 +98,9 @@ const ROUTES = {
   'studio/cache_manifest':     require('../server/routes/studio/cache_manifest'),
   'studio/cache_bundle':       require('../server/routes/studio/cache_bundle'),
   'studio/csv_settings':       require('../server/routes/studio/csv_settings'),
+  'studio/kb_settings':        require('../server/routes/studio/kb_settings'),
+  'studio/kb_sync':            require('../server/routes/studio/kb_sync'),
+  'studio/kb_download':        require('../server/routes/studio/kb_download'),
 };
 
 const DYNAMIC_ROUTES = [

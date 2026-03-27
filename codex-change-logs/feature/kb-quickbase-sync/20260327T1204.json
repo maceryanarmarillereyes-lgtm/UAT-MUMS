@@ -1,0 +1,10 @@
+{
+  "branch": "feature/kb-quickbase-sync/20260327T1204",
+  "date_utc": "2026-03-27T12:12:06Z",
+  "summary": [
+    "Added Support Studio Knowledge Base backend settings, sync, and download proxy endpoints.",
+    "Added Quickbase sync service with pagination, download link extraction, and deduplication.",
+    "Extended Support Studio UI with Knowledge Base tab, sync settings section, filters, charts, and table rendering.",
+    "Added unit/integration tests for quickbase sync service helpers and pagination behavior."
+  ]
+}

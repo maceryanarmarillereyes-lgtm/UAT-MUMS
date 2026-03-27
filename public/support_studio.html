@@ -1520,6 +1520,9 @@
         <button class="ss-tab" data-tab="parts_number" id="ss-tab-parts_number">
           <i class="fas fa-barcode"></i> Parts Number
         </button>
+        <button class="ss-tab" data-tab="knowledge_base" id="ss-tab-knowledge_base">
+          <i class="fas fa-book"></i> Knowledge Base
+        </button>
         <button class="ss-tab" data-tab="catalog" id="ss-tab-catalog">
           <i class="fas fa-microchip"></i> Product Controllers
         </button>
@@ -1684,6 +1687,13 @@
               <i class="fas fa-barcode" style="font-size:11px;color:#fb923c;"></i>
             </span>
             <span>Part Number Settings</span>
+          </button>
+          <button class="ss-settings-nav-btn" data-settings-section="kb-settings"
+            style="width:100%;padding:10px 16px;background:transparent;border:none;border-left:3px solid transparent;color:var(--ss-muted);cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;font-family:var(--ss-font);font-weight:600;text-align:left;transition:all .15s;">
+            <span style="width:26px;height:26px;border-radius:7px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="fas fa-book" style="font-size:11px;color:#22d3ee;"></i>
+            </span>
+            <span>Knowledge Base Sync</span>
           </button>
 
           <!-- ── Separator ── -->
@@ -1946,6 +1956,34 @@
         </div>
         <div style="display:none;" aria-hidden="true">
           <select id="pn-cat-filter" onchange="window._pnApplyFilters()"><option value="">All Categories</option></select>
+        </div>
+      </div>
+
+      <div id="left-panel-knowledge_base" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
+        <div class="prem-sb-header">
+          <div class="prem-sb-identity">
+            <div class="prem-sb-icon" style="background:rgba(34,211,238,.14);border-color:rgba(34,211,238,.35);"><i class="fas fa-book"></i></div>
+            <div>
+              <div class="prem-sb-title">Knowledge Base</div>
+              <div class="prem-sb-sub">Quickbase technical support assets</div>
+            </div>
+          </div>
+          <div class="prem-stats-grid">
+            <div class="prem-stat-pill">
+              <div class="prem-stat-num" id="kb-stats-total">—</div>
+              <div class="prem-stat-lbl">Items</div>
+            </div>
+            <div class="prem-stat-pill purple">
+              <div class="prem-stat-num purple" id="kb-stats-products">—</div>
+              <div class="prem-stat-lbl">Products</div>
+            </div>
+          </div>
+        </div>
+        <div class="prem-sb-search">
+          <div class="prem-search-wrap">
+            <i class="fas fa-search prem-search-icon"></i>
+            <input id="kb-search-input" type="text" class="prem-search-inp" placeholder="Search KB title, product, family…" autocomplete="off" oninput="window._kbApplyFilters()">
+          </div>
         </div>
       </div>
 
@@ -2465,6 +2503,19 @@
             </div>
           </div><!-- /settings-section-parts-number-settings -->
 
+          <div id="settings-section-kb-settings" style="display:none;">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:0;">
+              <div style="width:44px;height:44px;border-radius:12px;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas fa-book" style="color:#22d3ee;font-size:18px;"></i></div>
+              <div><div style="font-size:17px;font-weight:900;color:#e6edf3;letter-spacing:-.01em;">Knowledge Base Sync Settings</div><div style="font-size:11px;color:var(--ss-muted);margin-top:2px;">Configure Quickbase app URL, token, and sync schedule.</div></div>
+            </div>
+            <div style="height:1px;background:linear-gradient(90deg,rgba(34,211,238,.3),transparent);margin:18px 0 20px;"></div>
+            <div style="display:grid;grid-template-columns:1fr;gap:10px;">
+              <div><label style="font-size:10px;font-weight:800;color:var(--ss-muted);">Quickbase App URL</label><input id="kb-settings-app-url" class="ss-input" type="text" placeholder="https://...quickbase.com/nav/app/..." style="margin-top:6px;"></div>
+              <div><label style="font-size:10px;font-weight:800;color:var(--ss-muted);">Quickbase User Token</label><input id="kb-settings-token" class="ss-input" type="password" placeholder="Enter new token to replace" style="margin-top:6px;"></div>
+              <div><label style="font-size:10px;font-weight:800;color:var(--ss-muted);">Sync Schedule</label><select id="kb-settings-schedule" class="ss-input" style="margin-top:6px;"><option value="">Manual only</option><option value="hourly">Hourly</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
+            </div>
+            <div style="margin-top:16px;display:flex;align-items:center;gap:8px;"><button onclick="window._kbSaveSettings()" style="padding:9px 14px;background:linear-gradient(135deg,#0e7490,#155e75);border:1px solid rgba(34,211,238,.35);border-radius:8px;color:#fff;font-size:12px;font-weight:800;font-family:var(--ss-font);cursor:pointer;"><i class="fas fa-save"></i> Save KB Settings</button><span id="kb-settings-msg" style="font-size:11px;color:var(--ss-muted);"></span></div>
+          </div>
 
           <!-- ════════════════════════════════════════════════════════
                SECTION: Appearance  [PLACEHOLDER — coming soon]
@@ -2888,6 +2939,40 @@
           <button onclick="window._pnChangePage(1)" id="pn-next-btn" class="prem-page-nav">Next ›</button>
         </div>
       </div><!-- /canvas-parts_number -->
+
+      <div id="canvas-knowledge_base" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
+        <div class="ss-canvas-toolbar" style="flex-shrink:0;">
+          <div class="ss-canvas-toolbar-left">
+            <span class="ss-mode-badge" style="background:rgba(34,211,238,.1);color:#22d3ee;border-color:rgba(34,211,238,.3);">
+              <i class="fas fa-book" style="font-size:9px;margin-right:4px;"></i> Knowledge Base
+            </span>
+            <span id="kb-last-sync" style="font-size:10px;color:var(--ss-muted);">Last synced: —</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;margin-left:auto;">
+            <input id="kb-filter-product" class="ss-input" style="height:28px;min-width:150px;" placeholder="Filter product" oninput="window._kbApplyFilters()">
+            <input id="kb-filter-family" class="ss-input" style="height:28px;min-width:150px;" placeholder="Filter family" oninput="window._kbApplyFilters()">
+            <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--ss-muted);"><input id="kb-log-toggle" type="checkbox" onchange="window._kbRenderCharts()"> Log scale</label>
+            <button onclick="window._kbSyncNow()" class="prem-tb-btn"><i class="fas fa-sync-alt"></i> Sync Now</button>
+            <button onclick="window._kbLoad()" class="prem-tb-btn"><i class="fas fa-rotate"></i> Refresh</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 16px;flex-shrink:0;">
+          <div style="background:var(--ss-surface2);border:1px solid var(--ss-border);border-radius:8px;padding:10px;min-height:110px;">
+            <div style="font-size:10px;color:var(--ss-muted);margin-bottom:8px;">Troubleshooting Trend</div>
+            <div id="kb-chart-troubleshooting" style="display:flex;gap:4px;align-items:flex-end;height:70px;"></div>
+          </div>
+          <div style="background:var(--ss-surface2);border:1px solid var(--ss-border);border-radius:8px;padding:10px;min-height:110px;">
+            <div style="font-size:10px;color:var(--ss-muted);margin-bottom:8px;">Fast Track / Education Trend</div>
+            <div id="kb-chart-education" style="display:flex;gap:4px;align-items:flex-end;height:70px;"></div>
+          </div>
+        </div>
+        <div id="kb-table-wrap" style="flex:1;overflow:auto;min-height:0;padding:0 16px 16px;">
+          <table class="prem-table" style="min-width:1100px;">
+            <thead><tr><th>Name</th><th>Related Product</th><th>Product Family</th><th>Type</th><th>Downloads</th><th>Date Created</th><th>Source Link</th></tr></thead>
+            <tbody id="kb-table-body"><tr><td colspan="7" style="text-align:center;padding:30px;color:var(--ss-muted);">Loading Knowledge Base…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
 
       <!-- ═══════════════════════════════════════════════════════════════
            SUPPORT RECORDS — Canvas (pure results, sidebar handles filter/search)
@@ -4641,6 +4726,24 @@
 </script>
 
 <script>
+(function(){
+  'use strict';
+  const state={all:[],filtered:[],page:1,perPage:25,initialized:false};
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');}
+  function authHeaders(){try{const t=localStorage.getItem('mums_jwt')||localStorage.getItem('sb-access-token')||'';return t?{Authorization:'Bearer '+t}:{}}catch(_){return {}}}
+  function fmtDate(v){if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?esc(v):d.toLocaleDateString();}
+  function bars(el,arr){if(!el)return;const log=!!(document.getElementById('kb-log-toggle')&&document.getElementById('kb-log-toggle').checked);const vals=arr.length?arr:[0];const max=Math.max.apply(null,vals.map(n=>log?Math.log10((n||0)+1):(n||0)))||1;el.innerHTML=vals.map(n=>{const v=log?Math.log10((n||0)+1):(n||0);const h=Math.max(4,Math.round((v/max)*64));return '<div title="'+n+'" style="flex:1;background:linear-gradient(180deg,rgba(88,166,255,.9),rgba(88,166,255,.25));border:1px solid rgba(88,166,255,.35);border-radius:4px 4px 0 0;height:'+h+'px"></div>';}).join('');}
+  function renderTable(){const body=document.getElementById('kb-table-body');if(!body)return;const q=String((document.getElementById('kb-search-input')||{}).value||'').toLowerCase().trim();const p=String((document.getElementById('kb-filter-product')||{}).value||'').toLowerCase().trim();const f=String((document.getElementById('kb-filter-family')||{}).value||'').toLowerCase().trim();state.filtered=state.all.filter(it=>{const blob=[it.title,it.related_product,it.product_family,it.type].join(' ').toLowerCase();if(q&&!blob.includes(q))return false;if(p&&!String(it.related_product||'').toLowerCase().includes(p))return false;if(f&&!String(it.product_family||'').toLowerCase().includes(f))return false;return true;});const rows=state.filtered.slice((state.page-1)*state.perPage,(state.page-1)*state.perPage+state.perPage);if(!rows.length){body.innerHTML='<tr><td colspan="7" style="text-align:center;padding:36px;color:var(--ss-muted)">No knowledge base items found. Click Sync Now to refresh.</td></tr>';return;}body.innerHTML=rows.map(it=>{const dls=Array.isArray(it.download_url)&&it.download_url.length?it.download_url.map((u,i)=>'<a class="prem-tb-btn" style="padding:4px 8px;margin:0 4px 4px 0;display:inline-flex;" href="/api/studio/kb_download?url='+encodeURIComponent(u)+'" target="_blank" rel="noopener">Download</a>').join(''):'<span style="opacity:.6;">N/A</span>';return '<tr><td>'+esc(it.title||'N/A')+'</td><td>'+esc(it.related_product||'')+'</td><td>'+esc(it.product_family||'')+'</td><td>'+esc(it.type||'')+'</td><td>'+dls+'</td><td>'+esc(fmtDate(it.created_at))+'</td><td><a href="'+esc(it.source_link||'#')+'" target="_blank" rel="noopener">Source</a></td></tr>';}).join('');}
+  function renderCharts(){const by={},edu={};state.filtered.forEach(it=>{const d=new Date(it.created_at||Date.now());const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');by[k]=(by[k]||0)+1;if(String(it.type||'').toLowerCase().includes('education')||String(it.type||'').toLowerCase().includes('fast'))edu[k]=(edu[k]||0)+1;});const keys=Object.keys(by).sort().slice(-8);bars(document.getElementById('kb-chart-troubleshooting'),keys.map(k=>by[k]||0));bars(document.getElementById('kb-chart-education'),keys.map(k=>edu[k]||0));}
+  async function load(){const body=document.getElementById('kb-table-body');if(body)body.innerHTML='<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--ss-muted)"><i class="fas fa-spinner fa-spin"></i> Loading…</td></tr>';try{const res=await fetch('/api/studio/kb_sync',{headers:Object.assign({'Content-Type':'application/json'},authHeaders())});const json=await res.json();state.all=Array.isArray(json.items)?json.items:[];document.getElementById('kb-stats-total').textContent=state.all.length.toLocaleString();document.getElementById('kb-stats-products').textContent=new Set(state.all.map(i=>String(i.related_product||'').trim()).filter(Boolean)).size.toLocaleString();const syncEl=document.getElementById('kb-last-sync');if(syncEl)syncEl.textContent='Last synced: '+(json.syncedAt?new Date(json.syncedAt).toLocaleString():'—');renderTable();renderCharts();}catch(_){if(body)body.innerHTML='<tr><td colspan="7" style="text-align:center;padding:30px;color:#f85149;">Failed to load knowledge base.</td></tr>';}}
+  async function syncNow(){const msg=document.getElementById('kb-settings-msg');try{if(msg)msg.textContent='Syncing...';const res=await fetch('/api/studio/kb_sync',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders())});const j=await res.json();if(!res.ok||!j.ok)throw new Error('sync_failed');if(msg)msg.textContent='✓ Sync complete';await load();}catch(_){if(msg)msg.textContent='✕ Sync failed';}}
+  async function loadSettings(){try{const res=await fetch('/api/studio/kb_settings',{headers:authHeaders()});const j=await res.json();const d=j&&j.settings||{};document.getElementById('kb-settings-app-url').value=d.quickbaseAppUrl||'';document.getElementById('kb-settings-token').value=d.quickbaseUserTokenSet?'__KEEP__':'';document.getElementById('kb-settings-schedule').value=d.syncSchedule||'';}catch(_){}}
+  async function saveSettings(){const msg=document.getElementById('kb-settings-msg');const body={quickbaseAppUrl:document.getElementById('kb-settings-app-url').value||'',quickbaseUserToken:document.getElementById('kb-settings-token').value||'__KEEP__',syncSchedule:document.getElementById('kb-settings-schedule').value||''};try{if(msg)msg.textContent='Saving...';const res=await fetch('/api/studio/kb_settings',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify(body)});const j=await res.json();if(!res.ok||!j.ok)throw new Error('save_failed');if(msg)msg.textContent='✓ Saved';}catch(_){if(msg)msg.textContent='✕ Save failed';}}
+  window._kbLoad=load;window._kbInit=function(){if(!state.initialized)state.initialized=true;load();};window._kbSyncNow=syncNow;window._kbApplyFilters=function(){state.page=1;renderTable();renderCharts();};window._kbRenderCharts=renderCharts;window._kbLoadSettings=loadSettings;window._kbSaveSettings=saveSettings;
+})();
+</script>
+
+<script>
 /* ═══════════════════════════════════════════════════════════════════
    SUPPORT STUDIO — Core JS (tab switching, clock, mode, call info)
 ═══════════════════════════════════════════════════════════════════ */
@@ -4648,7 +4751,7 @@
   'use strict';
 
   // ── Tab switching — single persistent layout ────────────────────
-  const LEFT_PANELS = ['catalog','config','qbs','connectplus','parts_number','support_records'];
+  const LEFT_PANELS = ['catalog','config','qbs','connectplus','parts_number','knowledge_base','support_records'];
 
   function activateTab(target) {
     document.querySelectorAll('.ss-tab').forEach(t =>
@@ -4674,6 +4777,8 @@
         window._sqbLoadSettings();
       } else if (activeSection === 'connectplus-settings' && typeof window._cpsLoadSettings === 'function') {
         window._cpsLoadSettings();
+      } else if (activeSection === 'kb-settings' && typeof window._kbLoadSettings === 'function') {
+        window._kbLoadSettings();
       }
     }
     if (target === 'qbs') {
@@ -4686,6 +4791,9 @@
     }
     if (target === 'parts_number') {
       if (typeof window._pnInit === 'function') window._pnInit();
+    }
+    if (target === 'knowledge_base') {
+      if (typeof window._kbInit === 'function') window._kbInit();
     }
     if (target === 'support_records') {
       if (typeof window._srInit === 'function') window._srInit();
