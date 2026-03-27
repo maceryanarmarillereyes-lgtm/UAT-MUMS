@@ -6097,6 +6097,9 @@
           resultsEl.innerHTML = html + paginationHtml;
           resultsEl._qbsDeepSearchSnaps = _qbsBuildDeepSearchSnaps(records, labelMap);
           resultsEl._qbsDeepSearchColumns = cols;
+          // Keep global references in sync for patch-layer fallback openers.
+          window.__studioQbDeepRecords = records;
+          window.__studioQbDeepColumns = cols;
           _qbsEnsureDeepSearchCaseDetailBinding(resultsEl);
         }
       })
@@ -6128,8 +6131,14 @@
     var root = document.getElementById('qbs-root');
 
     function _open() {
-      if (isNaN(idx) || !snaps[idx]) return false;
-      var snap = snaps[idx];
+      var snap = null;
+      if (!isNaN(idx) && snaps[idx]) snap = snaps[idx];
+      if (!snap) {
+        snap = snaps.find(function(s) {
+          return s && String(s.recordId || s.qbRecordId || '') === String(caseNum || '');
+        }) || null;
+      }
+      if (!snap) return false;
       if (root && typeof root._qbcdOpen === 'function') {
         root._qbcdOpen(snap, snaps);
         return true;
@@ -6147,7 +6156,7 @@
           var s = root && root.querySelector && root.querySelector('input[type="text"]');
           if (s) { s.value = '#' + caseNum; s.dispatchEvent(new Event('input',{bubbles:true})); }
         }
-      }, 200);
+      }, 300);
     }
   };
 

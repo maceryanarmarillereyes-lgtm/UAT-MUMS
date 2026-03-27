@@ -98,6 +98,16 @@
   function _snapFromRecord(r, rid) {
     if (!r) return { rowNum: 0, recordId: String(rid), fields: {}, columnMap: {} };
 
+    // If this is already a pre-built snap from deep-search, keep it as-is.
+    if (r && r.fields && r.columnMap && (r.recordId || r.qbRecordId)) {
+      return {
+        rowNum: Number(r.rowNum || 0),
+        recordId: String(r.recordId || r.qbRecordId || rid || ''),
+        fields: r.fields,
+        columnMap: r.columnMap
+      };
+    }
+
     // Build columnMap: prefer r.columnMap (set by qb_search.js v2.1),
     // then fall back to building from __studioQbDeepColumns.
     var columnMap = {};
@@ -133,6 +143,15 @@
   function _findInCache(rid) {
     var key = String(rid);
 
+    // 0. Deep-search snaps rendered in the current results panel
+    var resultsEl = document.getElementById('qbs-search-results');
+    if (resultsEl && Array.isArray(resultsEl._qbsDeepSearchSnaps)) {
+      var snapMatch = resultsEl._qbsDeepSearchSnaps.find(function(s) {
+        return s && String(s.recordId || s.qbRecordId || '') === key;
+      });
+      if (snapMatch) return snapMatch;
+    }
+
     // 1. Fast O(1) Map lookup (deep search results)
     if (window.__studioQbDeepMap && window.__studioQbDeepMap[key]) {
       return window.__studioQbDeepMap[key];
@@ -162,6 +181,7 @@
 
   // ── HELPER: open Case Detail modal ──────────────────────────────────────
   function _callCdOpen(snap) {
+    if (!snap || !snap.recordId) return false;
     if (typeof window.__studioQbCdOpen === 'function') {
       window.__studioQbCdOpen(snap);
       return true;
@@ -186,7 +206,22 @@
       window.MQ.openCaseDetailModal({ qbRecordId: snap.recordId || '', fields: snap.fields || {} });
       return true;
     }
-    console.warn('[SupportStudioPatch] _callCdOpen: no opener found', snap);
+    // Timing guard: if opener is still mounting, retry briefly.
+    var attempts = 0;
+    var maxAttempts = 10;
+    var timer = setInterval(function() {
+      attempts++;
+      var rootRetry = document.querySelector('[data-page="quickbase_s"]') || document.getElementById('qbs-root');
+      if (rootRetry && typeof rootRetry._qbcdOpen === 'function') {
+        clearInterval(timer);
+        rootRetry._qbcdOpen(snap, [snap]);
+        return;
+      }
+      if (attempts >= maxAttempts) {
+        clearInterval(timer);
+        console.warn('[SupportStudioPatch] _callCdOpen: no opener found after retry', snap);
+      }
+    }, 120);
     return false;
   }
 
@@ -234,16 +269,28 @@
     window._qbsOpenDeepResult = function (caseNum, cardEl) {
       if (!caseNum || String(caseNum) === '—') return;
       var rid = String(caseNum);
+      var snap = null;
+
+      // Path 0: when caller sends deep-search result index (legacy inline onclick path)
+      if (typeof cardEl === 'number' || (typeof cardEl === 'string' && /^[0-9]+$/.test(cardEl))) {
+        var idx = Number(cardEl);
+        var resultsEl = document.getElementById('qbs-search-results');
+        var snaps = resultsEl && Array.isArray(resultsEl._qbsDeepSearchSnaps) ? resultsEl._qbsDeepSearchSnaps : [];
+        if (!isNaN(idx) && snaps[idx]) {
+          snap = snaps[idx];
+          rid = String(snap.recordId || rid);
+        }
+      }
 
       // Path A: card element passed directly → read data-snap-json (most reliable)
-      if (cardEl && cardEl.getAttribute) {
+      if (!snap && cardEl && cardEl.getAttribute) {
         var rawSnap = cardEl.getAttribute('data-snap-json');
         if (rawSnap) {
           try {
             var parsed = JSON.parse(rawSnap);
             if (parsed && parsed.recordId) {
-              _callCdOpen(parsed);
-              return;
+              snap = parsed;
+              rid = String(parsed.recordId || rid);
             }
           } catch (_) {}
         }
@@ -252,8 +299,11 @@
       }
 
       // Path B: Map / array cache lookup
-      var cached = _findInCache(rid);
-      var snap = _snapFromRecord(cached, rid);
+      if (!snap) {
+        var cached = _findInCache(rid);
+        snap = _snapFromRecord(cached, rid);
+      }
+      if (!snap || !snap.recordId) return;
       _callCdOpen(snap);
     };
     console.log('[SupportStudioPatch] window._qbsOpenDeepResult v3.0 defined.');
