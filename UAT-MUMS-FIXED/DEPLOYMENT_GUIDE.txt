@@ -1,0 +1,89 @@
+DEPLOYMENT GUIDE (Phase 3 Complete Build)
+========================================
+
+This build includes:
+- Phase 1 & 2 stability fixes (schema aligned with backend)
+- Phase 3 Command Center Monitoring Dashboard (/distribution/monitoring)
+- Strict pagination (20 per page) + Load More
+- FIFO retention policy (max 50 distributions)
+- Advanced exports (CSV + Excel) with UTF-8 BOM for Excel-safe encoding
+
+
+1) Run the Supabase migration (ONE SHOT)
+--------------------------------------
+A) Open your Supabase Project
+B) Go to: SQL Editor
+C) Ensure you are running as ROLE: postgres
+D) Open the file at project root: RUN_ALL_MIGRATIONS.sql
+E) Paste ALL contents into SQL Editor and RUN.
+
+Expected result:
+- Script completes successfully.
+- The last statement is:
+  NOTIFY pgrst, 'reload schema';
+
+
+2) Verify required schema exists
+-------------------------------
+Run these checks in SQL Editor:
+
+-- Confirm task tables exist
+select to_regclass('public.task_distributions') as task_distributions;
+select to_regclass('public.task_items') as task_items;
+
+-- Confirm required columns exist
+select column_name
+from information_schema.columns
+where table_schema='public'
+  and table_name='task_items'
+  and column_name in ('problem_notes','transferred_from','assigned_by','updated_at','distribution_id');
+
+-- Confirm enum status exists (Phase 1/2/3)
+select t.typname
+from pg_type t
+where t.typname in ('task_item_status');
+
+
+3) Verify PostgREST schema reload
+--------------------------------
+A) The migration ends with: NOTIFY pgrst, 'reload schema';
+B) Confirm the API sees new columns by testing (example):
+
+- In Supabase API docs or browser:
+  GET /rest/v1/task_items?select=id,problem_notes,transferred_from&limit=1
+
+If you see problem_notes/transferred_from in the response, schema reload is working.
+
+If you get "column does not exist" errors:
+- Re-run the last line:
+  NOTIFY pgrst, 'reload schema';
+- Wait ~10-30 seconds and retry.
+
+
+4) Deploy the app (Vercel)
+-------------------------
+A) Deploy as usual.
+B) Ensure the following env vars are configured:
+- SUPABASE_URL
+- SUPABASE_ANON_KEY
+- SUPABASE_SERVICE_ROLE_KEY   (server-only)
+
+
+5) Smoke Test Checklist (Phase 3)
+---------------------------------
+A) Login as TEAM_LEAD / ADMIN
+B) Confirm sidebar has "Command Center" under Team.
+C) Open: /distribution/monitoring
+   - Loads 20 distributions
+   - Load More fetches next 20
+D) Click Manage on a distribution member:
+   - Transfer pending tasks to another member
+E) Export:
+   - Download CSV contains full rows and correct UTF-8 characters
+   - Download Excel (.xls) opens with correct characters
+
+
+Notes
+-----
+- CSV/Excel exports include UTF-8 BOM (\uFEFF) to avoid Excel character corruption.
+- FIFO retention: if a user has 50 distributions already, the oldest distribution (and its tasks) is deleted automatically before creating a new one.

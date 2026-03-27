@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "include": [
+    "/api/*",
+    "/functions/*",
+    "/health"
+  ],
+  "exclude": [
+    "/css/*",
+    "/js/*",
+    "/*.json"
+  ]
+}
