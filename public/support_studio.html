@@ -4730,7 +4730,38 @@
   'use strict';
   const state={all:[],filtered:[],page:1,perPage:25,initialized:false};
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');}
-  function authHeaders(){try{const t=localStorage.getItem('mums_jwt')||localStorage.getItem('sb-access-token')||'';return t?{Authorization:'Bearer '+t}:{}}catch(_){return {}}}
+  function kbGetToken(){
+    try{
+      const raw=localStorage.getItem('mums_supabase_session')||sessionStorage.getItem('mums_supabase_session');
+      if(raw){
+        try{
+          const parsed=JSON.parse(raw);
+          const t=parsed&&(parsed.access_token||(parsed.session&&parsed.session.access_token));
+          if(t) return String(t);
+        }catch(_){}
+      }
+      if(window.CloudAuth&&typeof window.CloudAuth.accessToken==='function'){
+        const t2=window.CloudAuth.accessToken();
+        if(t2) return String(t2);
+      }
+      if(window.Auth&&typeof window.Auth.getSession==='function'){
+        const s=window.Auth.getSession();
+        const t3=s&&s.access_token;
+        if(t3) return String(t3);
+      }
+      const legacyKeys=['mums_jwt','mums_access_token','sb-access-token','supabase.auth.token'];
+      for(const k of legacyKeys){
+        const v=localStorage.getItem(k)||sessionStorage.getItem(k);
+        if(v) return String(v);
+      }
+      if(window.opener&&window.opener.CloudAuth&&typeof window.opener.CloudAuth.accessToken==='function'){
+        const t4=window.opener.CloudAuth.accessToken();
+        if(t4) return String(t4);
+      }
+    }catch(_){}
+    return '';
+  }
+  function authHeaders(){try{const t=kbGetToken();return t?{Authorization:'Bearer '+t}:{}}catch(_){return {}}}
   function fmtDate(v){if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?esc(v):d.toLocaleDateString();}
   function bars(el,arr){if(!el)return;const log=!!(document.getElementById('kb-log-toggle')&&document.getElementById('kb-log-toggle').checked);const vals=arr.length?arr:[0];const max=Math.max.apply(null,vals.map(n=>log?Math.log10((n||0)+1):(n||0)))||1;el.innerHTML=vals.map(n=>{const v=log?Math.log10((n||0)+1):(n||0);const h=Math.max(4,Math.round((v/max)*64));return '<div title="'+n+'" style="flex:1;background:linear-gradient(180deg,rgba(88,166,255,.9),rgba(88,166,255,.25));border:1px solid rgba(88,166,255,.35);border-radius:4px 4px 0 0;height:'+h+'px"></div>';}).join('');}
   function renderTable(){const body=document.getElementById('kb-table-body');if(!body)return;const q=String((document.getElementById('kb-search-input')||{}).value||'').toLowerCase().trim();const p=String((document.getElementById('kb-filter-product')||{}).value||'').toLowerCase().trim();const f=String((document.getElementById('kb-filter-family')||{}).value||'').toLowerCase().trim();state.filtered=state.all.filter(it=>{const blob=[it.title,it.related_product,it.product_family,it.type].join(' ').toLowerCase();if(q&&!blob.includes(q))return false;if(p&&!String(it.related_product||'').toLowerCase().includes(p))return false;if(f&&!String(it.product_family||'').toLowerCase().includes(f))return false;return true;});const rows=state.filtered.slice((state.page-1)*state.perPage,(state.page-1)*state.perPage+state.perPage);if(!rows.length){body.innerHTML='<tr><td colspan="7" style="text-align:center;padding:36px;color:var(--ss-muted)">No knowledge base items found. Click Sync Now to refresh.</td></tr>';return;}body.innerHTML=rows.map(it=>{const dls=Array.isArray(it.download_url)&&it.download_url.length?it.download_url.map((u,i)=>'<a class="prem-tb-btn" style="padding:4px 8px;margin:0 4px 4px 0;display:inline-flex;" href="/api/studio/kb_download?url='+encodeURIComponent(u)+'" target="_blank" rel="noopener">Download</a>').join(''):'<span style="opacity:.6;">N/A</span>';return '<tr><td>'+esc(it.title||'N/A')+'</td><td>'+esc(it.related_product||'')+'</td><td>'+esc(it.product_family||'')+'</td><td>'+esc(it.type||'')+'</td><td>'+dls+'</td><td>'+esc(fmtDate(it.created_at))+'</td><td><a href="'+esc(it.source_link||'#')+'" target="_blank" rel="noopener">Source</a></td></tr>';}).join('');}
