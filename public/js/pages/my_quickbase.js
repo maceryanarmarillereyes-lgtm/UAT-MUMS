@@ -3830,13 +3830,11 @@
     // Covers the case where navigation happened during state initialization.
     if (!root.isConnected) return;
 
-    // ── QB CASE DETAIL MODAL CONTROLLER — hoisted before try{} ─────────────────
-    // CRITICAL FIX v3.9.29: _initQbCaseDetailModal must run BEFORE the try{}
-    // block below. Previously it sat inside try{} after querySelector wiring;
-    // if any querySelector threw (missing element), this IIFE never ran,
-    // root._qbcdOpen was never set, and deep-search case detail showed all dashes.
-    // Moving it here guarantees root._qbcdOpen is ALWAYS available immediately
-    // after root.innerHTML is built, regardless of later DOM-wiring errors.
+    // ── QB CASE DETAIL MODAL CONTROLLER — guaranteed early init ─────────────────
+    // FIX v3.9.30: Moved out of try{} block. Previously this IIFE was the 2nd
+    // statement inside try{} after querySelector wiring. If that querySelector
+    // ever threw (missing element), root._qbcdOpen was never set and every
+    // deep-search card click fell back to the broken empty-columnMap path.
     (function _initQbCaseDetailModal() {
       var _snaps = [];
       var _idx   = 0;

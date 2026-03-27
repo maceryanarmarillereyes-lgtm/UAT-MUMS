@@ -5720,22 +5720,14 @@
       if (el) el.innerHTML = val || '';
     }
     function fieldVal(keys) {
-      if (!snap || !snap.fields) return '';
-      var cm = snap.columnMap || {};
-      // Primary: match by label in columnMap
-      var colId = Object.keys(cm).find(function(id) {
-        var lbl = (cm[id] || '').toLowerCase();
+      if (!snap || !snap.fields || !snap.columnMap) return '';
+      var colId = Object.keys(snap.columnMap).find(function(id) {
+        var lbl = (snap.columnMap[id] || '').toLowerCase();
         return keys.some(function(k) { return lbl.includes(k); });
       });
-      if (colId) {
-        var f = snap.fields[colId];
-        return f && f.value != null ? String(f.value) : '';
-      }
-      // FIX v3.9.29: Fallback — scan all fields whose values are non-empty strings
-      // when columnMap matching fails (e.g. columnMap is empty or labels differ).
-      // Try each field value against the keys as a last resort — at minimum
-      // returns the recordId so the modal always shows the case number.
-      return '';
+      if (!colId) return '';
+      var f = snap.fields[colId];
+      return f && f.value != null ? String(f.value) : '';
     }
     function statusBadge(s) {
       if (!s) return '';
@@ -5920,6 +5912,9 @@
     Q3: Deep Search cards had a CASE VIEW DETAILS button (.qbs-case-detail-btn) but it used only data-qbs-result-idx and local fallback openers.
     Q4: Timing issue risk existed for cross-module calls because no stable window-level modal opener was guaranteed before external handlers fired.
   */
+  // FIX v3.9.30: Removed the broken columnMap:{} snap path entirely.
+  // This function now delegates ALL opens to _qbsOpenDeepResult which uses
+  // the pre-built snap from _qbsDeepSearchSnaps (has full fields + columnMap).
   function _qbsEnsureDeepSearchCaseDetailBinding(resultsEl) {
     if (!resultsEl || resultsEl._qbsCaseDetailBound) return;
     resultsEl._qbsCaseDetailBound = true;
@@ -5928,38 +5923,13 @@
       if (!btn) return;
       e.preventDefault();
       e.stopPropagation();
-      var row = (function() {
-        try { return JSON.parse(btn.getAttribute('data-row') || '{}'); }
-        catch(_) { return {}; }
-      })();
-      var rid = btn.getAttribute('data-rid') || row.qbRecordId || row.recordId || '';
-      // Try direct opener first (works even if QB table page not loaded)
-      if (typeof window.__studioQbCdOpen === 'function') {
-        var snap = {
-          rowNum: 0,
-          recordId: rid,
-          fields: row.fields || {},
-          columnMap: {}
-        };
-        window.__studioQbCdOpen(snap);
-        return;
+      var resultIdx = parseInt(btn.getAttribute('data-qbs-result-idx') || '', 10);
+      var rid = btn.getAttribute('data-rid') || '';
+      // Always use the pre-built snap which has the FULL columnMap + fields from the API.
+      // The old path built columnMap:{} here, making every detail view show all dashes.
+      if (!isNaN(resultIdx)) {
+        window._qbsOpenDeepResult(rid, resultIdx);
       }
-      if (window.MQ && typeof window.MQ.openCaseDetailModal === 'function') {
-        var ctx = _qbsReadContextConfig();
-        window.MQ.openCaseDetailModal({
-          qbRecordId: rid,
-          fields: row.fields || {},
-          columns: (resultsEl._qbsDeepSearchColumns || []),
-          tabConfig: ctx.tabConfig || {},
-          realm: ctx.realm || '',
-          appId: ctx.appId || '',
-          tableId: ctx.tableId || ''
-        });
-        return;
-      }
-      var idx = parseInt(btn.getAttribute('data-qbs-result-idx') || '', 10);
-      var snaps = resultsEl._qbsDeepSearchSnaps || [];
-      if (!isNaN(idx) && snaps[idx]) window._qbsOpenCaseDetail(snaps[idx], snaps);
     });
   }
 
@@ -6147,45 +6117,37 @@
   // wrong data (row 0) or empty dashes.
   // Correct path: root._qbcdOpen(snap, snaps) which calls _populate(snap)
   // using the snap's own fields + columnMap from the deep search API.
-  // FIX v3.9.29: _qbsOpenDeepResult — robust snap-based modal opener.
-  // With _initQbCaseDetailModal now running synchronously before the try{} block,
-  // root._qbcdOpen is available immediately after Pages.my_quickbase boots.
-  // This function still retries once (100ms) in case of a rare race condition.
+  // FIX v3.9.30: always use the pre-built snap from deep-search (has full fields + columnMap).
+  // root._qbcdOpen is now set synchronously (moved before try{} — FIX 1), so it is
+  // reliably available. MQ.openCaseDetailModal path removed: it looked up records in
+  // host._qbRowSnaps (active report only, max 500 rows) and missed resolved/old cases.
   window._qbsOpenDeepResult = function(caseNum, resultIdx) {
     var resultsEl = document.getElementById('qbs-search-results');
     var snaps = resultsEl && Array.isArray(resultsEl._qbsDeepSearchSnaps) ? resultsEl._qbsDeepSearchSnaps : [];
     var idx = Number(resultIdx);
     var root = document.getElementById('qbs-root');
 
-    function _tryOpen() {
-      if (!isNaN(idx) && snaps[idx]) {
-        var snap = snaps[idx];
-        // PRIMARY: root._qbcdOpen — set synchronously by _initQbCaseDetailModal
-        if (root && typeof root._qbcdOpen === 'function') {
-          root._qbcdOpen(snap, snaps);
-          return true;
-        }
-        // SECONDARY: full fallback (also checks root._qbcdOpen internally)
-        if (typeof window._qbsOpenCaseDetail === 'function') {
-          window._qbsOpenCaseDetail(snap, snaps);
-          return true;
-        }
+    function _open() {
+      if (isNaN(idx) || !snaps[idx]) return false;
+      var snap = snaps[idx];
+      if (root && typeof root._qbcdOpen === 'function') {
+        root._qbcdOpen(snap, snaps);
+        return true;
+      }
+      if (typeof window._qbsOpenCaseDetail === 'function') {
+        window._qbsOpenCaseDetail(snap, snaps);
+        return true;
       }
       return false;
     }
 
-    if (!_tryOpen()) {
-      // Single retry after 150ms — covers any residual race condition
+    if (!_open()) {
       setTimeout(function() {
-        if (!_tryOpen()) {
-          // Last resort: put case# into main QB_S search box
-          var mainSearch = root && root.querySelector('input[type="text"]');
-          if (mainSearch) {
-            mainSearch.value = '#' + caseNum;
-            mainSearch.dispatchEvent(new Event('input', { bubbles: true }));
-          }
+        if (!_open()) {
+          var s = root && root.querySelector && root.querySelector('input[type="text"]');
+          if (s) { s.value = '#' + caseNum; s.dispatchEvent(new Event('input',{bubbles:true})); }
         }
-      }, 150);
+      }, 200);
     }
   };
 
