@@ -1960,6 +1960,7 @@
       </div>
 
       <div id="left-panel-knowledge_base" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
+        <!-- Header -->
         <div class="prem-sb-header">
           <div class="prem-sb-identity">
             <div class="prem-sb-icon" style="background:rgba(34,211,238,.14);border-color:rgba(34,211,238,.35);"><i class="fas fa-book"></i></div>
@@ -1979,11 +1980,35 @@
             </div>
           </div>
         </div>
+        <!-- Search -->
         <div class="prem-sb-search">
           <div class="prem-search-wrap">
             <i class="fas fa-search prem-search-icon"></i>
-            <input id="kb-search-input" type="text" class="prem-search-inp" placeholder="Search KB title, product, family…" autocomplete="off" oninput="window._kbApplyFilters()">
+            <input id="kb-search-input" type="text" class="prem-search-inp" placeholder="Search title, product, doc#…" autocomplete="off"
+              oninput="window._kbOnSearch(this.value);document.getElementById('kb-sb-clear').style.display=this.value?'block':'none';">
+            <button id="kb-sb-clear" class="prem-search-clear" style="display:none;"
+              onclick="document.getElementById('kb-search-input').value='';this.style.display='none';window._kbOnSearch('');">✕</button>
           </div>
+          <div class="prem-search-meta">
+            <span class="prem-search-status" id="kb-status"></span>
+            <span class="prem-search-count" id="kb-search-count"></span>
+          </div>
+        </div>
+        <!-- Active filter pill -->
+        <div id="kb-active-filter" class="prem-active-filter" style="display:none;padding:5px 12px;margin:0 8px 4px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.25);border-radius:6px;font-size:10px;color:#22d3ee;display:none;align-items:center;gap:6px;">
+          <i class="fas fa-filter" style="font-size:9px;"></i>
+          <span id="kb-filter-label" style="flex:1;font-weight:700;"></span>
+          <button onclick="window._kbClearTableFilter()" style="background:none;border:none;color:#22d3ee;cursor:pointer;padding:0;font-size:11px;">✕</button>
+        </div>
+        <!-- Section: Table / Category list -->
+        <div class="prem-section-head" style="margin-top:6px;">
+          <div class="prem-section-row">
+            <span class="prem-section-lbl">Document Type / Table</span>
+            <button class="prem-section-toggle" id="kb-cat-toggle-btn" onclick="window._kbToggleSection()">▾</button>
+          </div>
+        </div>
+        <div id="kb-sidebar-table-list" class="prem-filter-list" style="flex:1;overflow-y:auto;">
+          <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
         </div>
       </div>
 
@@ -2940,39 +2965,85 @@
         </div>
       </div><!-- /canvas-parts_number -->
 
+      <!-- ═══════════════════════════════════════════════════════════════
+           KNOWLEDGE BASE — Canvas
+      ═══════════════════════════════════════════════════════════════ -->
       <div id="canvas-knowledge_base" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
+
+        <!-- ── Toolbar ── -->
         <div class="ss-canvas-toolbar" style="flex-shrink:0;">
-          <div class="ss-canvas-toolbar-left">
+          <div class="ss-canvas-toolbar-left" style="gap:8px;">
             <span class="ss-mode-badge" style="background:rgba(34,211,238,.1);color:#22d3ee;border-color:rgba(34,211,238,.3);">
               <i class="fas fa-book" style="font-size:9px;margin-right:4px;"></i> Knowledge Base
             </span>
             <span id="kb-last-sync" style="font-size:10px;color:var(--ss-muted);">Last synced: —</span>
+            <span id="kb-record-count" class="prem-count-badge" style="background:rgba(34,211,238,.1);color:#22d3ee;border-color:rgba(34,211,238,.25);"></span>
           </div>
           <div style="display:flex;align-items:center;gap:7px;margin-left:auto;">
-            <input id="kb-filter-product" class="ss-input" style="height:28px;min-width:150px;" placeholder="Filter product" oninput="window._kbApplyFilters()">
-            <input id="kb-filter-family" class="ss-input" style="height:28px;min-width:150px;" placeholder="Filter family" oninput="window._kbApplyFilters()">
-            <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--ss-muted);"><input id="kb-log-toggle" type="checkbox" onchange="window._kbRenderCharts()"> Log scale</label>
-            <button onclick="window._kbSyncNow()" class="prem-tb-btn"><i class="fas fa-sync-alt"></i> Sync Now</button>
+            <input id="kb-filter-product" class="ss-input" style="height:28px;min-width:130px;" placeholder="Filter product" oninput="window._kbApplyFilters()">
+            <input id="kb-filter-family" class="ss-input" style="height:28px;min-width:130px;" placeholder="Filter family" oninput="window._kbApplyFilters()">
+            <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--ss-muted);white-space:nowrap;"><input id="kb-log-toggle" type="checkbox" onchange="window._kbRenderCharts()"> Log scale</label>
+            <button onclick="window._kbExportCsv()" class="prem-tb-btn"><i class="fas fa-download"></i> Export CSV</button>
+            <button onclick="window._kbSyncNow()" class="prem-tb-btn" id="kb-sync-btn"><i class="fas fa-sync-alt"></i> Sync Now</button>
             <button onclick="window._kbLoad()" class="prem-tb-btn"><i class="fas fa-rotate"></i> Refresh</button>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 16px;flex-shrink:0;">
-          <div style="background:var(--ss-surface2);border:1px solid var(--ss-border);border-radius:8px;padding:10px;min-height:110px;">
-            <div style="font-size:10px;color:var(--ss-muted);margin-bottom:8px;">Troubleshooting Trend</div>
-            <div id="kb-chart-troubleshooting" style="display:flex;gap:4px;align-items:flex-end;height:70px;"></div>
+
+        <!-- ── Trend Charts ── -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:8px 16px;flex-shrink:0;">
+          <div style="background:var(--ss-surface2);border:1px solid var(--ss-border);border-radius:8px;padding:10px;min-height:100px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:10px;font-weight:700;color:var(--ss-muted);text-transform:uppercase;letter-spacing:.05em;">Troubleshooting Trend</span>
+              <span id="kb-chart-ts-label" style="font-size:9px;color:rgba(34,211,238,.6);"></span>
+            </div>
+            <div id="kb-chart-troubleshooting" style="display:flex;gap:3px;align-items:flex-end;height:60px;"></div>
           </div>
-          <div style="background:var(--ss-surface2);border:1px solid var(--ss-border);border-radius:8px;padding:10px;min-height:110px;">
-            <div style="font-size:10px;color:var(--ss-muted);margin-bottom:8px;">Fast Track / Education Trend</div>
-            <div id="kb-chart-education" style="display:flex;gap:4px;align-items:flex-end;height:70px;"></div>
+          <div style="background:var(--ss-surface2);border:1px solid var(--ss-border);border-radius:8px;padding:10px;min-height:100px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:10px;font-weight:700;color:var(--ss-muted);text-transform:uppercase;letter-spacing:.05em;">Fast Track / Education Trend</span>
+              <span id="kb-chart-edu-label" style="font-size:9px;color:rgba(168,85,247,.6);"></span>
+            </div>
+            <div id="kb-chart-education" style="display:flex;gap:3px;align-items:flex-end;height:60px;"></div>
           </div>
         </div>
-        <div id="kb-table-wrap" style="flex:1;overflow:auto;min-height:0;padding:0 16px 16px;">
-          <table class="prem-table" style="min-width:1100px;">
-            <thead><tr><th>Name</th><th>Related Product</th><th>Product Family</th><th>Type</th><th>Downloads</th><th>Date Created</th><th>Source Link</th></tr></thead>
-            <tbody id="kb-table-body"><tr><td colspan="7" style="text-align:center;padding:30px;color:var(--ss-muted);">Loading Knowledge Base…</td></tr></tbody>
+
+        <!-- ── Table header (fixed) ── -->
+        <div style="flex-shrink:0;overflow-x:auto;background:var(--ss-surface3);">
+          <table id="kb-table-head" class="prem-table" style="min-width:1060px;">
+            <thead>
+              <tr>
+                <th style="width:36px;">#</th>
+                <th style="min-width:260px;cursor:pointer;" onclick="window._kbSort('title')">Name <span id="kb-sort-title" style="opacity:.4;">⇅</span></th>
+                <th style="min-width:80px;cursor:pointer;" onclick="window._kbSort('doc_number')">Doc # <span id="kb-sort-doc_number" style="opacity:.4;">⇅</span></th>
+                <th style="min-width:120px;cursor:pointer;" onclick="window._kbSort('related_product')">Related Product <span id="kb-sort-related_product" style="opacity:.4;">⇅</span></th>
+                <th style="min-width:140px;cursor:pointer;" onclick="window._kbSort('product_family')">Product Family <span id="kb-sort-product_family" style="opacity:.4;">⇅</span></th>
+                <th style="min-width:130px;cursor:pointer;" onclick="window._kbSort('type')">Type <span id="kb-sort-type" style="opacity:.4;">⇅</span></th>
+                <th style="min-width:120px;">Downloads</th>
+                <th style="min-width:90px;cursor:pointer;" onclick="window._kbSort('created_at')">Date <span id="kb-sort-created_at" style="opacity:.4;">⇅</span></th>
+                <th style="min-width:70px;">Source</th>
+              </tr>
+            </thead>
           </table>
         </div>
-      </div>
+
+        <!-- ── Table body (scrollable) ── -->
+        <div id="kb-table-body-wrap" style="flex:1;overflow:auto;min-height:0;">
+          <table class="prem-table" style="min-width:1060px;">
+            <tbody id="kb-table-body">
+              <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ss-muted);"><i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.35;display:block;margin-bottom:12px;"></i>Loading Knowledge Base…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ── Pagination ── -->
+        <div id="kb-pagination" class="prem-pagination">
+          <span id="kb-page-info" class="prem-page-info"></span>
+          <button onclick="window._kbChangePage(-1)" id="kb-prev-btn" class="prem-page-nav">‹ Prev</button>
+          <div id="kb-page-btns" style="display:flex;gap:4px;"></div>
+          <button onclick="window._kbChangePage(1)" id="kb-next-btn" class="prem-page-nav">Next ›</button>
+        </div>
+
+      </div><!-- /canvas-knowledge_base -->
 
       <!-- ═══════════════════════════════════════════════════════════════
            SUPPORT RECORDS — Canvas (pure results, sidebar handles filter/search)
@@ -4726,51 +4797,412 @@
 </script>
 
 <script>
+/* ═══════════════════════════════════════════════════════════════════
+   KNOWLEDGE BASE — Premium JS Engine v2
+   Multi-table | Sort | Pagination | Sidebar nav | Export CSV
+═══════════════════════════════════════════════════════════════════ */
 (function(){
   'use strict';
-  const state={all:[],filtered:[],page:1,perPage:25,initialized:false};
-  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');}
+
+  const PER_PAGE = 50;
+
+  const state = {
+    all:         [],   // full dataset from server
+    filtered:    [],   // after search + type + product + family filters
+    tables:      [],   // table metadata [{id,name,count}]
+    page:        1,
+    perPage:     PER_PAGE,
+    sortKey:     '',
+    sortDir:     1,    // 1=asc -1=desc
+    tableFilter: '',   // active table_id filter from sidebar
+    initialized: false
+  };
+
+  /* ── Utils ─────────────────────────────────────────────────── */
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function fmtDate(v){ if(!v) return '—'; const d=new Date(v); return isNaN(d.getTime()) ? esc(v) : d.toLocaleDateString(); }
+
   function kbGetToken(){
     try{
       const raw=localStorage.getItem('mums_supabase_session')||sessionStorage.getItem('mums_supabase_session');
-      if(raw){
-        try{
-          const parsed=JSON.parse(raw);
-          const t=parsed&&(parsed.access_token||(parsed.session&&parsed.session.access_token));
-          if(t) return String(t);
-        }catch(_){}
-      }
-      if(window.CloudAuth&&typeof window.CloudAuth.accessToken==='function'){
-        const t2=window.CloudAuth.accessToken();
-        if(t2) return String(t2);
-      }
-      if(window.Auth&&typeof window.Auth.getSession==='function'){
-        const s=window.Auth.getSession();
-        const t3=s&&s.access_token;
-        if(t3) return String(t3);
-      }
-      const legacyKeys=['mums_jwt','mums_access_token','sb-access-token','supabase.auth.token'];
-      for(const k of legacyKeys){
-        const v=localStorage.getItem(k)||sessionStorage.getItem(k);
-        if(v) return String(v);
-      }
-      if(window.opener&&window.opener.CloudAuth&&typeof window.opener.CloudAuth.accessToken==='function'){
-        const t4=window.opener.CloudAuth.accessToken();
-        if(t4) return String(t4);
-      }
+      if(raw){ try{ const p=JSON.parse(raw); const t=p&&(p.access_token||(p.session&&p.session.access_token)); if(t) return String(t); }catch(_){} }
+      if(window.CloudAuth&&typeof window.CloudAuth.accessToken==='function'){ const t2=window.CloudAuth.accessToken(); if(t2) return String(t2); }
+      const m=document.cookie.match(/(?:^|;)\s*sb-access-token=([^;]+)/); if(m) return decodeURIComponent(m[1]);
+      if(window.opener&&window.opener.CloudAuth&&typeof window.opener.CloudAuth.accessToken==='function'){ const t4=window.opener.CloudAuth.accessToken(); if(t4) return String(t4); }
     }catch(_){}
     return '';
   }
-  function authHeaders(){try{const t=kbGetToken();return t?{Authorization:'Bearer '+t}:{}}catch(_){return {}}}
-  function fmtDate(v){if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?esc(v):d.toLocaleDateString();}
-  function bars(el,arr){if(!el)return;const log=!!(document.getElementById('kb-log-toggle')&&document.getElementById('kb-log-toggle').checked);const vals=arr.length?arr:[0];const max=Math.max.apply(null,vals.map(n=>log?Math.log10((n||0)+1):(n||0)))||1;el.innerHTML=vals.map(n=>{const v=log?Math.log10((n||0)+1):(n||0);const h=Math.max(4,Math.round((v/max)*64));return '<div title="'+n+'" style="flex:1;background:linear-gradient(180deg,rgba(88,166,255,.9),rgba(88,166,255,.25));border:1px solid rgba(88,166,255,.35);border-radius:4px 4px 0 0;height:'+h+'px"></div>';}).join('');}
-  function renderTable(){const body=document.getElementById('kb-table-body');if(!body)return;const q=String((document.getElementById('kb-search-input')||{}).value||'').toLowerCase().trim();const p=String((document.getElementById('kb-filter-product')||{}).value||'').toLowerCase().trim();const f=String((document.getElementById('kb-filter-family')||{}).value||'').toLowerCase().trim();state.filtered=state.all.filter(it=>{const blob=[it.title,it.related_product,it.product_family,it.type].join(' ').toLowerCase();if(q&&!blob.includes(q))return false;if(p&&!String(it.related_product||'').toLowerCase().includes(p))return false;if(f&&!String(it.product_family||'').toLowerCase().includes(f))return false;return true;});const rows=state.filtered.slice((state.page-1)*state.perPage,(state.page-1)*state.perPage+state.perPage);if(!rows.length){body.innerHTML='<tr><td colspan="7" style="text-align:center;padding:36px;color:var(--ss-muted)">No knowledge base items found. Click Sync Now to refresh.</td></tr>';return;}body.innerHTML=rows.map(it=>{const dls=Array.isArray(it.download_url)&&it.download_url.length?it.download_url.map((u,i)=>'<a class="prem-tb-btn" style="padding:4px 8px;margin:0 4px 4px 0;display:inline-flex;" href="/api/studio/kb_download?url='+encodeURIComponent(u)+'" target="_blank" rel="noopener">Download</a>').join(''):'<span style="opacity:.6;">N/A</span>';return '<tr><td>'+esc(it.title||'N/A')+'</td><td>'+esc(it.related_product||'')+'</td><td>'+esc(it.product_family||'')+'</td><td>'+esc(it.type||'')+'</td><td>'+dls+'</td><td>'+esc(fmtDate(it.created_at))+'</td><td><a href="'+esc(it.source_link||'#')+'" target="_blank" rel="noopener">Source</a></td></tr>';}).join('');}
-  function renderCharts(){const by={},edu={};state.filtered.forEach(it=>{const d=new Date(it.created_at||Date.now());const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');by[k]=(by[k]||0)+1;if(String(it.type||'').toLowerCase().includes('education')||String(it.type||'').toLowerCase().includes('fast'))edu[k]=(edu[k]||0)+1;});const keys=Object.keys(by).sort().slice(-8);bars(document.getElementById('kb-chart-troubleshooting'),keys.map(k=>by[k]||0));bars(document.getElementById('kb-chart-education'),keys.map(k=>edu[k]||0));}
-  async function load(){const body=document.getElementById('kb-table-body');if(body)body.innerHTML='<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--ss-muted)"><i class="fas fa-spinner fa-spin"></i> Loading…</td></tr>';try{const res=await fetch('/api/studio/kb_sync',{headers:Object.assign({'Content-Type':'application/json'},authHeaders())});const json=await res.json();state.all=Array.isArray(json.items)?json.items:[];document.getElementById('kb-stats-total').textContent=state.all.length.toLocaleString();document.getElementById('kb-stats-products').textContent=new Set(state.all.map(i=>String(i.related_product||'').trim()).filter(Boolean)).size.toLocaleString();const syncEl=document.getElementById('kb-last-sync');if(syncEl)syncEl.textContent='Last synced: '+(json.syncedAt?new Date(json.syncedAt).toLocaleString():'—');renderTable();renderCharts();}catch(_){if(body)body.innerHTML='<tr><td colspan="7" style="text-align:center;padding:30px;color:#f85149;">Failed to load knowledge base.</td></tr>';}}
-  async function syncNow(){const msg=document.getElementById('kb-settings-msg');try{if(msg)msg.textContent='Syncing...';const res=await fetch('/api/studio/kb_sync',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders())});const j=await res.json();if(!res.ok||!j.ok)throw new Error('sync_failed');if(msg)msg.textContent='✓ Sync complete';await load();}catch(_){if(msg)msg.textContent='✕ Sync failed';}}
-  async function loadSettings(){try{const res=await fetch('/api/studio/kb_settings',{headers:authHeaders()});const j=await res.json();const d=j&&j.settings||{};document.getElementById('kb-settings-app-url').value=d.quickbaseAppUrl||'';document.getElementById('kb-settings-token').value=d.quickbaseUserTokenSet?'__KEEP__':'';document.getElementById('kb-settings-schedule').value=d.syncSchedule||'';}catch(_){}}
-  async function saveSettings(){const msg=document.getElementById('kb-settings-msg');const body={quickbaseAppUrl:document.getElementById('kb-settings-app-url').value||'',quickbaseUserToken:document.getElementById('kb-settings-token').value||'__KEEP__',syncSchedule:document.getElementById('kb-settings-schedule').value||''};try{if(msg)msg.textContent='Saving...';const res=await fetch('/api/studio/kb_settings',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify(body)});const j=await res.json();if(!res.ok||!j.ok)throw new Error('save_failed');if(msg)msg.textContent='✓ Saved';}catch(_){if(msg)msg.textContent='✕ Save failed';}}
-  window._kbLoad=load;window._kbInit=function(){if(!state.initialized)state.initialized=true;load();};window._kbSyncNow=syncNow;window._kbApplyFilters=function(){state.page=1;renderTable();renderCharts();};window._kbRenderCharts=renderCharts;window._kbLoadSettings=loadSettings;window._kbSaveSettings=saveSettings;
+  function authHeaders(){ try{ const t=kbGetToken(); return t?{Authorization:'Bearer '+t}:{}; }catch(_){ return {}; } }
+
+  /* ── Sort helpers ───────────────────────────────────────────── */
+  function applySort(arr){
+    if(!state.sortKey) return arr;
+    const k=state.sortKey, d=state.sortDir;
+    return [...arr].sort((a,b)=>{
+      let av=String(a[k]||'').toLowerCase(), bv=String(b[k]||'').toLowerCase();
+      if(k==='created_at'){ av=new Date(a[k]||0).getTime(); bv=new Date(b[k]||0).getTime(); }
+      if(av<bv) return -d; if(av>bv) return d; return 0;
+    });
+  }
+
+  /* ── Sidebar table list ─────────────────────────────────────── */
+  function renderSidebar(){
+    const el=document.getElementById('kb-sidebar-table-list');
+    if(!el) return;
+
+    // Build type counts from filtered (or all if no table filter)
+    const source = state.all;
+    const typeCounts = {};
+    source.forEach(it=>{
+      const k=it.table_name||it.type||'Other';
+      typeCounts[k]=(typeCounts[k]||0)+1;
+    });
+
+    let html='';
+    // "All" pill
+    const totalCount=source.length;
+    const allActive=!state.tableFilter;
+    html+=`<div class="prem-filter-item${allActive?' active':''}" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:7px 14px;margin:1px 6px;border-radius:6px;font-size:11px;font-weight:${allActive?'700':'500'};color:${allActive?'#22d3ee':'var(--ss-muted)'};background:${allActive?'rgba(34,211,238,.1)':'transparent'};border:1px solid ${allActive?'rgba(34,211,238,.25)':'transparent'};transition:all .15s;" onclick="window._kbSetTableFilter('')"><span><i class='fas fa-layer-group' style='margin-right:6px;font-size:10px;opacity:.7;'></i>All Documents</span><span style="background:rgba(255,255,255,.07);border-radius:10px;padding:1px 7px;font-size:10px;">${totalCount.toLocaleString()}</span></div>`;
+
+    // Per-table pills
+    const tableNames=Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]);
+    tableNames.forEach(([name,cnt])=>{
+      const matchTable=state.tables.find(t=>t.name===name);
+      const tId=matchTable?matchTable.id:'';
+      const isActive=state.tableFilter&&(state.tableFilter===tId||state.tableFilter===name);
+      const icon=getTableIcon(name);
+      html+=`<div class="prem-filter-item${isActive?' active':''}" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:7px 14px;margin:1px 6px;border-radius:6px;font-size:11px;font-weight:${isActive?'700':'500'};color:${isActive?'#22d3ee':'var(--ss-muted)'};background:${isActive?'rgba(34,211,238,.1)':'transparent'};border:1px solid ${isActive?'rgba(34,211,238,.25)':'transparent'};transition:all .15s;" onclick="window._kbSetTableFilter('${esc(tId||name)}')"><span style="display:flex;align-items:center;gap:7px;"><i class='${icon}' style='font-size:10px;opacity:.7;'></i>${esc(name)}</span><span style="background:rgba(255,255,255,.07);border-radius:10px;padding:1px 7px;font-size:10px;">${cnt.toLocaleString()}</span></div>`;
+    });
+
+    el.innerHTML=html;
+  }
+
+  function getTableIcon(name){
+    const n=String(name||'').toLowerCase();
+    if(n.includes('troubleshoot')) return 'fas fa-tools';
+    if(n.includes('work instruct')||n.includes('instruction')) return 'fas fa-file-alt';
+    if(n.includes('education')||n.includes('training')||n.includes('course')) return 'fas fa-graduation-cap';
+    if(n.includes('drawing')||n.includes('cad')||n.includes('dwg')) return 'fas fa-drafting-compass';
+    if(n.includes('video')) return 'fas fa-play-circle';
+    if(n.includes('product')) return 'fas fa-microchip';
+    if(n.includes('scope')) return 'fas fa-file-contract';
+    if(n.includes('faq')) return 'fas fa-question-circle';
+    if(n.includes('documentation')) return 'fas fa-book-open';
+    if(n.includes('material')) return 'fas fa-folder-open';
+    return 'fas fa-file';
+  }
+
+  /* ── Active filter pill ─────────────────────────────────────── */
+  function updateFilterPill(){
+    const pill=document.getElementById('kb-active-filter');
+    const lbl=document.getElementById('kb-filter-label');
+    if(!pill||!lbl) return;
+    if(state.tableFilter){
+      const t=state.tables.find(t=>t.id===state.tableFilter||t.name===state.tableFilter);
+      lbl.textContent=t?t.name:state.tableFilter;
+      pill.style.display='flex';
+    } else {
+      pill.style.display='none';
+    }
+  }
+
+  /* ── Filter + sort pipeline ─────────────────────────────────── */
+  function applyFilters(){
+    const q=String((document.getElementById('kb-search-input')||{}).value||'').toLowerCase().trim();
+    const p=String((document.getElementById('kb-filter-product')||{}).value||'').toLowerCase().trim();
+    const f=String((document.getElementById('kb-filter-family')||{}).value||'').toLowerCase().trim();
+    const tf=state.tableFilter;
+
+    state.filtered=state.all.filter(it=>{
+      if(tf){
+        const matchById=it.table_id&&it.table_id===tf;
+        const matchByName=it.table_name&&it.table_name===tf;
+        if(!matchById&&!matchByName) return false;
+      }
+      if(q){
+        const blob=[it.title,it.doc_number,it.related_product,it.product_family,it.type,it.table_name].join(' ').toLowerCase();
+        if(!blob.includes(q)) return false;
+      }
+      if(p&&!String(it.related_product||'').toLowerCase().includes(p)) return false;
+      if(f&&!String(it.product_family||'').toLowerCase().includes(f)) return false;
+      return true;
+    });
+
+    state.filtered=applySort(state.filtered);
+    state.page=1;
+    renderTable();
+    renderCharts();
+    updateFilterPill();
+
+    // Update status
+    const statusEl=document.getElementById('kb-status');
+    const countEl=document.getElementById('kb-search-count');
+    if(statusEl) statusEl.textContent=q?'Results for "'+q+'"':'';
+    if(countEl) countEl.textContent=state.filtered.length!==state.all.length?state.filtered.length.toLocaleString()+' of '+state.all.length.toLocaleString():state.all.length.toLocaleString()+' items';
+
+    // Update count badge
+    const badge=document.getElementById('kb-record-count');
+    if(badge) badge.textContent=state.filtered.length.toLocaleString()+' / '+state.all.length.toLocaleString();
+  }
+
+  /* ── Table render ───────────────────────────────────────────── */
+  function renderTable(){
+    const body=document.getElementById('kb-table-body');
+    if(!body) return;
+
+    const start=(state.page-1)*state.perPage;
+    const rows=state.filtered.slice(start, start+state.perPage);
+
+    if(!rows.length){
+      body.innerHTML='<tr><td colspan="9" style="text-align:center;padding:48px 20px;color:var(--ss-muted);"><i class="fas fa-search" style="display:block;font-size:24px;opacity:.2;margin-bottom:12px;"></i>No results found. Try a different filter or click Sync Now.</td></tr>';
+      renderPagination();
+      return;
+    }
+
+    body.innerHTML=rows.map((it,idx)=>{
+      const rowNum=start+idx+1;
+
+      // Download buttons
+      const dls=Array.isArray(it.download_url)&&it.download_url.length
+        ? it.download_url.map((u,i)=>`<a class="prem-tb-btn" style="padding:3px 9px;margin:0 3px 3px 0;display:inline-flex;align-items:center;gap:4px;font-size:10px;background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.25);color:#22d3ee;" href="/api/studio/kb_download?url=${encodeURIComponent(u)}" target="_blank" rel="noopener"><i class="fas fa-download" style="font-size:9px;"></i>${it.download_url.length>1?'File '+(i+1):'Download'}</a>`).join('')
+        : '<span style="opacity:.35;font-size:10px;">—</span>';
+
+      // Type badge colour
+      const typeColor=getTypeBadgeColor(it.type||it.table_name||'');
+
+      // Source link
+      const srcLink=it.source_link
+        ? `<a href="${esc(it.source_link)}" target="_blank" rel="noopener" class="prem-tb-btn" style="padding:3px 9px;font-size:10px;display:inline-flex;align-items:center;gap:4px;"><i class="fas fa-external-link-alt" style="font-size:9px;"></i> Open</a>`
+        : '<span style="opacity:.35;">—</span>';
+
+      return `<tr>
+        <td style="color:var(--ss-muted);font-size:10px;padding:8px 10px;width:36px;">${rowNum}</td>
+        <td style="padding:8px 10px;max-width:300px;">
+          <div style="font-weight:600;color:#e6edf3;font-size:11px;line-height:1.4;">${esc(it.title||'—')}</div>
+          ${it.table_name?`<div style="font-size:9px;color:var(--ss-muted);margin-top:2px;"><i class="fas fa-folder" style="margin-right:3px;opacity:.5;"></i>${esc(it.table_name)}</div>`:''}
+        </td>
+        <td style="padding:8px 10px;font-size:10px;color:var(--ss-muted);font-family:'JetBrains Mono',monospace;white-space:nowrap;">${esc(it.doc_number||'—')}</td>
+        <td style="padding:8px 10px;font-size:10px;color:#c9d1d9;max-width:130px;">${esc(it.related_product||'—')}</td>
+        <td style="padding:8px 10px;font-size:10px;color:#c9d1d9;max-width:150px;">${esc(it.product_family||'—')}</td>
+        <td style="padding:8px 10px;">
+          <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;letter-spacing:.03em;background:${typeColor.bg};color:${typeColor.fg};border:1px solid ${typeColor.border};">${esc(it.type||it.table_name||'—')}</span>
+        </td>
+        <td style="padding:8px 10px;">${dls}</td>
+        <td style="padding:8px 10px;font-size:10px;color:var(--ss-muted);white-space:nowrap;">${fmtDate(it.created_at)}</td>
+        <td style="padding:8px 10px;">${srcLink}</td>
+      </tr>`;
+    }).join('');
+
+    renderPagination();
+    updateSortIndicators();
+  }
+
+  function getTypeBadgeColor(type){
+    const t=String(type||'').toLowerCase();
+    if(t.includes('troubleshoot')||t.includes('phone'))  return {fg:'#22d3ee',bg:'rgba(34,211,238,.1)',border:'rgba(34,211,238,.25)'};
+    if(t.includes('education')||t.includes('training'))  return {fg:'#a78bfa',bg:'rgba(167,139,250,.1)',border:'rgba(167,139,250,.25)'};
+    if(t.includes('fast track')||t.includes('fast'))     return {fg:'#fb923c',bg:'rgba(251,146,60,.1)',border:'rgba(251,146,60,.25)'};
+    if(t.includes('application')||t.includes('engineer')) return {fg:'#34d399',bg:'rgba(52,211,153,.1)',border:'rgba(52,211,153,.25)'};
+    if(t.includes('escalation'))                          return {fg:'#f87171',bg:'rgba(248,113,113,.1)',border:'rgba(248,113,113,.25)'};
+    if(t.includes('ticketing'))                           return {fg:'#60a5fa',bg:'rgba(96,165,250,.1)',border:'rgba(96,165,250,.25)'};
+    if(t.includes('knowledge'))                           return {fg:'#22d3ee',bg:'rgba(34,211,238,.1)',border:'rgba(34,211,238,.25)'};
+    if(t.includes('support'))                             return {fg:'#e2e8f0',bg:'rgba(226,232,240,.08)',border:'rgba(226,232,240,.15)'};
+    return {fg:'#8b949e',bg:'rgba(139,148,158,.1)',border:'rgba(139,148,158,.2)'};
+  }
+
+  /* ── Pagination ─────────────────────────────────────────────── */
+  function renderPagination(){
+    const total=state.filtered.length;
+    const totalPages=Math.max(1,Math.ceil(total/state.perPage));
+    const cur=state.page;
+    const start=(cur-1)*state.perPage+1;
+    const end=Math.min(cur*state.perPage,total);
+
+    const info=document.getElementById('kb-page-info');
+    if(info) info.textContent=total?`${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()}`:'No results';
+
+    const prev=document.getElementById('kb-prev-btn');
+    const next=document.getElementById('kb-next-btn');
+    if(prev) prev.disabled=cur<=1;
+    if(next) next.disabled=cur>=totalPages;
+
+    // Page number buttons (max 7 visible)
+    const btns=document.getElementById('kb-page-btns');
+    if(!btns) return;
+    let pages=[];
+    if(totalPages<=7){ for(let i=1;i<=totalPages;i++) pages.push(i); }
+    else {
+      pages=[1];
+      if(cur>3) pages.push('…');
+      for(let i=Math.max(2,cur-1);i<=Math.min(totalPages-1,cur+1);i++) pages.push(i);
+      if(cur<totalPages-2) pages.push('…');
+      pages.push(totalPages);
+    }
+    btns.innerHTML=pages.map(p=>{
+      if(p==='…') return `<span style="padding:3px 6px;font-size:10px;color:var(--ss-muted);">…</span>`;
+      const isActive=p===cur;
+      return `<button onclick="window._kbGoPage(${p})" style="min-width:26px;padding:3px 7px;border-radius:4px;font-size:10px;font-weight:${isActive?'800':'500'};background:${isActive?'rgba(34,211,238,.2)':'rgba(255,255,255,.04)'};border:1px solid ${isActive?'rgba(34,211,238,.4)':'rgba(255,255,255,.08)'};color:${isActive?'#22d3ee':'var(--ss-muted)'};cursor:${isActive?'default':'pointer'};font-family:var(--ss-font);">${p}</button>`;
+    }).join('');
+  }
+
+  /* ── Sort indicators ────────────────────────────────────────── */
+  function updateSortIndicators(){
+    ['title','doc_number','related_product','product_family','type','created_at'].forEach(k=>{
+      const el=document.getElementById('kb-sort-'+k);
+      if(!el) return;
+      if(state.sortKey===k){ el.textContent=state.sortDir===1?'↑':'↓'; el.style.opacity='1'; el.style.color='#22d3ee'; }
+      else { el.textContent='⇅'; el.style.opacity='.4'; el.style.color=''; }
+    });
+  }
+
+  /* ── Charts ─────────────────────────────────────────────────── */
+  function bars(el, arr, color){
+    if(!el) return;
+    const log=!!(document.getElementById('kb-log-toggle')&&document.getElementById('kb-log-toggle').checked);
+    const vals=arr.length?arr:[0];
+    const max=Math.max(...vals.map(n=>log?Math.log10((n||0)+1):(n||0)))||1;
+    el.innerHTML=vals.map((n,i)=>{
+      const v=log?Math.log10((n||0)+1):(n||0);
+      const h=Math.max(3,Math.round((v/max)*52));
+      const c=color||'rgba(34,211,238,.8)';
+      return `<div title="${n}" style="flex:1;background:${c};border-radius:3px 3px 0 0;height:${h}px;min-width:3px;transition:height .2s;"></div>`;
+    }).join('');
+  }
+
+  function renderCharts(){
+    const byMonth={}, byEdu={};
+    state.filtered.forEach(it=>{
+      const d=new Date(it.created_at||Date.now());
+      const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      byMonth[k]=(byMonth[k]||0)+1;
+      const t=String(it.type||it.table_name||'').toLowerCase();
+      if(t.includes('education')||t.includes('training')||t.includes('fast track')||t.includes('course')) byEdu[k]=(byEdu[k]||0)+1;
+    });
+    const keys=Object.keys(byMonth).sort().slice(-12);
+    bars(document.getElementById('kb-chart-troubleshooting'),keys.map(k=>byMonth[k]||0),'rgba(34,211,238,.75)');
+    bars(document.getElementById('kb-chart-education'),keys.map(k=>byEdu[k]||0),'rgba(167,139,250,.75)');
+    const tsLbl=document.getElementById('kb-chart-ts-label');
+    const eduLbl=document.getElementById('kb-chart-edu-label');
+    if(tsLbl) tsLbl.textContent=keys.length?keys[0].replace('-','/')+' – '+keys[keys.length-1].replace('-','/'):'';
+    if(eduLbl) eduLbl.textContent=Object.values(byEdu).reduce((a,b)=>a+b,0)+' edu items';
+  }
+
+  /* ── Stats update ───────────────────────────────────────────── */
+  function updateStats(){
+    const totEl=document.getElementById('kb-stats-total');
+    const prodEl=document.getElementById('kb-stats-products');
+    if(totEl) totEl.textContent=state.all.length.toLocaleString();
+    if(prodEl) prodEl.textContent=new Set(state.all.map(i=>String(i.related_product||'').trim()).filter(Boolean)).size.toLocaleString();
+    const badge=document.getElementById('kb-record-count');
+    if(badge) badge.textContent=state.all.length.toLocaleString()+' items';
+  }
+
+  /* ── Export CSV ─────────────────────────────────────────────── */
+  function exportCsv(){
+    const cols=['title','doc_number','related_product','product_family','type','table_name','created_at','source_link'];
+    const header=cols.join(',');
+    const rows=state.filtered.map(it=>cols.map(c=>{
+      const v=String(it[c]||'').replace(/"/g,'""');
+      return v.includes(',')||v.includes('"')||v.includes('\n')?`"${v}"`:v;
+    }).join(','));
+    const csv=[header,...rows].join('\n');
+    const blob=new Blob([csv],{type:'text/csv'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='knowledge_base_export_'+new Date().toISOString().slice(0,10)+'.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  /* ── Load data ──────────────────────────────────────────────── */
+  async function load(){
+    const body=document.getElementById('kb-table-body');
+    if(body) body.innerHTML='<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ss-muted);"><i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.35;display:block;margin-bottom:10px;"></i>Loading Knowledge Base…</td></tr>';
+    try{
+      const res=await fetch('/api/studio/kb_sync',{headers:Object.assign({'Content-Type':'application/json'},authHeaders())});
+      const json=await res.json();
+      state.all=Array.isArray(json.items)?json.items:[];
+      state.tables=Array.isArray(json.tables)?json.tables:[];
+      updateStats();
+      const syncEl=document.getElementById('kb-last-sync');
+      if(syncEl) syncEl.textContent='Last synced: '+(json.syncedAt?new Date(json.syncedAt).toLocaleString():'—');
+      renderSidebar();
+      applyFilters();
+    }catch(err){
+      console.error('[KB] load failed',err);
+      if(body) body.innerHTML='<tr><td colspan="9" style="text-align:center;padding:40px;color:#f85149;"><i class="fas fa-exclamation-triangle" style="display:block;font-size:20px;margin-bottom:10px;"></i>Failed to load Knowledge Base. Check sync settings.</td></tr>';
+    }
+  }
+
+  /* ── Sync Now ───────────────────────────────────────────────── */
+  async function syncNow(){
+    const btn=document.getElementById('kb-sync-btn');
+    const msg=document.getElementById('kb-settings-msg');
+    try{
+      if(btn){ btn.disabled=true; btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Syncing…'; }
+      if(msg) msg.textContent='Syncing…';
+      const res=await fetch('/api/studio/kb_sync',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders())});
+      const j=await res.json();
+      if(!res.ok||!j.ok) throw new Error('sync_failed');
+      if(msg) msg.textContent='✓ Sync complete — '+((j.tables||[]).length)+' table(s), '+(j.count||0)+' items';
+      await load();
+    }catch(err){
+      if(msg) msg.textContent='✕ Sync failed: '+String(err&&err.message||err);
+    }finally{
+      if(btn){ btn.disabled=false; btn.innerHTML='<i class="fas fa-sync-alt"></i> Sync Now'; }
+    }
+  }
+
+  /* ── Settings load/save ─────────────────────────────────────── */
+  async function loadSettings(){
+    try{
+      const res=await fetch('/api/studio/kb_settings',{headers:authHeaders()});
+      const j=await res.json();
+      const d=j&&j.settings||{};
+      document.getElementById('kb-settings-app-url').value=d.quickbaseAppUrl||'';
+      document.getElementById('kb-settings-token').value=d.quickbaseUserTokenSet?'__KEEP__':'';
+      document.getElementById('kb-settings-schedule').value=d.syncSchedule||'';
+    }catch(_){}
+  }
+  async function saveSettings(){
+    const msg=document.getElementById('kb-settings-msg');
+    const body={quickbaseAppUrl:document.getElementById('kb-settings-app-url').value||'',quickbaseUserToken:document.getElementById('kb-settings-token').value||'__KEEP__',syncSchedule:document.getElementById('kb-settings-schedule').value||''};
+    try{
+      if(msg) msg.textContent='Saving…';
+      const res=await fetch('/api/studio/kb_settings',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify(body)});
+      const j=await res.json();
+      if(!res.ok||!j.ok) throw new Error('save_failed');
+      if(msg) msg.textContent='✓ Saved';
+    }catch(_){ if(msg) msg.textContent='✕ Save failed'; }
+  }
+
+  /* ── Public API ─────────────────────────────────────────────── */
+  window._kbLoad            = load;
+  window._kbInit            = function(){ if(!state.initialized){ state.initialized=true; load(); } };
+  window._kbSyncNow         = syncNow;
+  window._kbApplyFilters    = function(){ state.page=1; applyFilters(); };
+  window._kbOnSearch        = function(v){ state.page=1; applyFilters(); };
+  window._kbRenderCharts    = renderCharts;
+  window._kbLoadSettings    = loadSettings;
+  window._kbSaveSettings    = saveSettings;
+  window._kbExportCsv       = exportCsv;
+  window._kbSort            = function(key){ if(state.sortKey===key){ state.sortDir*=-1; } else { state.sortKey=key; state.sortDir=1; } state.page=1; applyFilters(); };
+  window._kbChangePage      = function(d){ const tp=Math.ceil(state.filtered.length/state.perPage)||1; state.page=Math.max(1,Math.min(tp,state.page+d)); renderTable(); };
+  window._kbGoPage          = function(p){ state.page=p; renderTable(); };
+  window._kbSetTableFilter  = function(tf){
+    state.tableFilter=tf; state.page=1;
+    applyFilters(); renderSidebar(); updateFilterPill();
+  };
+  window._kbClearTableFilter= function(){ window._kbSetTableFilter(''); };
+  window._kbToggleSection   = function(){
+    const el=document.getElementById('kb-sidebar-table-list');
+    const btn=document.getElementById('kb-cat-toggle-btn');
+    if(!el) return;
+    const hidden=el.style.display==='none';
+    el.style.display=hidden?'':'none';
+    if(btn) btn.textContent=hidden?'▾':'▸';
+  };
+
 })();
 </script>
 
