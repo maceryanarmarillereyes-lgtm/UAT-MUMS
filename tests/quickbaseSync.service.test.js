@@ -41,4 +41,20 @@ const svc = require('../server/services/quickbaseSync');
   assert.equal(item.download_url[0], 'https://copeland-coldchainservices.quickbase.com/up/bk24j9j8b/g/rh/eh/wb');
 })();
 
+(function testUnquotedHrefAndUrlPriority(){
+  const fields = {
+    '30': 'Download',
+    '31': 'File Attachment'
+  };
+  const record = {
+    '3': { value: 12 },
+    '6': { value: 'Doc C' },
+    // Some QB formula URL cells render href without quotes
+    '30': { value: '<a class=V href=/up/bk24j9j8b/g/rf/em/vb>Download</a>' },
+    '31': { value: 'https://copeland-coldchainservices.quickbase.com/files/bk24j9j8b/1/7/1' }
+  };
+  const item = svc.mapRecordToKbItem(record, fields, { quickbaseRealm: 'copeland-coldchainservices.quickbase.com', quickbaseAppUrl: 'https://x' });
+  assert.equal(item.download_url[0], 'https://copeland-coldchainservices.quickbase.com/up/bk24j9j8b/g/rf/em/vb');
+})();
+
 console.log('quickbaseSync.service.test.js passed');

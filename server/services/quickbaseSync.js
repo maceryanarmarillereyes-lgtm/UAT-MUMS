@@ -97,6 +97,9 @@ function extractUrlsFromText(input) {
   const hrefRe = /href\s*=\s*["']([^"']+)["']/ig;
   let m;
   while ((m = hrefRe.exec(txt))) out.push(m[1]);
+  // Unquoted href support: href=/up/... (seen in some QB-rendered formula fields)
+  const hrefBareRe = /href\s*=\s*([^"'\s>]+)/ig;
+  while ((m = hrefBareRe.exec(txt))) out.push(m[1]);
 
   // Plain absolute URLs
   const absRe = /\bhttps?:\/\/[^\s"'<>]+/ig;
@@ -106,6 +109,67 @@ function extractUrlsFromText(input) {
   const relRe = /\/(?:up|db|nav|files)\/[^\s"'<>]+/ig;
   while ((m = relRe.exec(txt))) out.push(m[0]);
 
+  return out;
+}
+
+function extractUrlsFromCell(record, fid) {
+  const out = [];
+  const seen = new Set();
+  const push = (u) => {
+    const s = String(u || '').trim();
+    if (!s || seen.has(s)) return;
+    seen.add(s);
+    out.push(s);
+  };
+
+  const cell = record && record[String(fid)];
+  const value = cell && typeof cell === 'object' ? cell.value : cell;
+  if (value == null) return out;
+
+  if (typeof value === 'string' || typeof value === 'number') {
+    const str = String(value);
+    push(str);
+    extractUrlsFromText(str).forEach(push);
+    return out;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((entry) => {
+      if (entry && typeof entry === 'object') {
+        push(entry.url || entry.href || entry.link || entry.value || entry.name || entry.text || '');
+        if (entry.url) extractUrlsFromText(entry.url).forEach(push);
+        if (entry.href) extractUrlsFromText(entry.href).forEach(push);
+      } else {
+        const str = String(entry || '');
+        push(str);
+        extractUrlsFromText(str).forEach(push);
+      }
+    });
+    return out;
+  }
+
+  if (typeof value === 'object') {
+    // Known QB attachment/formula-url object shapes
+    push(value.url || value.href || value.link || value.value || value.name || value.text || '');
+    if (Array.isArray(value.versions)) {
+      value.versions.forEach((ver) => {
+        if (!ver || typeof ver !== 'object') return;
+        push(ver.url || ver.href || ver.link || '');
+      });
+    }
+    // Last-chance scan of shallow string values
+    Object.values(value).forEach((v) => {
+      if (typeof v === 'string') {
+        push(v);
+        extractUrlsFromText(v).forEach(push);
+      }
+    });
+    return out;
+  }
+
+  const fallback = String(value || '');
+  push(fallback);
+  extractUrlsFromText(fallback).forEach(push);
   return out;
 }
 
@@ -129,13 +193,14 @@ function extractDownloadLinks(record, fields, realm) {
     const isAttachmentField = low.includes('file') || low.includes('url') || low.includes('attach');
     if (!isLinkField && !isAttachmentField) return;
 
-    const raw = pickFieldValue(record, fid);
-    if (!raw) return;
-
     const candidates = new Set();
-    // Split on pipe separator (QB can store multiple file URLs)
-    String(raw).split(/\s*\|\s*/).map(s => s.trim()).filter(Boolean).forEach(v => candidates.add(v));
-    extractUrlsFromText(raw).forEach(v => candidates.add(v));
+    extractUrlsFromCell(record, fid).forEach(v => candidates.add(v));
+    const raw = pickFieldValue(record, fid);
+    if (raw) {
+      // Split on pipe separator (QB can store multiple file URLs)
+      String(raw).split(/\s*\|\s*/).map(s => s.trim()).filter(Boolean).forEach(v => candidates.add(v));
+      extractUrlsFromText(raw).forEach(v => candidates.add(v));
+    }
 
     Array.from(candidates).forEach(candidate => {
       const safe = normalizeUrl(candidate, realm);
@@ -145,9 +210,19 @@ function extractDownloadLinks(record, fields, realm) {
     });
   });
 
+  const score = (url) => {
+    const u = String(url || '').toLowerCase();
+    if (u.includes('/up/')) return 100;
+    if (u.includes('/db/')) return 90;
+    if (u.includes('/nav/')) return 80;
+    if (u.includes('/files/')) return 40;
+    return 10;
+  };
+
   // Permanent preference: if Link/Download field exists, use those exactly.
-  // Fallback only when no explicit link field is available.
-  return preferred.length ? preferred : fallback;
+  // Secondary preference: choose Quickbase-native route style (/up/, /db/, /nav/) ahead of /files/.
+  const chosen = preferred.length ? preferred : fallback;
+  return chosen.slice().sort((a, b) => score(b) - score(a));
 }
 
 async function readSettings() {
