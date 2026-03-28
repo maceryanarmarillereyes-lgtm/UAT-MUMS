@@ -74,9 +74,8 @@
           '<label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);">User Token</label>',
           '<span id="kbs-token-badge"',
             ' style="display:none;font-size:9px;font-weight:700;padding:1px 7px;border-radius:20px;background:rgba(63,185,80,.12);color:#3fb950;border:1px solid rgba(63,185,80,.3);">',
-            '✓ Token Saved</span>',
+            '\u2713 Token Saved</span>',
         '</div>',
-        // Honeypot to suppress browser autofill
         '<input type="password" autocomplete="new-password" tabindex="-1"',
           ' style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">',
         '<input id="kbs-token" class="ss-input" type="password"',
@@ -145,12 +144,8 @@
     var el = document.getElementById('settings-section-kb-settings');
     if (!el) return;
     el.innerHTML = KB_PANEL_HTML;
-
-    // Highlight active preset after injection
     var schedEl = document.getElementById('kbs-schedule');
-    if (schedEl) {
-      schedEl.addEventListener('input', function () { schedEl._userEdited = true; });
-    }
+    if (schedEl) schedEl.addEventListener('input', function () { schedEl._userEdited = true; });
     var realmEl = document.getElementById('kbs-realm');
     var tableEl = document.getElementById('kbs-table-id');
     var qidEl   = document.getElementById('kbs-qid');
@@ -205,19 +200,17 @@
     if (q && !q._userEdited && p.qid)     q.value = p.qid;
   };
 
-  // ── Schedule preset highlight ─────────────────────────────────────────────
   window._kbsSetSchedule = function (val) {
     var el = document.getElementById('kbs-schedule');
     if (el) el.value = val;
     document.querySelectorAll('.kbs-preset-btn').forEach(function (b) {
       var isActive = b.dataset.val === val;
-      b.style.background     = isActive ? 'rgba(34,211,238,.15)' : 'rgba(255,255,255,.04)';
-      b.style.borderColor    = isActive ? 'rgba(34,211,238,.4)'  : 'rgba(255,255,255,.1)';
-      b.style.color          = isActive ? '#22d3ee'              : 'var(--ss-muted)';
+      b.style.background  = isActive ? 'rgba(34,211,238,.15)' : 'rgba(255,255,255,.04)';
+      b.style.borderColor = isActive ? 'rgba(34,211,238,.4)'  : 'rgba(255,255,255,.1)';
+      b.style.color       = isActive ? '#22d3ee'              : 'var(--ss-muted)';
     });
   };
 
-  // ── Sync status display ───────────────────────────────────────────────────
   function _renderSyncStatus(lastSyncedAt) {
     var el = document.getElementById('kbs-last-synced');
     if (!el) return;
@@ -234,10 +227,9 @@
     } catch (_) { el.textContent = lastSyncedAt; }
   }
 
-  // ── Load settings ─────────────────────────────────────────────────────────
   function _kbsLoad() {
     var st = document.getElementById('kbs-load-status');
-    if (st) { st.textContent = 'Loading…'; st.style.color = 'var(--ss-muted)'; }
+    if (st) { st.textContent = 'Loading\u2026'; st.style.color = 'var(--ss-muted)'; }
     fetch('/api/studio/kb_settings', { headers: _authHeader() })
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -250,12 +242,10 @@
         sv('kbs-table-id', s.quickbaseTableId);
         sv('kbs-qid',      s.quickbaseQid);
         sv('kbs-schedule', s.syncSchedule);
-        // Highlight matching schedule preset
         if (s.syncSchedule) window._kbsSetSchedule(s.syncSchedule);
-        // Token
         var tok = document.getElementById('kbs-token');
         if (tok) tok.placeholder = s.quickbaseUserTokenSet
-          ? '●●●●●●●●●●●● (token saved — enter new to replace)'
+          ? '\u25cf\u25cf\u25cf\u25cf\u25cf\u25cf\u25cf\u25cf\u25cf\u25cf\u25cf\u25cf (token saved \u2014 enter new to replace)'
           : 'Enter Quickbase User Token';
         var badge = document.getElementById('kbs-token-badge');
         if (badge) badge.style.display = s.quickbaseUserTokenSet ? 'inline-flex' : 'none';
@@ -264,20 +254,19 @@
       .catch(function () { if (st) { st.textContent = 'Network error.'; st.style.color = '#f85149'; } });
   }
 
-  // ── Save settings ─────────────────────────────────────────────────────────
   window._kbsSaveSettings = function () {
     var btn = document.getElementById('kbs-save-btn');
     var sp  = btn && btn.querySelector('span');
     if (btn) btn.disabled = true;
-    if (sp)  sp.textContent = 'Saving…';
+    if (sp)  sp.textContent = 'Saving\u2026';
     var tok = document.getElementById('kbs-token');
     var tokVal = tok ? tok.value.trim() : '';
     var body = {
-      quickbaseAppUrl:  _v('kbs-app-url'),
-      quickbaseRealm:   _v('kbs-realm'),
-      quickbaseTableId: _v('kbs-table-id'),
-      quickbaseQid:     _v('kbs-qid'),
-      syncSchedule:     _v('kbs-schedule'),
+      quickbaseAppUrl:    _v('kbs-app-url'),
+      quickbaseRealm:     _v('kbs-realm'),
+      quickbaseTableId:   _v('kbs-table-id'),
+      quickbaseQid:       _v('kbs-qid'),
+      syncSchedule:       _v('kbs-schedule'),
       quickbaseUserToken: tokVal || '__KEEP__'
     };
     fetch('/api/studio/kb_settings', {
@@ -290,32 +279,31 @@
         if (btn) btn.disabled = false;
         if (sp)  sp.textContent = 'Save KB Settings';
         if (data.ok) {
-          _showMsg('kbs-save-msg', '✓ Saved', 'ok');
+          _showMsg('kbs-save-msg', '\u2713 Saved', 'ok');
           var s = data.settings || {};
           var badge = document.getElementById('kbs-token-badge');
           if (badge) badge.style.display = s.quickbaseUserTokenSet ? 'inline-flex' : 'none';
           if (tok) tok.value = '';
         } else {
-          _showMsg('kbs-save-msg', '✗ ' + (data.error || 'Save failed'), 'err');
+          _showMsg('kbs-save-msg', '\u2717 ' + (data.error || 'Save failed'), 'err');
         }
       })
       .catch(function () {
         if (btn) btn.disabled = false;
         if (sp)  sp.textContent = 'Save KB Settings';
-        _showMsg('kbs-save-msg', '✗ Network error', 'err');
+        _showMsg('kbs-save-msg', '\u2717 Network error', 'err');
       });
   };
 
   function _v(id) { var e = document.getElementById(id); return e ? e.value.trim() : ''; }
 
-  // ── Manual sync ───────────────────────────────────────────────────────────
   window._kbsRunSync = function () {
     var btn   = document.getElementById('kbs-sync-btn');
     var icon  = document.getElementById('kbs-sync-icon');
     var label = document.getElementById('kbs-sync-label');
     if (btn)   btn.disabled = true;
     if (icon)  icon.className = 'fas fa-sync-alt fa-spin';
-    if (label) label.textContent = 'Syncing…';
+    if (label) label.textContent = 'Syncing\u2026';
     fetch('/api/studio/kb_sync', {
       method: 'POST',
       headers: Object.assign({ 'Content-Type': 'application/json' }, _authHeader())
@@ -326,24 +314,23 @@
         if (icon)  icon.className = 'fas fa-sync-alt';
         if (label) label.textContent = 'Sync Now';
         if (data.ok) {
-          _showMsg('kbs-sync-msg', '✓ Synced ' + (data.count || 0) + ' records', 'ok');
+          _showMsg('kbs-sync-msg', '\u2713 Synced ' + (data.count || 0) + ' records', 'ok');
           _renderSyncStatus(data.syncedAt);
           var tot = document.getElementById('kbs-stat-total');
           if (tot) tot.textContent = (data.count || 0).toLocaleString();
           _kbsLoadStats();
         } else {
-          _showMsg('kbs-sync-msg', '✗ ' + (data.error || 'Sync failed'), 'err');
+          _showMsg('kbs-sync-msg', '\u2717 ' + (data.error || 'Sync failed'), 'err');
         }
       })
       .catch(function () {
         if (btn)   btn.disabled = false;
         if (icon)  icon.className = 'fas fa-sync-alt';
         if (label) label.textContent = 'Sync Now';
-        _showMsg('kbs-sync-msg', '✗ Network error', 'err');
+        _showMsg('kbs-sync-msg', '\u2717 Network error', 'err');
       });
   };
 
-  // ── Load stats (GET kb_sync for counts + tables) ──────────────────────────
   function _kbsLoadStats() {
     fetch('/api/studio/kb_sync', { headers: _authHeader() })
       .then(function (r) { return r.json(); })
@@ -375,7 +362,6 @@
       .catch(function () {});
   }
 
-  // ── Init (called lazily when section becomes visible) ────────────────────
   var _ready = false;
   window._kbsInit = function () {
     if (_ready) return;
@@ -384,7 +370,6 @@
     _kbsLoadStats();
   };
 
-  // ── Hook: fire when the settings section is shown ────────────────────────
   function _watchSection() {
     var el = document.getElementById('settings-section-kb-settings');
     if (!el) return;
@@ -392,13 +377,11 @@
       if (el.style.display !== 'none') window._kbsInit();
     });
     obs.observe(el, { attributes: true, attributeFilter: ['style'] });
-    // Also handle custom event dispatched by settings nav
     document.addEventListener('ss:settings:section', function (e) {
       if (e && e.detail === 'kb-settings') window._kbsInit();
     });
   }
 
-  // ── Bootstrap ────────────────────────────────────────────────────────────
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () { _inject(); _watchSection(); });
   } else {
