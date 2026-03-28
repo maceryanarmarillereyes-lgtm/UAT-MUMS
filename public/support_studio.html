@@ -4819,7 +4819,7 @@
   };
 
   /* ── Utils ─────────────────────────────────────────────────── */
-  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   function fmtDate(v){ if(!v) return '—'; const d=new Date(v); return isNaN(d.getTime()) ? esc(v) : d.toLocaleDateString(); }
 
   function kbGetToken(){
@@ -4997,7 +4997,7 @@
 
       // Download buttons
       const dls=Array.isArray(it.download_url)&&it.download_url.length
-        ? it.download_url.map((u,i)=>`<a class="prem-tb-btn" style="padding:3px 9px;margin:0 3px 3px 0;display:inline-flex;align-items:center;gap:4px;font-size:10px;background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.25);color:#22d3ee;cursor:pointer;" onclick="kbDownloadFile('${esc(u)}', this)" rel="noopener"><i class="fas fa-download" style="font-size:9px;"></i>${it.download_url.length>1?'File '+(i+1):'Download'}</a>`).join('')
+        ? it.download_url.map((u,i)=>`<a class="prem-tb-btn" style="padding:3px 9px;margin:0 3px 3px 0;display:inline-flex;align-items:center;gap:4px;font-size:10px;background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.25);color:#22d3ee;cursor:pointer;" onclick="kbDownloadFile(atob('${btoa(u)}'), this)" rel="noopener"><i class="fas fa-download" style="font-size:9px;"></i>${it.download_url.length>1?'File '+(i+1):'Download'}</a>`).join('')
         : '<span style="opacity:.35;font-size:10px;">—</span>';
 
       // Type badge colour
