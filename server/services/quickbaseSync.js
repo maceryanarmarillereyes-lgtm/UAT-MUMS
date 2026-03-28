@@ -267,6 +267,9 @@ function extractDownloadLinks(record, fields, realm) {
   const validateUrl = (raw) => {
     const safe = normalizeUrl(String(raw || '').trim(), safeRealm);
     if (!safe || !/^https?:\/\/[^/]+\.[^/]+/i.test(safe)) return '';
+    // Keep URLs as-is — the download proxy (kb_download.js) converts /files/ and
+    // /up/ formats to the correct QB REST API v1 endpoint at fetch time.
+    // Do NOT pre-convert here — the proxy needs the original URL to parse correctly.
     return safe;
   };
 
