@@ -184,10 +184,24 @@ function extractUrlsFromCell(record, fid) {
   }
 
   if (typeof value === 'object') {
-    // ── FIX#6: traverse versions[] for file-attachment cells ──────────────
-    // QB file-attachment fields return { versions: [{ url: '/up/...', ... }] }
-    // The highest version (last index) holds the correct /up/ direct-download URL.
-    // This was previously skipped, causing the /files/ fallback URL to win.
+    // ── PRIORITY ORDER: value.url FIRST, then versions[] ──────────────────
+    // QB file-attachment REST response shape:
+    //   value.url      = "https://realm/up/tableId/g/rb/eh/vb"  ← QB canonical URL (what QB UI shows)
+    //   versions[].url = "/up/tableId/a/r/recordId/e/fieldId/1" ← versioned record URL
+    //
+    // BOTH contain /up/ so they score equally in ranking.
+    // FIRST-pushed wins the tie. We MUST push value.url first so the
+    // canonical QB URL (matching what QB shows on hover) is the winner.
+    //
+    // BUG WAS: versions[] pushed first → versioned URL won → mismatch with QB UI
+    // FIX:     value.url pushed first  → canonical URL wins → matches QB UI ✓
+    const canonicalUrl = value.url || value.href || value.link || '';
+    if (canonicalUrl) {
+      push(canonicalUrl);
+      extractUrlsFromText(canonicalUrl).forEach(push);
+    }
+
+    // versions[] — added as fallback only (will lose tie-break since pushed after canonical)
     if (Array.isArray(value.versions) && value.versions.length) {
       for (let i = value.versions.length - 1; i >= 0; i -= 1) {
         const ver = value.versions[i];
@@ -198,7 +212,10 @@ function extractUrlsFromCell(record, fid) {
       }
     }
 
-    push(value.url || value.href || value.link || value.value || value.name || value.text || '');
+    // Remaining string values on the object
+    if (!canonicalUrl) {
+      push(value.value || value.name || value.text || '');
+    }
     Object.values(value).forEach((v) => {
       if (typeof v === 'string') {
         push(v);
@@ -258,8 +275,12 @@ function extractDownloadLinks(record, fields, realm) {
   const score = (entry) => {
     const u = String((entry && entry.url) || '').toLowerCase();
     let routeWeight = 50;
-    if (u.includes('/up/')) routeWeight = 1000;
-    else if (u.includes('/db/') && (u.includes('a=d') || u.includes('act=download'))) routeWeight = 900;
+    if (u.includes('/up/')) {
+      // QB canonical attachment viewer URL (/up/tableId/g/...) scores highest
+      // QB versioned record URL (/up/tableId/a/r/...) scores slightly lower
+      // Both are /up/ but we must prefer QB's own canonical URL format
+      routeWeight = u.includes('/up/') && u.match(/\/up\/[^/]+\/g\//) ? 1200 : 1000;
+    } else if (u.includes('/db/') && (u.includes('a=d') || u.includes('act=download'))) routeWeight = 900;
     else if (u.includes('/db/')) routeWeight = 100;
     else if (u.includes('/nav/')) routeWeight = 80;
     else if (u.includes('/files/')) routeWeight = 10;
