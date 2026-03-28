@@ -74,8 +74,6 @@ function pickFieldValue(record, fid) {
             .filter(Boolean).join(' | ');
   }
   if (typeof v === 'object') {
-    // Direct URL property (QB URL fields, file attachments)
-    if (v.url) return String(v.url);
     // QB file attachment versions array — newest version is last element
     if (Array.isArray(v.versions) && v.versions.length) {
       for (let i = v.versions.length - 1; i >= 0; i--) {
@@ -83,31 +81,73 @@ function pickFieldValue(record, fid) {
         if (ver && ver.url) return String(ver.url);
       }
     }
+    // Direct URL property (QB URL fields, file attachments)
+    if (v.url) return String(v.url);
     return String(v.value || v.name || v.text || '');
   }
   return '';
+}
+
+function extractUrlsFromText(input) {
+  const txt = String(input || '').trim();
+  if (!txt) return [];
+  const out = [];
+
+  // HTML anchor href (formula URL/rich text fields)
+  const hrefRe = /href\s*=\s*["']([^"']+)["']/ig;
+  let m;
+  while ((m = hrefRe.exec(txt))) out.push(m[1]);
+
+  // Plain absolute URLs
+  const absRe = /\bhttps?:\/\/[^\s"'<>]+/ig;
+  while ((m = absRe.exec(txt))) out.push(m[0]);
+
+  // Common Quickbase relative paths seen in formula links
+  const relRe = /\/(?:up|db|nav|files)\/[^\s"'<>]+/ig;
+  while ((m = relRe.exec(txt))) out.push(m[0]);
+
+  return out;
 }
 
 // ── FIX #4b: extractDownloadLinks ────────────────────────────────
 // ADDED: 'attach' keyword to catch QB "File Attachment" typed fields
 // ADDED: strict URL validation — only keep fully formed absolute URLs
 function extractDownloadLinks(record, fields, realm) {
-  const links = new Set();
+  const preferred = [];
+  const fallback = [];
+  const seen = new Set();
+
+  const pushUnique = (bucket, url) => {
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    bucket.push(url);
+  };
+
   Object.entries(fields || {}).forEach(([fid, label]) => {
     const low = String(label || '').toLowerCase();
-    if (!low.includes('link') && !low.includes('download') &&
-        !low.includes('file') && !low.includes('url') &&
-        !low.includes('attach')) return;
-    const v = pickFieldValue(record, fid);
-    if (!v) return;
-    // Split on pipe separator or double-space (QB can store multiple file URLs)
-    String(v).split(/\s*\|\s*/).map(s => s.trim()).filter(Boolean).forEach(candidate => {
+    const isLinkField = low.includes('link') || low.includes('download');
+    const isAttachmentField = low.includes('file') || low.includes('url') || low.includes('attach');
+    if (!isLinkField && !isAttachmentField) return;
+
+    const raw = pickFieldValue(record, fid);
+    if (!raw) return;
+
+    const candidates = new Set();
+    // Split on pipe separator (QB can store multiple file URLs)
+    String(raw).split(/\s*\|\s*/).map(s => s.trim()).filter(Boolean).forEach(v => candidates.add(v));
+    extractUrlsFromText(raw).forEach(v => candidates.add(v));
+
+    Array.from(candidates).forEach(candidate => {
       const safe = normalizeUrl(candidate, realm);
-      // Extra guard: must be a real URL with a hostname that has a dot
-      if (safe && /^https?:\/\/[^/]+\.[^/]+/i.test(safe)) links.add(safe);
+      if (!safe || !/^https?:\/\/[^/]+\.[^/]+/i.test(safe)) return;
+      if (isLinkField) pushUnique(preferred, safe);
+      else pushUnique(fallback, safe);
     });
   });
-  return Array.from(links);
+
+  // Permanent preference: if Link/Download field exists, use those exactly.
+  // Fallback only when no explicit link field is available.
+  return preferred.length ? preferred : fallback;
 }
 
 async function readSettings() {
