@@ -4834,6 +4834,8 @@
   }
   function authHeaders(){ try{ const t=kbGetToken(); return t?{Authorization:'Bearer '+t}:{}; }catch(_){ return {}; } }
 
+
+
   /* ── Sort helpers ───────────────────────────────────────────── */
   function applySort(arr){
     if(!state.sortKey) return arr;
@@ -4963,8 +4965,12 @@
       const rowNum=start+idx+1;
 
       // Download buttons
+      // Route KB downloads through server proxy so QB auth header can be attached
       const dls=Array.isArray(it.download_url)&&it.download_url.length
-        ? it.download_url.map((u,i)=>`<a class="prem-tb-btn" style="padding:3px 9px;margin:0 3px 3px 0;display:inline-flex;align-items:center;gap:4px;font-size:10px;background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.25);color:#22d3ee;" href="${esc(u)}" target="_blank" rel="noopener"><i class="fas fa-download" style="font-size:9px;"></i>${it.download_url.length>1?'File '+(i+1):'Download'}</a>`).join('')
+        ? it.download_url.map((u,i)=>{
+            const dlUrl='/api/studio/kb_download?url='+encodeURIComponent(u);
+            return `<a class="prem-tb-btn" style="padding:3px 9px;margin:0 3px 3px 0;display:inline-flex;align-items:center;gap:4px;font-size:10px;background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.25);color:#22d3ee;" href="${esc(dlUrl)}" target="_blank" rel="noopener"><i class="fas fa-download" style="font-size:9px;"></i>${it.download_url.length>1?'File '+(i+1):'Download'}</a>`;
+          }).join('')
         : '<span style="opacity:.35;font-size:10px;">—</span>';
 
       // Type badge colour
@@ -5155,25 +5161,75 @@
 
   /* ── Settings load/save ─────────────────────────────────────── */
   async function loadSettings(){
+    const msg=document.getElementById('kb-settings-msg');
     try{
+      if(msg){ msg.style.color='var(--ss-muted)'; msg.textContent='Loading…'; }
       const res=await fetch('/api/studio/kb_settings',{headers:authHeaders()});
+      if(!res.ok){
+        const reason=res.status===401?'Unauthorized — please log in again':res.status===403?'Forbidden — Super Admin only':('HTTP '+res.status);
+        if(msg){ msg.style.color='#f85149'; msg.textContent='✕ Load failed: '+reason; }
+        return;
+      }
       const j=await res.json();
       const d=j&&j.settings||{};
       document.getElementById('kb-settings-app-url').value=d.quickbaseAppUrl||'';
-      document.getElementById('kb-settings-token').value=d.quickbaseUserTokenSet?'__KEEP__':'';
+      // FIX: show placeholder hint when token is already set vs not configured
+      const tokenEl=document.getElementById('kb-settings-token');
+      if(tokenEl){
+        tokenEl.value=d.quickbaseUserTokenSet?'__KEEP__':'';
+        tokenEl.placeholder=d.quickbaseUserTokenSet?'Token saved — enter new value to replace':'Enter Quickbase User Token';
+      }
       document.getElementById('kb-settings-schedule').value=d.syncSchedule||'';
-    }catch(_){}
+      // Show last synced time if available
+      if(msg){
+        if(d.lastSyncedAt){
+          const dt=new Date(d.lastSyncedAt);
+          msg.style.color='#3fb950';
+          msg.textContent='✓ Settings loaded — Last sync: '+dt.toLocaleString();
+        } else {
+          msg.style.color='var(--ss-muted)';
+          msg.textContent=d.quickbaseAppUrl?'✓ Settings loaded — not yet synced':'No settings configured yet';
+        }
+      }
+    }catch(err){
+      if(msg){ msg.style.color='#f85149'; msg.textContent='✕ Load error: '+String(err&&err.message||err); }
+      console.error('[KB Settings] loadSettings error:', err);
+    }
   }
   async function saveSettings(){
     const msg=document.getElementById('kb-settings-msg');
-    const body={quickbaseAppUrl:document.getElementById('kb-settings-app-url').value||'',quickbaseUserToken:document.getElementById('kb-settings-token').value||'__KEEP__',syncSchedule:document.getElementById('kb-settings-schedule').value||''};
+    const appUrl=(document.getElementById('kb-settings-app-url').value||'').trim();
+    const tokenVal=(document.getElementById('kb-settings-token').value||'').trim();
+    const schedule=document.getElementById('kb-settings-schedule').value||'';
+
+    // FIX BUG 2a: validate App URL before sending — empty URL is a common mis-save
+    if(!appUrl){
+      if(msg){ msg.style.color='#f85149'; msg.textContent='✕ Quickbase App URL is required'; }
+      return;
+    }
+
+    const body={
+      quickbaseAppUrl: appUrl,
+      // FIX BUG 2b: if user cleared the token field, default to __KEEP__ (don't wipe existing token)
+      quickbaseUserToken: tokenVal||'__KEEP__',
+      syncSchedule: schedule,
+    };
     try{
-      if(msg) msg.textContent='Saving…';
+      if(msg){ msg.style.color='var(--ss-muted)'; msg.textContent='Saving…'; }
       const res=await fetch('/api/studio/kb_settings',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHeaders()),body:JSON.stringify(body)});
-      const j=await res.json();
-      if(!res.ok||!j.ok) throw new Error('save_failed');
-      if(msg) msg.textContent='✓ Saved';
-    }catch(_){ if(msg) msg.textContent='✕ Save failed'; }
+      const j=await res.json().catch(()=>({}));
+      // FIX BUG 2c: show actual error from server, not generic "save_failed"
+      if(!res.ok||!j.ok){
+        const reason=j.error||j.message||('HTTP '+res.status);
+        throw new Error(reason);
+      }
+      if(msg){ msg.style.color='#3fb950'; msg.textContent='✓ Settings saved'; }
+      // FIX BUG 2d: reload fields from server to confirm round-trip persistence
+      setTimeout(()=>{ loadSettings(); }, 400);
+    }catch(err){
+      if(msg){ msg.style.color='#f85149'; msg.textContent='✕ Save failed: '+String(err&&err.message||err); }
+      console.error('[KB Settings] saveSettings error:', err);
+    }
   }
 
   /* ── Public API ─────────────────────────────────────────────── */
@@ -5599,6 +5655,10 @@
         window._cacheUI.refreshPanel();
       } else if (section === 'studio-appearance' && typeof window._appLoadDisplay === 'function') {
         window._appLoadDisplay();
+      } else if (section === 'kb-settings' && typeof window._kbLoadSettings === 'function') {
+        // FIX BUG 1: was missing — KB Settings fields were always blank
+        // because _kbLoadSettings() was never called when clicking this nav item.
+        window._kbLoadSettings();
       }
     });
   });
