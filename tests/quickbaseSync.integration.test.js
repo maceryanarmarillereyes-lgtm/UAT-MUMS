@@ -13,7 +13,7 @@ const svc = require('../server/services/quickbaseSync');
       : [{ '3': { value: 251 }, '6': { value: 'Row 251' } }];
     return {
       ok: true,
-      json: async () => ({ data: rows, fields: { '6': 'Name', '20': 'Download Link' } })
+      json: async () => ({ data: rows, fields: [{ id: 6, label: 'Name' }, { id: 20, label: 'Download Link' }] })
     };
   };
 
