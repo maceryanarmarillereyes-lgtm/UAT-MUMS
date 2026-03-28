@@ -1,13 +1,17 @@
 // ─────────────────────────────────────────────────────────────────
 //  quickbaseSync.js  — Knowledge Base sync service
-//  FIXED v2.1:
+//  FIXED v2.2:
 //    FIX#2 - normalizeUrl: reject bare numbers/words, only accept
-//            real URLs (https://) or QB relative paths (/xxx)
+//            real URLs (https://) or QB relative paths (/xxx).
+//            AUTO-APPEND .quickbase.com when realm is a bare subdomain.
 //    FIX#3 - mapRecordToKbItem: fully label-based field discovery,
 //            no hardcoded field IDs 9/10/13/14
 //    FIX#4 - pickFieldValue: handle QB file attachment versions[].url
 //    FIX#5 - extractDownloadLinks: prioritize direct-download URLs
 //            (/up/* and /db/* with download params) over /files/*.
+//    FIX#6 - extractUrlsFromCell: traverse value.versions[].url so
+//            the correct /up/ direct-download URL from file-attachment
+//            cells is always collected (was silently dropped before).
 // ─────────────────────────────────────────────────────────────────
 const { serviceSelect, serviceUpsert } = require('../lib/supabase');
 const { decryptText } = require('../lib/crypto');
@@ -15,6 +19,15 @@ const { decryptText } = require('../lib/crypto');
 const KB_SETTINGS_KEY = 'ss_kb_settings';
 const KB_ITEMS_KEY = 'ss_kb_items';
 const QB_DBID_RE = /\b[bt][a-z0-9]{8,14}\b/i;
+
+// ── FIX#2 / FIX#6: ensure realm always has the full QB hostname ────────────
+function _ensureQbRealm(realm) {
+  const r = String(realm || '').trim();
+  if (!r) return r;
+  // If realm has no dot it is a bare subdomain — append .quickbase.com
+  if (!r.includes('.')) return `${r}.quickbase.com`;
+  return r;
+}
 
 function normalizeUrl(raw, realm) {
   const val = String(raw || '').trim();
@@ -27,9 +40,10 @@ function normalizeUrl(raw, realm) {
     }
   }
   if (/^\/[a-zA-Z]/.test(val)) {
-    if (!realm) return '';
+    const safeRealm = _ensureQbRealm(realm);
+    if (!safeRealm) return '';
     try {
-      return new URL(val, `https://${realm}`).toString();
+      return new URL(val, `https://${safeRealm}`).toString();
     } catch (_) {
       return '';
     }
@@ -143,13 +157,21 @@ function extractUrlsFromCell(record, fid) {
   }
 
   if (typeof value === 'object') {
-    push(value.url || value.href || value.link || value.value || value.name || value.text || '');
-    if (Array.isArray(value.versions)) {
-      value.versions.forEach((ver) => {
-        if (!ver || typeof ver !== 'object') return;
-        push(ver.url || ver.href || ver.link || '');
-      });
+    // ── FIX#6: traverse versions[] for file-attachment cells ──────────────
+    // QB file-attachment fields return { versions: [{ url: '/up/...', ... }] }
+    // The highest version (last index) holds the correct /up/ direct-download URL.
+    // This was previously skipped, causing the /files/ fallback URL to win.
+    if (Array.isArray(value.versions) && value.versions.length) {
+      for (let i = value.versions.length - 1; i >= 0; i -= 1) {
+        const ver = value.versions[i];
+        if (ver && ver.url) {
+          push(ver.url);
+          extractUrlsFromText(ver.url).forEach(push);
+        }
+      }
     }
+
+    push(value.url || value.href || value.link || value.value || value.name || value.text || '');
     Object.values(value).forEach((v) => {
       if (typeof v === 'string') {
         push(v);
@@ -175,6 +197,8 @@ function extractDownloadLinks(record, fields, realm) {
     collected.push({ url, sourceWeight });
   };
 
+  const safeRealm = _ensureQbRealm(realm);
+
   Object.entries(fields || {}).forEach(([fid, label]) => {
     const low = String(label || '').toLowerCase();
     const isLinkField = low.includes('link') || low.includes('download');
@@ -194,7 +218,7 @@ function extractDownloadLinks(record, fields, realm) {
     }
 
     Array.from(candidates).forEach((candidate) => {
-      const safe = normalizeUrl(candidate, realm);
+      const safe = normalizeUrl(candidate, safeRealm);
       if (!safe || !/^https?:\/\/[^/]+\.[^/]+/i.test(safe)) return;
       const sourceWeight = isLinkField ? 30 : 10;
       pushUnique(safe, sourceWeight);
@@ -490,12 +514,13 @@ function mapRecordToKbItem(record, fields, settings, tableId, tableName) {
     if (isTextValue(v)) productFamily = v;
   }
 
-  const downloadUrls = extractDownloadLinks(record, fields, settings && settings.quickbaseRealm);
+  const safeRealm = _ensureQbRealm(settings && settings.quickbaseRealm);
+  const downloadUrls = extractDownloadLinks(record, fields, safeRealm);
 
   let sourceLink = '';
   const recId = pickFieldValue(record, 3);
-  if (recId && settings && settings.quickbaseRealm && settings.quickbaseAppId && tableId) {
-    sourceLink = `https://${settings.quickbaseRealm}/nav/app/${settings.quickbaseAppId}/table/${tableId}/record/${recId}`;
+  if (recId && safeRealm && settings && settings.quickbaseAppId && tableId) {
+    sourceLink = `https://${safeRealm}/nav/app/${settings.quickbaseAppId}/table/${tableId}/record/${recId}`;
   }
   if (!sourceLink && settings) sourceLink = settings.quickbaseAppUrl || '';
 
