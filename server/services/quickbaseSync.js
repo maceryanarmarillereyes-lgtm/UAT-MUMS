@@ -160,14 +160,13 @@ function extractUrlsFromCell(record, fid) {
 
 // ── FIX #5: extractDownloadLinks ────────────────────────────────
 function extractDownloadLinks(record, fields, realm) {
-  const preferred = [];
-  const fallback = [];
+  const collected = [];
   const seen = new Set();
 
-  const pushUnique = (bucket, url) => {
+  const pushUnique = (url, sourceWeight) => {
     if (!url || seen.has(url)) return;
     seen.add(url);
-    bucket.push(url);
+    collected.push({ url, sourceWeight });
   };
 
   Object.entries(fields || {}).forEach(([fid, label]) => {
@@ -187,26 +186,30 @@ function extractDownloadLinks(record, fields, realm) {
     Array.from(candidates).forEach(candidate => {
       const safe = normalizeUrl(candidate, realm);
       if (!safe || !/^https?:\/\/[^/]+\.[^/]+/i.test(safe)) return;
-      if (isLinkField) pushUnique(preferred, safe);
-      else pushUnique(fallback, safe);
+      const sourceWeight = isLinkField ? 30 : 10;
+      pushUnique(safe, sourceWeight);
     });
   });
 
-  const score = (url) => {
-    const u = String(url || '').toLowerCase();
+  const score = (entry) => {
+    const u = String(entry && entry.url || '').toLowerCase();
+    let routeWeight = 50;
     // Prioritize /up/ routes (Direct Download)
-    if (u.includes('/up/')) return 1000;
+    if (u.includes('/up/')) routeWeight = 1000;
     // Handle /db/ routes with download parameters
-    if (u.includes('/db/') && (u.includes('a=d') || u.includes('act=download'))) return 900;
-    if (u.includes('/db/')) return 100;
-    if (u.includes('/nav/')) return 80;
+    else if (u.includes('/db/') && (u.includes('a=d') || u.includes('act=download'))) routeWeight = 900;
+    else if (u.includes('/db/')) routeWeight = 100;
+    else if (u.includes('/nav/')) routeWeight = 80;
     // Penalize /files/ routes as they are often generic viewers requiring login
-    if (u.includes('/files/')) return 10;
-    return 50;
+    else if (u.includes('/files/')) routeWeight = 10;
+
+    return routeWeight + Number(entry && entry.sourceWeight || 0);
   };
 
-  const chosen = preferred.length ? preferred : fallback;
-  return chosen.slice().sort((a, b) => score(b) - score(a));
+  return collected
+    .slice()
+    .sort((a, b) => score(b) - score(a))
+    .map((entry) => entry.url);
 }
 
 async function readSettings() {
