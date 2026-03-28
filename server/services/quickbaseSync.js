@@ -232,72 +232,108 @@ function extractUrlsFromCell(record, fid) {
 }
 
 function extractDownloadLinks(record, fields, realm) {
-  const collected = [];
-  const seen = new Set();
-
-  const pushUnique = (url, sourceWeight) => {
-    if (!url || seen.has(url)) return;
-    seen.add(url);
-    collected.push({ url, sourceWeight });
-  };
+  // ── PERMANENT FIX: Two-pass strategy to eliminate URL format ambiguity ──────
+  //
+  // QB has two field types that store download URLs:
+  //
+  //   TYPE A — URL text field (label: "Link", "Download URL", etc.)
+  //     REST API value: { value: "https://realm/up/tableId/g/rb/eh/vb" }  ← STRING
+  //     This IS the canonical QB download URL, exactly as QB UI shows it.
+  //     MUST always win over file attachment fields.
+  //
+  //   TYPE B — File Attachment field (label: "File", "Attachment", etc.)
+  //     REST API value: { value: { url: "/up/tableId/a/r/recordId/e/fieldId/version" } }  ← OBJECT
+  //     This is the REST API versioned URL, different from QB UI URL.
+  //     Used ONLY as fallback when no URL-type field exists.
+  //
+  // PASS 1: Collect ONLY from fields whose REST value is a STRING (URL-type fields).
+  //         These are labeled "link" or "download" and return the canonical QB URL.
+  // PASS 2: Collect from object-value fields (file attachments) ONLY if Pass 1 is empty.
+  //
+  // This guarantees the canonical QB URL always wins, regardless of scoring.
 
   const safeRealm = _ensureQbRealm(realm);
+  const pass1 = [];  // URL-type string fields (canonical QB URLs)
+  const pass2 = [];  // File attachment object fields (versioned fallback URLs)
+  const seen  = new Set();
+
+  const pushUnique = (arr, url) => {
+    const s = String(url || '').trim();
+    if (!s || seen.has(s)) return;
+    seen.add(s);
+    arr.push(s);
+  };
+
+  const validateUrl = (raw) => {
+    const safe = normalizeUrl(String(raw || '').trim(), safeRealm);
+    if (!safe || !/^https?:\/\/[^/]+\.[^/]+/i.test(safe)) return '';
+    return safe;
+  };
+
+  const isLinkLabel = (label) => {
+    const l = String(label || '').toLowerCase();
+    return l.includes('link') || l.includes('download');
+  };
+  const isAttachLabel = (label) => {
+    const l = String(label || '').toLowerCase();
+    return l.includes('file') || l.includes('url') || l.includes('attach');
+  };
 
   Object.entries(fields || {}).forEach(([fid, label]) => {
-    const low = String(label || '').toLowerCase();
-    const isLinkField = low.includes('link') || low.includes('download');
-    const isAttachmentField = low.includes('file') || low.includes('url') || low.includes('attach');
-    if (!isLinkField && !isAttachmentField) return;
+    if (!isLinkLabel(label) && !isAttachLabel(label)) return;
 
-    const candidates = new Set();
-    extractUrlsFromCell(record, fid).forEach((v) => candidates.add(v));
-    const raw = pickFieldValue(record, fid);
-    if (raw) {
-      String(raw)
-        .split(/\s*\|\s*/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .forEach((v) => candidates.add(v));
-      extractUrlsFromText(raw).forEach((v) => candidates.add(v));
+    const cell  = record && record[String(fid)];
+    const value = cell && typeof cell === 'object' ? cell.value : cell;
+    if (value == null) return;
+
+    // ── PASS 1: STRING value = QB URL-type field ──────────────────────────
+    // These return the EXACT canonical QB download URL. No reconstruction needed.
+    if (typeof value === 'string') {
+      const safe = validateUrl(value);
+      if (safe) pushUnique(pass1, safe);
+      // Also scan inline URLs from the text
+      extractUrlsFromText(value).forEach(u => { const s = validateUrl(u); if (s) pushUnique(pass1, s); });
+      return;
     }
 
-    Array.from(candidates).forEach((candidate) => {
-      const safe = normalizeUrl(candidate, safeRealm);
-      if (!safe || !/^https?:\/\/[^/]+\.[^/]+/i.test(safe)) return;
-      // FIX: convert QB REST /files/ URLs → /up/ direct-download format
-      // so stored URLs always match what QB shows in its own UI
-      const upUrl = _filesUrlToUp(safe);
-      const sourceWeight = isLinkField ? 30 : 10;
-      pushUnique(upUrl, sourceWeight);
-    });
+    if (typeof value === 'number') {
+      // Numeric field — not a URL, skip entirely
+      return;
+    }
+
+    // ── PASS 2: OBJECT value = QB File Attachment field ───────────────────
+    // These return versioned URLs (/up/tableId/a/r/recordId/e/fieldId/ver).
+    // Only used when no URL-type field exists (Pass 1 empty).
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      // value.url is the primary REST download URL
+      if (value.url) {
+        const safe = validateUrl(value.url);
+        if (safe) pushUnique(pass2, safe);
+      }
+      // versions[] — additional version URLs (last = newest)
+      if (Array.isArray(value.versions) && value.versions.length) {
+        const ver = value.versions[value.versions.length - 1];
+        if (ver && ver.url) {
+          const safe = validateUrl(ver.url);
+          if (safe) pushUnique(pass2, safe);
+        }
+      }
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach(entry => {
+        const u = entry && typeof entry === 'object'
+          ? (entry.url || entry.href || entry.value || '')
+          : String(entry || '');
+        const safe = validateUrl(u);
+        if (safe) pushUnique(pass2, safe);
+      });
+    }
   });
 
-  const score = (entry) => {
-    const u = String((entry && entry.url) || '').toLowerCase();
-    let routeWeight = 50;
-    if (u.includes('/up/')) {
-      // QB canonical attachment viewer URL (/up/tableId/g/...) scores highest
-      // QB versioned record URL (/up/tableId/a/r/...) scores slightly lower
-      // Both are /up/ but we must prefer QB's own canonical URL format
-      routeWeight = u.includes('/up/') && u.match(/\/up\/[^/]+\/g\//) ? 1200 : 1000;
-    } else if (u.includes('/db/') && (u.includes('a=d') || u.includes('act=download'))) routeWeight = 900;
-    else if (u.includes('/db/')) routeWeight = 100;
-    else if (u.includes('/nav/')) routeWeight = 80;
-    else if (u.includes('/files/')) routeWeight = 10;
-    return routeWeight + Number((entry && entry.sourceWeight) || 0);
-  };
-
-  const ranked = collected.slice().sort((a, b) => score(b) - score(a));
-
-  const isDirect = (url) => {
-    const u = String(url || '').toLowerCase();
-    return u.includes('/up/') || (u.includes('/db/') && (u.includes('a=d') || u.includes('act=download')));
-  };
-
-  const directOnly = ranked.filter((entry) => isDirect(entry.url)).map((entry) => entry.url);
-  if (directOnly.length) return directOnly;
-
-  return ranked.map((entry) => entry.url);
+  // PASS 1 results win unconditionally. Fall back to PASS 2 only when empty.
+  return pass1.length ? pass1 : pass2;
 }
 
 async function readSettings() {
