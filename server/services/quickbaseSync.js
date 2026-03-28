@@ -292,24 +292,61 @@ function mapRecordToKbItem(record, fields, settings, tableId, tableName) {
     /^instruction\s*(&|and)\s*template/i,
     /\btype\b|\bcategory\b|\bclassif/i,
   ]);
-  if (typeFid) type = pickFieldValue(record, typeFid);
+  if (typeFid) {
+    const tv = pickFieldValue(record, typeFid);
+    // Only use if it's a meaningful text label, not a numeric count
+    if (tv && !/^\d+$/.test(String(tv).trim())) type = tv;
+  }
   if (!type) type = tableName || 'Knowledge Base';
 
-  // Related product — ONLY label-based, do NOT guess by FID
+  // Related product — multi-pass with numeric guard
+  // ROOT CAUSE FIX: QB "Related Product" fields are often RELATIONSHIP COUNT fields
+  // (returns "1", "2", etc. = number of related records) while "Product Name" is
+  // the actual text field. findFieldByLabel returns the LOWER field ID first (JS
+  // iterates integer-keyed objects in ascending order), so "Related Product" (fid 9)
+  // was found before "Product Name" (fid 11) → showed "1" instead of "XR Prime".
   let relatedProduct = '';
-  const productFid = findFieldByLabel(fields, [
-    /^(related\s*product|product\s*name|product)$/i,
-    /related\s*product|product\s*name/i,
-  ]);
-  if (productFid) relatedProduct = pickFieldValue(record, productFid);
 
-  // Product family — ONLY label-based
+  // Guard: reject pure-numeric values (QB relationship count fields)
+  const isTextValue = v => v && !/^\d+$/.test(String(v).trim());
+
+  // PASS 1: exact "Product Name" label (highest priority — text, not count)
+  const pNameFid = findFieldByLabel(fields, /^product\s*name$/i);
+  if (pNameFid) {
+    const v = pickFieldValue(record, pNameFid);
+    if (isTextValue(v)) relatedProduct = v;
+  }
+
+  // PASS 2: "Related Product" — only accept if it's TEXT (not a QB count like "1")
+  if (!relatedProduct) {
+    const relProdFid = findFieldByLabel(fields, /^related\s*product$/i);
+    if (relProdFid) {
+      const v = pickFieldValue(record, relProdFid);
+      if (isTextValue(v)) relatedProduct = v;
+    }
+  }
+
+  // PASS 3: any field labeled with "product" that isn't a family/doc/drawing/video field
+  if (!relatedProduct) {
+    for (const [fid, label] of Object.entries(fields || {})) {
+      const lbl = String(label || '').toLowerCase().trim();
+      if (/\bproduct\b/.test(lbl) && !/family|drawing|doc(umentation)?|video|count/.test(lbl)) {
+        const v = pickFieldValue(record, fid);
+        if (isTextValue(v)) { relatedProduct = v; break; }
+      }
+    }
+  }
+
+  // Product family — label-based with numeric guard
   let productFamily = '';
   const familyFid = findFieldByLabel(fields, [
     /^(product\s*family|family)$/i,
     /product\s*family|\bfamily\b/i,
   ]);
-  if (familyFid) productFamily = pickFieldValue(record, familyFid);
+  if (familyFid) {
+    const v = pickFieldValue(record, familyFid);
+    if (isTextValue(v)) productFamily = v;
+  }
 
   // Download URLs — direct original QB links (no proxy needed)
   // FIX #1 context: stored as original QB URLs so frontend opens them directly
