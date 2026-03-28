@@ -29,6 +29,33 @@ function _ensureQbRealm(realm) {
   return r;
 }
 
+// ── Convert QB REST /files/ URL → /up/ direct-download URL ────────────────
+// QB REST API v1 returns file attachment URLs in /files/ format:
+//   /files/tableId/recordId/fieldId/version
+// QB browser/UI uses /up/ format for direct authenticated downloads:
+//   /up/tableId/a/r/recordId/e/fieldId/version
+//
+// Both require the user to be logged into QB in their browser.
+// /up/ format is preferred — it matches what QB shows in its own UI
+// and works reliably with QB browser session cookies.
+//
+// Example:
+//   IN:  https://realm/files/bk249j98b/1/7/1
+//   OUT: https://realm/up/bk249j98b/a/r/1/e/7/1
+function _filesUrlToUp(url) {
+  try {
+    const u = new URL(String(url || ''));
+    const segs = u.pathname.split('/').filter(Boolean);
+    // Only process /files/tableId/recordId/fieldId[/version]
+    if (segs[0] !== 'files' || segs.length < 4) return url;
+    const [, tableId, recordId, fieldId, version] = segs;
+    if (!tableId || !recordId || !fieldId) return url;
+    const ver = version || '1';
+    // Rebuild as /up/tableId/a/r/recordId/e/fieldId/version
+    return `${u.protocol}//${u.host}/up/${tableId}/a/r/${recordId}/e/${fieldId}/${ver}`;
+  } catch (_) { return url; }
+}
+
 function normalizeUrl(raw, realm) {
   const val = String(raw || '').trim();
   if (!val) return '';
@@ -220,8 +247,11 @@ function extractDownloadLinks(record, fields, realm) {
     Array.from(candidates).forEach((candidate) => {
       const safe = normalizeUrl(candidate, safeRealm);
       if (!safe || !/^https?:\/\/[^/]+\.[^/]+/i.test(safe)) return;
+      // FIX: convert QB REST /files/ URLs → /up/ direct-download format
+      // so stored URLs always match what QB shows in its own UI
+      const upUrl = _filesUrlToUp(safe);
       const sourceWeight = isLinkField ? 30 : 10;
-      pushUnique(safe, sourceWeight);
+      pushUnique(upUrl, sourceWeight);
     });
   });
 
