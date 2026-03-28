@@ -362,31 +362,51 @@
       .catch(function () {});
   }
 
-  var _ready = false;
-  window._kbsInit = function () {
-    if (_ready) return;
-    _ready = true;
+  // ── Init — FIX: handle already-visible element on direct load / refresh ──
+  function _kbsLoadOnce() {
+    if (_kbsLoadOnce._done) return;
+    _kbsLoadOnce._done = true;
+    _inject();
     _kbsLoad();
     _kbsLoadStats();
-  };
+  }
 
-  function _watchSection() {
+  function _tryLoad() {
     var el = document.getElementById('settings-section-kb-settings');
     if (!el) return;
+    // If already visible — load immediately (fixes direct-load race condition)
+    var cs = window.getComputedStyle(el);
+    if (cs.display !== 'none' && cs.visibility !== 'hidden' && el.offsetParent !== null) {
+      _kbsLoadOnce();
+      return;
+    }
+    // Otherwise watch for visibility change (tab switching)
     var obs = new MutationObserver(function () {
-      if (el.style.display !== 'none') window._kbsInit();
+      var s = window.getComputedStyle(el);
+      if (s.display !== 'none' && s.visibility !== 'hidden' && el.offsetParent !== null) {
+        obs.disconnect();
+        _kbsLoadOnce();
+      }
     });
-    obs.observe(el, { attributes: true, attributeFilter: ['style'] });
-    document.addEventListener('ss:settings:section', function (e) {
-      if (e && e.detail === 'kb-settings') window._kbsInit();
-    });
+    obs.observe(el, { attributes: true, attributeFilter: ['style', 'class'] });
+    // Also watch parent container for tab-switch class changes
+    if (el.parentElement) {
+      var pObs = new MutationObserver(function () {
+        var s2 = window.getComputedStyle(el);
+        if (s2.display !== 'none' && s2.visibility !== 'hidden' && el.offsetParent !== null) {
+          pObs.disconnect();
+          obs.disconnect();
+          _kbsLoadOnce();
+        }
+      });
+      pObs.observe(el.parentElement, { attributes: true, attributeFilter: ['style', 'class'] });
+    }
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { _inject(); _watchSection(); });
+    document.addEventListener('DOMContentLoaded', _tryLoad);
   } else {
-    _inject();
-    _watchSection();
+    _tryLoad();
   }
 
 })();

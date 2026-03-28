@@ -4965,8 +4965,12 @@
       const rowNum=start+idx+1;
 
       // Download buttons
+      // Route KB downloads through server proxy so QB auth header can be attached
       const dls=Array.isArray(it.download_url)&&it.download_url.length
-        ? it.download_url.map((u,i)=>`<a class="prem-tb-btn" style="padding:3px 9px;margin:0 3px 3px 0;display:inline-flex;align-items:center;gap:4px;font-size:10px;background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.25);color:#22d3ee;" href="${esc(u)}" target="_blank" rel="noopener"><i class="fas fa-download" style="font-size:9px;"></i>${it.download_url.length>1?'File '+(i+1):'Download'}</a>`).join('')
+        ? it.download_url.map((u,i)=>{
+            const dlUrl='/api/studio/kb_download?url='+encodeURIComponent(u);
+            return `<a class="prem-tb-btn" style="padding:3px 9px;margin:0 3px 3px 0;display:inline-flex;align-items:center;gap:4px;font-size:10px;background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.25);color:#22d3ee;" href="${esc(dlUrl)}" target="_blank" rel="noopener"><i class="fas fa-download" style="font-size:9px;"></i>${it.download_url.length>1?'File '+(i+1):'Download'}</a>`;
+          }).join('')
         : '<span style="opacity:.35;font-size:10px;">—</span>';
 
       // Type badge colour
