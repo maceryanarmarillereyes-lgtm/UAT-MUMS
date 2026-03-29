@@ -7398,19 +7398,12 @@
   var CSV_URL  = '';
   var PAGE_SIZE = 100;
 
-  // ── Helper: get active CSV URL from live window var or localStorage ──
-  // (BUG FIX: _getActiveCsvUrl + _normalizeCsvUrl were missing from scope)
+  // ── Helper: get active CSV URL — ONLY from live window var (Supabase-backed) ──
+  // localStorage fallback removed: settings are now authoritative in Supabase.
+  // _loadSettingsIfNeeded() always fetches from /api/studio/csv_settings when
+  // window._cpCsvUrl is not yet populated, ensuring cross-device persistence.
   function _getActiveCsvUrl() {
-    // Primary: live value set by CPS settings module
     if (window._cpCsvUrl) return String(window._cpCsvUrl);
-    // Fallback: read directly from localStorage key used by CPS module
-    try {
-      var raw = localStorage.getItem('ss_connectplus_settings');
-      if (raw) {
-        var obj = JSON.parse(raw);
-        if (obj && obj.csvUrl) return String(obj.csvUrl);
-      }
-    } catch (_) {}
     return '';
   }
 
@@ -7500,7 +7493,8 @@
 
     var body = document.getElementById('cp-table-body');
     function _loadSettingsIfNeeded() {
-      if (window._cpCsvUrl) return Promise.resolve();
+      // Always fetch from Supabase — this is the single source of truth.
+      // window._cpCsvUrl may be set from a previous stale preload; confirm from DB.
       var tok = '';
       try {
         var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
@@ -7510,7 +7504,10 @@
         }
         if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken();
       } catch(_) {}
-      if (!tok) return Promise.resolve(); // no token yet — caller will handle empty CSV_URL
+      if (!tok) {
+        // No token yet — use whatever _cpCsvUrl is already set (preloader may have it)
+        return Promise.resolve();
+      }
       return fetch('/api/studio/csv_settings?type=connect_plus', {
         headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-cache' }
       }).then(function(resp) { return resp.ok ? resp.json().catch(function(){ return null; }) : null; })
@@ -7534,7 +7531,11 @@
       CSV_URL = _normalizeCsvUrl(_getActiveCsvUrl());
       return cachePromise;
     }).then(function(cached) {
-      if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
+      // ── Cache schema guard: if cached rows lack endUser, discard and reload ──
+      var cacheValid = cached && Array.isArray(cached.data) && cached.data.length > 0
+        && cached.data[0] && typeof cached.data[0].endUser !== 'undefined';
+
+      if (cacheValid) {
         // ✅ Serve from cache — instant, no network
         _state.all     = cached.data;
         _state.loaded  = true;
@@ -7962,21 +7963,38 @@
 (function() {
   'use strict';
 
-  var LS_KEY = 'ss_connectplus_settings';
+  var LS_KEY = 'ss_connectplus_settings'; // kept for legacy cleanup only
 
   // ── Helpers ──────────────────────────────────────────────────────
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+  // Settings are Supabase-authoritative. localStorage is only used as
+  // a write-back cache so _cpsSaveSettings can merge csvUrl with existing fields.
   function loadStoredSettings() {
+    // Try to build from live window vars (set by Supabase fetch)
+    var base = { csvUrl: window._cpCsvUrl || '', searchColumns: window._cpSearchCols || null };
+    // Also merge any detectedColumns from last test (stored in memory only)
     try {
       var raw = localStorage.getItem(LS_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        var obj = JSON.parse(raw);
+        // Only carry over non-auth fields that aren't in Supabase yet
+        if (obj.detectedColumns) base.detectedColumns = obj.detectedColumns;
+        if (obj.rowCount)        base.rowCount        = obj.rowCount;
+      }
     } catch(_) {}
-    return { csvUrl: '', searchColumns: null };
+    return base;
   }
 
   function storeSettings(obj) {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch(_) {}
+    // Write-back ONLY for detectedColumns/rowCount (preview metadata, not auth-critical)
+    try {
+      var existing = {};
+      try { var r = localStorage.getItem(LS_KEY); if (r) existing = JSON.parse(r); } catch(_) {}
+      existing.detectedColumns = obj.detectedColumns || existing.detectedColumns;
+      existing.rowCount        = obj.rowCount        || existing.rowCount;
+      localStorage.setItem(LS_KEY, JSON.stringify(existing));
+    } catch(_) {}
   }
 
   function _getApiTok() {
@@ -8028,12 +8046,12 @@
     fetch('/api/studio/csv_settings?type=connect_plus', { headers: { 'Authorization': 'Bearer ' + _getApiTok() } })
     .then(function(r){ return r.json(); })
     .then(function(d){
-      var stored = (d.ok && d.settings) ? d.settings : loadStoredSettings();
-      storeSettings(stored);
-      var urlEl = document.getElementById('cps-csv-url');
-      if (urlEl) urlEl.value = stored.csvUrl || '';
+      var stored = (d.ok && d.settings) ? d.settings : { csvUrl: window._cpCsvUrl || '', searchColumns: null };
+      // Update live window vars from Supabase source of truth
       window._cpCsvUrl = stored.csvUrl || '';
       window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
+      var urlEl = document.getElementById('cps-csv-url');
+      if (urlEl) urlEl.value = stored.csvUrl || '';
       if (stored.csvUrl && stored.detectedColumns && stored.detectedColumns.length) {
         _showColumnsPreview(stored.detectedColumns, stored.rowCount || null);
       }
@@ -8137,13 +8155,25 @@
           throw new Error('Could not detect column headers — the URL may not be a CSV. Make sure to use File → Publish to web → CSV format.');
         }
 
-        // Cache detected columns in stored settings
+        // Persist detected columns + url to Supabase (source of truth)
         var stored = loadStoredSettings();
         stored.detectedColumns = header;
         stored.rowCount = rowCount;
         stored.csvUrl = url; // save normalized URL
-        storeSettings(stored);
+        storeSettings(stored); // writes metadata to localStorage only
         window._cpCsvUrl = url;
+
+        // Also push to Supabase so detectedColumns survive across devices
+        fetch('/api/studio/csv_settings?type=connect_plus', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
+          body: JSON.stringify({
+            csvUrl:          url,
+            searchColumns:   window._cpSearchCols || null,
+            detectedColumns: header,
+            rowCount:        rowCount,
+          })
+        }).catch(function() {}); // fire-and-forget; user can still save manually
 
         setUrlStatus(
           '<i class="fas fa-check-circle" style="margin-right:6px;"></i>' +
@@ -8236,21 +8266,29 @@
     var btn   = document.getElementById('cps-save-btn');
     if (!url) { showMsg('cps-save-msg', '✗ Enter a CSV URL first', false); return; }
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; btn.style.opacity = '.7'; }
+
+    // Build payload — merge url with existing Supabase settings (detectedColumns, searchColumns)
     var stored = loadStoredSettings();
-    stored.csvUrl = url;
+    var payload = {
+      csvUrl:           url,
+      searchColumns:    stored.searchColumns    || null,
+      detectedColumns:  stored.detectedColumns  || [],
+      rowCount:         stored.rowCount         || null,
+    };
+
     fetch('/api/studio/csv_settings?type=connect_plus', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
-      body: JSON.stringify(stored)
+      body: JSON.stringify(payload)
     }).then(function(r){
       if (!r.ok) return r.json().catch(function(){ return { ok: false, error: 'HTTP ' + r.status }; })
                                .then(function(d){ throw new Error(d && d.error ? String(d.error) : 'HTTP ' + r.status); });
       return r.json().catch(function(){ return { ok: true }; });
     }).then(function(d){
       if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
-      storeSettings(stored);
+      // Update live window vars
       window._cpCsvUrl = url;
-      showMsg('cps-save-msg', '✓ Saved globally! Reload Connect+ to apply.', true);
+      showMsg('cps-save-msg', '✓ Saved globally! Reloading Connect+…', true);
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Connect+ Settings'; btn.style.opacity = '1'; }
       if (typeof window._preloadStudioSettings === 'function') window._preloadStudioSettings();
       if (typeof window._cpRefresh === 'function') window._cpRefresh();
@@ -8271,29 +8309,31 @@
     });
 
     // null = all columns (no filter); array = specific columns
-    stored.searchColumns = (selected.length === allCols.length) ? null : selected;
-    storeSettings(stored);
+    var searchColumns = (selected.length === allCols.length) ? null : selected;
+
+    // Build clean payload — Supabase is source of truth, no localStorage write
+    var payload = {
+      csvUrl:          window._cpCsvUrl || stored.csvUrl || '',
+      searchColumns:   searchColumns,
+      detectedColumns: stored.detectedColumns || [],
+      rowCount:        stored.rowCount || null,
+    };
+
     fetch('/api/studio/csv_settings?type=connect_plus', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
-      body: JSON.stringify(stored)
+      body: JSON.stringify(payload)
     }).then(function(r){
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json().catch(function(){ return { ok: true }; });
     }).then(function(d){
       if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
-      // Expose live to Connect+ search
-      window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
+      // Update live window var immediately
+      window._cpSearchCols = (Array.isArray(searchColumns) && searchColumns.length > 0) ? searchColumns : null;
       showMsg('cps-cols-msg', '✓ Search columns saved!', true);
     }).catch(function(err){
       showMsg('cps-cols-msg', '✗ Failed: ' + (err && err.message ? err.message : 'Network error'), false);
     });
-
-    // Expose live to Connect+ search
-    // null or empty = all columns; only restrict when user explicitly selected subset
-    window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
-
-    showMsg('cps-cols-msg', '✓ Search columns saved!', true);
   };
 
 })();
