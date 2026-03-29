@@ -108,6 +108,156 @@ module.exports = async (req, res) => {
 
     const query = req.query || {};
     const searchTerm = String(query.search || '').trim();
+
+    // ── SINGLE RECORD FETCH (for Support Records case detail) ─────────────────
+    // When ?recordId=461023 is passed, fetch ALL fields for that specific record
+    // This gives the Support Records detail modal full QB data (assign, contact, age, notes, etc.)
+    const recordIdParam = String(query.recordId || '').trim();
+    if (recordIdParam) {
+      // Get all available fields so we return EVERY column
+      const fieldsOut = await getFields({ realm, token, tableId });
+      const allFields = fieldsOut.ok
+        ? (fieldsOut.fields || []).map(f => ({ id: Number(f?.id), label: String(f?.label || '').trim() })).filter(f => Number.isFinite(f.id) && f.label)
+        : [];
+
+      // Find the Case # field id (usually field 3, or labeled "Case #" / "Case Number")
+      const caseFieldId = allFields.find(f => f.label.toLowerCase() === 'case #')?.id
+        || allFields.find(f => f.label.toLowerCase().includes('case #'))?.id
+        || allFields.find(f => f.label.toLowerCase() === 'case')?.id
+        || 3;
+
+      // QB WHERE clause: {caseFieldId.EX.'461023'}
+      const whereClause = `{${caseFieldId}.EX.'${encLit(recordIdParam)}'}`;
+      const selectIds   = allFields.map(f => f.id).filter(id => Number.isFinite(id));
+
+      const url = `https://api.quickbase.com/v1/records/query`;
+      const body = { from: tableId, select: selectIds, where: whereClause, options: { top: 1 } };
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'QB-Realm-Hostname': realm, Authorization: `QB-USER-TOKEN ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const json = await resp.json().catch(() => ({}));
+        if (!resp.ok || !Array.isArray(json.data) || !json.data.length) {
+          return sendJson(res, 404, { ok: false, error: 'record_not_found', message: `Case #${recordIdParam} not found` });
+        }
+        const row      = json.data[0];
+        const fields   = Array.isArray(json.fields) ? json.fields : [];
+
+        // ── QB value normalizer — handles all QB REST field types ─────────
+        // QB REST API returns complex objects for many field types:
+        //   User field:        { id: 49742, name: "Mace Ryan Reyes", email: "..." }
+        //   Multi-user:        [{ id:.., name:.. }, ...]
+        //   File attachment:   { url: "..", versions: [...] }
+        //   Lookup/relation:   { value: "text" } or just the raw value
+        // Using String() on these returns "[object Object]" — must extract .name
+        function normalizeQbValue(raw) {
+          if (raw == null || raw === '') return '';
+          // User / lookup object: extract name first, then other text fields
+          if (typeof raw === 'object' && !Array.isArray(raw)) {
+            // File attachment — return URL
+            if (raw.url) return String(raw.url);
+            // User/staff record object
+            if (raw.name) return String(raw.name);
+            if (raw.userName) return String(raw.userName);
+            if (raw.label)    return String(raw.label);
+            if (raw.text)     return String(raw.text);
+            // Nested value wrapper
+            if (raw.value != null) return normalizeQbValue(raw.value);
+            // Numeric id only (e.g. related record) — return as-is
+            if (raw.id != null) return String(raw.id);
+            return '';
+          }
+          // Array of values or user objects
+          if (Array.isArray(raw)) {
+            return raw.map(x => {
+              if (x && typeof x === 'object') return x.name || x.label || x.value || x.id || '';
+              return String(x || '');
+            }).filter(Boolean).join(', ');
+          }
+          return String(raw);
+        }
+
+        // Build columnMap: fieldId → label
+        const columnMap = {};
+        const fieldValues = {};
+        // Track relationship fields whose value is a bare numeric ID — need secondary lookup
+        const relationshipPending = []; // { fid, numericId }
+
+        fields.forEach(f => {
+          const fid   = String(f.id);
+          const label = String(f.label || f.name || '');
+          columnMap[fid] = label;
+          const cell = row[fid];
+          const raw  = (cell && typeof cell === 'object' && 'value' in cell) ? cell.value : cell;
+          const resolved = normalizeQbValue(raw);
+          fieldValues[fid] = { value: resolved };
+
+          // Detect QB relationship fields: label contains 'contact' and value is pure digits
+          // QB returns bare numeric record IDs for relationship/lookup fields
+          const labelLow = label.toLowerCase();
+          const isRelField = labelLow.includes('contact') || labelLow.includes('related employee') || labelLow.includes('assigned to');
+          if (isRelField && resolved && /^\d+$/.test(resolved)) {
+            relationshipPending.push({ fid, numericId: resolved, label });
+          }
+        });
+
+        // ── Secondary lookup: resolve bare numeric relationship IDs to names ──
+        // For each pending relationship field, query field 6 (Name) of the related record
+        if (relationshipPending.length > 0) {
+          const resolvePromises = relationshipPending.map(async ({ fid, numericId, label }) => {
+            try {
+              // QB field 3 = Record ID#, field 6 = Full Name (standard QB contact table)
+              const relUrl = `https://api.quickbase.com/v1/records/query`;
+              const relBody = {
+                from: tableId,
+                select: [3, 6, 7], // Record ID, Name/Full Name, common name fields
+                where: `{3.EX.'${encLit(numericId)}'}`,
+                options: { top: 1 },
+              };
+              const relResp = await fetch(relUrl, {
+                method: 'POST',
+                headers: {
+                  'QB-Realm-Hostname': realm,
+                  Authorization: `QB-USER-TOKEN ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(relBody),
+              });
+              if (!relResp.ok) return;
+              const relJson = await relResp.json().catch(() => ({}));
+              if (!Array.isArray(relJson.data) || !relJson.data.length) return;
+
+              const relRow = relJson.data[0];
+              // Try field 6 (Full Name), then 7, then any non-ID string value
+              let resolvedName = '';
+              const relFields = Array.isArray(relJson.fields) ? relJson.fields : [];
+              for (const rf of relFields) {
+                const rfid = String(rf.id);
+                if (rfid === '3') continue; // skip Record ID#
+                const rcell = relRow[rfid];
+                const rraw = (rcell && typeof rcell === 'object' && 'value' in rcell) ? rcell.value : rcell;
+                const rval = normalizeQbValue(rraw);
+                if (rval && !/^\d+$/.test(rval)) { resolvedName = rval; break; }
+              }
+              if (resolvedName) {
+                fieldValues[fid] = { value: resolvedName };
+                console.log(`[qb_data] Resolved relationship field "${label}" (fid:${fid}): ${numericId} → "${resolvedName}"`);
+              }
+            } catch (relErr) {
+              console.warn(`[qb_data] Secondary lookup failed for fid ${fid} id ${numericId}:`, relErr.message);
+            }
+          });
+          await Promise.all(resolvePromises);
+        }
+
+        return sendJson(res, 200, { ok: true, recordId: recordIdParam, fields: fieldValues, columnMap });
+      } catch (fetchErr) {
+        console.error('[qb_data] single record fetch error:', fetchErr);
+        return sendJson(res, 500, { ok: false, error: 'fetch_error', message: String(fetchErr?.message || fetchErr) });
+      }
+    }
     const limit = Number(query.limit) || 500;
     const forceRefresh = String(query.forceRefresh || '').trim() === '1';
 
