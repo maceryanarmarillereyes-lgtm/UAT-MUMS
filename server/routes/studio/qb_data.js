@@ -182,14 +182,76 @@ module.exports = async (req, res) => {
         // Build columnMap: fieldId → label
         const columnMap = {};
         const fieldValues = {};
+        // Track relationship fields whose value is a bare numeric ID — need secondary lookup
+        const relationshipPending = []; // { fid, numericId }
+
         fields.forEach(f => {
           const fid   = String(f.id);
           const label = String(f.label || f.name || '');
           columnMap[fid] = label;
           const cell = row[fid];
           const raw  = (cell && typeof cell === 'object' && 'value' in cell) ? cell.value : cell;
-          fieldValues[fid] = { value: normalizeQbValue(raw) };
+          const resolved = normalizeQbValue(raw);
+          fieldValues[fid] = { value: resolved };
+
+          // Detect QB relationship fields: label contains 'contact' and value is pure digits
+          // QB returns bare numeric record IDs for relationship/lookup fields
+          const labelLow = label.toLowerCase();
+          const isRelField = labelLow.includes('contact') || labelLow.includes('related employee') || labelLow.includes('assigned to');
+          if (isRelField && resolved && /^\d+$/.test(resolved)) {
+            relationshipPending.push({ fid, numericId: resolved, label });
+          }
         });
+
+        // ── Secondary lookup: resolve bare numeric relationship IDs to names ──
+        // For each pending relationship field, query field 6 (Name) of the related record
+        if (relationshipPending.length > 0) {
+          const resolvePromises = relationshipPending.map(async ({ fid, numericId, label }) => {
+            try {
+              // QB field 3 = Record ID#, field 6 = Full Name (standard QB contact table)
+              const relUrl = `https://api.quickbase.com/v1/records/query`;
+              const relBody = {
+                from: tableId,
+                select: [3, 6, 7], // Record ID, Name/Full Name, common name fields
+                where: `{3.EX.'${encLit(numericId)}'}`,
+                options: { top: 1 },
+              };
+              const relResp = await fetch(relUrl, {
+                method: 'POST',
+                headers: {
+                  'QB-Realm-Hostname': realm,
+                  Authorization: `QB-USER-TOKEN ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(relBody),
+              });
+              if (!relResp.ok) return;
+              const relJson = await relResp.json().catch(() => ({}));
+              if (!Array.isArray(relJson.data) || !relJson.data.length) return;
+
+              const relRow = relJson.data[0];
+              // Try field 6 (Full Name), then 7, then any non-ID string value
+              let resolvedName = '';
+              const relFields = Array.isArray(relJson.fields) ? relJson.fields : [];
+              for (const rf of relFields) {
+                const rfid = String(rf.id);
+                if (rfid === '3') continue; // skip Record ID#
+                const rcell = relRow[rfid];
+                const rraw = (rcell && typeof rcell === 'object' && 'value' in rcell) ? rcell.value : rcell;
+                const rval = normalizeQbValue(rraw);
+                if (rval && !/^\d+$/.test(rval)) { resolvedName = rval; break; }
+              }
+              if (resolvedName) {
+                fieldValues[fid] = { value: resolvedName };
+                console.log(`[qb_data] Resolved relationship field "${label}" (fid:${fid}): ${numericId} → "${resolvedName}"`);
+              }
+            } catch (relErr) {
+              console.warn(`[qb_data] Secondary lookup failed for fid ${fid} id ${numericId}:`, relErr.message);
+            }
+          });
+          await Promise.all(resolvePromises);
+        }
+
         return sendJson(res, 200, { ok: true, recordId: recordIdParam, fields: fieldValues, columnMap });
       } catch (fetchErr) {
         console.error('[qb_data] single record fetch error:', fetchErr);
