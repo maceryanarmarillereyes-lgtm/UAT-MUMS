@@ -108,6 +108,59 @@ module.exports = async (req, res) => {
 
     const query = req.query || {};
     const searchTerm = String(query.search || '').trim();
+
+    // ── SINGLE RECORD FETCH (for Support Records case detail) ─────────────────
+    // When ?recordId=461023 is passed, fetch ALL fields for that specific record
+    // This gives the Support Records detail modal full QB data (assign, contact, age, notes, etc.)
+    const recordIdParam = String(query.recordId || '').trim();
+    if (recordIdParam) {
+      // Get all available fields so we return EVERY column
+      const fieldsOut = await getFields({ realm, token, tableId });
+      const allFields = fieldsOut.ok
+        ? (fieldsOut.fields || []).map(f => ({ id: Number(f?.id), label: String(f?.label || '').trim() })).filter(f => Number.isFinite(f.id) && f.label)
+        : [];
+
+      // Find the Case # field id (usually field 3, or labeled "Case #" / "Case Number")
+      const caseFieldId = allFields.find(f => f.label.toLowerCase() === 'case #')?.id
+        || allFields.find(f => f.label.toLowerCase().includes('case #'))?.id
+        || allFields.find(f => f.label.toLowerCase() === 'case')?.id
+        || 3;
+
+      // QB WHERE clause: {caseFieldId.EX.'461023'}
+      const whereClause = `{${caseFieldId}.EX.'${encLit(recordIdParam)}'}`;
+      const selectIds   = allFields.map(f => f.id).filter(id => Number.isFinite(id));
+
+      const url = `https://api.quickbase.com/v1/records/query`;
+      const body = { from: tableId, select: selectIds, where: whereClause, options: { top: 1 } };
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'QB-Realm-Hostname': realm, Authorization: `QB-USER-TOKEN ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const json = await resp.json().catch(() => ({}));
+        if (!resp.ok || !Array.isArray(json.data) || !json.data.length) {
+          return sendJson(res, 404, { ok: false, error: 'record_not_found', message: `Case #${recordIdParam} not found` });
+        }
+        const row      = json.data[0];
+        const fields   = Array.isArray(json.fields) ? json.fields : [];
+        // Build columnMap: fieldId → label
+        const columnMap = {};
+        const fieldValues = {};
+        fields.forEach(f => {
+          const fid   = String(f.id);
+          const label = String(f.label || f.name || '');
+          columnMap[fid] = label;
+          const cell = row[fid];
+          const raw  = (cell && typeof cell === 'object' && 'value' in cell) ? cell.value : cell;
+          fieldValues[fid] = { value: raw != null ? String(raw) : '' };
+        });
+        return sendJson(res, 200, { ok: true, recordId: recordIdParam, fields: fieldValues, columnMap });
+      } catch (fetchErr) {
+        console.error('[qb_data] single record fetch error:', fetchErr);
+        return sendJson(res, 500, { ok: false, error: 'fetch_error', message: String(fetchErr?.message || fetchErr) });
+      }
+    }
     const limit = Number(query.limit) || 500;
     const forceRefresh = String(query.forceRefresh || '').trim() === '1';
 
