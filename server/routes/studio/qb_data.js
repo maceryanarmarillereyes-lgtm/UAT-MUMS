@@ -144,6 +144,41 @@ module.exports = async (req, res) => {
         }
         const row      = json.data[0];
         const fields   = Array.isArray(json.fields) ? json.fields : [];
+
+        // ── QB value normalizer — handles all QB REST field types ─────────
+        // QB REST API returns complex objects for many field types:
+        //   User field:        { id: 49742, name: "Mace Ryan Reyes", email: "..." }
+        //   Multi-user:        [{ id:.., name:.. }, ...]
+        //   File attachment:   { url: "..", versions: [...] }
+        //   Lookup/relation:   { value: "text" } or just the raw value
+        // Using String() on these returns "[object Object]" — must extract .name
+        function normalizeQbValue(raw) {
+          if (raw == null || raw === '') return '';
+          // User / lookup object: extract name first, then other text fields
+          if (typeof raw === 'object' && !Array.isArray(raw)) {
+            // File attachment — return URL
+            if (raw.url) return String(raw.url);
+            // User/staff record object
+            if (raw.name) return String(raw.name);
+            if (raw.userName) return String(raw.userName);
+            if (raw.label)    return String(raw.label);
+            if (raw.text)     return String(raw.text);
+            // Nested value wrapper
+            if (raw.value != null) return normalizeQbValue(raw.value);
+            // Numeric id only (e.g. related record) — return as-is
+            if (raw.id != null) return String(raw.id);
+            return '';
+          }
+          // Array of values or user objects
+          if (Array.isArray(raw)) {
+            return raw.map(x => {
+              if (x && typeof x === 'object') return x.name || x.label || x.value || x.id || '';
+              return String(x || '');
+            }).filter(Boolean).join(', ');
+          }
+          return String(raw);
+        }
+
         // Build columnMap: fieldId → label
         const columnMap = {};
         const fieldValues = {};
@@ -153,7 +188,7 @@ module.exports = async (req, res) => {
           columnMap[fid] = label;
           const cell = row[fid];
           const raw  = (cell && typeof cell === 'object' && 'value' in cell) ? cell.value : cell;
-          fieldValues[fid] = { value: raw != null ? String(raw) : '' };
+          fieldValues[fid] = { value: normalizeQbValue(raw) };
         });
         return sendJson(res, 200, { ok: true, recordId: recordIdParam, fields: fieldValues, columnMap });
       } catch (fetchErr) {

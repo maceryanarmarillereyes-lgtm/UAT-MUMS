@@ -3486,9 +3486,27 @@
             pool = srFlat.filter(e => e.id === cat);
           }
           if (!q || q.length < 1) return pool;
-          const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+
+          const qClean = q.trim();
+          const terms  = qClean.toLowerCase().split(/\s+/).filter(Boolean);
+
+          // FIX BUG 2: Pure-numeric query = case# search — check e.case first
+          // If user types "458697", find that exact case# immediately
+          if (/^\d+$/.test(qClean)) {
+            const exactCase = pool.filter(e => String(e.case || '') === qClean);
+            if (exactCase.length) return exactCase;
+            // Fall through to substring search if no exact match
+          }
+
           return pool.filter(e => {
-            const hay = (e.title + ' ' + e.res + ' ' + e.cat + ' ' + e.eu).toLowerCase();
+            // FIX BUG 2: Include e.case in haystack so case# is searchable
+            const hay = (
+              (e.title || '') + ' ' +
+              (e.res   || '') + ' ' +
+              (e.cat   || '') + ' ' +
+              (e.eu    || '') + ' ' +
+              (e.case  || '')          // ← was missing — added case number
+            ).toLowerCase();
             return terms.every(t => hay.includes(t));
           });
         }
@@ -3539,7 +3557,10 @@
           if (welcome) welcome.style.display = 'none';
           if (content) content.style.display = 'flex';
 
-          srCache = _srSearch(srQuery, srFilter);
+          // FIX BUG 2: When query is a pure case# (all digits), search ALL categories
+          // regardless of active category filter. Case# is unique — always cross-category.
+          const isCaseNumSearch = srQuery && /^\d+$/.test(srQuery.trim());
+          srCache = _srSearch(srQuery, isCaseNumSearch ? null : srFilter);
 
           if (countEl) countEl.textContent = srCache.length.toLocaleString() + ' Result' + (srCache.length !== 1 ? 's' : '');
           _srRenderCards();
