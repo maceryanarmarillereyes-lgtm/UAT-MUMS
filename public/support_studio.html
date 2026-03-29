@@ -212,6 +212,103 @@
       border-color: rgba(88,166,255,.32);
     }
 
+    /* Home icon tab */
+    .ss-home-btn {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.10);
+      color: var(--ss-muted,#7d8590);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0;
+      font-size: 13px;
+      padding: 0;
+      transition: background .18s, border-color .18s, color .18s, transform .15s, box-shadow .18s;
+      position: relative;
+    }
+    .ss-home-btn:hover {
+      background: rgba(88,166,255,.10);
+      border-color: rgba(88,166,255,.35);
+      color: #58a6ff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(88,166,255,.2);
+    }
+    .ss-home-btn:active { transform: scale(.93); }
+    .ss-home-btn.active,
+    .ss-home-btn.ss-tab.active {
+      background: rgba(88,166,255,.12) !important;
+      border-color: rgba(88,166,255,.40) !important;
+      color: #58a6ff !important;
+      box-shadow: 0 0 0 2px rgba(88,166,255,.15) !important;
+    }
+    body:has(#canvas-home.active) #ss-left-sidebar { display: none !important; }
+    body:has(#canvas-home.active) #ss-center-canvas { flex: 1 !important; }
+
+    /* Home canvas */
+    #canvas-home { background: var(--ss-bg); overflow-y: auto; }
+    .ss-home-wrap { padding: 32px 36px; max-width: 960px; margin: 0 auto; }
+    .ss-home-hero {
+      display: flex; align-items: center; gap: 18px; margin-bottom: 36px; padding: 28px 32px;
+      background: linear-gradient(135deg, rgba(0,115,234,.08) 0%, rgba(162,93,220,.06) 50%, rgba(22,211,238,.04) 100%);
+      border: 1px solid rgba(255,255,255,.07); border-radius: 16px; position: relative; overflow: hidden;
+    }
+    .ss-home-hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 80% 50%, rgba(88,166,255,.06) 0%, transparent 70%); pointer-events: none;
+    }
+    .ss-home-hero-icon {
+      width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #0073ea 0%, #a25ddc 100%);
+      display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; box-shadow: 0 4px 20px rgba(0,115,234,.4); flex-shrink: 0;
+    }
+    .ss-home-hero-text h1 { font-size: 20px; font-weight: 900; color: #e6edf3; letter-spacing: -.01em; margin: 0 0 4px; }
+    .ss-home-hero-text p { font-size: 12px; color: var(--ss-muted); margin: 0; line-height: 1.5; }
+    .ss-home-section-label {
+      font-size: 9px; font-weight: 800; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--ss-muted); margin-bottom: 12px;
+    }
+    .ss-home-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px; margin-bottom: 32px;
+    }
+    .ss-home-card {
+      padding: 18px 18px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,.07);
+      background: rgba(255,255,255,.03); cursor: pointer; display: flex; flex-direction: column; gap: 10px;
+      transition: background .18s, border-color .18s, transform .18s, box-shadow .18s;
+    }
+    .ss-home-card:hover { background: rgba(255,255,255,.06); transform: translateY(-2px); }
+    .ss-home-card-icon {
+      width: 34px; height: 34px; border-radius: 9px; display: flex;
+      align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+    }
+    .ss-home-card-title { font-size: 12px; font-weight: 800; color: #e6edf3; letter-spacing: .01em; }
+    .ss-home-card-desc { font-size: 10px; color: var(--ss-muted); line-height: 1.5; margin-top: 2px; }
+    .ss-home-card-arrow { margin-top: auto; font-size: 9px; color: var(--ss-muted); transition: color .18s, transform .18s; align-self: flex-end; }
+    .ss-home-card:hover .ss-home-card-arrow { transform: translateX(3px); }
+    .ss-home-card[data-accent="blue"] .ss-home-card-icon { background: rgba(88,166,255,.12); color: #58a6ff; }
+    .ss-home-card[data-accent="green"] .ss-home-card-icon { background: rgba(63,185,80,.12); color: #3fb950; }
+    .ss-home-card[data-accent="cyan"] .ss-home-card-icon { background: rgba(34,211,238,.12); color: #22d3ee; }
+    .ss-home-card[data-accent="orange"] .ss-home-card-icon { background: rgba(251,146,60,.12); color: #fb923c; }
+    .ss-home-card[data-accent="purple"] .ss-home-card-icon { background: rgba(162,93,220,.12); color: #a25ddc; }
+    .ss-home-card[data-accent="yellow"] .ss-home-card-icon { background: rgba(234,179,8,.12); color: #eab308; }
+
+    /* New case button */
+    .ss-new-case-btn {
+      display: flex; align-items: center; gap: 6px; padding: 0 13px; height: 30px;
+      border-radius: 8px; border: 1px solid rgba(56,189,248,.45);
+      background: linear-gradient(135deg, rgba(14,165,233,.18) 0%, rgba(56,189,248,.12) 50%, rgba(99,102,241,.14) 100%);
+      color: #7dd3fc; font-size: 11px; font-weight: 800; font-family: inherit; letter-spacing: .03em;
+      cursor: pointer; flex-shrink: 0; position: relative; overflow: hidden; text-decoration: none;
+      transition: border-color .2s, color .2s, transform .15s;
+    }
+    .ss-new-case-btn:hover {
+      border-color: rgba(56,189,248,.75);
+      color: #e0f2fe;
+      transform: translateY(-1px);
+      box-shadow: 0 0 22px rgba(56,189,248,.5), 0 6px 24px rgba(56,189,248,.3), inset 0 1px 0 rgba(255,255,255,.2);
+    }
+    .ss-new-case-btn:active { transform: translateY(0px) scale(.97); }
+    .ss-new-case-btn i { font-size: 10px; opacity: .9; }
+
     /* Header right controls */
     .ss-header-right {
       display: flex;
@@ -1493,6 +1590,10 @@
         </div>
       </div>
 
+      <button class="ss-home-btn ss-tab" data-tab="home" id="ss-tab-home" title="Home">
+        <i class="fas fa-home"></i>
+      </button>
+
       <!-- Search bar -->
       <div class="ss-search-wrap" style="margin-left:8px;">
         <input class="ss-search-input" id="ss-search" type="text" placeholder="Search cases, users, tickets…" autocomplete="off" style="width:260px;">
@@ -1535,6 +1636,14 @@
 
     <!-- Right controls — General Settings pinned to upper-right corner -->
     <div class="ss-header-right">
+
+      <a class="ss-new-case-btn"
+         href="https://copeland-coldchainservices.quickbase.com/nav/app/bpvmztzkw/table/bpvmztzr5/action/nwr?originalQid=9"
+         target="_blank" rel="noopener noreferrer"
+         title="Create a New Case in QuickBase">
+        <i class="fas fa-plus-circle"></i>
+        + New Case
+      </a>
 
       <!-- ── Cache Pulse Beacon ── accessible to ALL users ── -->
       <div class="ss-beacon" id="ss-cache-beacon" data-state="idle"
@@ -1625,6 +1734,8 @@
 
     <!-- ── PERSISTENT LEFT SIDEBAR ────────────────────────── -->
     <aside class="ss-sidebar" id="ss-left-sidebar">
+
+      <div id="left-panel-home" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;"></div>
 
       <!-- Session Manager (Tickets tab) -->
       <!-- Product Controllers left panel (catalog tab) — hidden by default -->
@@ -2061,6 +2172,52 @@
 
     <!-- ── CENTER CANVAS ────────────────────────────────────── -->
     <main class="ss-canvas" id="ss-center-canvas">
+
+      <div id="canvas-home" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
+        <div class="ss-home-wrap">
+          <div class="ss-home-hero">
+            <div class="ss-home-hero-icon"><i class="fas fa-headset"></i></div>
+            <div class="ss-home-hero-text">
+              <h1>Welcome to MUMS Support Studio</h1>
+              <p>Enterprise Support Console &mdash; Select a module below to get started, or use the tabs above to navigate.</p>
+            </div>
+          </div>
+
+          <div class="ss-home-section-label"><i class="fas fa-th-large" style="margin-right:5px;"></i>Quick Navigation</div>
+          <div class="ss-home-grid">
+            <div class="ss-home-card" data-accent="blue" onclick="document.querySelector('[data-tab=qbs]').click()">
+              <div class="ss-home-card-icon"><i class="fas fa-database"></i></div>
+              <div><div class="ss-home-card-title">QuickBase_S</div><div class="ss-home-card-desc">Studio-isolated QB dashboard. Search and manage case records.</div></div>
+              <div class="ss-home-card-arrow"><i class="fas fa-arrow-right"></i></div>
+            </div>
+            <div class="ss-home-card" data-accent="cyan" onclick="document.querySelector('[data-tab=connectplus]').click()">
+              <div class="ss-home-card-icon"><i class="fas fa-plug"></i></div>
+              <div><div class="ss-home-card-title">Connect+</div><div class="ss-home-card-desc">Connected site data lookup and external record search.</div></div>
+              <div class="ss-home-card-arrow"><i class="fas fa-arrow-right"></i></div>
+            </div>
+            <div class="ss-home-card" data-accent="orange" onclick="document.querySelector('[data-tab=parts_number]').click()">
+              <div class="ss-home-card-icon"><i class="fas fa-barcode"></i></div>
+              <div><div class="ss-home-card-title">Parts Number</div><div class="ss-home-card-desc">Search and reference part numbers and product items.</div></div>
+              <div class="ss-home-card-arrow"><i class="fas fa-arrow-right"></i></div>
+            </div>
+            <div class="ss-home-card" data-accent="green" onclick="document.querySelector('[data-tab=knowledge_base]').click()">
+              <div class="ss-home-card-icon"><i class="fas fa-book"></i></div>
+              <div><div class="ss-home-card-title">Knowledge Base</div><div class="ss-home-card-desc">Browse and search the support knowledge base articles.</div></div>
+              <div class="ss-home-card-arrow"><i class="fas fa-arrow-right"></i></div>
+            </div>
+            <div class="ss-home-card" data-accent="purple" onclick="document.querySelector('[data-tab=catalog]').click()">
+              <div class="ss-home-card-icon"><i class="fas fa-microchip"></i></div>
+              <div><div class="ss-home-card-title">Product Controllers</div><div class="ss-home-card-desc">Browse catalog items and product controller records.</div></div>
+              <div class="ss-home-card-arrow"><i class="fas fa-arrow-right"></i></div>
+            </div>
+            <div class="ss-home-card" data-accent="yellow" onclick="document.querySelector('[data-tab=support_records]').click()">
+              <div class="ss-home-card-icon"><i class="fas fa-book-open"></i></div>
+              <div><div class="ss-home-card-title">Support Records</div><div class="ss-home-card-desc">View and search the full support records knowledge base.</div></div>
+              <div class="ss-home-card-arrow"><i class="fas fa-arrow-right"></i></div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Tickets canvas -->
       <!-- Product Controllers canvas — item detail -->
@@ -5363,7 +5520,7 @@
   'use strict';
 
   // ── Tab switching — single persistent layout ────────────────────
-  const LEFT_PANELS = ['catalog','config','qbs','connectplus','parts_number','knowledge_base','support_records'];
+  const LEFT_PANELS = ['home','catalog','config','qbs','connectplus','parts_number','knowledge_base','support_records'];
 
   function activateTab(target) {
     document.querySelectorAll('.ss-tab').forEach(t =>
@@ -5416,9 +5573,12 @@
     tab.addEventListener('click', () => activateTab(tab.dataset.tab));
   });
 
-  // Default landing: QuickBase_S tab. _qbsInit guard is already in activateTab().
+  // Expose globally so other script blocks can call it.
+  window.activateTab = activateTab;
+
+  // Default landing: Home tab. _qbsInit guard is already in activateTab().
   // Config tab is gated to SUPER_ADMIN; this default works for all roles.
-  activateTab('qbs');
+  activateTab('home');
 
   // ── Live clock ──────────────────────────────────────────────────
   const clockEl = document.getElementById('ss-clock');
