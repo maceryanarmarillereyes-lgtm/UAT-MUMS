@@ -212,13 +212,6 @@
       border-color: rgba(88,166,255,.32);
     }
 
-    .ss-home-btn {
-      width: 34px;
-      justify-content: center;
-      padding: 5px 0;
-      flex-shrink: 0;
-    }
-
     /* Header right controls */
     .ss-header-right {
       display: flex;
@@ -1500,12 +1493,6 @@
         </div>
       </div>
 
-      <!-- Home icon shortcut -->
-      <button class="ss-tab ss-home-btn" id="ss-home-btn" type="button" title="Home"
-        onclick="window._ssGoHome()">
-        <i class="fas fa-home"></i>
-      </button>
-
       <!-- Search bar -->
       <div class="ss-search-wrap" style="margin-left:8px;">
         <input class="ss-search-input" id="ss-search" type="text" placeholder="Search cases, users, tickets…" autocomplete="off" style="width:260px;">
@@ -1548,10 +1535,6 @@
 
     <!-- Right controls — General Settings pinned to upper-right corner -->
     <div class="ss-header-right">
-
-      <button class="ss-btn-primary" id="ss-new-case-btn" type="button" onclick="window._ssOpenNewCase()">
-        <i class="fas fa-plus-circle"></i> + New Case
-      </button>
 
       <!-- ── Cache Pulse Beacon ── accessible to ALL users ── -->
       <div class="ss-beacon" id="ss-cache-beacon" data-state="idle"
@@ -5428,30 +5411,6 @@
       if (typeof window._srInit === 'function') window._srInit();
     }
   }
-
-  window._ssGoHome = function _ssGoHome() {
-    try {
-      if (window.parent && window.parent !== window && window.parent.App && typeof window.parent.App.navigate === 'function') {
-        window.parent.App.navigate('dashboard');
-        return;
-      }
-      if (window.App && typeof window.App.navigate === 'function') {
-        window.App.navigate('dashboard');
-        return;
-      }
-    } catch (_) {}
-    window.location.href = '/dashboard';
-  };
-
-  window._ssOpenNewCase = function _ssOpenNewCase() {
-    try {
-      window.dispatchEvent(new CustomEvent('mums:support-studio:new-case', { detail: { source: 'support_studio_header' } }));
-    } catch (_) {}
-    var qbsTab = document.getElementById('ss-tab-qbs');
-    if (qbsTab) qbsTab.click();
-    var callerInput = document.getElementById('ci-caller-name');
-    if (callerInput) callerInput.focus();
-  };
 
   document.querySelectorAll('.ss-tab').forEach(tab => {
     tab.addEventListener('click', () => activateTab(tab.dataset.tab));
