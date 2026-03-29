@@ -3889,8 +3889,23 @@
         status:  ['case status','status'],
         age:     ['age'],
         lastUpd: ['last update days','last update','update days'],
-        latest:  ['latest update','last comment','latest','update on the case'],
-        notes:   ['case notes','notes'],
+        latest:  [
+          'latest update on the case',
+          'latest update',
+          'last update',
+          'last comment',
+          'most recent update',
+          'update on the case',
+          'latest'
+        ],
+        notes:   [
+          'case notes detail',
+          'case notes',
+          'case note',
+          'case details',
+          'resolution details',
+          'notes'
+        ],
       };
 
       // Escape HTML for dynamic sections

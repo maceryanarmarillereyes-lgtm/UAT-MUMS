@@ -6633,8 +6633,22 @@
     var age    = fieldVal(['age']);
     var lastUpd= fieldVal(['last update days','last update']);
     // Convert EST→PHT timestamps in all text-bearing fields
-    var latest = _ssConvertPHT(fieldVal(['latest update','last comment','update on the case']));
-    var notes  = _ssConvertPHT(fieldVal(['case notes','notes']));
+    var latest = _ssConvertPHT(fieldVal([
+      'latest update on the case',
+      'latest update',
+      'last update',
+      'last comment',
+      'most recent update',
+      'update on the case'
+    ]));
+    var notes  = _ssConvertPHT(fieldVal([
+      'case notes detail',
+      'case notes',
+      'case note',
+      'case details',
+      'resolution details',
+      'notes'
+    ]));
 
     set('qbcdRowBadge', snap.rowNum || '—');
     set('qbcdCaseId',   caseId);
