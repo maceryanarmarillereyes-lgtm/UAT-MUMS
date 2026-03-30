@@ -5340,6 +5340,36 @@
   function esc(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+
+  function _normalizeName(s) {
+    return String(s || '')
+      .toLowerCase()
+      .replace(/[\.\,\(\)\[\]\-_/]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function _splitNameTokens(s) {
+    return _normalizeName(s).split(' ').filter(function(t) { return t.length > 1; });
+  }
+
+  function _isNameMatch(a, b) {
+    var na = _normalizeName(a);
+    var nb = _normalizeName(b);
+    if (!na || !nb) return false;
+    if (na === nb || na.includes(nb) || nb.includes(na)) return true;
+
+    var aT = _splitNameTokens(na);
+    var bT = _splitNameTokens(nb);
+    if (!aT.length || !bT.length) return false;
+
+    var overlap = 0;
+    for (var i = 0; i < aT.length; i++) {
+      if (bT.indexOf(aT[i]) >= 0) overlap++;
+    }
+    // Require strong token overlap to avoid false positives.
+    return overlap >= Math.min(2, Math.min(aT.length, bT.length));
+  }
   function showMsg(el, text, ok) {
     if (!el) return;
     el.textContent = text;
@@ -11077,11 +11107,26 @@
       if (datePart === todayStr) {
         var timePart = match[2].trim();
         var namePart = match[3].trim();
-        var isMine   = namePart.toLowerCase().includes(myNameLower);
+        var isMine   = _isNameMatch(namePart, myNameLower);
         return { time: timePart, name: namePart, isMine: isMine, full: match[0] };
       }
     }
     return null;
+  }
+
+  function _extractNotesText(v) {
+    if (v == null) return '';
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
+    if (Array.isArray(v)) {
+      return v.map(function(it) {
+        if (it == null) return '';
+        if (typeof it === 'string' || typeof it === 'number' || typeof it === 'boolean') return String(it);
+        if (typeof it === 'object') return String(it.text || it.value || it.name || '');
+        return '';
+      }).join(' ').trim();
+    }
+    if (typeof v === 'object') return String(v.text || v.value || v.name || '');
+    return '';
   }
 
   // Extract a short preview text after the bracket (strip dashes)
@@ -11105,7 +11150,11 @@
     });
     if (!colId) return '';
     var f = snap.fields[colId];
-    return f && f.value != null ? String(f.value) : '';
+    if (f == null) return '';
+    if (typeof f === 'object' && Object.prototype.hasOwnProperty.call(f, 'value')) {
+      return _extractNotesText(f.value);
+    }
+    return _extractNotesText(f);
   }
 
   function _getYctToken() {
@@ -11260,7 +11309,7 @@
 
     // Get current user name with multi-source fallback
     var myName = _resolveYCTMyName();
-    var myNameLower = myName.toLowerCase();
+    var myNameLower = _normalizeName(myName);
     if (nameEl) nameEl.textContent = myName || 'You';
 
     // Collect snaps from the QB root element
@@ -11294,21 +11343,15 @@
     snaps.forEach(function(snap, i) {
       snap._yctIdx = i;
       var assignedTo = _fv(snap, ['assigned to','assigned','agent']);
-      var assignedLower = assignedTo.toLowerCase();
-
-      // Match by name (supports partial names and reordered tokens)
-      var assignedTokens = assignedLower.split(/\s+/).filter(Boolean);
-      var myTokens = myNameLower.split(/\s+/).filter(Boolean);
-      var isAssignedToMe = myNameLower
-        ? (assignedLower.includes(myNameLower) ||
-           myNameLower.includes(assignedLower) ||
-           myTokens.some(function(t){ return t.length > 2 && assignedTokens.includes(t); }))
-        : false;
+      var isAssignedToMe = myNameLower ? _isNameMatch(assignedTo, myNameLower) : false;
 
       if (!isAssignedToMe) return;
 
-      var notesRaw = _convertPHT(_fv(snap, ['case notes detail','case notes','case note','notes']));
-      var entry    = _parseTodayEntry(notesRaw, todayStr, myNameLower);
+      var notesRawOriginal = _fv(snap, ['case notes detail','case notes','case note','notes']);
+      var notesRaw = _convertPHT(notesRawOriginal);
+      // Fallback to non-converted text to prevent double timezone conversion misses.
+      var entry = _parseTodayEntry(notesRaw, todayStr, myNameLower) ||
+                  _parseTodayEntry(String(notesRawOriginal || ''), todayStr, myNameLower);
       if (entry) matched.push(snap);
     });
 
