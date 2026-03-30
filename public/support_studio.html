@@ -11108,6 +11108,88 @@
     return f && f.value != null ? String(f.value) : '';
   }
 
+  function _getYctToken() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) {
+        try {
+          var parsed = JSON.parse(raw);
+          var t = parsed && (parsed.access_token || (parsed.session && parsed.session.access_token));
+          if (t) return String(t);
+        } catch (_) {}
+      }
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') {
+        var t2 = window.CloudAuth.accessToken();
+        if (t2) return String(t2);
+      }
+      if (window.Auth && typeof window.Auth.getSession === 'function') {
+        var s = window.Auth.getSession();
+        if (s && s.access_token) return String(s.access_token);
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  function _resolveYCTMyName() {
+    var picks = [];
+    try {
+      if (window._qbMyNameCache) picks.push(window._qbMyNameCache);
+    } catch (_) {}
+    try {
+      var su = window.store && window.store.getState && window.store.getState().user;
+      if (su) {
+        picks.push(su.qb_name, su.qbName, su.name, su.username);
+      }
+    } catch (_) {}
+    try {
+      if (window.__studioCurrentUser) {
+        picks.push(window.__studioCurrentUser.qb_name, window.__studioCurrentUser.qbName, window.__studioCurrentUser.name);
+      }
+    } catch (_) {}
+    try {
+      var pRaw = localStorage.getItem('mums_user_profile') || sessionStorage.getItem('mums_user_profile');
+      if (pRaw) {
+        var p = JSON.parse(pRaw);
+        picks.push(p && (p.qb_name || p.qbName || p.name || p.username));
+      }
+    } catch (_) {}
+    for (var i = 0; i < picks.length; i++) {
+      var v = String(picks[i] || '').trim();
+      if (v) return v;
+    }
+    return '';
+  }
+
+  function _preloadQBData() {
+    if (window.__yctQbPreloadStarted) return;
+    window.__yctQbPreloadStarted = true;
+
+    if (!window._qbMyNameCache) {
+      var tok = _getYctToken();
+      if (tok) {
+        fetch('/api/users/me', {
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            var profile = d && d.profile ? d.profile : null;
+            var qbName = String((profile && (profile.qb_name || profile.qbName || profile.name || profile.username)) || '').trim();
+            if (qbName) window._qbMyNameCache = qbName;
+          })
+          .catch(function() {});
+      }
+    }
+
+    setTimeout(function() {
+      var qbRoot = document.getElementById('qbs-root');
+      var hasSnaps = !!(qbRoot && Array.isArray(qbRoot._qbRowSnaps) && qbRoot._qbRowSnaps.length > 0);
+      var hasRaw = Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0;
+      if (!hasSnaps && !hasRaw && typeof window._qbsInit === 'function') {
+        try { window._qbsInit(); } catch (_) {}
+      }
+    }, 800);
+  }
+
   // ── status accent ────────────────────────────────────────────────────
   function _accentClass(status) {
     var s = (status || '').toLowerCase();
@@ -11176,15 +11258,8 @@
     var qbCntEl = document.getElementById('home-qb-count');
     if (!list) return;
 
-    // Get current user name
-    var myName = String(window._qbMyNameCache || '').trim();
-    if (!myName) {
-      // Try store
-      try {
-        var u = window.store && window.store.getState && window.store.getState().user;
-        myName = (u && (u.qb_name || u.name)) ? String(u.qb_name || u.name).trim() : '';
-      } catch(e) {}
-    }
+    // Get current user name with multi-source fallback
+    var myName = _resolveYCTMyName();
     var myNameLower = myName.toLowerCase();
     if (nameEl) nameEl.textContent = myName || 'You';
 
@@ -11221,9 +11296,13 @@
       var assignedTo = _fv(snap, ['assigned to','assigned','agent']);
       var assignedLower = assignedTo.toLowerCase();
 
-      // Match by name (partial — handles "Mace Ryan Reyes" vs myName)
+      // Match by name (supports partial names and reordered tokens)
+      var assignedTokens = assignedLower.split(/\s+/).filter(Boolean);
+      var myTokens = myNameLower.split(/\s+/).filter(Boolean);
       var isAssignedToMe = myNameLower
-        ? (assignedLower.includes(myNameLower) || myNameLower.includes(assignedLower.split(' ')[0].toLowerCase()))
+        ? (assignedLower.includes(myNameLower) ||
+           myNameLower.includes(assignedLower) ||
+           myTokens.some(function(t){ return t.length > 2 && assignedTokens.includes(t); }))
         : false;
 
       if (!isAssignedToMe) return;
@@ -11314,6 +11393,7 @@
     _updateDate();
     setInterval(_updateDate, 30000);
     _bindFilters();
+    _preloadQBData();
 
     var refreshBtn = document.getElementById('home-yct-refresh');
     if (refreshBtn) {
@@ -11351,24 +11431,20 @@
       setTimeout(tryRender, 500);
     }
 
-    // Also hook into QB data load event via fetch-patch
-    var _origWatcher = window.__studioQbRecordsWatcher;
-    Object.defineProperty(window, '__studioQbRecords', {
-      configurable: true,
-      get: function() { return _origWatcher; },
-      set: function(v) {
-        _origWatcher = v;
-        // When QB data loads, refresh YCT automatically if on home tab
-        if (Array.isArray(v) && v.length > 0) {
-          setTimeout(function() {
-            var homeCanvas = document.getElementById('canvas-home');
-            if (homeCanvas && homeCanvas.classList.contains('active')) {
-              _renderYCT();
-            }
-          }, 300);
-        }
+    // Refresh when QB records count changes (background load complete)
+    var lastRawCount = Array.isArray(window.__studioQbRecords) ? window.__studioQbRecords.length : 0;
+    var lastSnapCount = 0;
+    setInterval(function() {
+      var qbRoot = document.getElementById('qbs-root');
+      var snapCount = (qbRoot && Array.isArray(qbRoot._qbRowSnaps)) ? qbRoot._qbRowSnaps.length : 0;
+      var rawCount = Array.isArray(window.__studioQbRecords) ? window.__studioQbRecords.length : 0;
+      if (snapCount !== lastSnapCount || rawCount !== lastRawCount) {
+        lastSnapCount = snapCount;
+        lastRawCount = rawCount;
+        var homeCanvas = document.getElementById('canvas-home');
+        if (homeCanvas && homeCanvas.classList.contains('active')) _renderYCT();
       }
-    });
+    }, 1200);
 
     tryRender();
   }
