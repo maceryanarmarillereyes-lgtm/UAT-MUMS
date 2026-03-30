@@ -11107,7 +11107,7 @@
       if (datePart === todayStr) {
         var timePart = match[2].trim();
         var namePart = match[3].trim();
-        var isMine   = _isNameMatch(namePart, myNameLower);
+        var isMine   = _yctIsNameMatch(namePart, myNameLower);
         return { time: timePart, name: namePart, isMine: isMine, full: match[0] };
       }
     }
@@ -11177,6 +11177,36 @@
       }
     } catch (_) {}
     return '';
+  }
+
+  // Local name helpers for YCT block (must not depend on other script IIFEs)
+  function _yctNormalizeName(s) {
+    return String(s || '')
+      .toLowerCase()
+      .replace(/[\.\,\(\)\[\]\-_/]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function _yctSplitNameTokens(s) {
+    return _yctNormalizeName(s).split(' ').filter(function(t) { return t.length > 1; });
+  }
+
+  function _yctIsNameMatch(a, b) {
+    var na = _yctNormalizeName(a);
+    var nb = _yctNormalizeName(b);
+    if (!na || !nb) return false;
+    if (na === nb || na.includes(nb) || nb.includes(na)) return true;
+
+    var aT = _yctSplitNameTokens(na);
+    var bT = _yctSplitNameTokens(nb);
+    if (!aT.length || !bT.length) return false;
+
+    var overlap = 0;
+    for (var i = 0; i < aT.length; i++) {
+      if (bT.indexOf(aT[i]) >= 0) overlap++;
+    }
+    return overlap >= Math.min(2, Math.min(aT.length, bT.length));
   }
 
   function _resolveYCTMyName() {
@@ -11314,7 +11344,7 @@
 
     // Get current user name with multi-source fallback
     var myName = _resolveYCTMyName();
-    var myNameLower = _normalizeName(myName);
+    var myNameLower = _yctNormalizeName(myName);
     if (nameEl) nameEl.textContent = myName || 'No Quickbase Name';
 
     // Collect snaps from the QB root element
@@ -11357,7 +11387,7 @@
     snaps.forEach(function(snap, i) {
       snap._yctIdx = i;
       var assignedTo = _fv(snap, ['assigned to','assigned','agent']);
-      var isAssignedToMe = myNameLower ? _isNameMatch(assignedTo, myNameLower) : false;
+      var isAssignedToMe = myNameLower ? _yctIsNameMatch(assignedTo, myNameLower) : false;
 
       if (!isAssignedToMe) return;
 
