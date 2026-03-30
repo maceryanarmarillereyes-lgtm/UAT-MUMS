@@ -5858,6 +5858,13 @@
         window._kbLoadSettings();
       }
     }
+    if (target === 'home') {
+      // Trigger background QB data load + YCT re-render when home tab activates
+      setTimeout(function() {
+        if (typeof window._yctRefresh === 'function') window._yctRefresh();
+        if (typeof window._preloadQBDataYCT === 'function') window._preloadQBDataYCT();
+      }, 150);
+    }
     if (target === 'qbs') {
       // Guard: _qbsInit is defined in a later script block
       if (typeof window._qbsInit === 'function') window._qbsInit();
@@ -11067,21 +11074,36 @@
   }
 
   // Parse first today-dated [DATE TIME Name] bracket from notes text
+  // Accepts both today (PHT) and yesterday (for late-night EST notes that are today PHT)
   function _parseTodayEntry(notesRaw, todayStr, myNameLower) {
     if (!notesRaw || !todayStr) return null;
+
+    // Build yesterday string as fallback (PHT yesterday = possible EST today)
+    function _manilaYesterday() {
+      var d = new Date();
+      d.setTime(d.getTime() - 86400000);
+      return d.toLocaleDateString('en-US', {
+        timeZone: 'Asia/Manila', month: 'short', day: '2-digit', year: '2-digit'
+      }).toUpperCase().replace(/ /g, '-').replace(',', '');
+    }
+    var yesterdayStr = _manilaYesterday();
+
     // Match [MON-DD-YY H:MM AM/PM Name...] style
     var regex = /\[([A-Z]{3}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\s+([^\]]+)\]/gi;
     var match;
+    var bestToday = null;
+    var bestYesterday = null;
     while ((match = regex.exec(notesRaw)) !== null) {
       var datePart = match[1].toUpperCase();
-      if (datePart === todayStr) {
-        var timePart = match[2].trim();
-        var namePart = match[3].trim();
-        var isMine   = namePart.toLowerCase().includes(myNameLower);
-        return { time: timePart, name: namePart, isMine: isMine, full: match[0] };
-      }
+      var timePart = match[2].trim();
+      var namePart = match[3].trim();
+      var isMine   = myNameLower ? namePart.toLowerCase().includes(myNameLower) : false;
+      var entry = { time: timePart, name: namePart, isMine: isMine, full: match[0] };
+      if (datePart === todayStr && !bestToday) { bestToday = entry; }
+      else if (datePart === yesterdayStr && !bestYesterday) { bestYesterday = entry; }
     }
-    return null;
+    // Prefer today, fall back to yesterday (covers timezone edge cases)
+    return bestToday || bestYesterday || null;
   }
 
   // Extract a short preview text after the bracket (strip dashes)
@@ -11168,6 +11190,56 @@
   }
 
   // ── main render ───────────────────────────────────────────────────────
+  // ── resolve current user's QB display name from every available source ────
+  function _resolveMyName() {
+    // 1. Already cached by my_quickbase.js on QB tab init
+    var n = String(window._qbMyNameCache || '').trim();
+    if (n) return n;
+
+    // 2. YCT-specific pre-fetched cache (set by background fetch below)
+    n = String(window._yctUserNameCache || '').trim();
+    if (n) return n;
+
+    // 3. window.store state
+    try {
+      var u = window.store && window.store.getState && window.store.getState().user;
+      n = (u && (u.qb_name || u.name)) ? String(u.qb_name || u.name).trim() : '';
+      if (n) return n;
+    } catch(e) {}
+
+    // 4. CloudAuth in-memory user
+    try {
+      if (window.CloudAuth && typeof window.CloudAuth.getUser === 'function') {
+        var cu = window.CloudAuth.getUser();
+        n = (cu && (cu.qb_name || cu.name)) ? String(cu.qb_name || cu.name).trim() : '';
+        if (n) return n;
+      }
+    } catch(e) {}
+
+    // 5. Auth module
+    try {
+      if (window.Auth && typeof window.Auth.getUser === 'function') {
+        var au = window.Auth.getUser();
+        n = (au && (au.qb_name || au.name)) ? String(au.qb_name || au.name).trim() : '';
+        if (n) return n;
+      }
+    } catch(e) {}
+
+    // 6. Parse from mums_supabase_session in localStorage
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) {
+        var sess = JSON.parse(raw);
+        // Check user object variations
+        var prof = sess && (sess.profile || sess.user || sess);
+        n = (prof && (prof.qb_name || prof.name || prof.full_name)) ? String(prof.qb_name || prof.name || prof.full_name).trim() : '';
+        if (n) return n;
+      }
+    } catch(e) {}
+
+    return '';
+  }
+
   function _renderYCT() {
     var list    = document.getElementById('yct-list');
     var loading = document.getElementById('yct-loading');
@@ -11176,15 +11248,8 @@
     var qbCntEl = document.getElementById('home-qb-count');
     if (!list) return;
 
-    // Get current user name
-    var myName = String(window._qbMyNameCache || '').trim();
-    if (!myName) {
-      // Try store
-      try {
-        var u = window.store && window.store.getState && window.store.getState().user;
-        myName = (u && (u.qb_name || u.name)) ? String(u.qb_name || u.name).trim() : '';
-      } catch(e) {}
-    }
+    // Get current user name from all possible sources
+    var myName = _resolveMyName();
     var myNameLower = myName.toLowerCase();
     if (nameEl) nameEl.textContent = myName || 'You';
 
@@ -11214,30 +11279,59 @@
 
     var todayStr = _manilaToday();
 
-    // Filter: assigned to current user AND has today entry in notes
+    // Filter: assigned to current user (show all assigned cases, not just today's)
+    // The note bubble shows today's activity; cases without today notes still show
     var matched = [];
     snaps.forEach(function(snap, i) {
       snap._yctIdx = i;
       var assignedTo = _fv(snap, ['assigned to','assigned','agent']);
       var assignedLower = assignedTo.toLowerCase();
 
-      // Match by name (partial — handles "Mace Ryan Reyes" vs myName)
-      var isAssignedToMe = myNameLower
-        ? (assignedLower.includes(myNameLower) || myNameLower.includes(assignedLower.split(' ')[0].toLowerCase()))
-        : false;
+      // Match by name — partial match to handle "Mace Ryan Reyes" vs just first name
+      var isAssignedToMe = false;
+      if (myNameLower && assignedLower) {
+        // Full name match
+        if (assignedLower.includes(myNameLower)) {
+          isAssignedToMe = true;
+        }
+        // Partial: if myName is multiple words, check first word match
+        else if (myNameLower.split(' ').length > 1) {
+          var firstName = myNameLower.split(' ')[0];
+          var lastName  = myNameLower.split(' ').slice(-1)[0];
+          // Match if assigned field contains both first and last name
+          if (assignedLower.includes(firstName) && assignedLower.includes(lastName)) {
+            isAssignedToMe = true;
+          }
+          // Also match if assigned contains first name (for "Mace" matching "Mace Ryan Reyes")
+          else if (myNameLower.includes(assignedLower.split(' ')[0])) {
+            isAssignedToMe = true;
+          }
+        }
+      }
 
       if (!isAssignedToMe) return;
 
-      var notesRaw = _convertPHT(_fv(snap, ['case notes detail','case notes','case note','notes']));
-      var entry    = _parseTodayEntry(notesRaw, todayStr, myNameLower);
-      if (entry) matched.push(snap);
+      // Show all assigned cases — today's note bubble is added if found
+      matched.push(snap);
     });
 
     if (loading) loading.style.display = 'none';
 
     if (matched.length === 0) {
-      list.innerHTML = '<div class="yct-empty"><i class="fas fa-check-circle"></i><span>No cases with activity today</span><span style="font-size:9px;color:rgba(255,255,255,.15);">' + todayStr + '</span></div>';
-      if (countEl) countEl.textContent = '0';
+      // Check if QB data is loaded at all
+      var qbRootEl2 = document.getElementById('qbs-root');
+      var hasAnyData = (qbRootEl2 && Array.isArray(qbRootEl2._qbRowSnaps) && qbRootEl2._qbRowSnaps.length > 0)
+        || (Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0);
+
+      if (!hasAnyData && snaps.length === 0) {
+        // Data not loaded yet — show loading state
+        list.innerHTML = '<div class="yct-loading"><div class="yct-spinner"></div><span>Loading QB data…</span></div>';
+        if (countEl) countEl.textContent = '0';
+      } else {
+        // Data loaded but no cases assigned to user
+        list.innerHTML = '<div class="yct-empty"><i class="fas fa-check-circle"></i><span>No cases assigned to you</span><span style="font-size:9px;color:rgba(255,255,255,.15);">' + todayStr + '</span></div>';
+        if (countEl) countEl.textContent = '0';
+      }
       return;
     }
 
@@ -11310,6 +11404,56 @@
   }
 
   // ── init & refresh ────────────────────────────────────────────────────
+  // ── background QB data pre-loader ────────────────────────────────────
+  // Called on home tab load. Fetches QB data silently so YCT has records
+  // WITHOUT requiring the user to visit the QB tab first.
+  function _preloadQBData() {
+    function _getAuthTok() {
+      try {
+        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+        if (raw) { var p = JSON.parse(raw); if (p && p.access_token) return p.access_token; }
+        if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken() || '';
+      } catch(e) {}
+      return '';
+    }
+
+    var tok = _getAuthTok();
+    if (!tok) return;
+
+    var headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok };
+
+    // Step 1: Fetch qb_name from /api/users/me if not yet cached
+    if (!window._qbMyNameCache && !window._yctUserNameCache) {
+      fetch('/api/users/me', { headers: headers })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) {
+          if (d && d.ok && d.profile) {
+            var qbn = String(d.profile.qb_name || d.profile.name || '').trim();
+            if (qbn) {
+              window._yctUserNameCache = qbn;
+              // Re-render now that we have the name
+              var qbRoot2 = document.getElementById('qbs-root');
+              var hasData = (qbRoot2 && Array.isArray(qbRoot2._qbRowSnaps) && qbRoot2._qbRowSnaps.length > 0)
+                || (Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0);
+              if (hasData) _renderYCT();
+            }
+          }
+        }).catch(function() {});
+    }
+
+    // Step 2: Silently init QB tab in the background so _qbRowSnaps gets populated.
+    // my_quickbase.js will fetch QB records, set _qbRowSnaps + _qbMyNameCache,
+    // and the property watcher below will auto-trigger _renderYCT().
+    function _triggerQBInit() {
+      if (typeof window._qbsInit === 'function') {
+        window._qbsInit();
+      } else {
+        setTimeout(_triggerQBInit, 300);
+      }
+    }
+    setTimeout(_triggerQBInit, 800);
+  }
+
   function _initYCT() {
     _updateDate();
     setInterval(_updateDate, 30000);
@@ -11334,31 +11478,13 @@
       });
     }
 
-    // Initial render — wait for QB data to be available
-    // Poll up to 15s for snaps, then render whatever we have
-    var attempts = 0;
-    var MAX = 30;
-    function tryRender() {
-      var qbRoot = document.getElementById('qbs-root');
-      var snaps  = (qbRoot && Array.isArray(qbRoot._qbRowSnaps) && qbRoot._qbRowSnaps.length > 0)
-        ? qbRoot._qbRowSnaps : [];
-      var rawRec = window.__studioQbRecords || [];
-      if (snaps.length > 0 || rawRec.length > 0 || attempts >= MAX) {
-        _renderYCT();
-        return;
-      }
-      attempts++;
-      setTimeout(tryRender, 500);
-    }
-
-    // Also hook into QB data load event via fetch-patch
+    // Hook into QB raw records watcher (set by fetch-patch at top of file)
     var _origWatcher = window.__studioQbRecordsWatcher;
     Object.defineProperty(window, '__studioQbRecords', {
       configurable: true,
       get: function() { return _origWatcher; },
       set: function(v) {
         _origWatcher = v;
-        // When QB data loads, refresh YCT automatically if on home tab
         if (Array.isArray(v) && v.length > 0) {
           setTimeout(function() {
             var homeCanvas = document.getElementById('canvas-home');
@@ -11370,7 +11496,76 @@
       }
     });
 
-    tryRender();
+    // Hook into _qbRowSnaps on qbs-root so we catch data arriving from QB tab init
+    function _watchQbRowSnaps() {
+      var qbRootEl = document.getElementById('qbs-root');
+      if (!qbRootEl) { setTimeout(_watchQbRowSnaps, 500); return; }
+      // Only define if not already a getter (avoid re-defining)
+      var desc = Object.getOwnPropertyDescriptor(qbRootEl, '_qbRowSnaps');
+      if (desc && typeof desc.get === 'function') return; // already watched
+      var _snapsVal = qbRootEl._qbRowSnaps;
+      Object.defineProperty(qbRootEl, '_qbRowSnaps', {
+        configurable: true,
+        get: function() { return _snapsVal; },
+        set: function(v) {
+          _snapsVal = v;
+          if (Array.isArray(v) && v.length > 0) {
+            setTimeout(function() {
+              var homeCanvas = document.getElementById('canvas-home');
+              if (homeCanvas && homeCanvas.classList.contains('active')) {
+                _renderYCT();
+              }
+            }, 200);
+          }
+        }
+      });
+    }
+    _watchQbRowSnaps();
+
+    // Also watch _qbMyNameCache — set by my_quickbase after QB init
+    (function() {
+      var _nameVal = window._qbMyNameCache;
+      Object.defineProperty(window, '_qbMyNameCache', {
+        configurable: true,
+        get: function() { return _nameVal; },
+        set: function(v) {
+          _nameVal = v;
+          if (v) {
+            // Name became available — re-render YCT
+            setTimeout(function() {
+              var homeCanvas = document.getElementById('canvas-home');
+              if (homeCanvas && homeCanvas.classList.contains('active')) {
+                _renderYCT();
+              }
+            }, 150);
+          }
+        }
+      });
+    })();
+
+    // Initial render + background QB preload
+    _preloadQBData();
+
+    // Poll for data up to 15s, render as soon as something arrives
+    var attempts = 0;
+    var MAX = 30;
+    function tryRender() {
+      var qbRootEl = document.getElementById('qbs-root');
+      var snaps  = (qbRootEl && Array.isArray(qbRootEl._qbRowSnaps) && qbRootEl._qbRowSnaps.length > 0)
+        ? qbRootEl._qbRowSnaps : [];
+      var rawRec = window.__studioQbRecords || [];
+      if (snaps.length > 0 || rawRec.length > 0 || attempts >= MAX) {
+        _renderYCT();
+        return;
+      }
+      attempts++;
+      // After first second, force QB init in case _preloadQBData missed it
+      if (attempts === 2 && typeof window._qbsInit === 'function') {
+        window._qbsInit();
+      }
+      setTimeout(tryRender, 500);
+    }
+    setTimeout(tryRender, 200);
   }
 
   // Wait for DOM ready + tab system
@@ -11380,27 +11575,27 @@
     setTimeout(_initYCT, 400);
   }
 
-  // Also re-render when home tab is clicked
+  // Re-render + ensure QB data loaded whenever home tab is clicked
   document.addEventListener('click', function(e) {
     var btn = e.target.closest('[data-tab="home"]');
     if (btn) {
       setTimeout(function() {
-        var loading = document.getElementById('yct-loading');
-        var list    = document.getElementById('yct-list');
-        // Only re-render if list is empty or shows loading
-        if (list && (!list.querySelector('.yct-entry') || (loading && loading.style.display !== 'none'))) {
-          _renderYCT();
-        } else {
-          // Just refresh silently
-          _renderYCT();
-        }
         _updateDate();
+        // Ensure QB data is loading if not yet available
+        var qbRootEl = document.getElementById('qbs-root');
+        var hasSnaps = qbRootEl && Array.isArray(qbRootEl._qbRowSnaps) && qbRootEl._qbRowSnaps.length > 0;
+        var hasRaw   = Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0;
+        if (!hasSnaps && !hasRaw) {
+          _preloadQBData();
+        }
+        _renderYCT();
       }, 200);
     }
   });
 
-  // Expose globally for manual refresh
+  // Expose globally for manual refresh and external calls
   window._yctRefresh = _renderYCT;
+  window._preloadQBDataYCT = _preloadQBData;
 
 })();
 </script>
