@@ -14,7 +14,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.min.js"></script>
   <script>
   // Support Studio — expose loaded QB records globally so row-click fallbacks and YCT can resolve data.
-  // FIX v1.1: Intercepts BOTH /api/studio/qb_data AND /api/studio/qb_monitoring.
+  // FIX v1.1: Intercepts /api/studio/qb_monitoring AND /api/studio/qb_data.
   // my_quickbase.js main report load is redirected to qb_monitoring (not qb_data),
   // so the old patch missed all main-report fetches — __studioQbRecords was always empty.
   (function() {
@@ -11244,7 +11244,7 @@
     if (nameEl) nameEl.textContent = myName || 'You';
 
     // ── FIX v2.0: Read snaps from qbs-root._qbRowSnaps (set by _yctLoad) ──
-    // _yctLoad calls /api/studio/qb_data, converts records to snaps,
+    // _yctLoad calls /api/studio/yct_data (Global QB filtered by qb_name),
     // and stores them on qbs-root._qbRowSnaps before calling _renderYCT.
     // Fallback: raw __studioQbRecords from fetch-patch intercept.
     var qbRoot = document.getElementById('qbs-root');
@@ -11373,7 +11373,7 @@
   // to be populated as a side-effect of the user clicking the QBS tab.
   // On home-page load, QBS tab is NEVER clicked → data never arrives → 0 records.
   //
-  // SOLUTION: YCT calls /api/studio/qb_data directly on init (and on refresh).
+  // SOLUTION: YCT calls /api/studio/yct_data (Global QB + assignedTo=qb_name filter).
   // This is the same endpoint used by the QBS tab, isolated to the user's own
   // Studio QB Settings. No dependency on any other tab being loaded.
 
@@ -11397,26 +11397,45 @@
     return '';
   }
 
-  // ── fetch QB records from /api/studio/qb_data ───────────────────────
-  // Returns { records, columns } on success, null on failure.
-  // records: [{ qbRecordId, fields: { fid: { value } } }]
-  // columns: [{ id, label }]
+  // ── fetch QB records from /api/studio/yct_data ───────────────────────
+  // PERMANENT FIX (v2.0): Uses Global QB Settings — same source as My Quickbase.
+  // Previous version called /api/studio/qb_data (per-user Studio QB, often empty).
+  // /api/studio/yct_data reads Global QB + filters by user's registered qb_name.
   function _yctFetchQbData(limit) {
     limit = limit || 500;
     var tok = _yctGetToken();
     var headers = { 'Content-Type': 'application/json' };
     if (tok) headers['Authorization'] = 'Bearer ' + tok;
-    return fetch('/api/studio/qb_data?limit=' + limit, { headers: headers })
+    return fetch('/api/studio/yct_data?limit=' + limit, { headers: headers })
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (!data || !data.ok) return null;
-        if (!Array.isArray(data.records) || data.records.length === 0) return null;
-        // Store globally so other parts of the app can use it
-        window.__studioQbRecords = data.records;
+        if (!data || !data.ok) {
+          var list = document.getElementById('yct-list');
+          var msgs = {
+            'qb_name_not_assigned':         'Your QuickBase name is not set. Ask your admin to assign it in User Management.',
+            'global_qb_not_configured':     'Global QuickBase is not configured. Contact your Super Admin.',
+            'assigned_to_field_not_found':  '"Assigned to" field not found in this QuickBase table.',
+          };
+          var friendly = (data && data.warning && msgs[data.warning]) || (data && data.message) || 'QuickBase data unavailable.';
+          if (list) list.innerHTML = '<div class="yct-empty"><i class="fas fa-exclamation-triangle" style="color:var(--ss-warn);"></i><span>' + (friendly).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span></div>';
+          return null;
+        }
+        // Cache qb_name returned from server — authoritative, no guesswork
+        if (data.qbName) {
+          window._qbMyNameCache = data.qbName;
+          var nameEl = document.getElementById('yct-user-name');
+          if (nameEl) nameEl.textContent = data.qbName;
+          var qbRootEl = document.getElementById('qbs-root');
+          if (qbRootEl) qbRootEl._yctUserName = data.qbName;
+        }
+        window.__studioQbRecords = data.records || [];
         window.__studioQbColumns = Array.isArray(data.columns) ? data.columns : [];
-        return { records: data.records, columns: data.columns || [] };
+        return { records: data.records || [], columns: data.columns || [] };
       })
-      .catch(function() { return null; });
+      .catch(function(err) {
+        console.warn('[YCT] fetch error:', err);
+        return null;
+      });
   }
 
   // ── convert qb_data record shape → snap shape expected by _renderEntry ─
@@ -11468,35 +11487,16 @@
     _yctShowLoading();
 
     // Pre-fetch the user's qb_name if not cached yet — /api/users/me returns profile
-    var nameReady = Promise.resolve();
-    if (!window._qbMyNameCache && !window.me) {
-      var tok = _yctGetToken();
-      var hdrs = { 'Content-Type': 'application/json' };
-      if (tok) hdrs['Authorization'] = 'Bearer ' + tok;
-      nameReady = fetch('/api/users/me', { headers: hdrs })
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-          var qbName = d && (d.qb_name || (d.profile && d.profile.qb_name) || d.name || '');
-          if (qbName) {
-            window._qbMyNameCache = String(qbName).trim();
-            // Also cache on qbs-root for _renderYCT fallback
-            var qbRootEl = document.getElementById('qbs-root');
-            if (qbRootEl) qbRootEl._yctUserName = window._qbMyNameCache;
-            var nameEl2 = document.getElementById('yct-user-name');
-            if (nameEl2) nameEl2.textContent = window._qbMyNameCache;
-          }
-        }).catch(function() {});
-    }
-
-    nameReady.then(function() {
+    // qb_name is now returned by /api/studio/yct_data — no pre-fetch needed.
+    // The fetch itself resolves the user's name from their Supabase profile server-side.
+    Promise.resolve()
+    .then(function() {
       return _yctFetchQbData(500);
     }).then(function(result) {
       _yctFetching = false;
       if (!result) {
-        // QB not configured or error
-        var list    = document.getElementById('yct-list');
+        // Error message already rendered inside _yctFetchQbData
         var countEl = document.getElementById('yct-count');
-        if (list) list.innerHTML = '<div class="yct-empty"><i class="fas fa-database"></i><span>QB not configured or no data</span><span style="font-size:9px;color:rgba(255,255,255,.15);">Configure Studio QB Settings first</span></div>';
         if (countEl) countEl.textContent = '0';
         _yctUpdateToolbar(0);
         return;
