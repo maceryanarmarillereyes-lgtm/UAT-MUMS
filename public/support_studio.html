@@ -11224,38 +11224,50 @@
     var qbCntEl = document.getElementById('home-qb-count');
     if (!list) return;
 
-    // Get current user name
+    // Get current user's QB name — try multiple sources in priority order
     var myName = String(window._qbMyNameCache || '').trim();
     if (!myName) {
-      // Try store
       try {
         var u = window.store && window.store.getState && window.store.getState().user;
         myName = (u && (u.qb_name || u.name)) ? String(u.qb_name || u.name).trim() : '';
       } catch(e) {}
     }
+    if (!myName && window.me) {
+      myName = String(window.me.qb_name || window.me.name || '').trim();
+    }
+    if (!myName) {
+      // Try reading from the cached profile on qbs-root
+      var qbRootEl = document.getElementById('qbs-root');
+      if (qbRootEl && qbRootEl._yctUserName) myName = qbRootEl._yctUserName;
+    }
     var myNameLower = myName.toLowerCase();
     if (nameEl) nameEl.textContent = myName || 'You';
 
-    // Collect snaps from the QB root element
+    // ── FIX v2.0: Read snaps from qbs-root._qbRowSnaps (set by _yctLoad) ──
+    // _yctLoad calls /api/studio/qb_data, converts records to snaps,
+    // and stores them on qbs-root._qbRowSnaps before calling _renderYCT.
+    // Fallback: raw __studioQbRecords from fetch-patch intercept.
     var qbRoot = document.getElementById('qbs-root');
-    var snaps  = (qbRoot && Array.isArray(qbRoot._qbRowSnaps)) ? qbRoot._qbRowSnaps : [];
+    var snaps  = (qbRoot && Array.isArray(qbRoot._qbRowSnaps) && qbRoot._qbRowSnaps.length > 0)
+                 ? qbRoot._qbRowSnaps : [];
 
-    // Also check raw records as fallback (set by fetch-patch)
-    var rawRecords = window.__studioQbRecords || [];
-    var rawColumns = window.__studioQbColumns || [];
-
-    // If no snaps yet from qbs but we have raw records, convert them
-    if (snaps.length === 0 && rawRecords.length > 0 && rawColumns.length > 0) {
-      snaps = rawRecords.map(function(r, i) {
-        return {
-          rowNum:    i + 1,
-          recordId:  String(r.qbRecordId || r['3'] || i),
-          fields:    r.fields || r,
-          columnMap: rawColumns.reduce(function(acc, c) {
-            acc[String(c.id)] = String(c.label || c.id || ''); return acc;
-          }, {})
-        };
-      });
+    // Fallback: convert raw records if snaps not yet set
+    if (snaps.length === 0) {
+      var rawRecords = window.__studioQbRecords || [];
+      var rawColumns = window.__studioQbColumns || [];
+      if (rawRecords.length > 0) {
+        var rawColMap = {};
+        rawColumns.forEach(function(c) { rawColMap[String(c.id)] = String(c.label || c.id || ''); });
+        snaps = rawRecords.map(function(r, i) {
+          return {
+            _yctIdx:   i,
+            rowNum:    i + 1,
+            recordId:  String(r.qbRecordId || r['3'] || i),
+            fields:    r.fields || r,
+            columnMap: rawColMap
+          };
+        });
+      }
     }
 
     if (qbCntEl) qbCntEl.textContent = snaps.length + ' records';
@@ -11356,114 +11368,220 @@
   }
 
   // ── init & refresh ────────────────────────────────────────────────────
+  // ── PERMANENT FIX v2.0: YCT fetches its own QB data directly ──────
+  // ROOT CAUSE of v1.x failure: YCT passively waited for window.__studioQbRecords
+  // to be populated as a side-effect of the user clicking the QBS tab.
+  // On home-page load, QBS tab is NEVER clicked → data never arrives → 0 records.
+  //
+  // SOLUTION: YCT calls /api/studio/qb_data directly on init (and on refresh).
+  // This is the same endpoint used by the QBS tab, isolated to the user's own
+  // Studio QB Settings. No dependency on any other tab being loaded.
+
+  // ── get auth token (mirrors apiFetch pattern in this page) ──────────
+  function _yctGetToken() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) {
+        var p = JSON.parse(raw);
+        var t = p && (p.access_token || (p.session && p.session.access_token));
+        if (t) return String(t);
+      }
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') {
+        var t2 = window.CloudAuth.accessToken(); if (t2) return t2;
+      }
+      if (window.Auth && typeof window.Auth.getSession === 'function') {
+        var s = window.Auth.getSession();
+        var t3 = s && s.access_token; if (t3) return String(t3);
+      }
+    } catch(_) {}
+    return '';
+  }
+
+  // ── fetch QB records from /api/studio/qb_data ───────────────────────
+  // Returns { records, columns } on success, null on failure.
+  // records: [{ qbRecordId, fields: { fid: { value } } }]
+  // columns: [{ id, label }]
+  function _yctFetchQbData(limit) {
+    limit = limit || 500;
+    var tok = _yctGetToken();
+    var headers = { 'Content-Type': 'application/json' };
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
+    return fetch('/api/studio/qb_data?limit=' + limit, { headers: headers })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.ok) return null;
+        if (!Array.isArray(data.records) || data.records.length === 0) return null;
+        // Store globally so other parts of the app can use it
+        window.__studioQbRecords = data.records;
+        window.__studioQbColumns = Array.isArray(data.columns) ? data.columns : [];
+        return { records: data.records, columns: data.columns || [] };
+      })
+      .catch(function() { return null; });
+  }
+
+  // ── convert qb_data record shape → snap shape expected by _renderEntry ─
+  // qb_data: { qbRecordId, fields: { "12": { value: "foo" } } }
+  // _renderYCT expects snaps with: { recordId, fields, columnMap }
+  function _yctRecordsToSnaps(records, columns) {
+    // Build columnMap from columns array: { "12": "Case Status", ... }
+    var columnMap = {};
+    (columns || []).forEach(function(c) {
+      columnMap[String(c.id)] = String(c.label || c.id);
+    });
+    return records.map(function(r, i) {
+      return {
+        _yctIdx:   i,
+        rowNum:    i + 1,
+        recordId:  String(r.qbRecordId || ''),
+        fields:    r.fields || {},
+        columnMap: columnMap
+      };
+    });
+  }
+
+  // ── update count badge in toolbar ───────────────────────────────────
+  function _yctUpdateToolbar(count) {
+    var qbCntEl = document.getElementById('home-qb-count');
+    if (qbCntEl) qbCntEl.textContent = count + ' records';
+  }
+
+  // ── show loading state ───────────────────────────────────────────────
+  function _yctShowLoading() {
+    var list    = document.getElementById('yct-list');
+    var loading = document.getElementById('yct-loading');
+    if (!list) return;
+    if (loading) {
+      loading.style.display = '';
+      if (!list.contains(loading)) list.innerHTML = '';
+      if (!list.contains(loading)) list.appendChild(loading);
+    } else {
+      list.innerHTML = '<div class="yct-loading"><div class="yct-spinner"></div><span>Loading QB data...</span></div>';
+    }
+  }
+
+  // ── main fetch+render cycle ──────────────────────────────────────────
+  var _yctFetching = false;
+
+  function _yctLoad(isRefresh) {
+    if (_yctFetching) return;
+    _yctFetching = true;
+    _yctShowLoading();
+
+    // Pre-fetch the user's qb_name if not cached yet — /api/users/me returns profile
+    var nameReady = Promise.resolve();
+    if (!window._qbMyNameCache && !window.me) {
+      var tok = _yctGetToken();
+      var hdrs = { 'Content-Type': 'application/json' };
+      if (tok) hdrs['Authorization'] = 'Bearer ' + tok;
+      nameReady = fetch('/api/users/me', { headers: hdrs })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          var qbName = d && (d.qb_name || (d.profile && d.profile.qb_name) || d.name || '');
+          if (qbName) {
+            window._qbMyNameCache = String(qbName).trim();
+            // Also cache on qbs-root for _renderYCT fallback
+            var qbRootEl = document.getElementById('qbs-root');
+            if (qbRootEl) qbRootEl._yctUserName = window._qbMyNameCache;
+            var nameEl2 = document.getElementById('yct-user-name');
+            if (nameEl2) nameEl2.textContent = window._qbMyNameCache;
+          }
+        }).catch(function() {});
+    }
+
+    nameReady.then(function() {
+      return _yctFetchQbData(500);
+    }).then(function(result) {
+      _yctFetching = false;
+      if (!result) {
+        // QB not configured or error
+        var list    = document.getElementById('yct-list');
+        var countEl = document.getElementById('yct-count');
+        if (list) list.innerHTML = '<div class="yct-empty"><i class="fas fa-database"></i><span>QB not configured or no data</span><span style="font-size:9px;color:rgba(255,255,255,.15);">Configure Studio QB Settings first</span></div>';
+        if (countEl) countEl.textContent = '0';
+        _yctUpdateToolbar(0);
+        return;
+      }
+      // Convert records to snap format and update global snaps on qbs-root
+      var snaps = _yctRecordsToSnaps(result.records, result.columns);
+      _yctUpdateToolbar(result.records.length);
+
+      // Also attach to qbs-root so clicking a case opens the detail modal
+      var qbRoot = document.getElementById('qbs-root');
+      if (qbRoot) qbRoot._qbRowSnaps = snaps;
+
+      // Render with the fresh snaps
+      _renderYCT(snaps);
+    }); // closes nameReady→qbData promise chain
+  }
+
+  // ── OVERRIDE _renderYCT to accept optional snaps argument ───────────
+  // Wrap the original _renderYCT so _yctLoad can pass pre-fetched snaps directly
+  var _renderYCT_orig = _renderYCT;
+  _renderYCT = function(explicitSnaps) {
+    if (Array.isArray(explicitSnaps) && explicitSnaps.length > 0) {
+      // Use the passed snaps directly — bypass the window.__studioQbRecords lookup
+      var _origRecords = window.__studioQbRecords;
+      var _origColumns = window.__studioQbColumns;
+      // _renderYCT_orig reads from qbs-root._qbRowSnaps or window.__studioQbRecords
+      // We already set qbRoot._qbRowSnaps above, so just call it
+      _renderYCT_orig();
+    } else {
+      _renderYCT_orig();
+    }
+  };
+
   function _initYCT() {
     _updateDate();
     setInterval(_updateDate, 30000);
     _bindFilters();
 
+    // Wire up Refresh Cases button — re-fetches from QB directly
     var refreshBtn = document.getElementById('home-yct-refresh');
     if (refreshBtn) {
       refreshBtn.addEventListener('click', function() {
         var icon = refreshBtn.querySelector('i');
         if (icon) icon.style.animation = 'yct-spin .7s linear infinite';
-        var list = document.getElementById('yct-list');
-        var loading = document.getElementById('yct-loading');
-        if (list && loading) {
-          list.innerHTML = '';
-          list.appendChild(loading);
-          loading.style.display = '';
-        }
-        setTimeout(function() {
-          _renderYCT();
-          if (icon) icon.style.animation = '';
-        }, 600);
+        _yctLoad(true);
+        setTimeout(function() { if (icon) icon.style.animation = ''; }, 1200);
       });
     }
 
-    // ── Initial render + data-available watcher ──────────────────────
-    // FIX v1.1: Removed broken Object.defineProperty on __studioQbRecords.
-    // The fetch-patch already writes it as a plain property — redefining it as
-    // an accessor throws a TypeError in strict mode, silently killing the watcher.
-    //
-    // NEW APPROACH:
-    // 1. Register a callback on window.__studioQbRecordsLoaded — the extended
-    //    fetch-patch calls this whenever records arrive from qb_monitoring/qb_data.
-    // 2. Also poll every 800ms for up to 20s as belt-and-suspenders (handles cases
-    //    where QB tab was already loaded before home tab init).
-    
-    var _yctRendered = false;
-    
-    function _doRender() {
-      if (_yctRendered) {
-        // Already rendered once — just refresh silently
-        _renderYCT();
-        return;
-      }
-      var qbRoot = document.getElementById('qbs-root');
-      var hasSnaps = qbRoot && Array.isArray(qbRoot._qbRowSnaps) && qbRoot._qbRowSnaps.length > 0;
-      var hasRaw   = Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0;
-      if (hasSnaps || hasRaw) {
-        _yctRendered = true;
-        _renderYCT();
-      }
-    }
+    // Auto-fetch on init — no need to click QBS tab first
+    _yctLoad(false);
 
-    // Callback: fires immediately when fetch-patch intercepts a successful QB report load
+    // Also re-load when home tab is clicked (silent refresh if already loaded)
+    document.addEventListener('click', function(e) {
+      var btn = e.target.closest('[data-tab="home"]');
+      if (btn) {
+        setTimeout(function() {
+          _updateDate();
+          // If already have records, just re-render; else fetch fresh
+          var hasData = Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0;
+          if (hasData) {
+            _renderYCT();
+          } else {
+            _yctLoad(false);
+          }
+        }, 200);
+      }
+    });
+
+    // If QBS tab loads data later (user visits QBS tab), re-render YCT automatically
     window.__studioQbRecordsLoaded = function() {
-      setTimeout(function() {
-        _renderYCT();
-        _yctRendered = true;
-        // Also auto-refresh if user is on home canvas
-        var homeCanvas = document.getElementById('canvas-home');
-        if (homeCanvas && homeCanvas.classList.contains('active')) {
-          _renderYCT();
-        }
-      }, 200);
+      setTimeout(_renderYCT, 300);
     };
-
-    // Poll fallback: catches records loaded before this init ran
-    var _pollCount = 0;
-    var _pollMax   = 25; // 25 × 800ms = 20s max
-    var _pollTimer = setInterval(function() {
-      _pollCount++;
-      _doRender();
-      if (_yctRendered || _pollCount >= _pollMax) {
-        clearInterval(_pollTimer);
-      }
-    }, 800);
-
-    // Render immediately in case data is already there
-    _doRender();
   }
 
-  // Wait for DOM ready + tab system
+  // Boot
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() { setTimeout(_initYCT, 400); });
   } else {
     setTimeout(_initYCT, 400);
   }
 
-  // Also re-render when home tab is clicked
-  document.addEventListener('click', function(e) {
-    var btn = e.target.closest('[data-tab="home"]');
-    if (btn) {
-      setTimeout(function() {
-        var loading = document.getElementById('yct-loading');
-        var list    = document.getElementById('yct-list');
-        // Only re-render if list is empty or shows loading
-        if (list && (!list.querySelector('.yct-entry') || (loading && loading.style.display !== 'none'))) {
-          _renderYCT();
-        } else {
-          // Just refresh silently
-          _renderYCT();
-        }
-        _updateDate();
-      }, 200);
-    }
-  });
-
-  // Expose globally for manual refresh
-  window._yctRefresh = _renderYCT;
+  // Expose globals for manual refresh
+  window._yctRefresh = function() { _yctLoad(true); };
+  window._yctRender  = _renderYCT;
 
 })();
 </script>
