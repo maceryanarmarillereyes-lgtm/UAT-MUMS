@@ -5340,36 +5340,6 @@
   function esc(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
-
-  function _normalizeName(s) {
-    return String(s || '')
-      .toLowerCase()
-      .replace(/[\.\,\(\)\[\]\-_/]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  function _splitNameTokens(s) {
-    return _normalizeName(s).split(' ').filter(function(t) { return t.length > 1; });
-  }
-
-  function _isNameMatch(a, b) {
-    var na = _normalizeName(a);
-    var nb = _normalizeName(b);
-    if (!na || !nb) return false;
-    if (na === nb || na.includes(nb) || nb.includes(na)) return true;
-
-    var aT = _splitNameTokens(na);
-    var bT = _splitNameTokens(nb);
-    if (!aT.length || !bT.length) return false;
-
-    var overlap = 0;
-    for (var i = 0; i < aT.length; i++) {
-      if (bT.indexOf(aT[i]) >= 0) overlap++;
-    }
-    // Require strong token overlap to avoid false positives.
-    return overlap >= Math.min(2, Math.min(aT.length, bT.length));
-  }
   function showMsg(el, text, ok) {
     if (!el) return;
     el.textContent = text;
@@ -11125,29 +11095,15 @@
     var bestYesterday = null;
     while ((match = regex.exec(notesRaw)) !== null) {
       var datePart = match[1].toUpperCase();
-      if (datePart === todayStr) {
-        var timePart = match[2].trim();
-        var namePart = match[3].trim();
-        var isMine   = _yctIsNameMatch(namePart, myNameLower);
-        return { time: timePart, name: namePart, isMine: isMine, full: match[0] };
-      }
+      var timePart = match[2].trim();
+      var namePart = match[3].trim();
+      var isMine   = myNameLower ? namePart.toLowerCase().includes(myNameLower) : false;
+      var entry = { time: timePart, name: namePart, isMine: isMine, full: match[0] };
+      if (datePart === todayStr && !bestToday) { bestToday = entry; }
+      else if (datePart === yesterdayStr && !bestYesterday) { bestYesterday = entry; }
     }
-    return null;
-  }
-
-  function _extractNotesText(v) {
-    if (v == null) return '';
-    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
-    if (Array.isArray(v)) {
-      return v.map(function(it) {
-        if (it == null) return '';
-        if (typeof it === 'string' || typeof it === 'number' || typeof it === 'boolean') return String(it);
-        if (typeof it === 'object') return String(it.text || it.value || it.name || '');
-        return '';
-      }).join(' ').trim();
-    }
-    if (typeof v === 'object') return String(v.text || v.value || v.name || '');
-    return '';
+    // Prefer today, fall back to yesterday (covers timezone edge cases)
+    return bestToday || bestYesterday || null;
   }
 
   // Extract a short preview text after the bracket (strip dashes)
@@ -11171,128 +11127,7 @@
     });
     if (!colId) return '';
     var f = snap.fields[colId];
-    if (f == null) return '';
-    if (typeof f === 'object' && Object.prototype.hasOwnProperty.call(f, 'value')) {
-      return _extractNotesText(f.value);
-    }
-    return _extractNotesText(f);
-  }
-
-  function _getYctToken() {
-    try {
-      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-      if (raw) {
-        try {
-          var parsed = JSON.parse(raw);
-          var t = parsed && (parsed.access_token || (parsed.session && parsed.session.access_token));
-          if (t) return String(t);
-        } catch (_) {}
-      }
-      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') {
-        var t2 = window.CloudAuth.accessToken();
-        if (t2) return String(t2);
-      }
-      if (window.Auth && typeof window.Auth.getSession === 'function') {
-        var s = window.Auth.getSession();
-        if (s && s.access_token) return String(s.access_token);
-      }
-    } catch (_) {}
-    return '';
-  }
-
-  // Local name helpers for YCT block (must not depend on other script IIFEs)
-  function _yctNormalizeName(s) {
-    return String(s || '')
-      .toLowerCase()
-      .replace(/[\.\,\(\)\[\]\-_/]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  function _yctSplitNameTokens(s) {
-    return _yctNormalizeName(s).split(' ').filter(function(t) { return t.length > 1; });
-  }
-
-  function _yctIsNameMatch(a, b) {
-    var na = _yctNormalizeName(a);
-    var nb = _yctNormalizeName(b);
-    if (!na || !nb) return false;
-    if (na === nb || na.includes(nb) || nb.includes(na)) return true;
-
-    var aT = _yctSplitNameTokens(na);
-    var bT = _yctSplitNameTokens(nb);
-    if (!aT.length || !bT.length) return false;
-
-    var overlap = 0;
-    for (var i = 0; i < aT.length; i++) {
-      if (bT.indexOf(aT[i]) >= 0) overlap++;
-    }
-    return overlap >= Math.min(2, Math.min(aT.length, bT.length));
-  }
-
-  function _resolveYCTMyName() {
-    var picks = [];
-    try {
-      if (window._qbMyNameCache) picks.push(window._qbMyNameCache);
-    } catch (_) {}
-    try {
-      var su = window.store && window.store.getState && window.store.getState().user;
-      if (su) {
-        picks.push(su.qb_name, su.qbName);
-      }
-    } catch (_) {}
-    try {
-      if (window.__studioCurrentUser) {
-        picks.push(window.__studioCurrentUser.qb_name, window.__studioCurrentUser.qbName);
-      }
-    } catch (_) {}
-    try {
-      if (window.me) {
-        picks.push(window.me.qb_name, window.me.qbName);
-      }
-    } catch (_) {}
-    try {
-      var pRaw = localStorage.getItem('mums_user_profile') || sessionStorage.getItem('mums_user_profile');
-      if (pRaw) {
-        var p = JSON.parse(pRaw);
-        picks.push(p && (p.qb_name || p.qbName));
-      }
-    } catch (_) {}
-    for (var i = 0; i < picks.length; i++) {
-      var v = String(picks[i] || '').trim();
-      if (v) return v;
-    }
-    return '';
-  }
-
-  function _preloadQBData() {
-    if (window.__yctQbPreloadStarted) return;
-    window.__yctQbPreloadStarted = true;
-
-    if (!window._qbMyNameCache) {
-      var tok = _getYctToken();
-      if (tok) {
-        fetch('/api/users/me', {
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            var profile = d && d.profile ? d.profile : null;
-            var qbName = String((profile && (profile.qb_name || profile.qbName)) || '').trim();
-            if (qbName) window._qbMyNameCache = qbName;
-          })
-          .catch(function() {});
-      }
-    }
-
-    setTimeout(function() {
-      var qbRoot = document.getElementById('qbs-root');
-      var hasSnaps = !!(qbRoot && Array.isArray(qbRoot._qbRowSnaps) && qbRoot._qbRowSnaps.length > 0);
-      var hasRaw = Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0;
-      if (!hasSnaps && !hasRaw && typeof window._qbsInit === 'function') {
-        try { window._qbsInit(); } catch (_) {}
-      }
-    }, 800);
+    return f && f.value != null ? String(f.value) : '';
   }
 
   // ── status accent ────────────────────────────────────────────────────
@@ -11413,10 +11248,10 @@
     var qbCntEl = document.getElementById('home-qb-count');
     if (!list) return;
 
-    // Get current user name with multi-source fallback
-    var myName = _resolveYCTMyName();
-    var myNameLower = _yctNormalizeName(myName);
-    if (nameEl) nameEl.textContent = myName || 'No Quickbase Name';
+    // Get current user name from all possible sources
+    var myName = _resolveMyName();
+    var myNameLower = myName.toLowerCase();
+    if (nameEl) nameEl.textContent = myName || 'You';
 
     // Collect snaps from the QB root element
     var qbRoot = document.getElementById('qbs-root');
@@ -11444,30 +11279,40 @@
 
     var todayStr = _manilaToday();
 
-    // Privacy-aligned rule (same behavior as My Quickbase):
-    // no qb_name => do not show records.
-    if (!myNameLower) {
-      if (loading) loading.style.display = 'none';
-      list.innerHTML = '<div class="yct-empty"><i class="fas fa-user-lock"></i><span>Quickbase Name not assigned</span><span style="font-size:9px;color:rgba(255,255,255,.15);">Ask Super Admin to set your Quickbase Name</span></div>';
-      if (countEl) countEl.textContent = '0';
-      return;
-    }
-
-    // Filter: assigned to current user's Quickbase Name AND has today entry in notes
+    // Filter: assigned to current user (show all assigned cases, not just today's)
+    // The note bubble shows today's activity; cases without today notes still show
     var matched = [];
     snaps.forEach(function(snap, i) {
       snap._yctIdx = i;
       var assignedTo = _fv(snap, ['assigned to','assigned','agent']);
-      var isAssignedToMe = myNameLower ? _yctIsNameMatch(assignedTo, myNameLower) : false;
+      var assignedLower = assignedTo.toLowerCase();
+
+      // Match by name — partial match to handle "Mace Ryan Reyes" vs just first name
+      var isAssignedToMe = false;
+      if (myNameLower && assignedLower) {
+        // Full name match
+        if (assignedLower.includes(myNameLower)) {
+          isAssignedToMe = true;
+        }
+        // Partial: if myName is multiple words, check first word match
+        else if (myNameLower.split(' ').length > 1) {
+          var firstName = myNameLower.split(' ')[0];
+          var lastName  = myNameLower.split(' ').slice(-1)[0];
+          // Match if assigned field contains both first and last name
+          if (assignedLower.includes(firstName) && assignedLower.includes(lastName)) {
+            isAssignedToMe = true;
+          }
+          // Also match if assigned contains first name (for "Mace" matching "Mace Ryan Reyes")
+          else if (myNameLower.includes(assignedLower.split(' ')[0])) {
+            isAssignedToMe = true;
+          }
+        }
+      }
 
       if (!isAssignedToMe) return;
 
-      var notesRawOriginal = _fv(snap, ['case notes detail','case notes','case note','notes']);
-      var notesRaw = _convertPHT(notesRawOriginal);
-      // Fallback to non-converted text to prevent double timezone conversion misses.
-      var entry = _parseTodayEntry(notesRaw, todayStr, myNameLower) ||
-                  _parseTodayEntry(String(notesRawOriginal || ''), todayStr, myNameLower);
-      if (entry) matched.push(snap);
+      // Show all assigned cases — today's note bubble is added if found
+      matched.push(snap);
     });
 
     if (loading) loading.style.display = 'none';
@@ -11613,7 +11458,6 @@
     _updateDate();
     setInterval(_updateDate, 30000);
     _bindFilters();
-    _preloadQBData();
 
     var refreshBtn = document.getElementById('home-yct-refresh');
     if (refreshBtn) {
@@ -11634,37 +11478,23 @@
       });
     }
 
-    // Initial render — wait for QB data to be available
-    // Poll up to 15s for snaps, then render whatever we have
-    var attempts = 0;
-    var MAX = 30;
-    function tryRender() {
-      var qbRoot = document.getElementById('qbs-root');
-      var snaps  = (qbRoot && Array.isArray(qbRoot._qbRowSnaps) && qbRoot._qbRowSnaps.length > 0)
-        ? qbRoot._qbRowSnaps : [];
-      var rawRec = window.__studioQbRecords || [];
-      if (snaps.length > 0 || rawRec.length > 0 || attempts >= MAX) {
-        _renderYCT();
-        return;
+    // Hook into QB raw records watcher (set by fetch-patch at top of file)
+    var _origWatcher = window.__studioQbRecordsWatcher;
+    Object.defineProperty(window, '__studioQbRecords', {
+      configurable: true,
+      get: function() { return _origWatcher; },
+      set: function(v) {
+        _origWatcher = v;
+        if (Array.isArray(v) && v.length > 0) {
+          setTimeout(function() {
+            var homeCanvas = document.getElementById('canvas-home');
+            if (homeCanvas && homeCanvas.classList.contains('active')) {
+              _renderYCT();
+            }
+          }, 300);
+        }
       }
-      attempts++;
-      setTimeout(tryRender, 500);
-    }
-
-    // Refresh when QB records count changes (background load complete)
-    var lastRawCount = Array.isArray(window.__studioQbRecords) ? window.__studioQbRecords.length : 0;
-    var lastSnapCount = 0;
-    setInterval(function() {
-      var qbRoot = document.getElementById('qbs-root');
-      var snapCount = (qbRoot && Array.isArray(qbRoot._qbRowSnaps)) ? qbRoot._qbRowSnaps.length : 0;
-      var rawCount = Array.isArray(window.__studioQbRecords) ? window.__studioQbRecords.length : 0;
-      if (snapCount !== lastSnapCount || rawCount !== lastRawCount) {
-        lastSnapCount = snapCount;
-        lastRawCount = rawCount;
-        var homeCanvas = document.getElementById('canvas-home');
-        if (homeCanvas && homeCanvas.classList.contains('active')) _renderYCT();
-      }
-    }, 1200);
+    });
 
     // Hook into _qbRowSnaps on qbs-root so we catch data arriving from QB tab init
     function _watchQbRowSnaps() {
