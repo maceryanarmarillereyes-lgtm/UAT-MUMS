@@ -11098,12 +11098,6 @@
     var rawSnaps = _toSnapsFromRaw(raw, cols);
     if (rawSnaps.length) return rawSnaps;
 
-    // Deep-search cache fallback (same dataset family used by studio quickbase tools)
-    var deepRaw = window.__studioQbDeepRecords || [];
-    var deepCols = window.__studioQbDeepColumns || [];
-    var deepSnaps = _toSnapsFromRaw(deepRaw, deepCols);
-    if (deepSnaps.length) return deepSnaps;
-
     var qbRoot = document.getElementById('qbs-root');
     if (qbRoot && Array.isArray(qbRoot._qbRowSnaps) && qbRoot._qbRowSnaps.length) {
       return qbRoot._qbRowSnaps.slice();
@@ -11213,7 +11207,6 @@
     if (qbCntEl) qbCntEl.textContent = snaps.length + ' records';
 
     if (!snaps.length) {
-      _preloadQBData();
       list.innerHTML = '<div class="yct-loading"><div class="yct-spinner"></div><span>Loading QB data…</span></div>';
       if (countEl) countEl.textContent = '0';
       _updatePillCounts([]);
@@ -11284,55 +11277,30 @@
   }
 
   function _wireDataWatchers() {
-    // Do not redefine global/property descriptors here (can conflict with other studio hooks).
-    // Use safe periodic refresh while Home is active.
-    setInterval(function () {
-      var homeCanvas = document.getElementById('canvas-home');
-      if (homeCanvas && homeCanvas.classList.contains('active')) {
-        _renderYCT();
+    var rawCache = window.__studioQbRecords;
+    Object.defineProperty(window, '__studioQbRecords', {
+      configurable: true,
+      get: function () { return rawCache; },
+      set: function (v) {
+        rawCache = v;
+        setTimeout(_renderYCT, 120);
       }
-    }, 2000);
-  }
+    });
 
-  function _preloadQBData() {
-    function _getAuthTok() {
-      try {
-        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-        if (raw) {
-          var p = JSON.parse(raw);
-          if (p && p.access_token) return p.access_token;
+    function watchQbRoot() {
+      var root = document.getElementById('qbs-root');
+      if (!root) return setTimeout(watchQbRoot, 300);
+      var val = root._qbRowSnaps;
+      Object.defineProperty(root, '_qbRowSnaps', {
+        configurable: true,
+        get: function () { return val; },
+        set: function (v) {
+          val = v;
+          setTimeout(_renderYCT, 120);
         }
-      } catch (_) {}
-      try {
-        if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') {
-          return window.CloudAuth.accessToken() || '';
-        }
-      } catch (_) {}
-      return '';
+      });
     }
-
-    // Cache qb_name early so assignment matching works before qbs tab open
-    var tok = _getAuthTok();
-    if (tok && !window._yctUserNameCache) {
-      fetch('/api/users/me', {
-        headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' }
-      })
-      .then(function (r) { return r && r.ok ? r.json() : null; })
-      .then(function (d) {
-        var qbn = d && d.ok && d.profile ? String(d.profile.qb_name || d.profile.name || '').trim() : '';
-        if (qbn) window._yctUserNameCache = qbn;
-      })
-      .catch(function () {});
-    }
-
-    // Kick Quickbase_S bootstrap until available (background init for YCT data)
-    (function kick(tries) {
-      if (typeof window._qbsInit === 'function') {
-        try { window._qbsInit(); } catch (_) {}
-        return;
-      }
-      if (tries < 20) setTimeout(function () { kick(tries + 1); }, 250);
-    })(0);
+    watchQbRoot();
   }
 
   function _initYctDate() {
@@ -11363,7 +11331,6 @@
     if (typeof window._qbsInit === 'function') {
       setTimeout(function () { try { window._qbsInit(); } catch (_) {} }, 300);
     }
-    _preloadQBData();
 
     setTimeout(_renderYCT, 250);
   }
