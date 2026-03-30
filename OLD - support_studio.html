@@ -212,326 +212,6 @@
       border-color: rgba(88,166,255,.32);
     }
 
-    /* Home icon tab */
-    .ss-home-btn {
-      width: 32px; height: 32px;
-      border-radius: 8px;
-      background: rgba(255,255,255,.04);
-      border: 1px solid rgba(255,255,255,.10);
-      color: var(--ss-muted,#7d8590);
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; flex-shrink: 0;
-      font-size: 13px;
-      padding: 0;
-      transition: background .18s, border-color .18s, color .18s, transform .15s, box-shadow .18s;
-      position: relative;
-    }
-    .ss-home-btn:hover {
-      background: rgba(88,166,255,.10);
-      border-color: rgba(88,166,255,.35);
-      color: #58a6ff;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 14px rgba(88,166,255,.2);
-    }
-    .ss-home-btn:active { transform: scale(.93); }
-    .ss-home-btn.active,
-    .ss-home-btn.ss-tab.active {
-      background: rgba(88,166,255,.12) !important;
-      border-color: rgba(88,166,255,.40) !important;
-      color: #58a6ff !important;
-      box-shadow: 0 0 0 2px rgba(88,166,255,.15) !important;
-    }
-    body:has(#canvas-home.active) #ss-left-sidebar { display: none !important; }
-    body:has(#canvas-home.active) #ss-center-canvas { flex: 1 !important; }
-
-    /* Home canvas — Split Panel layout */
-    #canvas-home { background: var(--ss-bg); overflow: hidden; }
-
-    /* ── HOME SPLIT ── */
-    .home-split { display: flex; height: 100%; overflow: hidden; }
-
-    /* ── YCT PANEL ── */
-    .yct-panel {
-      width: 420px; min-width: 370px; display: flex; flex-direction: column;
-      border-right: 1px solid var(--ss-border); overflow: hidden; flex-shrink: 0;
-      background: var(--ss-surface);
-    }
-    .yct-header {
-      padding: 12px 16px 10px; border-bottom: 1px solid var(--ss-border2); flex-shrink: 0;
-      background: linear-gradient(135deg, rgba(88,166,255,.04), transparent);
-    }
-    .yct-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-    .yct-icon {
-      width: 26px; height: 26px; border-radius: 7px;
-      background: rgba(88,166,255,.15); border: 1px solid rgba(88,166,255,.28);
-      color: var(--ss-accent); font-size: 10px;
-      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    }
-    .yct-title { font-size: 13px; font-weight: 800; color: #e6edf3; }
-    .yct-count {
-      margin-left: auto; font-size: 9px; font-weight: 800; padding: 3px 8px;
-      border-radius: 20px; background: rgba(88,166,255,.12);
-      color: var(--ss-accent); border: 1px solid rgba(88,166,255,.28);
-    }
-    .yct-meta { font-size: 10px; color: var(--ss-muted); }
-    .yct-name-badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 2px 8px; border-radius: 20px;
-      background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.18);
-      color: var(--ss-cyan); font-size: 9px; font-weight: 800;
-      letter-spacing: .04em; margin-top: 5px;
-    }
-    .yct-filter-row {
-      display: flex; gap: 5px; padding: 8px 16px; border-bottom: 1px solid var(--ss-border2);
-      flex-shrink: 0; flex-wrap: wrap;
-    }
-    .yct-pill {
-      font-size: 9px; font-weight: 700; padding: 3px 9px; border-radius: 20px;
-      border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04);
-      color: var(--ss-muted); cursor: pointer; transition: all .15s;
-    }
-    .yct-pill.active { background: rgba(88,166,255,.12); color: var(--ss-accent); border-color: rgba(88,166,255,.3); }
-    .yct-pill:hover:not(.active) { border-color: rgba(255,255,255,.18); color: var(--ss-text); }
-
-    /* ── CASE LIST ── */
-    .yct-list { flex: 1; overflow-y: auto; padding: 10px; }
-    .yct-list::-webkit-scrollbar { width: 3px; }
-    .yct-list::-webkit-scrollbar-track { background: transparent; }
-    .yct-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 99px; }
-
-    /* ── CASE ENTRY ── */
-    .yct-entry {
-      padding: 11px 13px 10px; margin-bottom: 7px;
-      border: 1px solid rgba(255,255,255,.06); border-radius: 10px;
-      cursor: pointer; background: var(--ss-surface2);
-      transition: all .18s; position: relative; overflow: hidden;
-    }
-    .yct-entry:hover { border-color: rgba(88,166,255,.3); background: rgba(88,166,255,.04); box-shadow: 0 4px 16px rgba(0,0,0,.3); }
-    .yct-entry.yct-warn:hover { border-color: rgba(210,153,34,.3); background: rgba(210,153,34,.04); }
-    .yct-accent {
-      position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 3px 0 0 3px;
-    }
-    .yct-acc-blue  { background: var(--ss-accent); }
-    .yct-acc-warn  { background: var(--ss-warn); }
-    .yct-acc-init  { background: rgba(255,255,255,.2); }
-    .yct-acc-green { background: var(--ss-green); }
-
-    .yct-row1 { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; padding-left: 6px; }
-    .yct-cnum { font: 800 11px var(--ss-mono); color: var(--ss-accent); letter-spacing: .02em; }
-    .yct-badge {
-      font-size: 8px; font-weight: 800; padding: 2px 6px; border-radius: 4px; letter-spacing: .04em;
-    }
-    .yct-cb-inv  { background: rgba(88,166,255,.1); color: var(--ss-accent); border: 1px solid rgba(88,166,255,.2); }
-    .yct-cb-init { background: rgba(210,153,34,.1); color: var(--ss-warn); border: 1px solid rgba(210,153,34,.2); }
-    .yct-cb-res  { background: rgba(63,185,80,.1); color: var(--ss-green); border: 1px solid rgba(63,185,80,.2); }
-    .yct-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-    .yct-dot-on  { background: var(--ss-accent); box-shadow: 0 0 5px rgba(88,166,255,.5); animation: yctpulse 2s infinite; }
-    .yct-dot-warn { background: var(--ss-warn); }
-    .yct-dot-res  { background: var(--ss-green); }
-    @keyframes yctpulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-    .yct-age { margin-left: auto; font-size: 9px; color: var(--ss-muted); }
-    .yct-desc {
-      font-size: 11px; font-weight: 600; color: #c9d1d9; line-height: 1.4;
-      margin-bottom: 7px; padding-left: 6px;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-    }
-    /* note bubble */
-    .yct-bubble {
-      margin-left: 6px; padding: 6px 10px; border-radius: 7px;
-      border: 1px solid rgba(255,255,255,.05); background: rgba(0,0,0,.2); position: relative;
-    }
-    .yct-bubble.nb-mine {
-      background: rgba(255,255,255,.02); border-color: rgba(255,255,255,.04);
-    }
-    .yct-bubble.nb-other {
-      background: rgba(34,211,238,.03); border-color: rgba(34,211,238,.12);
-    }
-    .yct-nb-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; flex-wrap: wrap; }
-    .yct-nb-time { font: 400 9px var(--ss-mono); color: rgba(255,255,255,.3); }
-    .yct-nb-name { font-size: 10px; font-weight: 700; }
-    .yct-nb-name.nm-mine  { color: rgba(255,255,255,.28); }
-    .yct-nb-name.nm-other { color: var(--ss-cyan); }
-    .yct-nb-me {
-      font-size: 7px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase;
-      padding: 1px 4px; border-radius: 3px;
-      background: rgba(255,255,255,.05); color: rgba(255,255,255,.22);
-    }
-    .yct-nb-text {
-      font-size: 10px; line-height: 1.4;
-      display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
-    }
-    .yct-nb-text.nt-mine  { color: rgba(255,255,255,.28); }
-    .yct-nb-text.nt-other { color: rgba(255,255,255,.55); }
-    .yct-entry-cta {
-      display: flex; align-items: center; justify-content: flex-end;
-      margin-top: 6px; padding-left: 6px; opacity: 0; transition: opacity .18s;
-    }
-    .yct-entry:hover .yct-entry-cta { opacity: 1; }
-    .yct-cta-link { font-size: 9px; color: var(--ss-accent); font-weight: 700; display: flex; align-items: center; gap: 4px; }
-    .yct-empty {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 10px; height: 200px; color: rgba(255,255,255,.18); font-size: 11px;
-    }
-    .yct-empty i { font-size: 28px; opacity: .15; }
-    .yct-loading {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 8px; height: 120px; color: var(--ss-muted); font-size: 11px;
-    }
-    @keyframes yct-spin { to { transform: rotate(360deg); } }
-    .yct-spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.1); border-top-color: var(--ss-accent); border-radius: 50%; animation: yct-spin .7s linear infinite; }
-
-    /* ── PANELS AREA ── */
-    .home-panels-area {
-      flex: 1; overflow-y: auto; padding: 12px;
-    }
-    .home-panels-area::-webkit-scrollbar { width: 3px; }
-    .home-panels-area::-webkit-scrollbar-track { background: transparent; }
-    .home-panels-area::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 99px; }
-
-    /* ── CANVAS TOOLBAR (Home) ── */
-    .home-toolbar {
-      display: flex; align-items: center; gap: 10px;
-      padding: 0 14px; height: 38px; min-height: 38px;
-      border-bottom: 1px solid var(--ss-border); background: var(--ss-surface2);
-      flex-shrink: 0;
-    }
-    .home-tb-badge {
-      display: flex; align-items: center; gap: 5px; padding: 3px 9px;
-      border-radius: 5px; font: 700 9px var(--ss-font); letter-spacing: .04em;
-      background: rgba(88,166,255,.1); color: var(--ss-accent);
-      border: 1px solid rgba(88,166,255,.3);
-    }
-    .home-tb-refresh {
-      background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
-      color: var(--ss-muted); padding: 4px 10px; border-radius: 5px;
-      font: 600 10px var(--ss-font); cursor: pointer;
-      display: flex; align-items: center; gap: 5px; transition: all .15s;
-    }
-    .home-tb-refresh:hover { background: rgba(255,255,255,.08); color: var(--ss-text); }
-    .home-tb-date { font-size: 10px; color: var(--ss-muted); margin-left: auto; }
-
-    /* panel cards */
-    .hp-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start;
-    }
-    .hp-card {
-      border: 1px solid var(--ss-border); border-radius: 11px;
-      background: var(--ss-surface); overflow: hidden; display: flex; flex-direction: column;
-    }
-    .hp-card-head {
-      padding: 9px 12px 8px; border-bottom: 1px solid var(--ss-border2);
-      display: flex; align-items: center; gap: 8px; flex-shrink: 0;
-    }
-    .hp-icon {
-      width: 20px; height: 20px; border-radius: 5px;
-      display: flex; align-items: center; justify-content: center; font-size: 9px; flex-shrink: 0;
-    }
-    .hp-title { font-size: 10px; font-weight: 800; color: #e6edf3; text-transform: uppercase; letter-spacing: .04em; }
-    .hp-body { flex: 1; padding: 10px 12px; }
-    .hp-vacant {
-      background: repeating-linear-gradient(45deg, var(--ss-surface), var(--ss-surface) 4px, rgba(255,255,255,.01) 4px, rgba(255,255,255,.01) 8px) !important;
-      border-style: dashed !important;
-    }
-    .hp-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 64px; gap: 6px; }
-    .hp-empty i { font-size: 18px; opacity: .1; }
-    .hp-empty span { font-size: 10px; color: rgba(255,255,255,.18); }
-
-    /* oneday */
-    .hp-pw { padding: 12px; background: rgba(251,146,60,.06); border: 1px solid rgba(251,146,60,.15); border-radius: 8px; text-align: center; }
-    .hp-pw-val { font: 800 20px var(--ss-mono); color: var(--ss-orange); letter-spacing: .14em; }
-    .hp-pw-hint { font-size: 9px; color: var(--ss-muted); margin-top: 3px; }
-
-    /* oncall */
-    .hp-oncall-row {
-      display: flex; align-items: center; gap: 8px; padding: 7px 8px;
-      border-radius: 7px; border: 1px solid rgba(34,211,238,.1); background: rgba(34,211,238,.03);
-    }
-    .hp-oc-ava {
-      width: 28px; height: 28px; border-radius: 7px;
-      background: rgba(34,211,238,.12); color: var(--ss-cyan);
-      font: 800 10px var(--ss-font); display: flex; align-items: center; justify-content: center;
-    }
-    .hp-oc-name { font-size: 11px; font-weight: 700; color: #e6edf3; }
-    .hp-oc-role { font-size: 9px; color: var(--ss-muted); }
-    .hp-oc-live {
-      margin-left: auto; font-size: 8px; font-weight: 800; padding: 2px 6px;
-      border-radius: 4px; background: rgba(63,185,80,.12); color: var(--ss-green); border: 1px solid rgba(63,185,80,.25);
-    }
-    /* lab rows */
-    .hp-lab-row {
-      display: flex; align-items: center; gap: 8px; padding: 5px 0;
-      border-bottom: 1px solid var(--ss-border2); cursor: pointer;
-    }
-    .hp-lab-row:last-child { border-bottom: none; }
-    .hp-lab-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-    .hp-lab-on  { background: var(--ss-green); box-shadow: 0 0 4px rgba(63,185,80,.4); }
-    .hp-lab-off { background: var(--ss-muted); }
-    .hp-lab-name { font-size: 11px; color: var(--ss-text); flex: 1; }
-    .hp-lab-type { font-size: 9px; color: var(--ss-muted); }
-
-    .ss-home-wrap { padding: 32px 36px; max-width: 960px; margin: 0 auto; }
-    .ss-home-hero {
-      display: flex; align-items: center; gap: 18px; margin-bottom: 36px; padding: 28px 32px;
-      background: linear-gradient(135deg, rgba(0,115,234,.08) 0%, rgba(162,93,220,.06) 50%, rgba(22,211,238,.04) 100%);
-      border: 1px solid rgba(255,255,255,.07); border-radius: 16px; position: relative; overflow: hidden;
-    }
-    .ss-home-hero::before {
-      content: ''; position: absolute; inset: 0;
-      background: radial-gradient(ellipse at 80% 50%, rgba(88,166,255,.06) 0%, transparent 70%); pointer-events: none;
-    }
-    .ss-home-hero-icon {
-      width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #0073ea 0%, #a25ddc 100%);
-      display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; box-shadow: 0 4px 20px rgba(0,115,234,.4); flex-shrink: 0;
-    }
-    .ss-home-hero-text h1 { font-size: 20px; font-weight: 900; color: #e6edf3; letter-spacing: -.01em; margin: 0 0 4px; }
-    .ss-home-hero-text p { font-size: 12px; color: var(--ss-muted); margin: 0; line-height: 1.5; }
-    .ss-home-section-label {
-      font-size: 9px; font-weight: 800; letter-spacing: .1em;
-      text-transform: uppercase; color: var(--ss-muted); margin-bottom: 12px;
-    }
-    .ss-home-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 12px; margin-bottom: 32px;
-    }
-    .ss-home-card {
-      padding: 18px 18px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,.07);
-      background: rgba(255,255,255,.03); cursor: pointer; display: flex; flex-direction: column; gap: 10px;
-      transition: background .18s, border-color .18s, transform .18s, box-shadow .18s;
-    }
-    .ss-home-card:hover { background: rgba(255,255,255,.06); transform: translateY(-2px); }
-    .ss-home-card-icon {
-      width: 34px; height: 34px; border-radius: 9px; display: flex;
-      align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
-    }
-    .ss-home-card-title { font-size: 12px; font-weight: 800; color: #e6edf3; letter-spacing: .01em; }
-    .ss-home-card-desc { font-size: 10px; color: var(--ss-muted); line-height: 1.5; margin-top: 2px; }
-    .ss-home-card-arrow { margin-top: auto; font-size: 9px; color: var(--ss-muted); transition: color .18s, transform .18s; align-self: flex-end; }
-    .ss-home-card:hover .ss-home-card-arrow { transform: translateX(3px); }
-    .ss-home-card[data-accent="blue"] .ss-home-card-icon { background: rgba(88,166,255,.12); color: #58a6ff; }
-    .ss-home-card[data-accent="green"] .ss-home-card-icon { background: rgba(63,185,80,.12); color: #3fb950; }
-    .ss-home-card[data-accent="cyan"] .ss-home-card-icon { background: rgba(34,211,238,.12); color: #22d3ee; }
-    .ss-home-card[data-accent="orange"] .ss-home-card-icon { background: rgba(251,146,60,.12); color: #fb923c; }
-    .ss-home-card[data-accent="purple"] .ss-home-card-icon { background: rgba(162,93,220,.12); color: #a25ddc; }
-    .ss-home-card[data-accent="yellow"] .ss-home-card-icon { background: rgba(234,179,8,.12); color: #eab308; }
-
-    /* New case button */
-    .ss-new-case-btn {
-      display: flex; align-items: center; gap: 6px; padding: 0 13px; height: 30px;
-      border-radius: 8px; border: 1px solid rgba(56,189,248,.45);
-      background: linear-gradient(135deg, rgba(14,165,233,.18) 0%, rgba(56,189,248,.12) 50%, rgba(99,102,241,.14) 100%);
-      color: #7dd3fc; font-size: 11px; font-weight: 800; font-family: inherit; letter-spacing: .03em;
-      cursor: pointer; flex-shrink: 0; position: relative; overflow: hidden; text-decoration: none;
-      transition: border-color .2s, color .2s, transform .15s;
-    }
-    .ss-new-case-btn:hover {
-      border-color: rgba(56,189,248,.75);
-      color: #e0f2fe;
-      transform: translateY(-1px);
-      box-shadow: 0 0 22px rgba(56,189,248,.5), 0 6px 24px rgba(56,189,248,.3), inset 0 1px 0 rgba(255,255,255,.2);
-    }
-    .ss-new-case-btn:active { transform: translateY(0px) scale(.97); }
-    .ss-new-case-btn i { font-size: 10px; opacity: .9; }
-
     /* Header right controls */
     .ss-header-right {
       display: flex;
@@ -1673,6 +1353,165 @@
       border-radius: 4px; padding: 2px 7px;
     }
 
+    /* ── End User badge under site name ─────────────────────────── */
+    .cp-eu-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      margin-top: 3px;
+      padding: 1px 6px 1px 4px;
+      border-radius: 4px;
+      border: 1px solid rgba(162,93,220,.25);
+      background: rgba(162,93,220,.08);
+      color: #c084fc;
+      font-size: 9px; font-weight: 700; letter-spacing: .02em;
+      max-width: 200px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cp-eu-badge i { font-size: 7px; opacity: .7; flex-shrink: 0; }
+    .cp-site-cell { display: flex; flex-direction: column; gap: 0; }
+
+    /* ── Connect+ Detail Drawer ──────────────────────────────────── */
+    @keyframes cp-drawer-in  { from { transform: translateX(100%); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes cp-drawer-out { from { transform: none; opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+
+    #cp-detail-modal {
+      display: none;
+      position: fixed; inset: 0; z-index: 9500;
+      background: rgba(1,4,9,.6);
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+      align-items: stretch; justify-content: flex-end;
+    }
+    #cp-detail-modal.open { display: flex; }
+    #cp-detail-drawer {
+      width: 520px; max-width: 96vw;
+      background: #0d1117;
+      border-left: 1px solid rgba(34,211,238,.15);
+      display: flex; flex-direction: column;
+      box-shadow: -24px 0 80px rgba(0,0,0,.7), -2px 0 0 rgba(34,211,238,.06);
+      animation: cp-drawer-in .22s cubic-bezier(.22,1,.36,1);
+      overflow: hidden;
+    }
+    /* Drawer header */
+    .cp-drawer-header {
+      padding: 20px 22px 16px;
+      background: linear-gradient(135deg, rgba(34,211,238,.06) 0%, rgba(162,93,220,.04) 100%);
+      border-bottom: 1px solid rgba(255,255,255,.07);
+      flex-shrink: 0;
+    }
+    .cp-drawer-header-top {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+      margin-bottom: 14px;
+    }
+    .cp-drawer-site-name {
+      font-size: 18px; font-weight: 900; color: #e6edf3;
+      letter-spacing: -.01em; line-height: 1.2;
+      word-break: break-word;
+    }
+    .cp-drawer-close {
+      width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0;
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+      color: #7d8590; font-size: 13px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, color .15s;
+    }
+    .cp-drawer-close:hover { background: rgba(248,81,73,.15); border-color: rgba(248,81,73,.3); color: #f85149; }
+    .cp-drawer-eu-banner {
+      display: flex; align-items: center; gap: 9px;
+      padding: 10px 14px;
+      border-radius: 9px;
+      border: 1px solid rgba(162,93,220,.3);
+      background: rgba(162,93,220,.07);
+    }
+    .cp-drawer-eu-icon {
+      width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+      background: rgba(162,93,220,.15); border: 1px solid rgba(162,93,220,.25);
+      display: flex; align-items: center; justify-content: center;
+      color: #c084fc; font-size: 13px;
+    }
+    .cp-drawer-eu-label { font-size: 9px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #c084fc; opacity: .7; }
+    .cp-drawer-eu-value { font-size: 14px; font-weight: 800; color: #e9d5ff; line-height: 1.2; }
+    /* Drawer nav */
+    .cp-drawer-nav {
+      display: flex; align-items: center; gap: 8px; margin-top: 14px;
+    }
+    .cp-drawer-nav-pos {
+      font-size: 10px; color: #7d8590; font-weight: 600;
+      background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+      border-radius: 5px; padding: 3px 8px; margin-right: auto;
+    }
+    .cp-drawer-nav-btn {
+      width: 26px; height: 26px; border-radius: 6px;
+      background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
+      color: #7d8590; font-size: 11px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .cp-drawer-nav-btn:not(:disabled):hover {
+      background: rgba(34,211,238,.1); border-color: rgba(34,211,238,.3); color: #22d3ee;
+    }
+    .cp-drawer-nav-btn:disabled { opacity: .3; cursor: not-allowed; }
+    /* Drawer body */
+    .cp-drawer-body { flex: 1; overflow-y: auto; padding: 20px 22px; display: flex; flex-direction: column; gap: 20px; }
+    .cp-drawer-body::-webkit-scrollbar { width: 4px; }
+    .cp-drawer-body::-webkit-scrollbar-thumb { background: rgba(34,211,238,.15); border-radius: 2px; }
+    /* Info grid */
+    .cp-drawer-section-title {
+      font-size: 9px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase;
+      color: #22d3ee; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .cp-drawer-section-title::after {
+      content: ''; flex: 1; height: 1px; background: rgba(34,211,238,.12);
+    }
+    .cp-drawer-info-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    .cp-drawer-info-cell {
+      padding: 11px 13px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.06);
+    }
+    .cp-drawer-info-cell.full { grid-column: 1 / -1; }
+    .cp-drawer-info-label {
+      font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+      color: #7d8590; margin-bottom: 5px;
+    }
+    .cp-drawer-info-value {
+      font-size: 12px; font-weight: 700; color: #e6edf3; word-break: break-word;
+    }
+    .cp-drawer-info-value.mono { font-family: var(--ss-mono,monospace); font-size: 11px; }
+    /* Drawer footer */
+    .cp-drawer-footer {
+      padding: 14px 22px;
+      border-top: 1px solid rgba(255,255,255,.07);
+      display: flex; align-items: center; gap: 9px;
+      background: rgba(255,255,255,.02);
+      flex-shrink: 0;
+    }
+    .cp-drawer-open-btn {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 11px 18px; border-radius: 9px;
+      background: linear-gradient(135deg, rgba(34,211,238,.15), rgba(34,211,238,.08));
+      border: 1px solid rgba(34,211,238,.35); color: #22d3ee;
+      font-size: 12px; font-weight: 800; text-decoration: none;
+      transition: background .18s, box-shadow .18s, transform .15s;
+    }
+    .cp-drawer-open-btn:hover {
+      background: linear-gradient(135deg, rgba(34,211,238,.25), rgba(34,211,238,.15));
+      box-shadow: 0 4px 20px rgba(34,211,238,.2);
+      transform: translateY(-1px);
+    }
+    .cp-drawer-systems-badge {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 9px 16px; border-radius: 9px;
+      background: rgba(63,185,80,.08); border: 1px solid rgba(63,185,80,.2);
+      font-size: 10px; font-weight: 700; color: #7d8590;
+      gap: 1px; flex-shrink: 0;
+    }
+    .cp-drawer-systems-badge .num { font-size: 20px; font-weight: 900; color: #3fb950; line-height: 1; }
+    /* ── END Connect+ Detail Drawer ───────────────────────────────── */
+
     /* ─────────────────────────────────────────────────────────────────
        END CP/PN PREMIUM STYLES
     ───────────────────────────────────────────────────────────────── */
@@ -1705,6 +1544,212 @@
     .ci-note-caller { font-weight: 700; color: #58a6ff; }
     .sqb-col-item:hover { background: rgba(88,166,255,.08) !important; }
     .sqb-col-item { transition: background .12s; }
+
+    /* ── Home Icon Button ────────────────────────────────────── */
+    .ss-home-btn {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.10);
+      color: var(--ss-muted,#7d8590);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0;
+      font-size: 13px;
+      padding: 0;
+      transition: background .18s, border-color .18s, color .18s, transform .15s, box-shadow .18s;
+      position: relative;
+    }
+    .ss-home-btn:hover {
+      background: rgba(88,166,255,.10);
+      border-color: rgba(88,166,255,.35);
+      color: #58a6ff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(88,166,255,.2);
+    }
+    .ss-home-btn:active { transform: scale(.93); }
+    .ss-home-btn.active,
+    .ss-home-btn.ss-tab.active {
+      background: rgba(88,166,255,.12) !important;
+      border-color: rgba(88,166,255,.40) !important;
+      color: #58a6ff !important;
+      box-shadow: 0 0 0 2px rgba(88,166,255,.15) !important;
+    }
+    /* Hide left sidebar and expand canvas when home tab is active */
+    body:has(#canvas-home.active) #ss-left-sidebar { display: none !important; }
+    body:has(#canvas-home.active) #ss-center-canvas { flex: 1 !important; }
+    /* ── END Home Icon Button ─────────────────────────────────── */
+
+    /* ── Home Canvas Page ────────────────────────────────────── */
+    #canvas-home {
+      background: var(--ss-bg);
+      overflow-y: auto;
+    }
+    .ss-home-wrap {
+      padding: 32px 36px;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .ss-home-hero {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 36px;
+      padding: 28px 32px;
+      background: linear-gradient(135deg, rgba(0,115,234,.08) 0%, rgba(162,93,220,.06) 50%, rgba(22,211,238,.04) 100%);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .ss-home-hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 80% 50%, rgba(88,166,255,.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .ss-home-hero-icon {
+      width: 52px; height: 52px; border-radius: 14px;
+      background: linear-gradient(135deg, #0073ea 0%, #a25ddc 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; color: #fff;
+      box-shadow: 0 4px 20px rgba(0,115,234,.4);
+      flex-shrink: 0;
+    }
+    .ss-home-hero-text h1 {
+      font-size: 20px; font-weight: 900; color: #e6edf3;
+      letter-spacing: -.01em; margin: 0 0 4px;
+    }
+    .ss-home-hero-text p {
+      font-size: 12px; color: var(--ss-muted); margin: 0; line-height: 1.5;
+    }
+    .ss-home-section-label {
+      font-size: 9px; font-weight: 800; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--ss-muted);
+      margin-bottom: 12px;
+    }
+    .ss-home-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .ss-home-card {
+      padding: 18px 18px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.07);
+      background: rgba(255,255,255,.03);
+      cursor: pointer;
+      transition: background .18s, border-color .18s, transform .18s, box-shadow .18s;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .ss-home-card:hover {
+      background: rgba(255,255,255,.06);
+      transform: translateY(-2px);
+    }
+    .ss-home-card-icon {
+      width: 34px; height: 34px; border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0;
+    }
+    .ss-home-card-title {
+      font-size: 12px; font-weight: 800; color: #e6edf3;
+      letter-spacing: .01em;
+    }
+    .ss-home-card-desc {
+      font-size: 10px; color: var(--ss-muted); line-height: 1.5; margin-top: 2px;
+    }
+    .ss-home-card-arrow {
+      margin-top: auto;
+      font-size: 9px; color: var(--ss-muted);
+      transition: color .18s, transform .18s;
+      align-self: flex-end;
+    }
+    .ss-home-card:hover .ss-home-card-arrow {
+      transform: translateX(3px);
+    }
+    /* card accent variants */
+    .ss-home-card[data-accent="blue"]:hover  { border-color: rgba(88,166,255,.3);  box-shadow: 0 8px 28px rgba(88,166,255,.12); }
+    .ss-home-card[data-accent="green"]:hover { border-color: rgba(63,185,80,.3);   box-shadow: 0 8px 28px rgba(63,185,80,.12); }
+    .ss-home-card[data-accent="cyan"]:hover  { border-color: rgba(34,211,238,.3);  box-shadow: 0 8px 28px rgba(34,211,238,.12); }
+    .ss-home-card[data-accent="orange"]:hover{ border-color: rgba(251,146,60,.3);  box-shadow: 0 8px 28px rgba(251,146,60,.12); }
+    .ss-home-card[data-accent="purple"]:hover{ border-color: rgba(162,93,220,.3);  box-shadow: 0 8px 28px rgba(162,93,220,.12); }
+    .ss-home-card[data-accent="yellow"]:hover{ border-color: rgba(234,179,8,.3);   box-shadow: 0 8px 28px rgba(234,179,8,.12); }
+    .ss-home-card[data-accent="blue"]  .ss-home-card-icon { background: rgba(88,166,255,.12);  color: #58a6ff; }
+    .ss-home-card[data-accent="green"] .ss-home-card-icon { background: rgba(63,185,80,.12);   color: #3fb950; }
+    .ss-home-card[data-accent="cyan"]  .ss-home-card-icon { background: rgba(34,211,238,.12);  color: #22d3ee; }
+    .ss-home-card[data-accent="orange"].ss-home-card-icon { background: rgba(251,146,60,.12);  color: #fb923c; }
+    .ss-home-card[data-accent="purple"].ss-home-card-icon { background: rgba(162,93,220,.12);  color: #a25ddc; }
+    .ss-home-card[data-accent="yellow"].ss-home-card-icon { background: rgba(234,179,8,.12);   color: #eab308; }
+    .ss-home-card[data-accent="blue"]  .ss-home-card-arrow { color: #58a6ff; }
+    .ss-home-card[data-accent="green"] .ss-home-card-arrow { color: #3fb950; }
+    .ss-home-card[data-accent="cyan"]  .ss-home-card-arrow { color: #22d3ee; }
+    .ss-home-card[data-accent="orange"].ss-home-card-arrow { color: #fb923c; }
+    .ss-home-card[data-accent="purple"].ss-home-card-arrow { color: #a25ddc; }
+    .ss-home-card[data-accent="yellow"].ss-home-card-arrow { color: #eab308; }
+    /* ── END Home Canvas Page ─────────────────────────────────── */
+
+    /* ── New Case Button ─────────────────────────────────────── */
+    @keyframes nc-shimmer {
+      0%   { background-position: -200% center; }
+      100% { background-position:  200% center; }
+    }
+    @keyframes nc-glow-pulse {
+      0%, 100% { box-shadow: 0 0 10px rgba(56,189,248,.35), 0 2px 12px rgba(56,189,248,.2), inset 0 1px 0 rgba(255,255,255,.15); }
+      50%       { box-shadow: 0 0 18px rgba(56,189,248,.55), 0 4px 20px rgba(56,189,248,.35), inset 0 1px 0 rgba(255,255,255,.2); }
+    }
+    .ss-new-case-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 13px;
+      height: 30px;
+      border-radius: 8px;
+      border: 1px solid rgba(56,189,248,.45);
+      background: linear-gradient(135deg, rgba(14,165,233,.18) 0%, rgba(56,189,248,.12) 50%, rgba(99,102,241,.14) 100%);
+      background-size: 200% auto;
+      color: #7dd3fc;
+      font-size: 11px;
+      font-weight: 800;
+      font-family: inherit;
+      letter-spacing: .03em;
+      cursor: pointer;
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+      text-decoration: none;
+      transition: border-color .2s, color .2s, transform .15s;
+      animation: nc-glow-pulse 2.8s ease-in-out infinite;
+    }
+    .ss-new-case-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.08) 50%, transparent 100%);
+      background-size: 200% auto;
+      opacity: 0;
+      transition: opacity .25s;
+    }
+    .ss-new-case-btn:hover {
+      border-color: rgba(56,189,248,.75);
+      color: #e0f2fe;
+      transform: translateY(-1px);
+      animation: none;
+      box-shadow: 0 0 22px rgba(56,189,248,.5), 0 6px 24px rgba(56,189,248,.3), inset 0 1px 0 rgba(255,255,255,.2);
+    }
+    .ss-new-case-btn:hover::before {
+      opacity: 1;
+      animation: nc-shimmer 1.2s linear infinite;
+    }
+    .ss-new-case-btn:active {
+      transform: translateY(0px) scale(.97);
+      box-shadow: 0 0 10px rgba(56,189,248,.3), inset 0 1px 0 rgba(255,255,255,.1);
+    }
+    .ss-new-case-btn i {
+      font-size: 10px;
+      opacity: .9;
+    }
+    /* ── END New Case Button ──────────────────────────────────── */
 
     /* ── Cache Pulse Beacon Icon ─────────────────────────────── */
     @keyframes pulse         { 0%,100%{opacity:1} 50%{opacity:.35} }
@@ -1813,7 +1858,8 @@
         </div>
       </div>
 
-      <button class="ss-home-btn ss-tab" data-tab="home" id="ss-tab-home" title="Home">
+      <!-- Home Page Button — right of MUMS logo -->
+      <button class="ss-home-btn ss-tab active" data-tab="home" id="ss-tab-home" title="Home">
         <i class="fas fa-home"></i>
       </button>
 
@@ -1860,6 +1906,7 @@
     <!-- Right controls — General Settings pinned to upper-right corner -->
     <div class="ss-header-right">
 
+    <!-- ── +New Case Button — opens QuickBase new case form ── -->
       <a class="ss-new-case-btn"
          href="https://copeland-coldchainservices.quickbase.com/nav/app/bpvmztzkw/table/bpvmztzr5/action/nwr?originalQid=9"
          target="_blank" rel="noopener noreferrer"
@@ -1958,6 +2005,7 @@
     <!-- ── PERSISTENT LEFT SIDEBAR ────────────────────────── -->
     <aside class="ss-sidebar" id="ss-left-sidebar">
 
+      <!-- Home left panel — empty, home uses full canvas width -->
       <div id="left-panel-home" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;"></div>
 
       <!-- Session Manager (Tickets tab) -->
@@ -2396,136 +2444,80 @@
     <!-- ── CENTER CANVAS ────────────────────────────────────── -->
     <main class="ss-canvas" id="ss-center-canvas">
 
+      <!-- ── HOME CANVAS ── default landing page ── -->
       <div id="canvas-home" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
+        <div class="ss-home-wrap">
 
-        <!-- HOME TOOLBAR -->
-        <div class="home-toolbar">
-          <div class="home-tb-badge">
-            <i class="fas fa-database" style="font-size:8px;"></i>
-            <span id="home-qb-count">— records</span>
-          </div>
-          <div class="home-tb-badge" style="background:rgba(63,185,80,.1);color:var(--ss-green);border-color:rgba(63,185,80,.3);">
-            <span style="width:6px;height:6px;border-radius:50%;background:var(--ss-green);box-shadow:0 0 5px rgba(63,185,80,.6);animation:yctpulse 2s infinite;display:inline-block;"></span>
-            Live
-          </div>
-          <button class="home-tb-refresh" id="home-yct-refresh">
-            <i class="fas fa-sync-alt" style="font-size:9px;"></i> Refresh Cases
-          </button>
-          <span class="home-tb-date" id="home-date-display"></span>
-        </div>
-
-        <!-- HOME SPLIT LAYOUT -->
-        <div class="home-split">
-
-          <!-- LEFT: Your Case Today -->
-          <div class="yct-panel">
-            <div class="yct-header">
-              <div class="yct-title-row">
-                <div class="yct-icon"><i class="fas fa-briefcase"></i></div>
-                <span class="yct-title">Your Case Today</span>
-                <span class="yct-count" id="yct-count">0</span>
-              </div>
-              <div class="yct-meta">Cases assigned to you with activity today</div>
-              <div class="yct-name-badge" id="yct-name-badge">
-                <i class="fas fa-user" style="font-size:8px;"></i>
-                <span id="yct-user-name">Loading...</span>
-              </div>
-            </div>
-            <div class="yct-filter-row" id="yct-filter-row">
-              <button class="yct-pill active" data-filter="all">All</button>
-              <button class="yct-pill" data-filter="investigating">Investigating</button>
-              <button class="yct-pill" data-filter="initial">Initial Inquiry</button>
-              <button class="yct-pill" data-filter="woolworths">Woolworths</button>
-            </div>
-            <div class="yct-list" id="yct-list">
-              <div class="yct-loading" id="yct-loading">
-                <div class="yct-spinner"></div>
-                <span>Loading your cases...</span>
-              </div>
+          <!-- Hero -->
+          <div class="ss-home-hero">
+            <div class="ss-home-hero-icon"><i class="fas fa-headset"></i></div>
+            <div class="ss-home-hero-text">
+              <h1>Welcome to MUMS Support Studio</h1>
+              <p>Enterprise Support Console &mdash; Select a module below to get started, or use the tabs above to navigate.</p>
             </div>
           </div>
 
-          <!-- RIGHT: Panel grid -->
-          <div class="home-panels-area">
-            <div class="hp-grid">
+          <!-- Quick Navigation -->
+          <div class="ss-home-section-label"><i class="fas fa-th-large" style="margin-right:5px;"></i>Quick Navigation</div>
+          <div class="ss-home-grid">
 
-              <!-- Oneday Password -->
-              <div class="hp-card">
-                <div class="hp-card-head">
-                  <div class="hp-icon" style="background:rgba(251,146,60,.15);border:1px solid rgba(251,146,60,.25);color:var(--ss-orange);"><i class="fas fa-key"></i></div>
-                  <span class="hp-title">Oneday Password</span>
-                </div>
-                <div class="hp-body">
-                  <div class="hp-pw">
-                    <div class="hp-pw-val" id="hp-oneday-pw">--</div>
-                    <div class="hp-pw-hint">Today's one-time passcode</div>
-                  </div>
-                </div>
+            <div class="ss-home-card" data-accent="blue" onclick="document.querySelector('[data-tab=qbs]').click()">
+              <div class="ss-home-card-icon"><i class="fas fa-database"></i></div>
+              <div>
+                <div class="ss-home-card-title">QuickBase_S</div>
+                <div class="ss-home-card-desc">Studio-isolated QB dashboard. Search and manage case records.</div>
               </div>
-
-              <!-- ICare Oncall Tech -->
-              <div class="hp-card">
-                <div class="hp-card-head">
-                  <div class="hp-icon" style="background:rgba(34,211,238,.15);border:1px solid rgba(34,211,238,.25);color:var(--ss-cyan);"><i class="fas fa-headset"></i></div>
-                  <span class="hp-title">ICare Oncall Tech</span>
-                </div>
-                <div class="hp-body">
-                  <div class="hp-oncall-row">
-                    <div class="hp-oc-ava">JG</div>
-                    <div><div class="hp-oc-name">John V. Gernan</div><div class="hp-oc-role">On-Call Support Tech</div></div>
-                    <span class="hp-oc-live">Live</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Vacant 1 -->
-              <div class="hp-card hp-vacant">
-                <div class="hp-card-head">
-                  <div class="hp-icon" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.2);"><i class="fas fa-plus"></i></div>
-                  <span class="hp-title" style="color:rgba(255,255,255,.2);">Vacant 1</span>
-                </div>
-                <div class="hp-body"><div class="hp-empty"><span style="font-size:9px;opacity:.5;">Available slot</span></div></div>
-              </div>
-
-              <!-- Vacant 2 -->
-              <div class="hp-card hp-vacant">
-                <div class="hp-card-head">
-                  <div class="hp-icon" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.2);"><i class="fas fa-plus"></i></div>
-                  <span class="hp-title" style="color:rgba(255,255,255,.2);">Vacant 2</span>
-                </div>
-                <div class="hp-body"><div class="hp-empty"><span style="font-size:9px;opacity:.5;">Available slot</span></div></div>
-              </div>
-
-              <!-- Controller Testing Lab full width -->
-              <div class="hp-card" style="grid-column:span 2;">
-                <div class="hp-card-head">
-                  <div class="hp-icon" style="background:rgba(162,93,220,.15);border:1px solid rgba(162,93,220,.25);color:var(--ss-purple);"><i class="fas fa-flask"></i></div>
-                  <span class="hp-title">Controller Testing Lab</span>
-                  <span style="margin-left:auto;font-size:8px;font-weight:800;padding:2px 7px;border-radius:4px;background:rgba(162,93,220,.1);color:var(--ss-purple);border:1px solid rgba(162,93,220,.2);">3 Active</span>
-                </div>
-                <div class="hp-body" style="display:flex;flex-direction:column;gap:2px;">
-                  <div class="hp-lab-row"><div class="hp-lab-dot hp-lab-on"></div><span class="hp-lab-name">XR75CX Testing - Fixture A</span><span class="hp-lab-type">Controller</span></div>
-                  <div class="hp-lab-row"><div class="hp-lab-dot hp-lab-on"></div><span class="hp-lab-name">CC200 Protocol Validation</span><span class="hp-lab-type">Protocol</span></div>
-                  <div class="hp-lab-row"><div class="hp-lab-dot hp-lab-off"></div><span class="hp-lab-name">E3 Firmware 4.2.1 Staging</span><span class="hp-lab-type">Firmware</span></div>
-                </div>
-              </div>
-
-              <!-- Connect+ Updated Credential full width -->
-              <div class="hp-card" style="grid-column:span 2;">
-                <div class="hp-card-head">
-                  <div class="hp-icon" style="background:rgba(34,211,238,.15);border:1px solid rgba(34,211,238,.25);color:var(--ss-cyan);"><i class="fas fa-plug"></i></div>
-                  <span class="hp-title">Connect+ Updated Credential</span>
-                </div>
-                <div class="hp-body">
-                  <div class="hp-empty"><i class="fas fa-shield-alt"></i><span>No credential updates pending</span></div>
-                </div>
-              </div>
-
+              <div class="ss-home-card-arrow"><i class="fas fa-arrow-right"></i></div>
             </div>
-          </div>
 
-        </div>
-      </div>
+            <div class="ss-home-card" data-accent="cyan" onclick="document.querySelector('[data-tab=connectplus]').click()">
+              <div class="ss-home-card-icon"><i class="fas fa-plug"></i></div>
+              <div>
+                <div class="ss-home-card-title">Connect+</div>
+                <div class="ss-home-card-desc">Connected site data lookup and external record search.</div>
+              </div>
+              <div class="ss-home-card-arrow"><i class="fas fa-arrow-right"></i></div>
+            </div>
+
+            <div class="ss-home-card" data-accent="orange" onclick="document.querySelector('[data-tab=parts_number]').click()">
+              <div class="ss-home-card-icon"><i class="fas fa-barcode"></i></div>
+              <div>
+                <div class="ss-home-card-title">Parts Number</div>
+                <div class="ss-home-card-desc">Search and reference part numbers and product items.</div>
+              </div>
+              <div class="ss-home-card-arrow"><i class="fas fa-arrow-right"></i></div>
+            </div>
+
+            <div class="ss-home-card" data-accent="green" onclick="document.querySelector('[data-tab=knowledge_base]').click()">
+              <div class="ss-home-card-icon"><i class="fas fa-book"></i></div>
+              <div>
+                <div class="ss-home-card-title">Knowledge Base</div>
+                <div class="ss-home-card-desc">Browse and search the support knowledge base articles.</div>
+              </div>
+              <div class="ss-home-card-arrow"><i class="fas fa-arrow-right"></i></div>
+            </div>
+
+            <div class="ss-home-card" data-accent="purple" onclick="document.querySelector('[data-tab=catalog]').click()">
+              <div class="ss-home-card-icon"><i class="fas fa-microchip"></i></div>
+              <div>
+                <div class="ss-home-card-title">Product Controllers</div>
+                <div class="ss-home-card-desc">Browse catalog items and product controller records.</div>
+              </div>
+              <div class="ss-home-card-arrow"><i class="fas fa-arrow-right"></i></div>
+            </div>
+
+            <div class="ss-home-card" data-accent="yellow" onclick="document.querySelector('[data-tab=support_records]').click()">
+              <div class="ss-home-card-icon"><i class="fas fa-book-open"></i></div>
+              <div>
+                <div class="ss-home-card-title">Support Records</div>
+                <div class="ss-home-card-desc">View and search the full support records knowledge base.</div>
+              </div>
+              <div class="ss-home-card-arrow"><i class="fas fa-arrow-right"></i></div>
+            </div>
+
+          </div><!-- /ss-home-grid -->
+        </div><!-- /ss-home-wrap -->
+      </div><!-- /canvas-home -->
 
       <!-- Tickets canvas -->
       <!-- Product Controllers canvas — item detail -->
@@ -3951,27 +3943,9 @@
             pool = srFlat.filter(e => e.id === cat);
           }
           if (!q || q.length < 1) return pool;
-
-          const qClean = q.trim();
-          const terms  = qClean.toLowerCase().split(/\s+/).filter(Boolean);
-
-          // FIX BUG 2: Pure-numeric query = case# search — check e.case first
-          // If user types "458697", find that exact case# immediately
-          if (/^\d+$/.test(qClean)) {
-            const exactCase = pool.filter(e => String(e.case || '') === qClean);
-            if (exactCase.length) return exactCase;
-            // Fall through to substring search if no exact match
-          }
-
+          const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
           return pool.filter(e => {
-            // FIX BUG 2: Include e.case in haystack so case# is searchable
-            const hay = (
-              (e.title || '') + ' ' +
-              (e.res   || '') + ' ' +
-              (e.cat   || '') + ' ' +
-              (e.eu    || '') + ' ' +
-              (e.case  || '')          // ← was missing — added case number
-            ).toLowerCase();
+            const hay = (e.title + ' ' + e.res + ' ' + e.cat + ' ' + e.eu).toLowerCase();
             return terms.every(t => hay.includes(t));
           });
         }
@@ -4022,10 +3996,7 @@
           if (welcome) welcome.style.display = 'none';
           if (content) content.style.display = 'flex';
 
-          // FIX BUG 2: When query is a pure case# (all digits), search ALL categories
-          // regardless of active category filter. Case# is unique — always cross-category.
-          const isCaseNumSearch = srQuery && /^\d+$/.test(srQuery.trim());
-          srCache = _srSearch(srQuery, isCaseNumSearch ? null : srFilter);
+          srCache = _srSearch(srQuery, srFilter);
 
           if (countEl) countEl.textContent = srCache.length.toLocaleString() + ' Result' + (srCache.length !== 1 ? 's' : '');
           _srRenderCards();
@@ -4120,98 +4091,27 @@
 
         // ── SR CASE DETAIL OPENER ──────────────────────────────────────────
         // Opens #qbCaseDetailModal from a Support Records KB entry.
-        // Step 1: Opens immediately with summary data from support_records_kb.json
-        // Step 2: Fetches FULL record from QBS (QuickBase_S) and refreshes modal
+        // Constructs a snap object that maps KB fields to the modal's expected
+        // columnMap keywords so _populate() in my_quickbase.js fills all slots.
         window._srOpenDetail = function(globalIdx) {
           const resArea = $('sr-results');
           const cache   = (resArea && resArea._srFullCache) ? resArea._srFullCache : srCache;
           const e       = cache[globalIdx];
           if (!e) return;
 
-          // Build allSnaps for prev/next navigation
+          // Build allSnaps for prev/next navigation across the full filtered set
           const allSnaps = cache.map(function(entry, idx) {
             return _srBuildSnap(entry, idx);
           });
 
           const snap = allSnaps[globalIdx];
-
-          // Step 1: Open modal immediately with summary data
           if (typeof window._qbsOpenCaseDetail === 'function') {
             window._qbsOpenCaseDetail(snap, allSnaps);
           } else if (typeof window.__studioQbCdOpen === 'function') {
             window.__studioQbCdOpen(snap);
+          } else {
+            console.warn('[SR] No case detail opener available');
           }
-
-          // Step 2: Fetch full record from QBS and refresh modal
-          const caseNum = String(e.case || '').trim();
-          if (!caseNum) return;
-
-          // Show loading state on key fields
-          var loadingFields = ['qbcdAssigned','qbcdContact','qbcdKpiAge','qbcdKpiLast','qbcdNotes','qbcdLatest'];
-          loadingFields.forEach(function(id) {
-            var el = document.getElementById(id);
-            if (el && (el.textContent === '—' || el.textContent === '')) {
-              el.textContent = '…';
-              el.style.opacity = '0.5';
-            }
-          });
-
-          // Get auth token for API call
-          function _getToken() {
-            try {
-              var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-              if (raw) { var p = JSON.parse(raw); if (p && p.access_token) return p.access_token; }
-            } catch(_) {}
-            return '';
-          }
-
-          var tok = _getToken();
-          fetch('/api/studio/qb_data?recordId=' + encodeURIComponent(caseNum), {
-            headers: tok ? { 'Authorization': 'Bearer ' + tok } : {}
-          })
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            if (!data.ok || !data.fields) {
-              // Restore loading indicators back to summary data
-              loadingFields.forEach(function(id) {
-                var el = document.getElementById(id);
-                if (el && el.textContent === '…') { el.textContent = '—'; el.style.opacity = ''; }
-              });
-              return;
-            }
-
-            // Build a FULL snap from the QBS record and re-populate the modal
-            var fullSnap = {
-              rowNum:    snap.rowNum,
-              recordId:  String(data.recordId || caseNum),
-              qbRecordId: String(data.recordId || caseNum),
-              fields:    data.fields,
-              columnMap: data.columnMap,
-            };
-
-            // Replace this snap in allSnaps for proper prev/next navigation with full data
-            allSnaps[globalIdx] = fullSnap;
-
-            // Re-populate the modal with full data
-            if (typeof window._qbsOpenCaseDetail === 'function') {
-              window._qbsOpenCaseDetail(fullSnap, allSnaps);
-            } else if (typeof window.__studioQbCdOpen === 'function') {
-              window.__studioQbCdOpen(fullSnap);
-            }
-
-            // Remove loading opacity
-            loadingFields.forEach(function(id) {
-              var el = document.getElementById(id);
-              if (el) el.style.opacity = '';
-            });
-          })
-          .catch(function(err) {
-            console.warn('[SR] Failed to fetch full case record:', err);
-            loadingFields.forEach(function(id) {
-              var el = document.getElementById(id);
-              if (el && el.textContent === '…') { el.textContent = '—'; el.style.opacity = ''; }
-            });
-          });
         };
 
         function _srBuildSnap(e, idx) {
@@ -5881,10 +5781,10 @@
     tab.addEventListener('click', () => activateTab(tab.dataset.tab));
   });
 
-  // Expose globally so other script blocks can call it.
+  // Expose globally so other script blocks can call it
   window.activateTab = activateTab;
 
-  // Default landing: Home tab. _qbsInit guard is already in activateTab().
+  // Default landing: Home page. _qbsInit guard is already in activateTab().
   // Config tab is gated to SUPER_ADMIN; this default works for all roles.
   activateTab('home');
 
@@ -6941,22 +6841,8 @@
     var age    = fieldVal(['age']);
     var lastUpd= fieldVal(['last update days','last update']);
     // Convert EST→PHT timestamps in all text-bearing fields
-    var latest = _ssConvertPHT(fieldVal([
-      'latest update on the case',
-      'latest update',
-      'last update',
-      'last comment',
-      'most recent update',
-      'update on the case'
-    ]));
-    var notes  = _ssConvertPHT(fieldVal([
-      'case notes detail',
-      'case notes',
-      'case note',
-      'case details',
-      'resolution details',
-      'notes'
-    ]));
+    var latest = _ssConvertPHT(fieldVal(['latest update','last comment','update on the case']));
+    var notes  = _ssConvertPHT(fieldVal(['case notes','notes']));
 
     set('qbcdRowBadge', snap.rowNum || '—');
     set('qbcdCaseId',   caseId);
@@ -7512,19 +7398,12 @@
   var CSV_URL  = '';
   var PAGE_SIZE = 100;
 
-  // ── Helper: get active CSV URL from live window var or localStorage ──
-  // (BUG FIX: _getActiveCsvUrl + _normalizeCsvUrl were missing from scope)
+  // ── Helper: get active CSV URL — ONLY from live window var (Supabase-backed) ──
+  // localStorage fallback removed: settings are now authoritative in Supabase.
+  // _loadSettingsIfNeeded() always fetches from /api/studio/csv_settings when
+  // window._cpCsvUrl is not yet populated, ensuring cross-device persistence.
   function _getActiveCsvUrl() {
-    // Primary: live value set by CPS settings module
     if (window._cpCsvUrl) return String(window._cpCsvUrl);
-    // Fallback: read directly from localStorage key used by CPS module
-    try {
-      var raw = localStorage.getItem('ss_connectplus_settings');
-      if (raw) {
-        var obj = JSON.parse(raw);
-        if (obj && obj.csvUrl) return String(obj.csvUrl);
-      }
-    } catch (_) {}
     return '';
   }
 
@@ -7614,7 +7493,8 @@
 
     var body = document.getElementById('cp-table-body');
     function _loadSettingsIfNeeded() {
-      if (window._cpCsvUrl) return Promise.resolve();
+      // Always fetch from Supabase — this is the single source of truth.
+      // window._cpCsvUrl may be set from a previous stale preload; confirm from DB.
       var tok = '';
       try {
         var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
@@ -7624,7 +7504,10 @@
         }
         if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken();
       } catch(_) {}
-      if (!tok) return Promise.resolve(); // no token yet — caller will handle empty CSV_URL
+      if (!tok) {
+        // No token yet — use whatever _cpCsvUrl is already set (preloader may have it)
+        return Promise.resolve();
+      }
       return fetch('/api/studio/csv_settings?type=connect_plus', {
         headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-cache' }
       }).then(function(resp) { return resp.ok ? resp.json().catch(function(){ return null; }) : null; })
@@ -7648,7 +7531,11 @@
       CSV_URL = _normalizeCsvUrl(_getActiveCsvUrl());
       return cachePromise;
     }).then(function(cached) {
-      if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
+      // ── Cache schema guard: if cached rows lack endUser, discard and reload ──
+      var cacheValid = cached && Array.isArray(cached.data) && cached.data.length > 0
+        && cached.data[0] && typeof cached.data[0].endUser !== 'undefined';
+
+      if (cacheValid) {
         // ✅ Serve from cache — instant, no network
         _state.all     = cached.data;
         _state.loaded  = true;
@@ -7699,8 +7586,9 @@
             timezone:  String(r[7]  || '').trim(),
             systems:   String(r[8]  || '').trim(),
             url:       String(r[9]  || '').trim(),
-            // _search includes ALL text columns including URL — searches all 36k+ records by default
-            _search:   [r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[9]].join(' ').toLowerCase(),
+            endUser:   String(r[10] || '').trim(),
+            // _search includes ALL text columns including endUser
+            _search:   [r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[9],r[10]].join(' ').toLowerCase(),
           });
         }
         _state.all     = data;
@@ -7778,7 +7666,7 @@
         var haystack;
         if (!activeCols) {
           // No column filter — search all indexed fields
-          haystack = r._search || [r.site,r.directory,r.address1,r.country,r.city,r.state,r.zip,r.timezone,r.url].join(' ').toLowerCase();
+          haystack = r._search || [r.site,r.directory,r.address1,r.country,r.city,r.state,r.zip,r.timezone,r.url,r.endUser].join(' ').toLowerCase();
         } else {
           // Build haystack from only selected columns
           haystack = activeCols.map(function(col) {
@@ -7793,7 +7681,8 @@
             if (colKey.includes('zip') || colKey.includes('postal'))     return r.zip      || '';
             if (colKey.includes('time') || colKey.includes('zone'))      return r.timezone || '';
             if (colKey.includes('url') || colKey.includes('connect') || colKey.includes('link')) return r.url || '';
-            if (colKey.includes('system') || colKey.includes('control')) return r.systems || '';
+            if (colKey.includes('system') || colKey.includes('control')) return r.systems  || '';
+            if (colKey.includes('enduser') || colKey.includes('end') || colKey.includes('user') || colKey.includes('client')) return r.endUser || '';
             // Fallback: try index map
             var idx = colIndexMap[col];
             if (idx != null) {
@@ -7879,7 +7768,11 @@
         'onmouseover="this.querySelectorAll(\'td\').forEach(function(t){t.style.background=\'rgba(34,211,238,.04)\'})" ' +
         'onmouseout="this.querySelectorAll(\'td\').forEach(function(t){t.style.background=\'\'});">';
       html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-muted);font-size:10px;width:38px;">' + (start + i + 1) + '</td>';
-      html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);"><span class="cp-site-link">' + esc(row.site) + '</span></td>';
+      html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);">' +
+        '<div class="cp-site-cell">' +
+        '<span class="cp-site-link">' + esc(row.site) + '</span>' +
+        (row.endUser ? '<span class="cp-eu-badge"><i class="fas fa-building"></i>' + esc(row.endUser) + '</span>' : '') +
+        '</div></td>';
       html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-text);">' + esc(row.directory) + '</td>';
       html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-text);">' + esc(row.city) + '</td>';
       html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-muted);">' + esc(row.state) + '</td>';
@@ -7948,8 +7841,14 @@
     _cpPopulateModal(row, idx);
     var m = document.getElementById('cp-detail-modal');
     if (m) {
-      m.style.display = 'flex';
-      if (m.parentElement !== document.body) document.body.appendChild(m);
+      m.classList.add('open');
+      // Re-trigger animation on the drawer
+      var drawer = document.getElementById('cp-detail-drawer');
+      if (drawer) {
+        drawer.style.animation = 'none';
+        drawer.offsetHeight; // reflow
+        drawer.style.animation = '';
+      }
     }
     try { document.body.classList.add('modal-open'); } catch(_) {}
   };
@@ -7963,11 +7862,17 @@
     set('cp-modal-directory', row.directory);
     set('cp-modal-timezone',  row.timezone);
     set('cp-modal-systems',   row.systems || '0');
+    set('cp-modal-systems-big', row.systems || '0');
     set('cp-modal-city',      row.city);
     set('cp-modal-state',     row.state);
     set('cp-modal-zip',       row.zip);
     set('cp-modal-addr1',     row.address1);
     set('cp-modal-pos',       (idx + 1) + ' of ' + total.toLocaleString());
+    set('cp-modal-end-user',  row.endUser || 'Unknown');
+
+    // Show/hide end user banner
+    var euBanner = document.getElementById('cp-modal-eu-banner');
+    if (euBanner) euBanner.style.display = row.endUser ? 'flex' : 'none';
 
     var urlEl = document.getElementById('cp-modal-url');
     var urlTx = document.getElementById('cp-modal-url-text');
@@ -7978,6 +7883,7 @@
         if (urlTx) urlTx.textContent = row.url;
       } else {
         urlEl.style.display = 'none';
+        if (urlTx) urlTx.textContent = '—';
       }
     }
 
@@ -7996,35 +7902,27 @@
 
   window._cpCloseModal = function() {
     var m = document.getElementById('cp-detail-modal');
-    if (m) m.style.display = 'none';
-    try { if (!document.querySelector('.modal.open')) document.body.classList.remove('modal-open'); } catch(_) {}
+    if (m) m.classList.remove('open');
+    try { document.body.classList.remove('modal-open'); } catch(_) {}
   };
 
   // Keyboard nav + escape for modal
   document.addEventListener('keydown', function(e) {
     var m = document.getElementById('cp-detail-modal');
-    if (!m || m.style.display === 'none') return;
+    if (!m || !m.classList.contains('open')) return;
     if (e.key === 'Escape')     window._cpCloseModal();
     if (e.key === 'ArrowLeft')  window._cpModalNav(-1);
     if (e.key === 'ArrowRight') window._cpModalNav(1);
   });
-  // Backdrop click — guard against null when modal not yet in DOM
-  (function() {
-    var _modal = document.getElementById('cp-detail-modal');
-    if (_modal) {
-      _modal.addEventListener('click', function(e) {
-        if (e.target === this) window._cpCloseModal();
-      });
-    }
-  })();
+  // Backdrop click handled by inline onclick on the flex-1 backdrop div in HTML
 
   // ── CSV Export ──────────────────────────────────────────────────────
   window._cpExportCsv = function() {
     var rows = _state.filtered;
     if (!rows.length) { alert('No data to export.'); return; }
-    var header = ['Site','Directory','Address 1','Country','City','State/Province/Region','Zip/Postal Code','Time Zone','Number of Control Systems','URL CONNECT+ LINK'];
+    var header = ['Site','Directory','Address 1','Country','City','State/Province/Region','Zip/Postal Code','Time Zone','Number of Control Systems','URL CONNECT+ LINK','End User'];
     var csv = [header].concat(rows.map(function(r) {
-      return [r.site,r.directory,r.address1,r.country,r.city,r.state,r.zip,r.timezone,r.systems,r.url].map(function(v) {
+      return [r.site,r.directory,r.address1,r.country,r.city,r.state,r.zip,r.timezone,r.systems,r.url,r.endUser].map(function(v) {
         return '"' + String(v||'').replace(/"/g,'""') + '"';
       });
     })).map(function(r) { return r.join ? r.join(',') : r; }).join('\n');
@@ -8065,21 +7963,38 @@
 (function() {
   'use strict';
 
-  var LS_KEY = 'ss_connectplus_settings';
+  var LS_KEY = 'ss_connectplus_settings'; // kept for legacy cleanup only
 
   // ── Helpers ──────────────────────────────────────────────────────
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+  // Settings are Supabase-authoritative. localStorage is only used as
+  // a write-back cache so _cpsSaveSettings can merge csvUrl with existing fields.
   function loadStoredSettings() {
+    // Try to build from live window vars (set by Supabase fetch)
+    var base = { csvUrl: window._cpCsvUrl || '', searchColumns: window._cpSearchCols || null };
+    // Also merge any detectedColumns from last test (stored in memory only)
     try {
       var raw = localStorage.getItem(LS_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        var obj = JSON.parse(raw);
+        // Only carry over non-auth fields that aren't in Supabase yet
+        if (obj.detectedColumns) base.detectedColumns = obj.detectedColumns;
+        if (obj.rowCount)        base.rowCount        = obj.rowCount;
+      }
     } catch(_) {}
-    return { csvUrl: '', searchColumns: null };
+    return base;
   }
 
   function storeSettings(obj) {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch(_) {}
+    // Write-back ONLY for detectedColumns/rowCount (preview metadata, not auth-critical)
+    try {
+      var existing = {};
+      try { var r = localStorage.getItem(LS_KEY); if (r) existing = JSON.parse(r); } catch(_) {}
+      existing.detectedColumns = obj.detectedColumns || existing.detectedColumns;
+      existing.rowCount        = obj.rowCount        || existing.rowCount;
+      localStorage.setItem(LS_KEY, JSON.stringify(existing));
+    } catch(_) {}
   }
 
   function _getApiTok() {
@@ -8131,12 +8046,12 @@
     fetch('/api/studio/csv_settings?type=connect_plus', { headers: { 'Authorization': 'Bearer ' + _getApiTok() } })
     .then(function(r){ return r.json(); })
     .then(function(d){
-      var stored = (d.ok && d.settings) ? d.settings : loadStoredSettings();
-      storeSettings(stored);
-      var urlEl = document.getElementById('cps-csv-url');
-      if (urlEl) urlEl.value = stored.csvUrl || '';
+      var stored = (d.ok && d.settings) ? d.settings : { csvUrl: window._cpCsvUrl || '', searchColumns: null };
+      // Update live window vars from Supabase source of truth
       window._cpCsvUrl = stored.csvUrl || '';
       window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
+      var urlEl = document.getElementById('cps-csv-url');
+      if (urlEl) urlEl.value = stored.csvUrl || '';
       if (stored.csvUrl && stored.detectedColumns && stored.detectedColumns.length) {
         _showColumnsPreview(stored.detectedColumns, stored.rowCount || null);
       }
@@ -8240,13 +8155,25 @@
           throw new Error('Could not detect column headers — the URL may not be a CSV. Make sure to use File → Publish to web → CSV format.');
         }
 
-        // Cache detected columns in stored settings
+        // Persist detected columns + url to Supabase (source of truth)
         var stored = loadStoredSettings();
         stored.detectedColumns = header;
         stored.rowCount = rowCount;
         stored.csvUrl = url; // save normalized URL
-        storeSettings(stored);
+        storeSettings(stored); // writes metadata to localStorage only
         window._cpCsvUrl = url;
+
+        // Also push to Supabase so detectedColumns survive across devices
+        fetch('/api/studio/csv_settings?type=connect_plus', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
+          body: JSON.stringify({
+            csvUrl:          url,
+            searchColumns:   window._cpSearchCols || null,
+            detectedColumns: header,
+            rowCount:        rowCount,
+          })
+        }).catch(function() {}); // fire-and-forget; user can still save manually
 
         setUrlStatus(
           '<i class="fas fa-check-circle" style="margin-right:6px;"></i>' +
@@ -8339,21 +8266,29 @@
     var btn   = document.getElementById('cps-save-btn');
     if (!url) { showMsg('cps-save-msg', '✗ Enter a CSV URL first', false); return; }
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; btn.style.opacity = '.7'; }
+
+    // Build payload — merge url with existing Supabase settings (detectedColumns, searchColumns)
     var stored = loadStoredSettings();
-    stored.csvUrl = url;
+    var payload = {
+      csvUrl:           url,
+      searchColumns:    stored.searchColumns    || null,
+      detectedColumns:  stored.detectedColumns  || [],
+      rowCount:         stored.rowCount         || null,
+    };
+
     fetch('/api/studio/csv_settings?type=connect_plus', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
-      body: JSON.stringify(stored)
+      body: JSON.stringify(payload)
     }).then(function(r){
       if (!r.ok) return r.json().catch(function(){ return { ok: false, error: 'HTTP ' + r.status }; })
                                .then(function(d){ throw new Error(d && d.error ? String(d.error) : 'HTTP ' + r.status); });
       return r.json().catch(function(){ return { ok: true }; });
     }).then(function(d){
       if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
-      storeSettings(stored);
+      // Update live window vars
       window._cpCsvUrl = url;
-      showMsg('cps-save-msg', '✓ Saved globally! Reload Connect+ to apply.', true);
+      showMsg('cps-save-msg', '✓ Saved globally! Reloading Connect+…', true);
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Connect+ Settings'; btn.style.opacity = '1'; }
       if (typeof window._preloadStudioSettings === 'function') window._preloadStudioSettings();
       if (typeof window._cpRefresh === 'function') window._cpRefresh();
@@ -8374,29 +8309,31 @@
     });
 
     // null = all columns (no filter); array = specific columns
-    stored.searchColumns = (selected.length === allCols.length) ? null : selected;
-    storeSettings(stored);
+    var searchColumns = (selected.length === allCols.length) ? null : selected;
+
+    // Build clean payload — Supabase is source of truth, no localStorage write
+    var payload = {
+      csvUrl:          window._cpCsvUrl || stored.csvUrl || '',
+      searchColumns:   searchColumns,
+      detectedColumns: stored.detectedColumns || [],
+      rowCount:        stored.rowCount || null,
+    };
+
     fetch('/api/studio/csv_settings?type=connect_plus', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
-      body: JSON.stringify(stored)
+      body: JSON.stringify(payload)
     }).then(function(r){
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json().catch(function(){ return { ok: true }; });
     }).then(function(d){
       if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
-      // Expose live to Connect+ search
-      window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
+      // Update live window var immediately
+      window._cpSearchCols = (Array.isArray(searchColumns) && searchColumns.length > 0) ? searchColumns : null;
       showMsg('cps-cols-msg', '✓ Search columns saved!', true);
     }).catch(function(err){
       showMsg('cps-cols-msg', '✗ Failed: ' + (err && err.message ? err.message : 'Network error'), false);
     });
-
-    // Expose live to Connect+ search
-    // null or empty = all columns; only restrict when user explicitly selected subset
-    window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
-
-    showMsg('cps-cols-msg', '✓ Search columns saved!', true);
   };
 
 })();
@@ -11030,379 +10967,126 @@
   </div><!-- /qbcd-shell -->
 </div><!-- /qbCaseDetailModal -->
 
+<!-- ══════════════════════════════════════════════════════════════════
+     CONNECT+ SITE DETAIL DRAWER
+     Premium slide-in panel for Connect+ site records
+══════════════════════════════════════════════════════════════════ -->
+<div id="cp-detail-modal" role="dialog" aria-modal="true" aria-label="Site Detail">
 
-<script>
-/* ═══════════════════════════════════════════════════════════════════════
-   YOUR CASE TODAY — Home Page Feature  v1.0
-   Reads from window.__studioQbRecords (set by the fetch-patch at top of file)
-   or root._qbRowSnaps after QB tab initialises.
-   Filters to cases assigned to the current user that have a today-dated
-   entry in Case Notes, then renders them with mine/other note bubbles.
-═══════════════════════════════════════════════════════════════════════ */
-(function() {
-  'use strict';
+  <!-- Backdrop click to close -->
+  <div style="flex:1;" onclick="window._cpCloseModal()"></div>
 
-  // ── helpers ──────────────────────────────────────────────────────────
-  function _manilaToday() {
-    return new Date().toLocaleDateString('en-US', {
-      timeZone: 'Asia/Manila',
-      month: 'short', day: '2-digit', year: '2-digit'
-    }).toUpperCase().replace(/ /g, '-').replace(',', '');
-  }
+  <!-- Drawer panel -->
+  <div id="cp-detail-drawer">
 
-  function _phtNow() {
-    return new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila',
-      month: 'short', day: '2-digit', year: '2-digit',
-      hour: '2-digit', minute: '2-digit', hour12: true });
-  }
+    <!-- Header -->
+    <div class="cp-drawer-header">
+      <div class="cp-drawer-header-top">
+        <div>
+          <div style="font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#22d3ee;margin-bottom:6px;">
+            <i class="fas fa-map-marker-alt" style="margin-right:4px;opacity:.7;"></i>Site Record
+          </div>
+          <div class="cp-drawer-site-name" id="cp-modal-site">—</div>
+        </div>
+        <button class="cp-drawer-close" onclick="window._cpCloseModal()" title="Close (Esc)">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
 
-  function esc(s) {
-    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
+      <!-- End User Banner — prominent highlight -->
+      <div class="cp-drawer-eu-banner" id="cp-modal-eu-banner">
+        <div class="cp-drawer-eu-icon"><i class="fas fa-building"></i></div>
+        <div>
+          <div class="cp-drawer-eu-label">End User / Client</div>
+          <div class="cp-drawer-eu-value" id="cp-modal-end-user">—</div>
+        </div>
+      </div>
 
-  // Convert EST bracket timestamps to PHT (+13h offset EST→PHT)
-  function _convertPHT(text) {
-    if (!text || typeof window._ssConvertPHT !== 'function') return text;
-    try { return window._ssConvertPHT(text); } catch(e) { return text; }
-  }
+      <!-- Navigation -->
+      <div class="cp-drawer-nav">
+        <span class="cp-drawer-nav-pos" id="cp-modal-pos">— of —</span>
+        <button class="cp-drawer-nav-btn" id="cp-modal-prev" onclick="window._cpModalNav(-1)" title="Previous (←)">
+          <i class="fas fa-chevron-left"></i>
+        </button>
+        <button class="cp-drawer-nav-btn" id="cp-modal-next" onclick="window._cpModalNav(1)" title="Next (→)">
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
+    </div>
 
-  // Parse first today-dated [DATE TIME Name] bracket from notes text
-  function _parseTodayEntry(notesRaw, todayStr, myNameLower) {
-    if (!notesRaw || !todayStr) return null;
-    // Match [MON-DD-YY H:MM AM/PM Name...] style
-    var regex = /\[([A-Z]{3}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\s+([^\]]+)\]/gi;
-    var match;
-    while ((match = regex.exec(notesRaw)) !== null) {
-      var datePart = match[1].toUpperCase();
-      if (datePart === todayStr) {
-        var timePart = match[2].trim();
-        var namePart = match[3].trim();
-        var isMine   = namePart.toLowerCase().includes(myNameLower);
-        return { time: timePart, name: namePart, isMine: isMine, full: match[0] };
-      }
-    }
-    return null;
-  }
+    <!-- Body -->
+    <div class="cp-drawer-body">
 
-  // Extract a short preview text after the bracket (strip dashes)
-  function _notePreview(notesRaw, bracketFull) {
-    if (!bracketFull) return '';
-    var idx = notesRaw.indexOf(bracketFull);
-    if (idx < 0) return '';
-    var after = notesRaw.slice(idx + bracketFull.length).replace(/^[\s\-]+/, '').trim();
-    // Cut at next bracket or 120 chars
-    var nextBracket = after.indexOf('[');
-    if (nextBracket > 0) after = after.slice(0, nextBracket).trim();
-    return after.slice(0, 120) || '(update)';
-  }
+      <!-- Location -->
+      <div>
+        <div class="cp-drawer-section-title"><i class="fas fa-globe"></i> Location</div>
+        <div class="cp-drawer-info-grid">
+          <div class="cp-drawer-info-cell full">
+            <div class="cp-drawer-info-label">Full Address</div>
+            <div class="cp-drawer-info-value" id="cp-modal-address">—</div>
+          </div>
+          <div class="cp-drawer-info-cell">
+            <div class="cp-drawer-info-label">City</div>
+            <div class="cp-drawer-info-value" id="cp-modal-city">—</div>
+          </div>
+          <div class="cp-drawer-info-cell">
+            <div class="cp-drawer-info-label">State / Region</div>
+            <div class="cp-drawer-info-value" id="cp-modal-state">—</div>
+          </div>
+          <div class="cp-drawer-info-cell">
+            <div class="cp-drawer-info-label">Country</div>
+            <div class="cp-drawer-info-value" id="cp-modal-country">—</div>
+          </div>
+          <div class="cp-drawer-info-cell">
+            <div class="cp-drawer-info-label">Zip / Postal Code</div>
+            <div class="cp-drawer-info-value mono" id="cp-modal-zip">—</div>
+          </div>
+        </div>
+      </div>
 
-  // Get field value from a QB record snap by keyword match
-  function _fv(snap, keys) {
-    if (!snap || !snap.fields || !snap.columnMap) return '';
-    var colId = Object.keys(snap.columnMap).find(function(id) {
-      var lbl = (snap.columnMap[id] || '').toLowerCase();
-      return keys.some(function(k) { return lbl.includes(k); });
-    });
-    if (!colId) return '';
-    var f = snap.fields[colId];
-    return f && f.value != null ? String(f.value) : '';
-  }
+      <!-- Directory & System Info -->
+      <div>
+        <div class="cp-drawer-section-title"><i class="fas fa-folder-open"></i> Directory Info</div>
+        <div class="cp-drawer-info-grid">
+          <div class="cp-drawer-info-cell full">
+            <div class="cp-drawer-info-label">Directory</div>
+            <div class="cp-drawer-info-value" id="cp-modal-directory">—</div>
+          </div>
+          <div class="cp-drawer-info-cell">
+            <div class="cp-drawer-info-label">Time Zone</div>
+            <div class="cp-drawer-info-value mono" id="cp-modal-timezone">—</div>
+          </div>
+          <div class="cp-drawer-info-cell">
+            <div class="cp-drawer-info-label">Control Systems</div>
+            <div class="cp-drawer-info-value" id="cp-modal-systems">—</div>
+          </div>
+        </div>
+      </div>
 
-  // ── status accent ────────────────────────────────────────────────────
-  function _accentClass(status) {
-    var s = (status || '').toLowerCase();
-    if (s.includes('invest'))  return { bar: 'yct-acc-blue',  dot: 'yct-dot-on',   badge: 'yct-cb-inv',  badgeTxt: 'Investigating' };
-    if (s.includes('initial')) return { bar: 'yct-acc-warn',  dot: 'yct-dot-warn', badge: 'yct-cb-init', badgeTxt: 'Initial Inquiry' };
-    if (s.includes('resolv'))  return { bar: 'yct-acc-green', dot: 'yct-dot-res',  badge: 'yct-cb-res',  badgeTxt: 'Resolved' };
-    return { bar: 'yct-acc-init', dot: 'yct-dot-warn', badge: 'yct-cb-init', badgeTxt: status || 'Open' };
-  }
+      <!-- Connect+ Link -->
+      <div>
+        <div class="cp-drawer-section-title"><i class="fas fa-link"></i> Connect+ Link</div>
+        <div class="cp-drawer-info-cell full" style="padding:10px 12px;">
+          <div class="cp-drawer-info-label">URL</div>
+          <div style="margin-top:5px;word-break:break-all;font-size:10px;color:#7d8590;font-family:var(--ss-mono);" id="cp-modal-url-text">—</div>
+        </div>
+      </div>
 
-  // ── render one case entry ─────────────────────────────────────────────
-  function _renderEntry(snap, todayStr, myNameLower) {
-    var caseId  = snap.recordId || '—';
-    var desc    = _fv(snap, ['short description','description','concern','subject']) || '—';
-    var status  = _fv(snap, ['case status','status']);
-    var age     = _fv(snap, ['age']);
-    var endUser = _fv(snap, ['end user','client','account','customer']);
-    var notesRaw = _convertPHT(_fv(snap, ['case notes detail','case notes','case note','notes']));
+    </div><!-- /drawer-body -->
 
-    var acc    = _accentClass(status);
-    var ageStr = age ? (Number(age) < 86400000 ? '< 1 day' : Math.round(Number(age)/86400000) + ' d') : '';
+    <!-- Footer -->
+    <div class="cp-drawer-footer">
+      <a href="#" id="cp-modal-url" target="_blank" rel="noopener noreferrer" class="cp-drawer-open-btn" style="display:none;">
+        <i class="fas fa-external-link-alt"></i> Open in Connect+
+      </a>
+      <div class="cp-drawer-systems-badge">
+        <span class="num" id="cp-modal-systems-big">—</span>
+        <span>Systems</span>
+      </div>
+    </div>
 
-    // Find the first today-dated entry in notes
-    var entry = _parseTodayEntry(notesRaw, todayStr, myNameLower);
-    var preview = entry ? _notePreview(notesRaw, entry.full) : '';
-    var isMine  = entry ? entry.isMine : false;
-    var bubbleClass = entry ? (isMine ? 'nb-mine' : 'nb-other') : 'nb-mine';
-    var nameClass   = isMine ? 'nm-mine' : 'nm-other';
-    var textClass   = isMine ? 'nt-mine' : 'nt-other';
+  </div><!-- /cp-detail-drawer -->
+</div><!-- /cp-detail-modal -->
 
-    var bubbleHtml = '';
-    if (entry) {
-      bubbleHtml = '<div class="yct-bubble ' + bubbleClass + '">' +
-        '<div class="yct-nb-row">' +
-          '<span class="yct-nb-time">' + esc(entry.time) + '</span>' +
-          '<span class="yct-nb-name ' + nameClass + '">' + esc(entry.name) + '</span>' +
-          (isMine ? '<span class="yct-nb-me">ME</span>' : '') +
-        '</div>' +
-        '<div class="yct-nb-text ' + textClass + '">' + esc(preview) + '</div>' +
-      '</div>';
-    }
-
-    var warnClass = acc.bar === 'yct-acc-warn' ? ' yct-warn' : '';
-    var snapIdx   = snap._yctIdx !== undefined ? snap._yctIdx : 0;
-
-    return '<div class="yct-entry' + warnClass + '" data-yct-snap-idx="' + snapIdx + '" data-status-key="' + esc(status.toLowerCase()) + '" data-enduser="' + esc(endUser.toLowerCase()) + '">' +
-      '<div class="yct-accent ' + acc.bar + '"></div>' +
-      '<div class="yct-row1">' +
-        '<div class="yct-dot ' + acc.dot + '"></div>' +
-        '<span class="yct-cnum">' + esc(caseId) + '</span>' +
-        '<span class="yct-badge ' + acc.badge + '">' + esc(acc.badgeTxt) + '</span>' +
-        (endUser ? '<span style="font-size:9px;color:var(--ss-muted);font-weight:600;margin-left:2px;">' + esc(endUser) + '</span>' : '') +
-        (ageStr ? '<span class="yct-age">' + esc(ageStr) + '</span>' : '') +
-      '</div>' +
-      '<div class="yct-desc">' + esc(desc) + '</div>' +
-      bubbleHtml +
-      '<div class="yct-entry-cta"><span class="yct-cta-link"><i class="fas fa-external-link-alt" style="font-size:8px;"></i> View Case Detail</span></div>' +
-    '</div>';
-  }
-
-  // ── main render ───────────────────────────────────────────────────────
-  function _renderYCT() {
-    var list    = document.getElementById('yct-list');
-    var loading = document.getElementById('yct-loading');
-    var countEl = document.getElementById('yct-count');
-    var nameEl  = document.getElementById('yct-user-name');
-    var qbCntEl = document.getElementById('home-qb-count');
-    if (!list) return;
-
-    // Get current user name
-    var myName = String(window._qbMyNameCache || '').trim();
-    if (!myName) {
-      // Try store
-      try {
-        var u = window.store && window.store.getState && window.store.getState().user;
-        myName = (u && (u.qb_name || u.name)) ? String(u.qb_name || u.name).trim() : '';
-      } catch(e) {}
-    }
-    var myNameLower = myName.toLowerCase();
-    if (nameEl) nameEl.textContent = myName || 'You';
-
-    // Collect snaps from the QB root element
-    var qbRoot = document.getElementById('qbs-root');
-    var snaps  = (qbRoot && Array.isArray(qbRoot._qbRowSnaps)) ? qbRoot._qbRowSnaps : [];
-
-    // Also check raw records as fallback (set by fetch-patch)
-    var rawRecords = window.__studioQbRecords || [];
-    var rawColumns = window.__studioQbColumns || [];
-
-    // If no snaps yet from qbs but we have raw records, convert them
-    if (snaps.length === 0 && rawRecords.length > 0 && rawColumns.length > 0) {
-      snaps = rawRecords.map(function(r, i) {
-        return {
-          rowNum:    i + 1,
-          recordId:  String(r.qbRecordId || r['3'] || i),
-          fields:    r.fields || r,
-          columnMap: rawColumns.reduce(function(acc, c) {
-            acc[String(c.id)] = String(c.label || c.id || ''); return acc;
-          }, {})
-        };
-      });
-    }
-
-    if (qbCntEl) qbCntEl.textContent = snaps.length + ' records';
-
-    var todayStr = _manilaToday();
-
-    // Filter: assigned to current user AND has today entry in notes
-    var matched = [];
-    snaps.forEach(function(snap, i) {
-      snap._yctIdx = i;
-      var assignedTo = _fv(snap, ['assigned to','assigned','agent']);
-      var assignedLower = assignedTo.toLowerCase();
-
-      // Match by name (partial — handles "Mace Ryan Reyes" vs myName)
-      var isAssignedToMe = myNameLower
-        ? (assignedLower.includes(myNameLower) || myNameLower.includes(assignedLower.split(' ')[0].toLowerCase()))
-        : false;
-
-      if (!isAssignedToMe) return;
-
-      var notesRaw = _convertPHT(_fv(snap, ['case notes detail','case notes','case note','notes']));
-      var entry    = _parseTodayEntry(notesRaw, todayStr, myNameLower);
-      if (entry) matched.push(snap);
-    });
-
-    if (loading) loading.style.display = 'none';
-
-    if (matched.length === 0) {
-      list.innerHTML = '<div class="yct-empty"><i class="fas fa-check-circle"></i><span>No cases with activity today</span><span style="font-size:9px;color:rgba(255,255,255,.15);">' + todayStr + '</span></div>';
-      if (countEl) countEl.textContent = '0';
-      return;
-    }
-
-    if (countEl) countEl.textContent = matched.length;
-
-    var html = matched.map(function(snap) {
-      return _renderEntry(snap, todayStr, myNameLower);
-    }).join('');
-    list.innerHTML = html;
-
-    // Bind click → Case Detail
-    list.querySelectorAll('.yct-entry').forEach(function(el) {
-      el.addEventListener('click', function() {
-        var idx = parseInt(el.dataset.yctSnapIdx, 10);
-        var snap = snaps[idx];
-        if (!snap) return;
-        if (typeof window.__studioQbCdOpen === 'function') {
-          window.__studioQbCdOpen(snap, snaps);
-        } else if (qbRoot && typeof qbRoot._qbcdOpen === 'function') {
-          qbRoot._qbcdOpen(snap, snaps);
-        } else {
-          // Fallback: open QB tab and trigger detail
-          if (typeof window.activateTab === 'function') window.activateTab('qbs');
-          setTimeout(function() {
-            var btn = document.querySelector('[data-qb-snap-idx="' + idx + '"]');
-            if (btn) btn.click();
-          }, 600);
-        }
-      });
-    });
-
-    // Store matched snaps for filter use
-    list._yctAllSnaps = matched;
-    list._yctAllSnapsGlobal = snaps;
-  }
-
-  // ── filter pills ─────────────────────────────────────────────────────
-  function _bindFilters() {
-    var row = document.getElementById('yct-filter-row');
-    var list = document.getElementById('yct-list');
-    if (!row || !list) return;
-    row.addEventListener('click', function(e) {
-      var pill = e.target.closest('.yct-pill');
-      if (!pill) return;
-      row.querySelectorAll('.yct-pill').forEach(function(p) { p.classList.remove('active'); });
-      pill.classList.add('active');
-      var f = pill.dataset.filter;
-      var entries = list.querySelectorAll('.yct-entry');
-      entries.forEach(function(el) {
-        var sk = el.dataset.statusKey || '';
-        var eu = el.dataset.enduser || '';
-        var show = true;
-        if (f === 'investigating') show = sk.includes('invest');
-        else if (f === 'initial')  show = sk.includes('initial');
-        else if (f === 'woolworths') show = eu.includes('woolworths');
-        el.style.display = show ? '' : 'none';
-      });
-    });
-  }
-
-  // ── date display ──────────────────────────────────────────────────────
-  function _updateDate() {
-    var el = document.getElementById('home-date-display');
-    if (!el) return;
-    var now = new Date().toLocaleString('en-US', {
-      timeZone: 'Asia/Manila', weekday:'short', month:'short', day:'numeric',
-      hour:'2-digit', minute:'2-digit', hour12: true
-    });
-    el.textContent = now + ' PHT';
-  }
-
-  // ── init & refresh ────────────────────────────────────────────────────
-  function _initYCT() {
-    _updateDate();
-    setInterval(_updateDate, 30000);
-    _bindFilters();
-
-    var refreshBtn = document.getElementById('home-yct-refresh');
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', function() {
-        var icon = refreshBtn.querySelector('i');
-        if (icon) icon.style.animation = 'yct-spin .7s linear infinite';
-        var list = document.getElementById('yct-list');
-        var loading = document.getElementById('yct-loading');
-        if (list && loading) {
-          list.innerHTML = '';
-          list.appendChild(loading);
-          loading.style.display = '';
-        }
-        setTimeout(function() {
-          _renderYCT();
-          if (icon) icon.style.animation = '';
-        }, 600);
-      });
-    }
-
-    // Initial render — wait for QB data to be available
-    // Poll up to 15s for snaps, then render whatever we have
-    var attempts = 0;
-    var MAX = 30;
-    function tryRender() {
-      var qbRoot = document.getElementById('qbs-root');
-      var snaps  = (qbRoot && Array.isArray(qbRoot._qbRowSnaps) && qbRoot._qbRowSnaps.length > 0)
-        ? qbRoot._qbRowSnaps : [];
-      var rawRec = window.__studioQbRecords || [];
-      if (snaps.length > 0 || rawRec.length > 0 || attempts >= MAX) {
-        _renderYCT();
-        return;
-      }
-      attempts++;
-      setTimeout(tryRender, 500);
-    }
-
-    // Also hook into QB data load event via fetch-patch
-    var _origWatcher = window.__studioQbRecordsWatcher;
-    Object.defineProperty(window, '__studioQbRecords', {
-      configurable: true,
-      get: function() { return _origWatcher; },
-      set: function(v) {
-        _origWatcher = v;
-        // When QB data loads, refresh YCT automatically if on home tab
-        if (Array.isArray(v) && v.length > 0) {
-          setTimeout(function() {
-            var homeCanvas = document.getElementById('canvas-home');
-            if (homeCanvas && homeCanvas.classList.contains('active')) {
-              _renderYCT();
-            }
-          }, 300);
-        }
-      }
-    });
-
-    tryRender();
-  }
-
-  // Wait for DOM ready + tab system
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { setTimeout(_initYCT, 400); });
-  } else {
-    setTimeout(_initYCT, 400);
-  }
-
-  // Also re-render when home tab is clicked
-  document.addEventListener('click', function(e) {
-    var btn = e.target.closest('[data-tab="home"]');
-    if (btn) {
-      setTimeout(function() {
-        var loading = document.getElementById('yct-loading');
-        var list    = document.getElementById('yct-list');
-        // Only re-render if list is empty or shows loading
-        if (list && (!list.querySelector('.yct-entry') || (loading && loading.style.display !== 'none'))) {
-          _renderYCT();
-        } else {
-          // Just refresh silently
-          _renderYCT();
-        }
-        _updateDate();
-      }, 200);
-    }
-  });
-
-  // Expose globally for manual refresh
-  window._yctRefresh = _renderYCT;
-
-})();
-</script>
 </body>
 </html>

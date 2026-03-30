@@ -1980,7 +1980,7 @@
           : '';
         const activeBadge = isActive && hasCachedData ? '<span class="qb-tab-cache-badge qb-tab-badge-live">●</span>' : '';
         return `<button type="button" data-tab-idx="${idx}" class="qb-tab-btn${isActive ? ' qb-tab-btn-active' : ''}" title="${esc(tab.tabName || `Report ${idx + 1}`)}">${activeBadge}<span class="qb-tab-label">${esc(tab.tabName || `Report ${idx + 1}`)}</span>${cacheBadge}</button>`;
-      }).join('') + '<button type="button" id="qbAddTabBtn" title="Add New Tab" aria-label="Add New Tab" class="qb-tab-add-btn">+</button>';
+      }).join('');
     }
 
     function setSettingsModalView(viewKey) {
@@ -2230,6 +2230,7 @@
         <!-- TAB BAR -->
         <div class="qb-tabbar-wrap">
           <div id="qbTabBar" class="qb-tabs-inner"></div>
+          <button type="button" id="qbAddTabBtn" title="Add New Tab" aria-label="Add New Tab" class="qb-tab-add-btn">+</button>
           <button type="button" class="qb-fullscreen-btn" id="qbFullscreenBtn" title="Toggle Fullscreen" aria-label="Toggle Fullscreen">
             <svg id="qbFsIconExpand" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
             <svg id="qbFsIconCollapse" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
@@ -3888,8 +3889,23 @@
         status:  ['case status','status'],
         age:     ['age'],
         lastUpd: ['last update days','last update','update days'],
-        latest:  ['latest update','last comment','latest','update on the case'],
-        notes:   ['case notes','notes'],
+        latest:  [
+          'latest update on the case',
+          'latest update',
+          'last update',
+          'last comment',
+          'most recent update',
+          'update on the case',
+          'latest'
+        ],
+        notes:   [
+          'case notes detail',
+          'case notes',
+          'case note',
+          'case details',
+          'resolution details',
+          'notes'
+        ],
       };
 
       // Escape HTML for dynamic sections
@@ -4371,10 +4387,10 @@
       await deleteTabAtIndex(idx);
     };
 
-    root.querySelector('#qbTabBar').onclick = async (event) => {
-      const target = event.target;
+    root.querySelector('.qb-tabbar-wrap').onclick = async (event) => {
+      const target = event.target && event.target.closest ? (event.target.closest('#qbAddTabBtn, [data-tab-idx], .qb-tab-btn') || event.target) : event.target;
       if (!target || !(target instanceof HTMLElement)) return;
-      if (target.id === 'qbAddTabBtn') {
+      if (target.id === 'qbAddTabBtn' || target.closest('#qbAddTabBtn')) {
         // Only capture modal inputs when modal is actually open
         const isModalOpenForAdd = (() => {
           const modal = root.querySelector('#qbSettingsModal');

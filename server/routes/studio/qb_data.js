@@ -120,27 +120,68 @@ module.exports = async (req, res) => {
         ? (fieldsOut.fields || []).map(f => ({ id: Number(f?.id), label: String(f?.label || '').trim() })).filter(f => Number.isFinite(f.id) && f.label)
         : [];
 
-      // Find the Case # field id (usually field 3, or labeled "Case #" / "Case Number")
-      const caseFieldId = allFields.find(f => f.label.toLowerCase() === 'case #')?.id
-        || allFields.find(f => f.label.toLowerCase().includes('case #'))?.id
-        || allFields.find(f => f.label.toLowerCase() === 'case')?.id
-        || 3;
+      // Find likely Case # field IDs, from strict→loose matches.
+      // Some QuickBase_S tables use labels like:
+      // - "Case #"
+      // - "Case Number"
+      // - "Case No"
+      // - "Case ID"
+      const caseFieldCandidates = [];
+      const addCaseCandidate = (id) => {
+        const n = Number(id);
+        if (Number.isFinite(n) && !caseFieldCandidates.includes(n)) caseFieldCandidates.push(n);
+      };
+      allFields.forEach((f) => {
+        const label = String(f.label || '').trim().toLowerCase();
+        if (!label) return;
+        if (label === 'case #' || label === 'case number' || label === 'case no' || label === 'case id') addCaseCandidate(f.id);
+      });
+      allFields.forEach((f) => {
+        const label = String(f.label || '').trim().toLowerCase();
+        if (!label) return;
+        if (label.includes('case #') || label.includes('case number') || label.includes('case no') || label.includes('case id')) addCaseCandidate(f.id);
+      });
+      allFields.forEach((f) => {
+        const label = String(f.label || '').trim().toLowerCase();
+        if (!label) return;
+        if (label === 'case' || label.includes('case')) addCaseCandidate(f.id);
+      });
+      addCaseCandidate(3); // hard fallback (Record ID# or common case id field in many QB tables)
 
-      // QB WHERE clause: {caseFieldId.EX.'461023'}
-      const whereClause = `{${caseFieldId}.EX.'${encLit(recordIdParam)}'}`;
-      const selectIds   = allFields.map(f => f.id).filter(id => Number.isFinite(id));
+      const selectIds = allFields.map(f => f.id).filter(id => Number.isFinite(id));
+      const safeSelectIds = selectIds.length ? selectIds : undefined;
 
       const url = `https://api.quickbase.com/v1/records/query`;
-      const body = { from: tableId, select: selectIds, where: whereClause, options: { top: 1 } };
       try {
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers: { 'QB-Realm-Hostname': realm, Authorization: `QB-USER-TOKEN ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const json = await resp.json().catch(() => ({}));
-        if (!resp.ok || !Array.isArray(json.data) || !json.data.length) {
-          return sendJson(res, 404, { ok: false, error: 'record_not_found', message: `Case #${recordIdParam} not found` });
+        // Try candidate case fields in order; stop at first hit.
+        let json = null;
+        let hitFieldId = null;
+        for (const caseFieldId of caseFieldCandidates) {
+          const whereClause = `{${caseFieldId}.EX.'${encLit(recordIdParam)}'}`;
+          const body = { from: tableId, where: whereClause, options: { top: 1 } };
+          if (safeSelectIds) body.select = safeSelectIds;
+
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'QB-Realm-Hostname': realm, Authorization: `QB-USER-TOKEN ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const out = await resp.json().catch(() => ({}));
+          if (!resp.ok) continue;
+          if (Array.isArray(out.data) && out.data.length) {
+            json = out;
+            hitFieldId = caseFieldId;
+            break;
+          }
+        }
+
+        if (!json || !Array.isArray(json.data) || !json.data.length) {
+          return sendJson(res, 404, {
+            ok: false,
+            error: 'record_not_found',
+            message: `Case #${recordIdParam} not found`,
+            debug: { triedCaseFieldIds: caseFieldCandidates },
+          });
         }
         const row      = json.data[0];
         const fields   = Array.isArray(json.fields) ? json.fields : [];
@@ -182,15 +223,83 @@ module.exports = async (req, res) => {
         // Build columnMap: fieldId → label
         const columnMap = {};
         const fieldValues = {};
+        // Track relationship fields whose value is a bare numeric ID — need secondary lookup
+        const relationshipPending = []; // { fid, numericId }
+
         fields.forEach(f => {
           const fid   = String(f.id);
           const label = String(f.label || f.name || '');
           columnMap[fid] = label;
           const cell = row[fid];
           const raw  = (cell && typeof cell === 'object' && 'value' in cell) ? cell.value : cell;
-          fieldValues[fid] = { value: normalizeQbValue(raw) };
+          const resolved = normalizeQbValue(raw);
+          fieldValues[fid] = { value: resolved };
+
+          // Detect QB relationship fields: label contains 'contact' and value is pure digits
+          // QB returns bare numeric record IDs for relationship/lookup fields
+          const labelLow = label.toLowerCase();
+          const isRelField = labelLow.includes('contact') || labelLow.includes('related employee') || labelLow.includes('assigned to');
+          if (isRelField && resolved && /^\d+$/.test(resolved)) {
+            relationshipPending.push({ fid, numericId: resolved, label });
+          }
         });
-        return sendJson(res, 200, { ok: true, recordId: recordIdParam, fields: fieldValues, columnMap });
+
+        // ── Secondary lookup: resolve bare numeric relationship IDs to names ──
+        // For each pending relationship field, query field 6 (Name) of the related record
+        if (relationshipPending.length > 0) {
+          const resolvePromises = relationshipPending.map(async ({ fid, numericId, label }) => {
+            try {
+              // QB field 3 = Record ID#, field 6 = Full Name (standard QB contact table)
+              const relUrl = `https://api.quickbase.com/v1/records/query`;
+              const relBody = {
+                from: tableId,
+                select: [3, 6, 7], // Record ID, Name/Full Name, common name fields
+                where: `{3.EX.'${encLit(numericId)}'}`,
+                options: { top: 1 },
+              };
+              const relResp = await fetch(relUrl, {
+                method: 'POST',
+                headers: {
+                  'QB-Realm-Hostname': realm,
+                  Authorization: `QB-USER-TOKEN ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(relBody),
+              });
+              if (!relResp.ok) return;
+              const relJson = await relResp.json().catch(() => ({}));
+              if (!Array.isArray(relJson.data) || !relJson.data.length) return;
+
+              const relRow = relJson.data[0];
+              // Try field 6 (Full Name), then 7, then any non-ID string value
+              let resolvedName = '';
+              const relFields = Array.isArray(relJson.fields) ? relJson.fields : [];
+              for (const rf of relFields) {
+                const rfid = String(rf.id);
+                if (rfid === '3') continue; // skip Record ID#
+                const rcell = relRow[rfid];
+                const rraw = (rcell && typeof rcell === 'object' && 'value' in rcell) ? rcell.value : rcell;
+                const rval = normalizeQbValue(rraw);
+                if (rval && !/^\d+$/.test(rval)) { resolvedName = rval; break; }
+              }
+              if (resolvedName) {
+                fieldValues[fid] = { value: resolvedName };
+                console.log(`[qb_data] Resolved relationship field "${label}" (fid:${fid}): ${numericId} → "${resolvedName}"`);
+              }
+            } catch (relErr) {
+              console.warn(`[qb_data] Secondary lookup failed for fid ${fid} id ${numericId}:`, relErr.message);
+            }
+          });
+          await Promise.all(resolvePromises);
+        }
+
+        return sendJson(res, 200, {
+          ok: true,
+          recordId: recordIdParam,
+          fields: fieldValues,
+          columnMap,
+          matchedCaseFieldId: hitFieldId,
+        });
       } catch (fetchErr) {
         console.error('[qb_data] single record fetch error:', fetchErr);
         return sendJson(res, 500, { ok: false, error: 'fetch_error', message: String(fetchErr?.message || fetchErr) });
