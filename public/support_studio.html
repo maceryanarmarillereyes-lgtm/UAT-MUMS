@@ -11187,19 +11187,24 @@
     try {
       var su = window.store && window.store.getState && window.store.getState().user;
       if (su) {
-        picks.push(su.qb_name, su.qbName, su.name, su.username);
+        picks.push(su.qb_name, su.qbName);
       }
     } catch (_) {}
     try {
       if (window.__studioCurrentUser) {
-        picks.push(window.__studioCurrentUser.qb_name, window.__studioCurrentUser.qbName, window.__studioCurrentUser.name);
+        picks.push(window.__studioCurrentUser.qb_name, window.__studioCurrentUser.qbName);
+      }
+    } catch (_) {}
+    try {
+      if (window.me) {
+        picks.push(window.me.qb_name, window.me.qbName);
       }
     } catch (_) {}
     try {
       var pRaw = localStorage.getItem('mums_user_profile') || sessionStorage.getItem('mums_user_profile');
       if (pRaw) {
         var p = JSON.parse(pRaw);
-        picks.push(p && (p.qb_name || p.qbName || p.name || p.username));
+        picks.push(p && (p.qb_name || p.qbName));
       }
     } catch (_) {}
     for (var i = 0; i < picks.length; i++) {
@@ -11222,7 +11227,7 @@
           .then(function(r) { return r.json(); })
           .then(function(d) {
             var profile = d && d.profile ? d.profile : null;
-            var qbName = String((profile && (profile.qb_name || profile.qbName || profile.name || profile.username)) || '').trim();
+            var qbName = String((profile && (profile.qb_name || profile.qbName)) || '').trim();
             if (qbName) window._qbMyNameCache = qbName;
           })
           .catch(function() {});
@@ -11310,7 +11315,7 @@
     // Get current user name with multi-source fallback
     var myName = _resolveYCTMyName();
     var myNameLower = _normalizeName(myName);
-    if (nameEl) nameEl.textContent = myName || 'You';
+    if (nameEl) nameEl.textContent = myName || 'No Quickbase Name';
 
     // Collect snaps from the QB root element
     var qbRoot = document.getElementById('qbs-root');
@@ -11338,7 +11343,16 @@
 
     var todayStr = _manilaToday();
 
-    // Filter: assigned to current user AND has today entry in notes
+    // Privacy-aligned rule (same behavior as My Quickbase):
+    // no qb_name => do not show records.
+    if (!myNameLower) {
+      if (loading) loading.style.display = 'none';
+      list.innerHTML = '<div class="yct-empty"><i class="fas fa-user-lock"></i><span>Quickbase Name not assigned</span><span style="font-size:9px;color:rgba(255,255,255,.15);">Ask Super Admin to set your Quickbase Name</span></div>';
+      if (countEl) countEl.textContent = '0';
+      return;
+    }
+
+    // Filter: assigned to current user's Quickbase Name AND has today entry in notes
     var matched = [];
     snaps.forEach(function(snap, i) {
       snap._yctIdx = i;
