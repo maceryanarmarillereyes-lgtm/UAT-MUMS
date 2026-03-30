@@ -11040,563 +11040,308 @@
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════════
-   YOUR CASE TODAY — Home Page Feature  v1.0
-   Reads from window.__studioQbRecords (set by the fetch-patch at top of file)
-   or root._qbRowSnaps after QB tab initialises.
-   Filters to cases assigned to the current user that have a today-dated
-   entry in Case Notes, then renders them with mine/other note bubbles.
+   YOUR CASE TODAY — Home Page Feature v2.0
+   Source of truth: same Quickbase dataset used by My Quickbase in Support Studio.
+   YCT mirrors user-scoped records, then renders only selected card fields.
 ═══════════════════════════════════════════════════════════════════════ */
-(function() {
+(function () {
   'use strict';
 
-  // ── helpers ──────────────────────────────────────────────────────────
-  function _manilaToday() {
-    return new Date().toLocaleDateString('en-US', {
-      timeZone: 'Asia/Manila',
-      month: 'short', day: '2-digit', year: '2-digit'
-    }).toUpperCase().replace(/ /g, '-').replace(',', '');
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
-  function _phtNow() {
-    return new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila',
-      month: 'short', day: '2-digit', year: '2-digit',
-      hour: '2-digit', minute: '2-digit', hour12: true });
+  function _normalize(v) {
+    return String(v || '').trim().toLowerCase();
   }
 
-  function esc(s) {
-    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  // Convert EST bracket timestamps to PHT (+13h offset EST→PHT)
-  function _convertPHT(text) {
-    if (!text || typeof window._ssConvertPHT !== 'function') return text;
-    try { return window._ssConvertPHT(text); } catch(e) { return text; }
-  }
-
-  // Parse first today-dated [DATE TIME Name] bracket from notes text
-  // Accepts both today (PHT) and yesterday (for late-night EST notes that are today PHT)
-  function _parseTodayEntry(notesRaw, todayStr, myNameLower) {
-    if (!notesRaw || !todayStr) return null;
-
-    // Build yesterday string as fallback (PHT yesterday = possible EST today)
-    function _manilaYesterday() {
-      var d = new Date();
-      d.setTime(d.getTime() - 86400000);
-      return d.toLocaleDateString('en-US', {
-        timeZone: 'Asia/Manila', month: 'short', day: '2-digit', year: '2-digit'
-      }).toUpperCase().replace(/ /g, '-').replace(',', '');
-    }
-    var yesterdayStr = _manilaYesterday();
-
-    // Match [MON-DD-YY H:MM AM/PM Name...] style
-    var regex = /\[([A-Z]{3}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\s+([^\]]+)\]/gi;
-    var match;
-    var bestToday = null;
-    var bestYesterday = null;
-    while ((match = regex.exec(notesRaw)) !== null) {
-      var datePart = match[1].toUpperCase();
-      var timePart = match[2].trim();
-      var namePart = match[3].trim();
-      var isMine   = myNameLower ? namePart.toLowerCase().includes(myNameLower) : false;
-      var entry = { time: timePart, name: namePart, isMine: isMine, full: match[0] };
-      if (datePart === todayStr && !bestToday) { bestToday = entry; }
-      else if (datePart === yesterdayStr && !bestYesterday) { bestYesterday = entry; }
-    }
-    // Prefer today, fall back to yesterday (covers timezone edge cases)
-    return bestToday || bestYesterday || null;
-  }
-
-  // Extract a short preview text after the bracket (strip dashes)
-  function _notePreview(notesRaw, bracketFull) {
-    if (!bracketFull) return '';
-    var idx = notesRaw.indexOf(bracketFull);
-    if (idx < 0) return '';
-    var after = notesRaw.slice(idx + bracketFull.length).replace(/^[\s\-]+/, '').trim();
-    // Cut at next bracket or 120 chars
-    var nextBracket = after.indexOf('[');
-    if (nextBracket > 0) after = after.slice(0, nextBracket).trim();
-    return after.slice(0, 120) || '(update)';
-  }
-
-  // Get field value from a QB record snap by keyword match
-  function _fv(snap, keys) {
-    if (!snap || !snap.fields || !snap.columnMap) return '';
-    var colId = Object.keys(snap.columnMap).find(function(id) {
-      var lbl = (snap.columnMap[id] || '').toLowerCase();
-      return keys.some(function(k) { return lbl.includes(k); });
-    });
-    if (!colId) return '';
-    var f = snap.fields[colId];
-    return f && f.value != null ? String(f.value) : '';
-  }
-
-  // ── status accent ────────────────────────────────────────────────────
-  function _accentClass(status) {
-    var s = (status || '').toLowerCase();
-    if (s.includes('invest'))  return { bar: 'yct-acc-blue',  dot: 'yct-dot-on',   badge: 'yct-cb-inv',  badgeTxt: 'Investigating' };
-    if (s.includes('initial')) return { bar: 'yct-acc-warn',  dot: 'yct-dot-warn', badge: 'yct-cb-init', badgeTxt: 'Initial Inquiry' };
-    if (s.includes('resolv'))  return { bar: 'yct-acc-green', dot: 'yct-dot-res',  badge: 'yct-cb-res',  badgeTxt: 'Resolved' };
-    return { bar: 'yct-acc-init', dot: 'yct-dot-warn', badge: 'yct-cb-init', badgeTxt: status || 'Open' };
-  }
-
-  // ── render one case entry ─────────────────────────────────────────────
-  function _renderEntry(snap, todayStr, myNameLower) {
-    var caseId  = snap.recordId || '—';
-    var desc    = _fv(snap, ['short description','description','concern','subject']) || '—';
-    var status  = _fv(snap, ['case status','status']);
-    var age     = _fv(snap, ['age']);
-    var endUser = _fv(snap, ['end user','client','account','customer']);
-    var notesRaw = _convertPHT(_fv(snap, ['case notes detail','case notes','case note','notes']));
-
-    var acc    = _accentClass(status);
-    var ageStr = age ? (Number(age) < 86400000 ? '< 1 day' : Math.round(Number(age)/86400000) + ' d') : '';
-
-    // Find the first today-dated entry in notes
-    var entry = _parseTodayEntry(notesRaw, todayStr, myNameLower);
-    var preview = entry ? _notePreview(notesRaw, entry.full) : '';
-    var isMine  = entry ? entry.isMine : false;
-    var bubbleClass = entry ? (isMine ? 'nb-mine' : 'nb-other') : 'nb-mine';
-    var nameClass   = isMine ? 'nm-mine' : 'nm-other';
-    var textClass   = isMine ? 'nt-mine' : 'nt-other';
-
-    var bubbleHtml = '';
-    if (entry) {
-      bubbleHtml = '<div class="yct-bubble ' + bubbleClass + '">' +
-        '<div class="yct-nb-row">' +
-          '<span class="yct-nb-time">' + esc(entry.time) + '</span>' +
-          '<span class="yct-nb-name ' + nameClass + '">' + esc(entry.name) + '</span>' +
-          (isMine ? '<span class="yct-nb-me">ME</span>' : '') +
-        '</div>' +
-        '<div class="yct-nb-text ' + textClass + '">' + esc(preview) + '</div>' +
-      '</div>';
-    }
-
-    var warnClass = acc.bar === 'yct-acc-warn' ? ' yct-warn' : '';
-    var snapIdx   = snap._yctIdx !== undefined ? snap._yctIdx : 0;
-
-    return '<div class="yct-entry' + warnClass + '" data-yct-snap-idx="' + snapIdx + '" data-status-key="' + esc(status.toLowerCase()) + '" data-enduser="' + esc(endUser.toLowerCase()) + '">' +
-      '<div class="yct-accent ' + acc.bar + '"></div>' +
-      '<div class="yct-row1">' +
-        '<div class="yct-dot ' + acc.dot + '"></div>' +
-        '<span class="yct-cnum">' + esc(caseId) + '</span>' +
-        '<span class="yct-badge ' + acc.badge + '">' + esc(acc.badgeTxt) + '</span>' +
-        (endUser ? '<span style="font-size:9px;color:var(--ss-muted);font-weight:600;margin-left:2px;">' + esc(endUser) + '</span>' : '') +
-        (ageStr ? '<span class="yct-age">' + esc(ageStr) + '</span>' : '') +
-      '</div>' +
-      '<div class="yct-desc">' + esc(desc) + '</div>' +
-      bubbleHtml +
-      '<div class="yct-entry-cta"><span class="yct-cta-link"><i class="fas fa-external-link-alt" style="font-size:8px;"></i> View Case Detail</span></div>' +
-    '</div>';
-  }
-
-  // ── main render ───────────────────────────────────────────────────────
-  // ── resolve current user's QB display name from every available source ────
   function _resolveMyName() {
-    // 1. Already cached by my_quickbase.js on QB tab init
-    var n = String(window._qbMyNameCache || '').trim();
+    var n = String(window._qbMyNameCache || window._yctUserNameCache || '').trim();
     if (n) return n;
-
-    // 2. YCT-specific pre-fetched cache (set by background fetch below)
-    n = String(window._yctUserNameCache || '').trim();
-    if (n) return n;
-
-    // 3. window.store state
     try {
-      var u = window.store && window.store.getState && window.store.getState().user;
-      n = (u && (u.qb_name || u.name)) ? String(u.qb_name || u.name).trim() : '';
+      var st = window.store && window.store.getState && window.store.getState();
+      var u = st && st.user;
+      n = String((u && (u.qb_name || u.name || u.full_name)) || '').trim();
       if (n) return n;
-    } catch(e) {}
-
-    // 4. CloudAuth in-memory user
-    try {
-      if (window.CloudAuth && typeof window.CloudAuth.getUser === 'function') {
-        var cu = window.CloudAuth.getUser();
-        n = (cu && (cu.qb_name || cu.name)) ? String(cu.qb_name || cu.name).trim() : '';
-        if (n) return n;
-      }
-    } catch(e) {}
-
-    // 5. Auth module
-    try {
-      if (window.Auth && typeof window.Auth.getUser === 'function') {
-        var au = window.Auth.getUser();
-        n = (au && (au.qb_name || au.name)) ? String(au.qb_name || au.name).trim() : '';
-        if (n) return n;
-      }
-    } catch(e) {}
-
-    // 6. Parse from mums_supabase_session in localStorage
-    try {
-      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-      if (raw) {
-        var sess = JSON.parse(raw);
-        // Check user object variations
-        var prof = sess && (sess.profile || sess.user || sess);
-        n = (prof && (prof.qb_name || prof.name || prof.full_name)) ? String(prof.qb_name || prof.name || prof.full_name).trim() : '';
-        if (n) return n;
-      }
-    } catch(e) {}
-
+    } catch (_) {}
     return '';
   }
 
+  function _buildColumnMap(columns) {
+    return (Array.isArray(columns) ? columns : []).reduce(function (acc, c) {
+      var id = c && c.id != null ? String(c.id) : '';
+      if (id) acc[id] = String((c && c.label) || id);
+      return acc;
+    }, {});
+  }
+
+  function _toSnapsFromRaw(records, columns) {
+    if (!Array.isArray(records) || !records.length) return [];
+    var map = _buildColumnMap(columns);
+    return records.map(function (row, i) {
+      return {
+        rowNum: i + 1,
+        recordId: String((row && (row.qbRecordId || row['3'])) || i + 1),
+        fields: (row && row.fields) || row || {},
+        columnMap: map
+      };
+    });
+  }
+
+  function _getSnaps() {
+    var raw = window.__studioQbRecords || [];
+    var cols = window.__studioQbColumns || [];
+    var rawSnaps = _toSnapsFromRaw(raw, cols);
+    if (rawSnaps.length) return rawSnaps;
+
+    var qbRoot = document.getElementById('qbs-root');
+    if (qbRoot && Array.isArray(qbRoot._qbRowSnaps) && qbRoot._qbRowSnaps.length) {
+      return qbRoot._qbRowSnaps.slice();
+    }
+    return [];
+  }
+
+  function _field(snap, aliases) {
+    if (!snap || !snap.fields || !snap.columnMap) return '';
+    var keys = Object.keys(snap.columnMap);
+    for (var i = 0; i < keys.length; i++) {
+      var colId = keys[i];
+      var label = _normalize(snap.columnMap[colId]);
+      var hit = aliases.some(function (a) { return label.indexOf(a) !== -1; });
+      if (!hit) continue;
+      var cell = snap.fields[colId];
+      if (cell && cell.value != null) return String(cell.value);
+    }
+    return '';
+  }
+
+  function _parseAge(ageRaw) {
+    if (!ageRaw) return '';
+    var n = Number(ageRaw);
+    if (Number.isFinite(n) && n > 0) {
+      if (n < 86400000) return '<1d';
+      return Math.round(n / 86400000) + 'd';
+    }
+    var s = String(ageRaw).trim();
+    return s.slice(0, 14);
+  }
+
+  function _extractNoteLine(notesRaw) {
+    var s = String(notesRaw || '').trim();
+    if (!s) return '';
+    var parts = s.split(/\n+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    var first = parts[0] || '';
+    if (!first) return '';
+    return first.replace(/^[-–—\s]+/, '').slice(0, 120);
+  }
+
+  function _statusClass(status) {
+    var s = _normalize(status);
+    if (s.indexOf('invest') !== -1) return 'yct-cb-inv';
+    if (s.indexOf('initial') !== -1) return 'yct-cb-init';
+    if (s.indexOf('resolv') !== -1 || s.indexOf('closed') !== -1) return 'yct-cb-res';
+    return 'yct-cb-init';
+  }
+
+  function _matchAssigned(assignedTo, myName) {
+    var a = _normalize(assignedTo);
+    var m = _normalize(myName);
+    if (!a || !m) return false;
+    if (a.indexOf(m) !== -1) return true;
+    var bits = m.split(/\s+/).filter(Boolean);
+    if (bits.length >= 2) {
+      return a.indexOf(bits[0]) !== -1 && a.indexOf(bits[bits.length - 1]) !== -1;
+    }
+    return a.indexOf(bits[0] || '') !== -1;
+  }
+
+  function _renderEntry(item, idx) {
+    var status = item.status || 'Open';
+    var note = item.note || '';
+    var sub = [item.age, item.endUser].filter(Boolean).join(' · ');
+
+    return '<div class="yct-entry" data-yct-snap-idx="' + idx + '" data-status-key="' + esc(_normalize(status)) + '" data-enduser="' + esc(_normalize(item.endUser)) + '">' +
+      '<div class="yct-row1">' +
+      '<span class="yct-cnum">#' + esc(item.caseNo) + '</span>' +
+      '<span class="yct-badge ' + _statusClass(status) + '">' + esc(status) + '</span>' +
+      (sub ? '<span class="yct-age">' + esc(sub) + '</span>' : '') +
+      '</div>' +
+      '<div class="yct-desc">' + esc(item.description || '—') + '</div>' +
+      (note ? '<div class="yct-bubble nb-mine"><div class="yct-nb-text nt-mine">' + esc(note) + '</div></div>' : '') +
+      '</div>';
+  }
+
+  function _updatePillCounts(rows) {
+    var row = document.getElementById('yct-filter-row');
+    if (!row) return;
+    var counts = {
+      all: rows.length,
+      investigating: rows.filter(function (r) { return _normalize(r.status).indexOf('invest') !== -1; }).length,
+      initial: rows.filter(function (r) { return _normalize(r.status).indexOf('initial') !== -1; }).length,
+      woolworths: rows.filter(function (r) { return _normalize(r.endUser).indexOf('woolworths') !== -1; }).length
+    };
+    row.querySelectorAll('.yct-pill').forEach(function (pill) {
+      var key = pill.dataset.filter;
+      var base = (pill.textContent || '').replace(/\s*\(\d+\)\s*$/, '');
+      if (Object.prototype.hasOwnProperty.call(counts, key)) {
+        pill.textContent = base + ' (' + counts[key] + ')';
+      }
+    });
+  }
+
   function _renderYCT() {
-    var list    = document.getElementById('yct-list');
-    var loading = document.getElementById('yct-loading');
+    var list = document.getElementById('yct-list');
     var countEl = document.getElementById('yct-count');
-    var nameEl  = document.getElementById('yct-user-name');
     var qbCntEl = document.getElementById('home-qb-count');
+    var nameEl = document.getElementById('yct-user-name');
     if (!list) return;
 
-    // Get current user name from all possible sources
     var myName = _resolveMyName();
-    var myNameLower = myName.toLowerCase();
     if (nameEl) nameEl.textContent = myName || 'You';
 
-    // Collect snaps from the QB root element
-    var qbRoot = document.getElementById('qbs-root');
-    var snaps  = (qbRoot && Array.isArray(qbRoot._qbRowSnaps)) ? qbRoot._qbRowSnaps : [];
-
-    // Also check raw records as fallback (set by fetch-patch)
-    var rawRecords = window.__studioQbRecords || [];
-    var rawColumns = window.__studioQbColumns || [];
-
-    // If no snaps yet from qbs but we have raw records, convert them
-    if (snaps.length === 0 && rawRecords.length > 0 && rawColumns.length > 0) {
-      snaps = rawRecords.map(function(r, i) {
-        return {
-          rowNum:    i + 1,
-          recordId:  String(r.qbRecordId || r['3'] || i),
-          fields:    r.fields || r,
-          columnMap: rawColumns.reduce(function(acc, c) {
-            acc[String(c.id)] = String(c.label || c.id || ''); return acc;
-          }, {})
-        };
-      });
-    }
-
+    var snaps = _getSnaps();
     if (qbCntEl) qbCntEl.textContent = snaps.length + ' records';
 
-    var todayStr = _manilaToday();
-
-    // Filter: assigned to current user (show all assigned cases, not just today's)
-    // The note bubble shows today's activity; cases without today notes still show
-    var matched = [];
-    snaps.forEach(function(snap, i) {
-      snap._yctIdx = i;
-      var assignedTo = _fv(snap, ['assigned to','assigned','agent']);
-      var assignedLower = assignedTo.toLowerCase();
-
-      // Match by name — partial match to handle "Mace Ryan Reyes" vs just first name
-      var isAssignedToMe = false;
-      if (myNameLower && assignedLower) {
-        // Full name match
-        if (assignedLower.includes(myNameLower)) {
-          isAssignedToMe = true;
-        }
-        // Partial: if myName is multiple words, check first word match
-        else if (myNameLower.split(' ').length > 1) {
-          var firstName = myNameLower.split(' ')[0];
-          var lastName  = myNameLower.split(' ').slice(-1)[0];
-          // Match if assigned field contains both first and last name
-          if (assignedLower.includes(firstName) && assignedLower.includes(lastName)) {
-            isAssignedToMe = true;
-          }
-          // Also match if assigned contains first name (for "Mace" matching "Mace Ryan Reyes")
-          else if (myNameLower.includes(assignedLower.split(' ')[0])) {
-            isAssignedToMe = true;
-          }
-        }
-      }
-
-      if (!isAssignedToMe) return;
-
-      // Show all assigned cases — today's note bubble is added if found
-      matched.push(snap);
-    });
-
-    if (loading) loading.style.display = 'none';
-
-    if (matched.length === 0) {
-      // Check if QB data is loaded at all
-      var qbRootEl2 = document.getElementById('qbs-root');
-      var hasAnyData = (qbRootEl2 && Array.isArray(qbRootEl2._qbRowSnaps) && qbRootEl2._qbRowSnaps.length > 0)
-        || (Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0);
-
-      if (!hasAnyData && snaps.length === 0) {
-        // Data not loaded yet — show loading state
-        list.innerHTML = '<div class="yct-loading"><div class="yct-spinner"></div><span>Loading QB data…</span></div>';
-        if (countEl) countEl.textContent = '0';
-      } else {
-        // Data loaded but no cases assigned to user
-        list.innerHTML = '<div class="yct-empty"><i class="fas fa-check-circle"></i><span>No cases assigned to you</span><span style="font-size:9px;color:rgba(255,255,255,.15);">' + todayStr + '</span></div>';
-        if (countEl) countEl.textContent = '0';
-      }
+    if (!snaps.length) {
+      list.innerHTML = '<div class="yct-loading"><div class="yct-spinner"></div><span>Loading QB data…</span></div>';
+      if (countEl) countEl.textContent = '0';
+      _updatePillCounts([]);
       return;
     }
 
-    if (countEl) countEl.textContent = matched.length;
+    var rows = [];
+    snaps.forEach(function (snap, idx) {
+      var assignedTo = _field(snap, ['assigned to', 'assigned', 'agent']);
+      if (!_matchAssigned(assignedTo, myName)) return;
 
-    var html = matched.map(function(snap) {
-      return _renderEntry(snap, todayStr, myNameLower);
-    }).join('');
-    list.innerHTML = html;
-
-    // Bind click → Case Detail
-    list.querySelectorAll('.yct-entry').forEach(function(el) {
-      el.addEventListener('click', function() {
-        var idx = parseInt(el.dataset.yctSnapIdx, 10);
-        var snap = snaps[idx];
-        if (!snap) return;
-        if (typeof window.__studioQbCdOpen === 'function') {
-          window.__studioQbCdOpen(snap, snaps);
-        } else if (qbRoot && typeof qbRoot._qbcdOpen === 'function') {
-          qbRoot._qbcdOpen(snap, snaps);
-        } else {
-          // Fallback: open QB tab and trigger detail
-          if (typeof window.activateTab === 'function') window.activateTab('qbs');
-          setTimeout(function() {
-            var btn = document.querySelector('[data-qb-snap-idx="' + idx + '"]');
-            if (btn) btn.click();
-          }, 600);
-        }
-      });
+      var row = {
+        _snapIdx: idx,
+        caseNo: _field(snap, ['case #', 'case no', 'case number']) || snap.recordId || '—',
+        description: _field(snap, ['short description', 'description', 'concern', 'subject']),
+        status: _field(snap, ['case status', 'status']),
+        age: _parseAge(_field(snap, ['age'])),
+        endUser: _field(snap, ['end user', 'customer', 'account']),
+        note: _extractNoteLine(_field(snap, ['case notes detail', 'case notes', 'case note', 'notes']))
+      };
+      rows.push(row);
     });
 
-    // Store matched snaps for filter use
-    list._yctAllSnaps = matched;
-    list._yctAllSnapsGlobal = snaps;
+    if (countEl) countEl.textContent = String(rows.length);
+    _updatePillCounts(rows);
+
+    if (!rows.length) {
+      list.innerHTML = '<div class="yct-empty"><i class="fas fa-check-circle"></i><span>No cases assigned to you</span></div>';
+      return;
+    }
+
+    list.innerHTML = rows.map(function (row, i) { return _renderEntry(row, i); }).join('');
+    list._yctAllRows = rows;
+    list._yctAllSnaps = snaps;
+
+    list.querySelectorAll('.yct-entry').forEach(function (el) {
+      el.addEventListener('click', function () {
+        var i = Number(el.dataset.yctSnapIdx);
+        var snap = snaps[i];
+        if (!snap) return;
+        if (typeof window.__studioQbCdOpen === 'function') return window.__studioQbCdOpen(snap, snaps);
+        var qbRoot = document.getElementById('qbs-root');
+        if (qbRoot && typeof qbRoot._qbcdOpen === 'function') return qbRoot._qbcdOpen(snap, snaps);
+      });
+    });
   }
 
-  // ── filter pills ─────────────────────────────────────────────────────
   function _bindFilters() {
     var row = document.getElementById('yct-filter-row');
     var list = document.getElementById('yct-list');
     if (!row || !list) return;
-    row.addEventListener('click', function(e) {
+    row.addEventListener('click', function (e) {
       var pill = e.target.closest('.yct-pill');
       if (!pill) return;
-      row.querySelectorAll('.yct-pill').forEach(function(p) { p.classList.remove('active'); });
+      row.querySelectorAll('.yct-pill').forEach(function (p) { p.classList.remove('active'); });
       pill.classList.add('active');
       var f = pill.dataset.filter;
-      var entries = list.querySelectorAll('.yct-entry');
-      entries.forEach(function(el) {
+      list.querySelectorAll('.yct-entry').forEach(function (el) {
         var sk = el.dataset.statusKey || '';
         var eu = el.dataset.enduser || '';
-        var show = true;
-        if (f === 'investigating') show = sk.includes('invest');
-        else if (f === 'initial')  show = sk.includes('initial');
-        else if (f === 'woolworths') show = eu.includes('woolworths');
+        var show = (f === 'all')
+          || (f === 'investigating' && sk.indexOf('invest') !== -1)
+          || (f === 'initial' && sk.indexOf('initial') !== -1)
+          || (f === 'woolworths' && eu.indexOf('woolworths') !== -1);
         el.style.display = show ? '' : 'none';
       });
     });
   }
 
-  // ── date display ──────────────────────────────────────────────────────
-  function _updateDate() {
-    var el = document.getElementById('home-date-display');
-    if (!el) return;
-    var now = new Date().toLocaleString('en-US', {
-      timeZone: 'Asia/Manila', weekday:'short', month:'short', day:'numeric',
-      hour:'2-digit', minute:'2-digit', hour12: true
-    });
-    el.textContent = now + ' PHT';
-  }
-
-  // ── init & refresh ────────────────────────────────────────────────────
-  // ── background QB data pre-loader ────────────────────────────────────
-  // Called on home tab load. Fetches QB data silently so YCT has records
-  // WITHOUT requiring the user to visit the QB tab first.
-  function _preloadQBData() {
-    function _getAuthTok() {
-      try {
-        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-        if (raw) { var p = JSON.parse(raw); if (p && p.access_token) return p.access_token; }
-        if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken() || '';
-      } catch(e) {}
-      return '';
-    }
-
-    var tok = _getAuthTok();
-    if (!tok) return;
-
-    var headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok };
-
-    // Step 1: Fetch qb_name from /api/users/me if not yet cached
-    if (!window._qbMyNameCache && !window._yctUserNameCache) {
-      fetch('/api/users/me', { headers: headers })
-        .then(function(r) { return r.ok ? r.json() : null; })
-        .then(function(d) {
-          if (d && d.ok && d.profile) {
-            var qbn = String(d.profile.qb_name || d.profile.name || '').trim();
-            if (qbn) {
-              window._yctUserNameCache = qbn;
-              // Re-render now that we have the name
-              var qbRoot2 = document.getElementById('qbs-root');
-              var hasData = (qbRoot2 && Array.isArray(qbRoot2._qbRowSnaps) && qbRoot2._qbRowSnaps.length > 0)
-                || (Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0);
-              if (hasData) _renderYCT();
-            }
-          }
-        }).catch(function() {});
-    }
-
-    // Step 2: Silently init QB tab in the background so _qbRowSnaps gets populated.
-    // my_quickbase.js will fetch QB records, set _qbRowSnaps + _qbMyNameCache,
-    // and the property watcher below will auto-trigger _renderYCT().
-    function _triggerQBInit() {
-      if (typeof window._qbsInit === 'function') {
-        window._qbsInit();
-      } else {
-        setTimeout(_triggerQBInit, 300);
-      }
-    }
-    setTimeout(_triggerQBInit, 800);
-  }
-
-  function _initYCT() {
-    _updateDate();
-    setInterval(_updateDate, 30000);
-    _bindFilters();
-
-    var refreshBtn = document.getElementById('home-yct-refresh');
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', function() {
-        var icon = refreshBtn.querySelector('i');
-        if (icon) icon.style.animation = 'yct-spin .7s linear infinite';
-        var list = document.getElementById('yct-list');
-        var loading = document.getElementById('yct-loading');
-        if (list && loading) {
-          list.innerHTML = '';
-          list.appendChild(loading);
-          loading.style.display = '';
-        }
-        setTimeout(function() {
-          _renderYCT();
-          if (icon) icon.style.animation = '';
-        }, 600);
-      });
-    }
-
-    // Hook into QB raw records watcher (set by fetch-patch at top of file)
-    var _origWatcher = window.__studioQbRecordsWatcher;
+  function _wireDataWatchers() {
+    var rawCache = window.__studioQbRecords;
     Object.defineProperty(window, '__studioQbRecords', {
       configurable: true,
-      get: function() { return _origWatcher; },
-      set: function(v) {
-        _origWatcher = v;
-        if (Array.isArray(v) && v.length > 0) {
-          setTimeout(function() {
-            var homeCanvas = document.getElementById('canvas-home');
-            if (homeCanvas && homeCanvas.classList.contains('active')) {
-              _renderYCT();
-            }
-          }, 300);
-        }
+      get: function () { return rawCache; },
+      set: function (v) {
+        rawCache = v;
+        setTimeout(_renderYCT, 120);
       }
     });
 
-    // Hook into _qbRowSnaps on qbs-root so we catch data arriving from QB tab init
-    function _watchQbRowSnaps() {
-      var qbRootEl = document.getElementById('qbs-root');
-      if (!qbRootEl) { setTimeout(_watchQbRowSnaps, 500); return; }
-      // Only define if not already a getter (avoid re-defining)
-      var desc = Object.getOwnPropertyDescriptor(qbRootEl, '_qbRowSnaps');
-      if (desc && typeof desc.get === 'function') return; // already watched
-      var _snapsVal = qbRootEl._qbRowSnaps;
-      Object.defineProperty(qbRootEl, '_qbRowSnaps', {
+    function watchQbRoot() {
+      var root = document.getElementById('qbs-root');
+      if (!root) return setTimeout(watchQbRoot, 300);
+      var val = root._qbRowSnaps;
+      Object.defineProperty(root, '_qbRowSnaps', {
         configurable: true,
-        get: function() { return _snapsVal; },
-        set: function(v) {
-          _snapsVal = v;
-          if (Array.isArray(v) && v.length > 0) {
-            setTimeout(function() {
-              var homeCanvas = document.getElementById('canvas-home');
-              if (homeCanvas && homeCanvas.classList.contains('active')) {
-                _renderYCT();
-              }
-            }, 200);
-          }
+        get: function () { return val; },
+        set: function (v) {
+          val = v;
+          setTimeout(_renderYCT, 120);
         }
       });
     }
-    _watchQbRowSnaps();
-
-    // Also watch _qbMyNameCache — set by my_quickbase after QB init
-    (function() {
-      var _nameVal = window._qbMyNameCache;
-      Object.defineProperty(window, '_qbMyNameCache', {
-        configurable: true,
-        get: function() { return _nameVal; },
-        set: function(v) {
-          _nameVal = v;
-          if (v) {
-            // Name became available — re-render YCT
-            setTimeout(function() {
-              var homeCanvas = document.getElementById('canvas-home');
-              if (homeCanvas && homeCanvas.classList.contains('active')) {
-                _renderYCT();
-              }
-            }, 150);
-          }
-        }
-      });
-    })();
-
-    // Initial render + background QB preload
-    _preloadQBData();
-
-    // Poll for data up to 15s, render as soon as something arrives
-    var attempts = 0;
-    var MAX = 30;
-    function tryRender() {
-      var qbRootEl = document.getElementById('qbs-root');
-      var snaps  = (qbRootEl && Array.isArray(qbRootEl._qbRowSnaps) && qbRootEl._qbRowSnaps.length > 0)
-        ? qbRootEl._qbRowSnaps : [];
-      var rawRec = window.__studioQbRecords || [];
-      if (snaps.length > 0 || rawRec.length > 0 || attempts >= MAX) {
-        _renderYCT();
-        return;
-      }
-      attempts++;
-      // After first second, force QB init in case _preloadQBData missed it
-      if (attempts === 2 && typeof window._qbsInit === 'function') {
-        window._qbsInit();
-      }
-      setTimeout(tryRender, 500);
-    }
-    setTimeout(tryRender, 200);
+    watchQbRoot();
   }
 
-  // Wait for DOM ready + tab system
+  function _initYctDate() {
+    var el = document.getElementById('home-date-display');
+    if (!el) return;
+    function draw() {
+      el.textContent = new Date().toLocaleString('en-US', {
+        timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: true
+      }) + ' PHT';
+    }
+    draw();
+    setInterval(draw, 30000);
+  }
+
+  function _init() {
+    _initYctDate();
+    _bindFilters();
+    _wireDataWatchers();
+
+    var refresh = document.getElementById('home-yct-refresh');
+    if (refresh) refresh.addEventListener('click', function () { _renderYCT(); });
+
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('[data-tab="home"]')) setTimeout(_renderYCT, 150);
+    });
+
+    if (typeof window._qbsInit === 'function') {
+      setTimeout(function () { try { window._qbsInit(); } catch (_) {} }, 300);
+    }
+
+    setTimeout(_renderYCT, 250);
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { setTimeout(_initYCT, 400); });
+    document.addEventListener('DOMContentLoaded', _init);
   } else {
-    setTimeout(_initYCT, 400);
+    _init();
   }
 
-  // Re-render + ensure QB data loaded whenever home tab is clicked
-  document.addEventListener('click', function(e) {
-    var btn = e.target.closest('[data-tab="home"]');
-    if (btn) {
-      setTimeout(function() {
-        _updateDate();
-        // Ensure QB data is loading if not yet available
-        var qbRootEl = document.getElementById('qbs-root');
-        var hasSnaps = qbRootEl && Array.isArray(qbRootEl._qbRowSnaps) && qbRootEl._qbRowSnaps.length > 0;
-        var hasRaw   = Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0;
-        if (!hasSnaps && !hasRaw) {
-          _preloadQBData();
-        }
-        _renderYCT();
-      }, 200);
-    }
-  });
-
-  // Expose globally for manual refresh and external calls
   window._yctRefresh = _renderYCT;
-  window._preloadQBDataYCT = _preloadQBData;
-
 })();
 </script>
 </body>
