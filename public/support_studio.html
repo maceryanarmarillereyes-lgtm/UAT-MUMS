@@ -310,6 +310,12 @@
     }
     .yct-pill.active { background: rgba(88,166,255,.12); color: var(--ss-accent); border-color: rgba(88,166,255,.3); }
     .yct-pill:hover:not(.active) { border-color: rgba(255,255,255,.18); color: var(--ss-text); }
+    /* YCT Compact mode — hide card body & notes, show header only */
+    #yct-list.yct-compact .yct-card-body  { display: none !important; }
+    #yct-list.yct-compact .yct-notes-section { display: none !important; }
+    #yct-list.yct-compact .yct-card-footer { display: none !important; }
+    #yct-list.yct-compact .yct-entry { padding-bottom: 0 !important; cursor: pointer; }
+    #yct-list.yct-compact .yct-card-header { padding-bottom: 8px !important; }
 
     /* ── CASE LIST ── */
     .yct-list { flex: 1; overflow-y: auto; padding: 10px 10px 14px; }
@@ -2538,6 +2544,16 @@
               <button class="yct-pill" data-filter="investigating">Investigating</button>
               <button class="yct-pill" data-filter="initial">Initial Inquiry</button>
               <button class="yct-pill" data-filter="woolworths">Woolworths</button>
+              <div style="margin-left:auto;display:flex;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:2px;gap:1px;">
+                <button id="yct-view-compact" onclick="window._yctSetView('compact')" title="Compact — header only"
+                  style="background:rgba(88,166,255,.15);border:none;color:#58a6ff;padding:3px 9px;border-radius:4px;cursor:pointer;font-size:9px;font-weight:700;font-family:var(--ss-font);display:flex;align-items:center;gap:4px;transition:all .15s;">
+                  <i class="fas fa-list"></i> Compact
+                </button>
+                <button id="yct-view-detailed" onclick="window._yctSetView('detailed')" title="Detailed — full card"
+                  style="background:transparent;border:none;color:var(--ss-muted);padding:3px 9px;border-radius:4px;cursor:pointer;font-size:9px;font-weight:700;font-family:var(--ss-font);display:flex;align-items:center;gap:4px;transition:all .15s;">
+                  <i class="fas fa-th-list"></i> Detailed
+                </button>
+              </div>
             </div>
             <div class="yct-list" id="yct-list">
               <div class="yct-loading" id="yct-loading">
@@ -11205,6 +11221,29 @@
     return after.slice(0, 220) || '(update)';
   }
 
+  // Convert "[MAR-31-26 2:43 PM Name]" bracket to a sortable ms timestamp (PHT)
+  // Used for sorting matched cases from newest to oldest.
+  function _parseNoteTime(entry) {
+    if (!entry || !entry.date || !entry.time) return 0;
+    try {
+      // entry.date: "MAR-31-26", entry.time: "2:43 PM"
+      var parts = entry.date.split('-');  // ["MAR","31","26"]
+      var months = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+      var mon = months[parts[0]] !== undefined ? months[parts[0]] : 0;
+      var day = parseInt(parts[1], 10);
+      var yr  = 2000 + parseInt(parts[2], 10);
+      var timeParts = entry.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+      if (!timeParts) return 0;
+      var hr  = parseInt(timeParts[1], 10);
+      var min = parseInt(timeParts[2], 10);
+      var ampm = timeParts[3].toUpperCase();
+      if (ampm === 'PM' && hr !== 12) hr += 12;
+      if (ampm === 'AM' && hr === 12) hr  = 0;
+      // PHT = UTC+8; create as UTC then adjust
+      return Date.UTC(yr, mon, day, hr - 8, min); // PHT→UTC
+    } catch(_) { return 0; }
+  }
+
   // Parse the MOST RECENT [DATE TIME Name] bracket from notes — regardless of date
   function _parseLatestEntry(notesRaw, myNameLower) {
     if (!notesRaw) return null;
@@ -11408,21 +11447,34 @@
 
     var todayStr = _manilaToday();
 
-    // Filter: show ALL cases assigned to current user (mirrors My Quickbase view)
-    // No longer restricted to only cases with today-dated notes.
+    // Filter: cases assigned to user AND with TODAY-dated note entry
+    // Sort: most recent first (by latest note timestamp)
     var matched = [];
     snaps.forEach(function(snap, i) {
       snap._yctIdx = i;
-      var assignedTo = _fv(snap, ['assigned to','assigned','agent']);
+      var assignedTo    = _fv(snap, ['assigned to','assigned','agent']);
       var assignedLower = assignedTo.toLowerCase();
 
-      // Match by name — partial match handles "Mace Ryan Reyes" vs stored qb_name
+      // Match by qb_name (partial — handles "Mace Ryan Reyes" vs myName)
       var isAssignedToMe = myNameLower
         ? (assignedLower.includes(myNameLower) || myNameLower.includes(assignedLower.split(' ')[0].toLowerCase()))
         : false;
-
       if (!isAssignedToMe) return;
+
+      // ONLY show cases with a TODAY-dated note entry (per user requirement)
+      var notesRaw = _convertPHT(_fv(snap, ['case notes detail','case notes','case note','notes']));
+      var todayEntry = _parseTodayEntry(notesRaw, todayStr, myNameLower);
+      if (!todayEntry) return; // skip — no activity today
+
+      // Store the today-entry and its sort time on the snap for ordering
+      snap._yctTodayEntry = todayEntry;
+      snap._yctSortTime   = _parseNoteTime(todayEntry);
       matched.push(snap);
+    });
+
+    // Sort: most recent first
+    matched.sort(function(a, b) {
+      return (b._yctSortTime || 0) - (a._yctSortTime || 0);
     });
 
     if (loading) loading.style.display = 'none';
@@ -11440,23 +11492,55 @@
     }).join('');
     list.innerHTML = html;
 
-    // Bind click → Case Detail
+    // Bind click → Case Detail (FIX v3: activate QBS tab first, then open modal)
     list.querySelectorAll('.yct-entry').forEach(function(el) {
-      el.addEventListener('click', function() {
-        var idx = parseInt(el.dataset.yctSnapIdx, 10);
+      el.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var idx  = parseInt(el.dataset.yctSnapIdx, 10);
         var snap = snaps[idx];
         if (!snap) return;
-        if (typeof window.__studioQbCdOpen === 'function') {
-          window.__studioQbCdOpen(snap, snaps);
-        } else if (qbRoot && typeof qbRoot._qbcdOpen === 'function') {
-          qbRoot._qbcdOpen(snap, snaps);
+
+        function _openModal() {
+          // 1. Try the global opener (set by QBS init after data loads)
+          if (typeof window.__studioQbCdOpen === 'function') {
+            window.__studioQbCdOpen(snap, snaps);
+            return;
+          }
+          // 2. Try root._qbcdOpen directly
+          var qbRootEl = document.getElementById('qbs-root');
+          if (qbRootEl && typeof qbRootEl._qbcdOpen === 'function') {
+            qbRootEl._qbcdOpen(snap, snaps);
+            return;
+          }
+          // 3. Walk up to find _qbcdOpen on any ancestor
+          var el2 = document.getElementById('qbs-root');
+          while (el2 && el2 !== document.body) {
+            if (typeof el2._qbcdOpen === 'function') { el2._qbcdOpen(snap, snaps); return; }
+            el2 = el2.parentElement;
+          }
+        }
+
+        // Ensure QBS tab is active & _qbcdOpen is mounted before opening modal
+        var qbRootEl2 = document.getElementById('qbs-root');
+        var isQbsMounted = qbRootEl2 && (typeof qbRootEl2._qbcdOpen === 'function' || typeof window.__studioQbCdOpen === 'function');
+
+        if (isQbsMounted) {
+          // QBS already mounted — open immediately
+          _openModal();
         } else {
-          // Fallback: open QB tab and trigger detail
-          if (typeof window.activateTab === 'function') window.activateTab('qbs');
-          setTimeout(function() {
-            var btn = document.querySelector('[data-qb-snap-idx="' + idx + '"]');
-            if (btn) btn.click();
-          }, 600);
+          // QBS not mounted yet — activate tab first, then wait for mount
+          var qbsTab = document.querySelector('[data-tab="qbs"]');
+          if (qbsTab) qbsTab.click();
+          var attempts = 0;
+          var poll = setInterval(function() {
+            attempts++;
+            var ready = typeof window.__studioQbCdOpen === 'function'
+                     || (document.getElementById('qbs-root') && typeof document.getElementById('qbs-root')._qbcdOpen === 'function');
+            if (ready || attempts > 20) {
+              clearInterval(poll);
+              if (ready) _openModal();
+            }
+          }, 150);
         }
       });
     });
@@ -11465,6 +11549,23 @@
     list._yctAllSnaps = matched;
     list._yctAllSnapsGlobal = snaps;
   }
+
+  // ── Compact / Detailed view toggle ──────────────────────────────────
+  window._yctSetView = function(v) {
+    var list       = document.getElementById('yct-list');
+    var btnCompact = document.getElementById('yct-view-compact');
+    var btnDetail  = document.getElementById('yct-view-detailed');
+    if (!list) return;
+    if (v === 'compact') {
+      list.classList.add('yct-compact');
+      if (btnCompact) { btnCompact.style.background = 'rgba(88,166,255,.15)'; btnCompact.style.color = '#58a6ff'; }
+      if (btnDetail)  { btnDetail.style.background  = 'transparent';          btnDetail.style.color  = 'var(--ss-muted)'; }
+    } else {
+      list.classList.remove('yct-compact');
+      if (btnCompact) { btnCompact.style.background = 'transparent';           btnCompact.style.color = 'var(--ss-muted)'; }
+      if (btnDetail)  { btnDetail.style.background  = 'rgba(88,166,255,.15)'; btnDetail.style.color  = '#58a6ff'; }
+    }
+  };
 
   // ── filter pills ─────────────────────────────────────────────────────
   function _bindFilters() {
@@ -11488,6 +11589,8 @@
         el.style.display = show ? '' : 'none';
       });
     });
+    // Set default view to compact
+    window._yctSetView('compact');
   }
 
   // ── date display ──────────────────────────────────────────────────────
