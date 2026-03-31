@@ -102,6 +102,7 @@ const ROUTES = {
   'studio/kb_settings':        require('../server/routes/studio/kb_settings'),
   'studio/kb_sync':            require('../server/routes/studio/kb_sync'),
   'studio/kb_download':        require('../server/routes/studio/kb_download'),
+  'studio/daily_passwords':    require('../server/routes/studio/daily_passwords'),
 };
 
 const DYNAMIC_ROUTES = [
