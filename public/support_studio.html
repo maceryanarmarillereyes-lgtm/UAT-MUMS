@@ -6982,13 +6982,17 @@
           var ph = p.getUTCHours(), pm2 = p.getUTCMinutes();
           var pap = ph >= 12 ? 'PM' : 'AM';
           ph = ph % 12 || 12;
-          return '[' + _MN[p.getUTCMonth()] + '-' + p.getUTCDate() + '-' +
+          // FIX: pad day to 2 digits so date-parsing regexes always match \d{2}
+          var dayStr = String(p.getUTCDate()).padStart(2,'0');
+          return '[' + _MN[p.getUTCMonth()] + '-' + dayStr + '-' +
             String(p.getUTCFullYear()).slice(-2) + ' ' + ph + ':' +
             String(pm2).padStart(2,'0') + ' ' + pap + rest + ']';
         } catch(_) { return full; }
       }
     );
   }
+  // Expose on window so YCT and other modules can use it
+  window._ssConvertPHT = _ssConvertPHT;
 
   window._qbsOpenCaseDetail = function(snap, allSnaps) {
     var root = document.getElementById('qbs-root');
@@ -11171,12 +11175,15 @@
   // Parse first today-dated [DATE TIME Name] bracket from notes text
   function _parseTodayEntry(notesRaw, todayStr, myNameLower) {
     if (!notesRaw || !todayStr) return null;
-    // Match [MON-DD-YY H:MM AM/PM Name...] style
-    var regex = /\[([A-Z]{3}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\s+([^\]]+)\]/gi;
+    // Match [MON-DD-YY H:MM AM/PM Name...] — \d{1,2} for day handles both padded and unpadded
+    var regex = /\[([A-Z]{3}-\d{1,2}-\d{2})\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\s+([^\]]+)\]/gi;
     var match;
     while ((match = regex.exec(notesRaw)) !== null) {
       var datePart = match[1].toUpperCase();
-      if (datePart === todayStr) {
+      // Normalise to padded form (e.g. "MAR-1-26" → "MAR-01-26") before comparing
+      var datePadded = datePart.replace(/-(\d)-/, function(_, d) { return '-0' + d + '-'; });
+      var todayPadded = todayStr.replace(/-(\d)-/, function(_, d) { return '-0' + d + '-'; });
+      if (datePadded === todayPadded || datePart === todayStr) {
         var timePart = match[2].trim();
         var namePart = match[3].trim();
         var isMine   = namePart.toLowerCase().includes(myNameLower);
@@ -11201,7 +11208,8 @@
   // Parse the MOST RECENT [DATE TIME Name] bracket from notes — regardless of date
   function _parseLatestEntry(notesRaw, myNameLower) {
     if (!notesRaw) return null;
-    var regex = /\[([A-Z]{3}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\s+([^\]]+)\]/gi;
+    // \d{1,2} for day handles both zero-padded ("31") and unpadded ("1") dates
+    var regex = /\[([A-Z]{3}-\d{1,2}-\d{2})\s+(\d{1,2}:\d{2}\s*(?:AM|PM))\s+([^\]]+)\]/gi;
     var last = null;
     var match;
     while ((match = regex.exec(notesRaw)) !== null) {
