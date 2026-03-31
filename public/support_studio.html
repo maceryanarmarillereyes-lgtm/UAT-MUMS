@@ -11609,12 +11609,23 @@
 
   function _yctLoad(isRefresh) {
     if (_yctFetching) return;
+
+    // Guard: if no token yet, don't try — _bootYCT will retry when mums:authtoken fires
+    var tok = _yctGetToken();
+    if (!tok) {
+      var list = document.getElementById('yct-list');
+      var loading = document.getElementById('yct-loading');
+      if (list && loading) {
+        if (!list.contains(loading)) list.innerHTML = '';
+        if (!list.contains(loading)) list.appendChild(loading);
+        loading.style.display = '';
+      }
+      return;
+    }
+
     _yctFetching = true;
     _yctShowLoading();
 
-    // Pre-fetch the user's qb_name if not cached yet — /api/users/me returns profile
-    // qb_name is now returned by /api/studio/yct_data — no pre-fetch needed.
-    // The fetch itself resolves the user's name from their Supabase profile server-side.
     Promise.resolve()
     .then(function() {
       return _yctFetchQbData(500);
@@ -11631,13 +11642,16 @@
       var snaps = _yctRecordsToSnaps(result.records, result.columns);
       _yctUpdateToolbar(result.records.length);
 
-      // Also attach to qbs-root so clicking a case opens the detail modal
+      // Attach to qbs-root so clicking a case opens the detail modal
       var qbRoot = document.getElementById('qbs-root');
       if (qbRoot) qbRoot._qbRowSnaps = snaps;
 
       // Render with the fresh snaps
       _renderYCT(snaps);
-    }); // closes nameReady→qbData promise chain
+    }).catch(function(err) {
+      _yctFetching = false;
+      console.warn('[YCT] _yctLoad error:', err);
+    });
   }
 
   // ── OVERRIDE _renderYCT to accept optional snaps argument ───────────
@@ -11698,12 +11712,45 @@
     };
   }
 
-  // Boot
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { setTimeout(_initYCT, 400); });
-  } else {
-    setTimeout(_initYCT, 400);
+  // ── YCT Boot — wait for auth token, THEN init ────────────────────────────
+  // Root cause of "QuickBase data unavailable" on first load:
+  //   setTimeout(_initYCT, 400) fires before cloud_auth.js resolves the session
+  //   and dispatches mums:authtoken → _yctGetToken() returns '' → 401 → no data.
+  //
+  // Fix: listen for mums:authtoken (same pattern as _preloadStudioSettings).
+  //   If the token is already in localStorage when this code runs (page refresh /
+  //   already logged in), fire immediately. Otherwise wait for the event.
+  var _yctBooted = false;
+
+  function _bootYCT() {
+    if (_yctBooted) return;
+    // Only boot once we actually have a token
+    if (!_yctGetToken()) return;
+    _yctBooted = true;
+    _initYCT();
   }
+
+  // PRIMARY: fire as soon as CloudAuth confirms a valid session
+  window.addEventListener('mums:authtoken', function() {
+    setTimeout(_bootYCT, 100); // tiny delay so token is written to localStorage first
+  });
+
+  // FALLBACK A: token already in localStorage (page refresh / already logged in)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(function() { if (!_yctBooted) _bootYCT(); }, 300);
+    });
+  } else {
+    setTimeout(function() { if (!_yctBooted) _bootYCT(); }, 300);
+  }
+
+  // FALLBACK B: retry loop — catches slow auth resolves (up to 8s)
+  var _yctRetryCount = 0;
+  var _yctRetryInterval = setInterval(function() {
+    _yctRetryCount++;
+    if (_yctBooted || _yctRetryCount > 16) { clearInterval(_yctRetryInterval); return; }
+    _bootYCT();
+  }, 500);
 
   // Expose globals for manual refresh
   window._yctRefresh = function() { _yctLoad(true); };
