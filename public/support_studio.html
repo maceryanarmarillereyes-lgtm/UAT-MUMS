@@ -266,34 +266,36 @@
     /* ── HOME SPLIT ── */
     .home-split { display: flex; height: 100%; overflow: hidden; }
 
-    /* ── YCT PANEL ── */
+    /* ══════════════════════════════════════════════════════════════════
+       YCT PANEL — Premium Enterprise Card Design v3.0
+    ══════════════════════════════════════════════════════════════════ */
     .yct-panel {
-      width: 420px; min-width: 370px; display: flex; flex-direction: column;
+      width: 430px; min-width: 380px; display: flex; flex-direction: column;
       border-right: 1px solid var(--ss-border); overflow: hidden; flex-shrink: 0;
       background: var(--ss-surface);
     }
     .yct-header {
       padding: 12px 16px 10px; border-bottom: 1px solid var(--ss-border2); flex-shrink: 0;
-      background: linear-gradient(135deg, rgba(88,166,255,.04), transparent);
+      background: linear-gradient(135deg, rgba(88,166,255,.05), transparent);
     }
     .yct-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     .yct-icon {
-      width: 26px; height: 26px; border-radius: 7px;
-      background: rgba(88,166,255,.15); border: 1px solid rgba(88,166,255,.28);
-      color: var(--ss-accent); font-size: 10px;
+      width: 28px; height: 28px; border-radius: 8px;
+      background: rgba(88,166,255,.15); border: 1px solid rgba(88,166,255,.3);
+      color: var(--ss-accent); font-size: 11px;
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
-    .yct-title { font-size: 13px; font-weight: 800; color: #e6edf3; }
+    .yct-title { font-size: 13px; font-weight: 900; color: #e6edf3; letter-spacing: -.01em; }
     .yct-count {
-      margin-left: auto; font-size: 9px; font-weight: 800; padding: 3px 8px;
-      border-radius: 20px; background: rgba(88,166,255,.12);
-      color: var(--ss-accent); border: 1px solid rgba(88,166,255,.28);
+      margin-left: auto; font-size: 9px; font-weight: 900; padding: 3px 9px;
+      border-radius: 20px; background: rgba(88,166,255,.14);
+      color: var(--ss-accent); border: 1px solid rgba(88,166,255,.3);
     }
-    .yct-meta { font-size: 10px; color: var(--ss-muted); }
+    .yct-meta { font-size: 10px; color: var(--ss-muted); margin-bottom: 2px; }
     .yct-name-badge {
       display: inline-flex; align-items: center; gap: 5px;
-      padding: 2px 8px; border-radius: 20px;
-      background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.18);
+      padding: 3px 9px; border-radius: 20px;
+      background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.2);
       color: var(--ss-cyan); font-size: 9px; font-weight: 800;
       letter-spacing: .04em; margin-top: 5px;
     }
@@ -302,7 +304,7 @@
       flex-shrink: 0; flex-wrap: wrap;
     }
     .yct-pill {
-      font-size: 9px; font-weight: 700; padding: 3px 9px; border-radius: 20px;
+      font-size: 9px; font-weight: 700; padding: 3px 10px; border-radius: 20px;
       border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04);
       color: var(--ss-muted); cursor: pointer; transition: all .15s;
     }
@@ -310,85 +312,169 @@
     .yct-pill:hover:not(.active) { border-color: rgba(255,255,255,.18); color: var(--ss-text); }
 
     /* ── CASE LIST ── */
-    .yct-list { flex: 1; overflow-y: auto; padding: 10px; }
+    .yct-list { flex: 1; overflow-y: auto; padding: 10px 10px 14px; }
     .yct-list::-webkit-scrollbar { width: 3px; }
     .yct-list::-webkit-scrollbar-track { background: transparent; }
     .yct-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 99px; }
 
-    /* ── CASE ENTRY ── */
+    /* ══ PREMIUM CASE ENTRY CARD ══════════════════════════════════════ */
     .yct-entry {
-      padding: 11px 13px 10px; margin-bottom: 7px;
-      border: 1px solid rgba(255,255,255,.06); border-radius: 10px;
-      cursor: pointer; background: var(--ss-surface2);
-      transition: all .18s; position: relative; overflow: hidden;
+      margin-bottom: 9px;
+      border: 1px solid rgba(255,255,255,.07); border-radius: 12px;
+      cursor: pointer; background: rgba(13,17,23,.7);
+      transition: all .2s; position: relative; overflow: hidden;
     }
-    .yct-entry:hover { border-color: rgba(88,166,255,.3); background: rgba(88,166,255,.04); box-shadow: 0 4px 16px rgba(0,0,0,.3); }
-    .yct-entry.yct-warn:hover { border-color: rgba(210,153,34,.3); background: rgba(210,153,34,.04); }
+    .yct-entry:hover {
+      border-color: rgba(88,166,255,.35); background: rgba(88,166,255,.035);
+      box-shadow: 0 6px 24px rgba(0,0,0,.35), 0 0 0 1px rgba(88,166,255,.1);
+      transform: translateY(-1px);
+    }
+    .yct-entry.yct-warn:hover { border-color: rgba(210,153,34,.35); background: rgba(210,153,34,.03); box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+    .yct-entry.yct-green:hover { border-color: rgba(63,185,80,.35); background: rgba(63,185,80,.03); box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+
+    /* Left accent bar */
     .yct-accent {
       position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 3px 0 0 3px;
     }
-    .yct-acc-blue  { background: var(--ss-accent); }
-    .yct-acc-warn  { background: var(--ss-warn); }
-    .yct-acc-init  { background: rgba(255,255,255,.2); }
-    .yct-acc-green { background: var(--ss-green); }
+    .yct-acc-blue  { background: linear-gradient(180deg,#58a6ff,#1d6bbd); }
+    .yct-acc-warn  { background: linear-gradient(180deg,#d29922,#b07800); }
+    .yct-acc-init  { background: rgba(255,255,255,.15); }
+    .yct-acc-green { background: linear-gradient(180deg,#3fb950,#218838); }
 
-    .yct-row1 { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; padding-left: 6px; }
-    .yct-cnum { font: 800 11px var(--ss-mono); color: var(--ss-accent); letter-spacing: .02em; }
-    .yct-badge {
-      font-size: 8px; font-weight: 800; padding: 2px 6px; border-radius: 4px; letter-spacing: .04em;
+    /* ── Card Header Row: Case# + Status + Age ── */
+    .yct-card-header {
+      display: flex; align-items: center; gap: 7px;
+      padding: 10px 12px 8px 14px;
+      border-bottom: 1px solid rgba(255,255,255,.05);
     }
-    .yct-cb-inv  { background: rgba(88,166,255,.1); color: var(--ss-accent); border: 1px solid rgba(88,166,255,.2); }
-    .yct-cb-init { background: rgba(210,153,34,.1); color: var(--ss-warn); border: 1px solid rgba(210,153,34,.2); }
-    .yct-cb-res  { background: rgba(63,185,80,.1); color: var(--ss-green); border: 1px solid rgba(63,185,80,.2); }
     .yct-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-    .yct-dot-on  { background: var(--ss-accent); box-shadow: 0 0 5px rgba(88,166,255,.5); animation: yctpulse 2s infinite; }
-    .yct-dot-warn { background: var(--ss-warn); }
-    .yct-dot-res  { background: var(--ss-green); }
-    @keyframes yctpulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-    .yct-age { margin-left: auto; font-size: 9px; color: var(--ss-muted); }
+    .yct-dot-on   { background: #58a6ff; box-shadow: 0 0 6px rgba(88,166,255,.6); animation: yctpulse 2s infinite; }
+    .yct-dot-warn { background: #d29922; box-shadow: 0 0 5px rgba(210,153,34,.5); }
+    .yct-dot-res  { background: #3fb950; box-shadow: 0 0 5px rgba(63,185,80,.4); }
+    @keyframes yctpulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+    .yct-cnum {
+      font: 800 12px var(--ss-mono); color: #58a6ff; letter-spacing: .03em;
+    }
+    .yct-badge {
+      font-size: 8px; font-weight: 800; padding: 2px 7px; border-radius: 5px;
+      letter-spacing: .05em; text-transform: uppercase;
+    }
+    .yct-cb-inv  { background: rgba(88,166,255,.12); color: #79c0ff; border: 1px solid rgba(88,166,255,.25); }
+    .yct-cb-init { background: rgba(210,153,34,.12); color: #e3b341; border: 1px solid rgba(210,153,34,.25); }
+    .yct-cb-res  { background: rgba(63,185,80,.12); color: #56d364; border: 1px solid rgba(63,185,80,.25); }
+    .yct-cb-wait { background: rgba(162,93,220,.12); color: #d2a8ff; border: 1px solid rgba(162,93,220,.25); }
+
+    /* Age pill */
+    .yct-age-pill {
+      margin-left: auto; display: inline-flex; align-items: center; gap: 3px;
+      font-size: 9px; font-weight: 700; color: #7d8590;
+      background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07);
+      border-radius: 20px; padding: 2px 8px;
+    }
+    .yct-age-pill i { font-size: 7px; opacity: .6; }
+
+    /* ── Card Body ── */
+    .yct-card-body { padding: 9px 12px 0 14px; }
+
+    /* End User tag */
+    .yct-eu-row { margin-bottom: 5px; }
+    .yct-eu-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 5px;
+      background: rgba(162,93,220,.1); border: 1px solid rgba(162,93,220,.22);
+      color: #c084fc; font-size: 9px; font-weight: 800; letter-spacing: .03em;
+    }
+    .yct-eu-tag i { font-size: 7px; opacity: .75; }
+
+    /* Case description */
     .yct-desc {
-      font-size: 11px; font-weight: 600; color: #c9d1d9; line-height: 1.4;
-      margin-bottom: 7px; padding-left: 6px;
+      font-size: 11px; font-weight: 700; color: #e6edf3; line-height: 1.45;
+      margin-bottom: 9px; letter-spacing: .005em;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
-    /* note bubble */
-    .yct-bubble {
-      margin-left: 6px; padding: 6px 10px; border-radius: 7px;
-      border: 1px solid rgba(255,255,255,.05); background: rgba(0,0,0,.2); position: relative;
+
+    /* ── Case Notes Section ── */
+    .yct-notes-section {
+      margin: 0 12px 10px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,.06);
+      background: rgba(0,0,0,.25);
+      overflow: hidden;
     }
-    .yct-bubble.nb-mine {
-      background: rgba(255,255,255,.02); border-color: rgba(255,255,255,.04);
+    .yct-notes-header {
+      display: flex; align-items: center; gap: 5px;
+      padding: 5px 9px;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+      background: rgba(255,255,255,.025);
     }
-    .yct-bubble.nb-other {
-      background: rgba(34,211,238,.03); border-color: rgba(34,211,238,.12);
+    .yct-notes-label {
+      font-size: 8px; font-weight: 800; letter-spacing: .08em;
+      text-transform: uppercase; color: rgba(255,255,255,.3);
     }
-    .yct-nb-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; flex-wrap: wrap; }
-    .yct-nb-time { font: 400 9px var(--ss-mono); color: rgba(255,255,255,.3); }
-    .yct-nb-name { font-size: 10px; font-weight: 700; }
-    .yct-nb-name.nm-mine  { color: rgba(255,255,255,.28); }
-    .yct-nb-name.nm-other { color: var(--ss-cyan); }
-    .yct-nb-me {
+    /* PHT timestamp chip */
+    .yct-pht-chip {
+      margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
+      font-size: 8px; font-weight: 700;
+      color: #22d3ee; font-family: var(--ss-mono);
+      background: rgba(34,211,238,.07); border: 1px solid rgba(34,211,238,.15);
+      border-radius: 4px; padding: 1px 6px;
+    }
+    .yct-pht-chip i { font-size: 7px; }
+    /* Author row */
+    .yct-notes-author {
+      display: flex; align-items: center; gap: 5px;
+      padding: 5px 9px 3px;
+    }
+    .yct-author-avatar {
+      width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 7px; font-weight: 800;
+    }
+    .yct-author-avatar.av-mine  { background: rgba(255,255,255,.07); color: rgba(255,255,255,.35); }
+    .yct-author-avatar.av-other { background: rgba(34,211,238,.15); color: #22d3ee; }
+    .yct-author-name { font-size: 10px; font-weight: 700; }
+    .yct-author-name.an-mine  { color: rgba(255,255,255,.35); }
+    .yct-author-name.an-other { color: #22d3ee; }
+    .yct-me-chip {
       font-size: 7px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase;
       padding: 1px 4px; border-radius: 3px;
-      background: rgba(255,255,255,.05); color: rgba(255,255,255,.22);
+      background: rgba(88,166,255,.12); color: #58a6ff; border: 1px solid rgba(88,166,255,.2);
     }
-    .yct-nb-text {
-      font-size: 10px; line-height: 1.4;
-      display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+    /* Note text body */
+    .yct-notes-text {
+      padding: 3px 9px 8px;
+      font-size: 10px; line-height: 1.55; color: rgba(255,255,255,.5);
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
     }
-    .yct-nb-text.nt-mine  { color: rgba(255,255,255,.28); }
-    .yct-nb-text.nt-other { color: rgba(255,255,255,.55); }
-    .yct-entry-cta {
+    .yct-notes-text.nt-mine  { color: rgba(255,255,255,.3); }
+    .yct-notes-text.nt-other { color: rgba(255,255,255,.52); }
+    .yct-no-notes {
+      padding: 8px 9px;
+      font-size: 9px; color: rgba(255,255,255,.18); font-style: italic;
+    }
+
+    /* ── Card Footer / CTA ── */
+    .yct-card-footer {
       display: flex; align-items: center; justify-content: flex-end;
-      margin-top: 6px; padding-left: 6px; opacity: 0; transition: opacity .18s;
+      padding: 7px 12px 9px 14px;
+      opacity: 0; transition: opacity .18s;
     }
-    .yct-entry:hover .yct-entry-cta { opacity: 1; }
-    .yct-cta-link { font-size: 9px; color: var(--ss-accent); font-weight: 700; display: flex; align-items: center; gap: 4px; }
+    .yct-entry:hover .yct-card-footer { opacity: 1; }
+    .yct-cta-link {
+      font-size: 9px; font-weight: 800; color: #58a6ff;
+      display: inline-flex; align-items: center; gap: 4px;
+      letter-spacing: .03em;
+    }
+    .yct-cta-link i { font-size: 8px; }
+
+    /* ── Empty / Loading states ── */
     .yct-empty {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 10px; height: 200px; color: rgba(255,255,255,.18); font-size: 11px;
+      gap: 10px; height: 200px; color: rgba(255,255,255,.2); font-size: 11px; text-align: center;
+      padding: 20px;
     }
-    .yct-empty i { font-size: 28px; opacity: .15; }
+    .yct-empty i { font-size: 28px; opacity: .2; margin-bottom: 4px; }
     .yct-loading {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       gap: 8px; height: 120px; color: var(--ss-muted); font-size: 11px;
@@ -11109,7 +11195,7 @@
     // Cut at next bracket or 120 chars
     var nextBracket = after.indexOf('[');
     if (nextBracket > 0) after = after.slice(0, nextBracket).trim();
-    return after.slice(0, 120) || '(update)';
+    return after.slice(0, 220) || '(update)';
   }
 
   // Parse the MOST RECENT [DATE TIME Name] bracket from notes — regardless of date
@@ -11138,81 +11224,121 @@
     return f && f.value != null ? String(f.value) : '';
   }
 
-  // ── status accent ────────────────────────────────────────────────────
+  // ── status accent ──────────────────────────────────────────────────────────
   function _accentClass(status) {
     var s = (status || '').toLowerCase();
-    if (s.includes('invest'))  return { bar: 'yct-acc-blue',  dot: 'yct-dot-on',   badge: 'yct-cb-inv',  badgeTxt: 'Investigating' };
-    if (s.includes('initial')) return { bar: 'yct-acc-warn',  dot: 'yct-dot-warn', badge: 'yct-cb-init', badgeTxt: 'Initial Inquiry' };
-    if (s.includes('resolv'))  return { bar: 'yct-acc-green', dot: 'yct-dot-res',  badge: 'yct-cb-res',  badgeTxt: 'Resolved' };
-    return { bar: 'yct-acc-init', dot: 'yct-dot-warn', badge: 'yct-cb-init', badgeTxt: status || 'Open' };
+    if (s.includes('invest'))        return { bar: 'yct-acc-blue',  dot: 'yct-dot-on',   badge: 'yct-cb-inv',  badgeTxt: 'Investigating',   entryClass: '' };
+    if (s.includes('initial'))       return { bar: 'yct-acc-warn',  dot: 'yct-dot-warn', badge: 'yct-cb-init', badgeTxt: 'Initial Inquiry',  entryClass: ' yct-warn' };
+    if (s.includes('resolv'))        return { bar: 'yct-acc-green', dot: 'yct-dot-res',  badge: 'yct-cb-res',  badgeTxt: 'Resolved',         entryClass: ' yct-green' };
+    if (s.includes('wait'))          return { bar: 'yct-acc-warn',  dot: 'yct-dot-warn', badge: 'yct-cb-wait', badgeTxt: status || 'Waiting', entryClass: ' yct-warn' };
+    return                                  { bar: 'yct-acc-init',  dot: 'yct-dot-warn', badge: 'yct-cb-init', badgeTxt: status || 'Open',   entryClass: '' };
   }
 
-  // ── render one case entry ─────────────────────────────────────────────
-  // FIX v1.1: Shows latest note entry (any date), not just today-dated ones.
-  // Columns match Image 2: Case#, Status badge, Age, End User, Subject, latest note bubble.
+  // ── Premium Case Entry Card (v3.0) ────────────────────────────────────────
+  // Sections: Header (Case# | Status | Age) → End User → Description → Case Notes
   function _renderEntry(snap, todayStr, myNameLower) {
     var caseId   = snap.recordId || '—';
-    var desc     = _fv(snap, ['short description','description','concern','subject','latest update on the case','latest update']) || '—';
+    var desc     = _fv(snap, ['short description','description','concern','subject']) || '—';
     var status   = _fv(snap, ['case status','status']);
     var age      = _fv(snap, ['age','last update days','last update']);
     var endUser  = _fv(snap, ['end user','client','account','customer']);
     var notesRaw = _convertPHT(_fv(snap, ['case notes detail','case notes','case note','notes']));
 
-    var acc    = _accentClass(status);
+    var acc = _accentClass(status);
 
-    // Age display: handle both milliseconds and plain day-numbers/strings
+    // ── Age display ──────────────────────────────────────────────────────────
     var ageStr = '';
     if (age) {
       var ageNum = Number(age);
       if (!isNaN(ageNum) && ageNum > 1000) {
-        // Milliseconds format
         ageStr = ageNum < 86400000 ? '< 1 day' : Math.round(ageNum / 86400000) + 'd';
       } else if (!isNaN(ageNum)) {
-        // Plain day count
-        ageStr = ageNum < 1 ? '< 1 day' : Math.round(ageNum) + 'd';
+        ageStr = ageNum < 1 ? '< 1 day' : ageNum === 1 ? '1 day' : Math.round(ageNum) + ' days';
       } else {
-        ageStr = String(age).slice(0, 10);
+        ageStr = String(age).slice(0, 12);
       }
     }
 
-    // Find latest note entry (prefer today, fall back to any most-recent bracket)
+    // ── Latest note entry ─────────────────────────────────────────────────────
     var entry = _parseTodayEntry(notesRaw, todayStr, myNameLower);
     if (!entry) entry = _parseLatestEntry(notesRaw, myNameLower);
 
-    var preview     = entry ? _notePreview(notesRaw, entry.full) : '';
-    var isMine      = entry ? entry.isMine : false;
-    var bubbleClass = isMine ? 'nb-mine' : 'nb-other';
-    var nameClass   = isMine ? 'nm-mine' : 'nm-other';
-    var textClass   = isMine ? 'nt-mine' : 'nt-other';
+    var preview  = entry ? _notePreview(notesRaw, entry.full) : '';
+    var isMine   = entry ? entry.isMine : false;
+    var avClass  = isMine ? 'av-mine' : 'av-other';
+    var anClass  = isMine ? 'an-mine' : 'an-other';
+    var ntClass  = isMine ? 'nt-mine' : 'nt-other';
+    var snapIdx  = snap._yctIdx !== undefined ? snap._yctIdx : 0;
 
-    var bubbleHtml = '';
-    if (entry && preview) {
-      bubbleHtml = '<div class="yct-bubble ' + bubbleClass + '">' +
-        '<div class="yct-nb-row">' +
-          '<span class="yct-nb-time">' + esc(entry.date ? entry.date + ' ' + entry.time : entry.time) + '</span>' +
-          '<span class="yct-nb-name ' + nameClass + '">' + esc(entry.name) + '</span>' +
-          (isMine ? '<span class="yct-nb-me">ME</span>' : '') +
-        '</div>' +
-        '<div class="yct-nb-text ' + textClass + '">' + esc(preview) + '</div>' +
-      '</div>';
+    // PHT timestamp chip from the note entry
+    var phtChip = '';
+    if (entry) {
+      var phtLabel = entry.date ? (entry.date + ' ' + entry.time + ' PHT') : (entry.time + ' PHT');
+      phtChip = '<span class="yct-pht-chip"><i class="fas fa-clock"></i>' + esc(phtLabel) + '</span>';
     }
 
-    var warnClass = acc.bar === 'yct-acc-warn' ? ' yct-warn' : '';
-    var snapIdx   = snap._yctIdx !== undefined ? snap._yctIdx : 0;
+    // Author avatar initials
+    var authorInitials = entry ? entry.name.split(' ').slice(0,2).map(function(w){ return w[0]||''; }).join('').toUpperCase() : '';
 
-    return '<div class="yct-entry' + warnClass + '" data-yct-snap-idx="' + snapIdx + '" data-status-key="' + esc(status.toLowerCase()) + '" data-enduser="' + esc(endUser.toLowerCase()) + '">' +
-      '<div class="yct-accent ' + acc.bar + '"></div>' +
-      '<div class="yct-row1">' +
-        '<div class="yct-dot ' + acc.dot + '"></div>' +
-        '<span class="yct-cnum">#' + esc(caseId) + '</span>' +
-        '<span class="yct-badge ' + acc.badge + '">' + esc(acc.badgeTxt) + '</span>' +
-        (endUser ? '<span style="font-size:9px;color:var(--ss-muted);font-weight:600;margin-left:2px;">' + esc(endUser) + '</span>' : '') +
-        (ageStr ? '<span class="yct-age">' + esc(ageStr) + '</span>' : '') +
-      '</div>' +
-      '<div class="yct-desc">' + esc(desc) + '</div>' +
-      bubbleHtml +
-      '<div class="yct-entry-cta"><span class="yct-cta-link"><i class="fas fa-external-link-alt" style="font-size:8px;"></i> View Case Detail</span></div>' +
-    '</div>';
+    // Notes section HTML
+    var notesHtml;
+    if (entry && preview) {
+      notesHtml =
+        '<div class="yct-notes-section">' +
+          '<div class="yct-notes-header">' +
+            '<i class="fas fa-comment-alt" style="font-size:7px;color:rgba(255,255,255,.25);"></i>' +
+            '<span class="yct-notes-label">Latest Case Note</span>' +
+            phtChip +
+          '</div>' +
+          '<div class="yct-notes-author">' +
+            '<div class="yct-author-avatar ' + avClass + '">' + esc(authorInitials) + '</div>' +
+            '<span class="yct-author-name ' + anClass + '">' + esc(entry.name) + '</span>' +
+            (isMine ? '<span class="yct-me-chip">ME</span>' : '') +
+          '</div>' +
+          '<div class="yct-notes-text ' + ntClass + '">' + esc(preview) + '</div>' +
+        '</div>';
+    } else {
+      notesHtml =
+        '<div class="yct-notes-section">' +
+          '<div class="yct-notes-header">' +
+            '<i class="fas fa-comment-alt" style="font-size:7px;color:rgba(255,255,255,.25);"></i>' +
+            '<span class="yct-notes-label">Latest Case Note</span>' +
+          '</div>' +
+          '<div class="yct-no-notes">No notes found</div>' +
+        '</div>';
+    }
+
+    return (
+      '<div class="yct-entry' + acc.entryClass + '" data-yct-snap-idx="' + snapIdx + '" data-status-key="' + esc(status.toLowerCase()) + '" data-enduser="' + esc(endUser.toLowerCase()) + '">' +
+        '<div class="yct-accent ' + acc.bar + '"></div>' +
+
+        // ── Header row: dot + Case# + Status + Age ──
+        '<div class="yct-card-header">' +
+          '<div class="yct-dot ' + acc.dot + '"></div>' +
+          '<span class="yct-cnum">#' + esc(caseId) + '</span>' +
+          '<span class="yct-badge ' + acc.badge + '">' + esc(acc.badgeTxt) + '</span>' +
+          (ageStr
+            ? '<span class="yct-age-pill"><i class="fas fa-hourglass-half"></i>' + esc(ageStr) + '</span>'
+            : '') +
+        '</div>' +
+
+        // ── Card body: End User + Description ──
+        '<div class="yct-card-body">' +
+          (endUser
+            ? '<div class="yct-eu-row"><span class="yct-eu-tag"><i class="fas fa-building"></i>' + esc(endUser) + '</span></div>'
+            : '') +
+          '<div class="yct-desc">' + esc(desc) + '</div>' +
+        '</div>' +
+
+        // ── Case Notes section ──
+        notesHtml +
+
+        // ── Footer CTA ──
+        '<div class="yct-card-footer">' +
+          '<span class="yct-cta-link"><i class="fas fa-arrow-right"></i> View Case Detail</span>' +
+        '</div>' +
+      '</div>'
+    );
   }
 
   // ── main render ───────────────────────────────────────────────────────
