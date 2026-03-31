@@ -67,15 +67,27 @@ module.exports = async (req, res) => {
 
     // ── GET ──────────────────────────────────────────────────────────
     if (req.method === 'GET') {
-      const url = new URL(req.url || '/', `http://localhost`);
-      const mode = url.searchParams.get('mode') || 'home';
+      // Parse query params safely from req.url (req.query.path is the route path in Vercel, not query params)
+      let qp = {};
+      try {
+        const rawUrl = String(req.url || '');
+        const qIdx = rawUrl.indexOf('?');
+        if (qIdx !== -1) {
+          const qs = rawUrl.slice(qIdx + 1);
+          qs.split('&').forEach(pair => {
+            const [k, v] = pair.split('=');
+            if (k) qp[decodeURIComponent(k)] = v ? decodeURIComponent(v) : '';
+          });
+        }
+      } catch(_) {}
+      const mode = String(qp.mode || 'home');
 
       if (mode === 'month') {
         // Return full month data for the editor
         const manilaToday = getManilaDateStr(0);
         const [ty, tm] = manilaToday.split('-').map(Number);
-        const year  = parseInt(url.searchParams.get('year')  || ty, 10);
-        const month = parseInt(url.searchParams.get('month') || tm, 10);
+        const year  = parseInt(qp.year  || ty, 10);
+        const month = parseInt(qp.month || tm, 10);
 
         const days = getDaysInMonth(year, month);
         const startDate = days[0];

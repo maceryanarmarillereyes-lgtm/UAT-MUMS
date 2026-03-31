@@ -12128,13 +12128,12 @@
         <thead>
           <tr>
             <th style="width:42%;">Date</th>
-            <th style="width:34%;">Password</th>
-            <th style="width:14%;">Action</th>
-            <th style="width:10%;">Updated By</th>
+            <th style="width:45%;">Password</th>
+            <th style="width:13%;text-align:center;">Action</th>
           </tr>
         </thead>
         <tbody id="odp-tbody">
-          <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--ss-muted);font-size:11px;"><i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>Loading...</td></tr>
+          <tr><td colspan="3" style="text-align:center;padding:24px;color:var(--ss-muted);font-size:11px;"><i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -12271,48 +12270,66 @@
     var tbody = document.getElementById('odp-tbody');
     if (!tbody) return;
 
-    var today = _getManilaDateStr(0);
+    var today     = _getManilaDateStr(0);
     var yesterday = _getManilaDateStr(-1);
-    var rows = _odpState.rows;
+    var rows      = _odpState.rows;
 
+    // Should never be empty after client-side generation, but guard anyway
     if (!rows || rows.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--ss-muted);font-size:11px;">No data available</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:20px;color:var(--ss-muted);font-size:11px;">Click the arrows to navigate months.</td></tr>';
       return;
     }
 
     var html = '';
     rows.forEach(function(row) {
-      var dateStr = row.date;
-      var isToday = (dateStr === today);
-      var isYest  = (dateStr === yesterday);
-      // Use dirty value if user has edited, else saved value
+      var dateStr   = row.date;
+      var isToday   = (dateStr === today);
+      var isYest    = (dateStr === yesterday);
       var currentPw = Object.prototype.hasOwnProperty.call(_odpState.dirty, dateStr)
         ? _odpState.dirty[dateStr]
         : (row.password || '');
 
-      var trClass = isToday ? 'odp-row-today' : '';
+      var trClass = isToday ? 'odp-row-today' : (isYest ? 'odp-row-yesterday' : '');
+
       var badgeHtml = '';
-      if (isToday)    badgeHtml = '<span class="odp-badge-today">Today</span>';
-      else if (isYest) badgeHtml = '<span class="odp-badge-yesterday">Yesterday</span>';
+      if (isToday)     badgeHtml = ' <span class="odp-badge-today">Today</span>';
+      else if (isYest) badgeHtml = ' <span class="odp-badge-yesterday">Yesterday</span>';
 
       var metaHtml = '';
       if (row.updated_by) {
         var name = String(row.updated_by).split('@')[0];
-        metaHtml = '<div class="odp-meta-txt" title="' + _esc(row.updated_by) + '">' + _esc(name) + '</div>';
+        metaHtml = '<span class="odp-meta-txt" title="' + _esc(row.updated_by) + '">' + _esc(name) + '</span>';
       }
 
       var inputClass = 'odp-input' + (currentPw ? ' odp-has-val' : '');
+      var saveBtnId  = 'odp-sbtn-' + dateStr;
 
       html += '<tr class="' + trClass + '" data-date="' + _esc(dateStr) + '">'
-        + '<td><div class="odp-date-badge"><span class="odp-date-txt">' + _esc(row.label) + '</span>' + badgeHtml + '</div></td>'
-        + '<td><input type="text" class="' + inputClass + '" data-date="' + _esc(dateStr) + '"'
-        + ' value="' + _esc(currentPw) + '"'
-        + ' placeholder="Enter password…"'
-        + ' autocomplete="off" spellcheck="false"'
-        + ' oninput="window._odpOnInput(this)"'
-        + ' /></td>'
-        + '<td><button class="odp-row-save-btn" data-date="' + _esc(dateStr) + '" onclick="window._odpSaveSingle(\'' + _esc(dateStr) + '\')">Save</button></td>'
-        + '<td>' + metaHtml + '</td>'
+        // Column 1: Date
+        + '<td style="width:42%;"><div class="odp-date-badge">'
+        +   '<span class="odp-date-txt">' + _esc(row.label) + '</span>'
+        +   badgeHtml
+        + '</div>' + metaHtml + '</td>'
+        // Column 2: Password input
+        + '<td style="width:45%;">'
+        +   '<input type="text"'
+        +   ' id="odp-inp-' + _esc(dateStr) + '"'
+        +   ' class="' + inputClass + '"'
+        +   ' data-date="' + _esc(dateStr) + '"'
+        +   ' value="' + _esc(currentPw) + '"'
+        +   ' placeholder="Enter password…"'
+        +   ' autocomplete="off" spellcheck="false"'
+        +   ' oninput="window._odpOnInput(this)"'
+        +   ' onkeydown="if(event.key==='Enter'){window._odpSaveSingle('' + _esc(dateStr) + '');}"'
+        +   ' />'
+        + '</td>'
+        // Column 3: Save button
+        + '<td style="width:13%;text-align:center;">'
+        +   '<button id="' + _esc(saveBtnId) + '" class="odp-row-save-btn" data-date="' + _esc(dateStr) + '"'
+        +   ' onclick="window._odpSaveSingle('' + _esc(dateStr) + '')">'
+        +   (currentPw ? '<i class="fas fa-floppy-disk"></i> Save' : 'Save')
+        +   '</button>'
+        + '</td>'
         + '</tr>';
     });
 
@@ -12372,16 +12389,62 @@
     if (el) el.textContent = _monthLabel(_odpState.view.year, _odpState.view.month);
   }
 
+  /* ── Client-side month row generator ───────────────────────── */
+  function _odpBuildClientRows(year, month) {
+    var today     = _getManilaDateStr(0);
+    var yesterday = _getManilaDateStr(-1);
+    var totalDays = new Date(year, month, 0).getDate();
+    var rows = [];
+    for (var d = 1; d <= totalDays; d++) {
+      var mm = month < 10 ? '0' + month : String(month);
+      var dd = d < 10 ? '0' + d : String(d);
+      var dateStr = year + '-' + mm + '-' + dd;
+      var dt = new Date(Date.UTC(year, month - 1, d));
+      var label = dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+      rows.push({
+        date:         dateStr,
+        label:        label,
+        password:     '',
+        updated_by:   '',
+        updated_at:   null,
+        is_today:     dateStr === today,
+        is_yesterday: dateStr === yesterday,
+      });
+    }
+    return rows;
+  }
+
   async function _odpLoadModalMonth() {
     var tbody = document.getElementById('odp-tbody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--ss-muted);font-size:11px;"><i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>Loading...</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--ss-muted);font-size:11px;"><i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>Loading...</td></tr>';
 
-    var data = await _odpFetchMonth(_odpState.view.year, _odpState.view.month);
-    if (data && data.ok && Array.isArray(data.rows)) {
-      _odpState.rows = data.rows;
-    } else {
-      _odpState.rows = [];
+    var year  = _odpState.view.year;
+    var month = _odpState.view.month;
+
+    // ALWAYS build full month rows client-side — table always shows all dates
+    var clientRows = _odpBuildClientRows(year, month);
+
+    // Overlay saved passwords from API if available
+    try {
+      var data = await _odpFetchMonth(year, month);
+      if (data && data.ok && Array.isArray(data.rows) && data.rows.length > 0) {
+        var pwMap = {};
+        data.rows.forEach(function(r) {
+          if (r.date) pwMap[r.date] = { password: r.password || '', updated_by: r.updated_by || '', updated_at: r.updated_at || null };
+        });
+        clientRows.forEach(function(row) {
+          if (pwMap[row.date]) {
+            row.password   = pwMap[row.date].password;
+            row.updated_by = pwMap[row.date].updated_by;
+            row.updated_at = pwMap[row.date].updated_at;
+          }
+        });
+      }
+    } catch(_) {
+      // API failed — still render editable rows with empty passwords
     }
+
+    _odpState.rows = clientRows;
     _odpRenderTable();
   }
 
@@ -12395,8 +12458,8 @@
 
   /* ── Save single row ────────────────────────────────────────── */
   window._odpSaveSingle = async function(dateStr) {
-    var btn = document.querySelector('.odp-row-save-btn[data-date="' + dateStr + '"]');
-    var input = document.querySelector('.odp-input[data-date="' + dateStr + '"]');
+    var btn   = document.getElementById('odp-sbtn-' + dateStr) || document.querySelector('.odp-row-save-btn[data-date="' + dateStr + '"]');
+    var input = document.getElementById('odp-inp-' + dateStr)   || document.querySelector('.odp-input[data-date="' + dateStr + '"]');
     if (!btn || !input) return;
 
     if (_odpState.saving[dateStr]) return;
@@ -12420,7 +12483,7 @@
       btn.classList.add('odp-saved');
       input.classList.toggle('odp-has-val', !!pw);
       setTimeout(function() {
-        btn.innerHTML = 'Save';
+        btn.innerHTML = '<i class="fas fa-floppy-disk"></i> Save';
         btn.classList.remove('odp-saved');
         btn.disabled = false;
       }, 2000);
