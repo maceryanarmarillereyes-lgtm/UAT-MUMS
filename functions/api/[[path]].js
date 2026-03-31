@@ -128,7 +128,8 @@ async function getRoutes(env) {
     'studio/csv_settings':        unwrapCjs(await import('../../server/routes/studio/csv_settings.js')),
     'studio/kb_settings':         unwrapCjs(await import('../../server/routes/studio/kb_settings.js')),
     'studio/kb_sync':             unwrapCjs(await import('../../server/routes/studio/kb_sync.js')),
-    'studio/kb_download':         unwrapCjs(await import('../../server/routes/studio/kb_download.js'))
+    'studio/kb_download':         unwrapCjs(await import('../../server/routes/studio/kb_download.js')),
+    'studio/daily_passwords':     unwrapCjs(await import('../../server/routes/studio/daily_passwords.js'))
   };
 
   return ROUTES;

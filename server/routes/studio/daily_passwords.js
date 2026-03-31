@@ -67,16 +67,21 @@ module.exports = async (req, res) => {
 
     // ── GET ──────────────────────────────────────────────────────────
     if (req.method === 'GET') {
-      // Parse query params safely from req.url (req.query.path is the route path in Vercel, not query params)
+      // Parse query params — support both Cloudflare (req.query obj) and Vercel (req.url string)
       let qp = {};
       try {
+        // 1. Cloudflare Pages Functions passes req.query as a plain object
+        if (req.query && typeof req.query === 'object') {
+          Object.keys(req.query).forEach(k => { if (k !== 'path') qp[k] = req.query[k]; });
+        }
+        // 2. Also parse from req.url for Vercel / any remaining params
         const rawUrl = String(req.url || '');
         const qIdx = rawUrl.indexOf('?');
         if (qIdx !== -1) {
           const qs = rawUrl.slice(qIdx + 1);
           qs.split('&').forEach(pair => {
             const [k, v] = pair.split('=');
-            if (k) qp[decodeURIComponent(k)] = v ? decodeURIComponent(v) : '';
+            if (k && k !== 'path') qp[decodeURIComponent(k)] = v ? decodeURIComponent(v) : '';
           });
         }
       } catch(_) {}
