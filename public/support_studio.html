@@ -12320,13 +12320,13 @@
         +   ' placeholder="Enter password…"'
         +   ' autocomplete="off" spellcheck="false"'
         +   ' oninput="window._odpOnInput(this)"'
-        +   ' onkeydown="if(event.key==='Enter'){window._odpSaveSingle('' + _esc(dateStr) + '');}"'
+        +   ' onkeydown="if(event.key===\'Enter\'){window._odpSaveSingleByEl(this.closest(\'tr\').querySelector(\'.odp-row-save-btn\'));}"'
         +   ' />'
         + '</td>'
         // Column 3: Save button
         + '<td style="width:13%;text-align:center;">'
         +   '<button id="' + _esc(saveBtnId) + '" class="odp-row-save-btn" data-date="' + _esc(dateStr) + '"'
-        +   ' onclick="window._odpSaveSingle('' + _esc(dateStr) + '')">'
+        +   ' onclick="window._odpSaveSingleByEl(this)">'
         +   (currentPw ? '<i class="fas fa-floppy-disk"></i> Save' : 'Save')
         +   '</button>'
         + '</td>'
@@ -12457,6 +12457,12 @@
   };
 
   /* ── Save single row ────────────────────────────────────────── */
+  // Helper: called from inline onclick via element reference (avoids quote-escaping issues)
+  window._odpSaveSingleByEl = function(el) {
+    var dateStr = el && el.getAttribute && el.getAttribute('data-date');
+    if (dateStr) window._odpSaveSingle(dateStr);
+  };
+
   window._odpSaveSingle = async function(dateStr) {
     var btn   = document.getElementById('odp-sbtn-' + dateStr) || document.querySelector('.odp-row-save-btn[data-date="' + dateStr + '"]');
     var input = document.getElementById('odp-inp-' + dateStr)   || document.querySelector('.odp-input[data-date="' + dateStr + '"]');
