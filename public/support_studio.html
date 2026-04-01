@@ -375,11 +375,12 @@
     .yct-acc-init  { background: rgba(255,255,255,.15); }
     .yct-acc-green { background: linear-gradient(180deg,#3fb950,#218838); }
 
-    /* ── Card Header Row: Case# + Status + Age ── */
+    /* ── Card Header Row: Case# + Status + Age + TIME ── */
     .yct-card-header {
       display: flex; align-items: center; gap: 7px;
       padding: 10px 12px 8px 14px;
       border-bottom: 1px solid rgba(255,255,255,.05);
+      flex-wrap: nowrap;
     }
     .yct-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
     .yct-dot-on   { background: #58a6ff; box-shadow: 0 0 6px rgba(88,166,255,.6); animation: yctpulse 2s infinite; }
@@ -401,25 +402,43 @@
 
     /* Age pill */
     .yct-age-pill {
-      margin-left: auto; display: inline-flex; align-items: center; gap: 3px;
+      display: inline-flex; align-items: center; gap: 3px;
       font-size: 9px; font-weight: 700; color: #7d8590;
       background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07);
       border-radius: 20px; padding: 2px 8px;
     }
     .yct-age-pill i { font-size: 7px; opacity: .6; }
 
+    /* PHT Time chip — NOW IN HEADER, prominent size */
+    .yct-time-chip {
+      margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 800;
+      color: #22d3ee; font-family: var(--ss-mono);
+      background: rgba(34,211,238,.08);
+      border: 1px solid rgba(34,211,238,.22);
+      border-radius: 7px; padding: 3px 9px;
+      letter-spacing: .04em;
+      flex-shrink: 0;
+    }
+    .yct-time-chip i { font-size: 9px; opacity: .8; }
+
     /* ── Card Body ── */
     .yct-card-body { padding: 9px 12px 0 14px; }
 
-    /* End User tag */
-    .yct-eu-row { margin-bottom: 5px; }
+    /* End User row — full-width prominent display */
+    .yct-eu-row { margin-bottom: 7px; }
     .yct-eu-tag {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 2px 8px; border-radius: 5px;
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 6px;
       background: rgba(162,93,220,.1); border: 1px solid rgba(162,93,220,.22);
-      color: #c084fc; font-size: 9px; font-weight: 800; letter-spacing: .03em;
+      color: #c084fc; font-size: 10px; font-weight: 800; letter-spacing: .03em;
     }
-    .yct-eu-tag i { font-size: 7px; opacity: .75; }
+    .yct-eu-tag i { font-size: 9px; opacity: .75; }
+    /* End User label prefix */
+    .yct-eu-prefix {
+      font-size: 8px; font-weight: 700; color: rgba(192,132,252,.55);
+      text-transform: uppercase; letter-spacing: .07em; margin-right: 2px;
+    }
 
     /* Case description */
     .yct-desc {
@@ -446,12 +465,12 @@
       font-size: 8px; font-weight: 800; letter-spacing: .08em;
       text-transform: uppercase; color: rgba(255,255,255,.3);
     }
-    /* PHT timestamp chip */
+    /* PHT timestamp chip — mini version kept for notes header compat */
     .yct-pht-chip {
       margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
       font-size: 8px; font-weight: 700;
-      color: #22d3ee; font-family: var(--ss-mono);
-      background: rgba(34,211,238,.07); border: 1px solid rgba(34,211,238,.15);
+      color: rgba(34,211,238,.6); font-family: var(--ss-mono);
+      background: rgba(34,211,238,.05); border: 1px solid rgba(34,211,238,.1);
       border-radius: 4px; padding: 1px 6px;
     }
     .yct-pht-chip i { font-size: 7px; }
@@ -11568,7 +11587,6 @@
           '<div class="yct-notes-header">' +
             '<i class="fas fa-comment-alt" style="font-size:7px;color:rgba(255,255,255,.25);"></i>' +
             '<span class="yct-notes-label">Latest Case Note</span>' +
-            phtChip +
           '</div>' +
           '<div class="yct-notes-author">' +
             '<div class="yct-author-avatar ' + avClass + '">' + esc(authorInitials) + '</div>' +
@@ -11588,11 +11606,32 @@
         '</div>';
     }
 
+    // Build the time chip for the header (prominent)
+    var timeChipHtml = '';
+    if (entry) {
+      var timeDisplay = entry.time ? entry.time + ' PHT' : '';
+      if (timeDisplay) {
+        timeChipHtml = '<span class="yct-time-chip"><i class="fas fa-clock"></i>' + esc(timeDisplay) + '</span>';
+      }
+    }
+
+    // Build end user row with prefix label
+    var euHtml = '';
+    if (endUser) {
+      euHtml = '<div class="yct-eu-row">' +
+        '<span class="yct-eu-tag">' +
+          '<i class="fas fa-user"></i>' +
+          '<span class="yct-eu-prefix">End User</span>' +
+          esc(endUser) +
+        '</span>' +
+      '</div>';
+    }
+
     return (
       '<div class="yct-entry' + acc.entryClass + '" data-yct-snap-idx="' + snapIdx + '" data-status-key="' + esc(status.toLowerCase()) + '" data-enduser="' + esc(endUser.toLowerCase()) + '">' +
         '<div class="yct-accent ' + acc.bar + '"></div>' +
 
-        // ── Header row: dot + Case# + Status + Age ──
+        // ── Header row: dot + Case# + Status + Age + TIME (top-right) ──
         '<div class="yct-card-header">' +
           '<div class="yct-dot ' + acc.dot + '"></div>' +
           '<span class="yct-cnum">#' + esc(caseId) + '</span>' +
@@ -11600,14 +11639,13 @@
           (ageStr
             ? '<span class="yct-age-pill"><i class="fas fa-hourglass-half"></i>' + esc(ageStr) + '</span>'
             : '') +
+          timeChipHtml +
         '</div>' +
 
-        // ── Card body: End User + Description ──
+        // ── Card body: Description + End User ──
         '<div class="yct-card-body">' +
-          (endUser
-            ? '<div class="yct-eu-row"><span class="yct-eu-tag"><i class="fas fa-building"></i>' + esc(endUser) + '</span></div>'
-            : '') +
           '<div class="yct-desc">' + esc(desc) + '</div>' +
+          euHtml +
         '</div>' +
 
         // ── Case Notes section ──
