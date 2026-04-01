@@ -61,6 +61,34 @@
   <script src="/js/quickbase_adapter.js"></script>
   <script src="/js/pages/my_quickbase_tab_manager.js"></script>
   <script src="/js/pages/my_quickbase.js"></script>
+
+  <!-- Supabase SDK — first-party proxy loader (required for ODP Realtime) -->
+  <script>
+  (function(){
+    var sources = [
+      '/functions/vendor/supabase.js',
+      '/api/vendor/supabase.js',
+      'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.0/dist/umd/supabase.min.js'
+    ];
+    function loadAt(i) {
+      if (i >= sources.length) return;
+      var s = document.createElement('script');
+      s.src = sources[i];
+      s.onload = function() {
+        try { window.__MUMS_SUPABASE_SRC = sources[i]; } catch(_) {}
+        try { window.dispatchEvent(new CustomEvent('mums:supabase_ready')); } catch(_) {}
+      };
+      s.onerror = function() { loadAt(i + 1); };
+      document.head.appendChild(s);
+    }
+    if (window.supabase && typeof window.supabase.createClient === 'function') {
+      try { window.dispatchEvent(new CustomEvent('mums:supabase_ready')); } catch(_) {}
+    } else {
+      loadAt(0);
+    }
+  })();
+  </script>
+
   <!-- Studio Cache Manager — IndexedDB-based persistent cache -->
   <script src="/js/studio_cache.js"></script>
   <style>
@@ -11976,6 +12004,8 @@
       var qbRoot = document.getElementById('qbs-root');
       if (qbRoot) qbRoot._qbRowSnaps = snaps;
 
+      // Track last successful fetch time for auto-poll debounce
+      if (typeof _yctLastFetchTime !== 'undefined') _yctLastFetchTime = Date.now();
       // Render with the fresh snaps
       _renderYCT(snaps);
     }).catch(function(err) {
@@ -12000,6 +12030,41 @@
     }
   };
 
+  // YCT auto-poll interval reference
+  var _yctAutoPollInterval = null;
+  var _yctLastFetchTime = 0;
+
+  function _yctSilentRefresh() {
+    // Silent refresh — only if home tab is visible and not already fetching
+    var homeCanvas = document.getElementById('canvas-home');
+    var isHomeVisible = homeCanvas && homeCanvas.style.display !== 'none' &&
+                        !homeCanvas.classList.contains('hidden') &&
+                        homeCanvas.offsetParent !== null;
+    if (!isHomeVisible) return; // don't poll when user isn't on home tab
+    if (_yctFetching) return;
+    var now = Date.now();
+    if (now - _yctLastFetchTime < 55000) return; // debounce: min 55s between fetches
+    _yctLoad(true);
+    _yctLastFetchTime = now;
+  }
+
+  function _startYCTAutoPoll() {
+    if (_yctAutoPollInterval) return;
+    // Poll every 60 seconds silently
+    _yctAutoPollInterval = setInterval(_yctSilentRefresh, 60000);
+
+    // Also refresh when browser tab regains visibility (user switches back)
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') {
+        var now = Date.now();
+        // Only fetch if last fetch was >30s ago to avoid hammering on rapid tab switches
+        if (now - _yctLastFetchTime > 30000) {
+          _yctSilentRefresh();
+        }
+      }
+    });
+  }
+
   function _initYCT() {
     _updateDate();
     setInterval(_updateDate, 30000);
@@ -12011,13 +12076,18 @@
       refreshBtn.addEventListener('click', function() {
         var icon = refreshBtn.querySelector('i');
         if (icon) icon.style.animation = 'yct-spin .7s linear infinite';
+        _yctLastFetchTime = 0; // force refresh
         _yctLoad(true);
         setTimeout(function() { if (icon) icon.style.animation = ''; }, 1200);
       });
     }
 
-    // Auto-fetch on init — no need to click QBS tab first
+    // Auto-fetch on init
+    _yctLastFetchTime = Date.now();
     _yctLoad(false);
+
+    // Start 60s auto-poll
+    _startYCTAutoPoll();
 
     // Also re-load when home tab is clicked (silent refresh if already loaded)
     document.addEventListener('click', function(e) {
@@ -12025,12 +12095,14 @@
       if (btn) {
         setTimeout(function() {
           _updateDate();
-          // If already have records, just re-render; else fetch fresh
-          var hasData = Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0;
-          if (hasData) {
-            _renderYCT();
-          } else {
+          var now = Date.now();
+          // If last fetch was >30s ago, do a fresh fetch; else just re-render
+          if (now - _yctLastFetchTime > 30000) {
+            _yctLastFetchTime = now;
             _yctLoad(false);
+          } else {
+            var hasData = Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0;
+            if (hasData) { _renderYCT(); } else { _yctLoad(false); }
           }
         }, 200);
       }
@@ -12159,6 +12231,7 @@
     dirty: {},          // { date: newPassword } — user edits not yet saved
     saving: {},         // { date: true } — in-flight saves
     rtChannel: null,    // Supabase realtime channel
+    sbClient: null,     // dedicated Supabase client for ODP realtime
     homeData: null,     // { today, yesterday }
     homeTimer: null,
     pollInterval: null,
@@ -12567,51 +12640,62 @@
   }
 
   /* ── Realtime subscription via Supabase ─────────────────────── */
-  async function _odpSetupRealtime() {
+  // Waits for Supabase SDK to be available before subscribing.
+  // support_studio.html loads the SDK asynchronously — we must not
+  // attempt createClient() before window.supabase exists.
+  function _odpSetupRealtime() {
+    // If SDK already loaded, go straight to subscribe
+    if (window.supabase && typeof window.supabase.createClient === 'function') {
+      _odpDoSubscribe();
+    } else {
+      // Listen for our custom event fired by the SDK loader onload
+      window.addEventListener('mums:supabase_ready', function onSbReady() {
+        window.removeEventListener('mums:supabase_ready', onSbReady);
+        _odpDoSubscribe();
+      });
+      // Safety timeout: if SDK never loads in 8s, start polling fallback
+      setTimeout(function() {
+        if (!_odpState.rtChannel) {
+          console.warn('[ODP] Supabase SDK not ready after 8s — using poll fallback');
+          _odpStartPolling();
+        }
+      }, 8000);
+    }
+  }
+
+  async function _odpDoSubscribe() {
     try {
-      // Wait for env to be ready
+      // Wait for env
       if (window.EnvRuntime && EnvRuntime.ready) {
         await EnvRuntime.ready();
       }
-
       var env = (window.EnvRuntime && EnvRuntime.env && EnvRuntime.env()) || (window.MUMS_ENV || {});
       if (!env || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
-        // fallback: poll every 30s if no realtime
-        _odpStartPolling();
-        return;
-      }
-
-      if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+        console.warn('[ODP] No Supabase env — using poll fallback');
         _odpStartPolling();
         return;
       }
 
       var token = _odpGetToken();
 
-      // Reuse shared client if available and already created, or build our own for this subscription
-      var sbClient = window.__MUMS_SB_CLIENT;
-      if (!sbClient) {
-        sbClient = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-            detectSessionInUrl: false,
-            storage: { getItem() { return null; }, setItem() {}, removeItem() {} },
-            storageKey: 'mums_odp_rt'
-          },
-          realtime: { params: { eventsPerSecond: 10 } },
-          global: { headers: token ? { Authorization: 'Bearer ' + token } : {} }
-        });
+      // Build a dedicated ODP realtime client so we don't interfere with __MUMS_SB_CLIENT
+      if (_odpState.sbClient) {
+        try { _odpState.sbClient.removeAllChannels(); } catch(_) {}
       }
+      _odpState.sbClient = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+          storage: { getItem: function(){ return null; }, setItem: function(){}, removeItem: function(){} },
+          storageKey: 'mums_odp_rt'
+        },
+        realtime: { params: { eventsPerSecond: 10 } },
+        global: { headers: token ? { Authorization: 'Bearer ' + token } : {} }
+      });
 
-      // Remove old channel if any
-      if (_odpState.rtChannel) {
-        try { sbClient.removeChannel(_odpState.rtChannel); } catch(_) {}
-        _odpState.rtChannel = null;
-      }
-
-      _odpState.rtChannel = sbClient
-        .channel('odp-daily-passwords-broadcast')
+      _odpState.rtChannel = _odpState.sbClient
+        .channel('odp-daily-passwords-v2')
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
@@ -12621,9 +12705,14 @@
         })
         .subscribe(function(status) {
           if (status === 'SUBSCRIBED') {
-            console.log('[ODP] Realtime subscribed to daily_passwords');
-          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            console.warn('[ODP] Realtime channel issue:', status, '— falling back to polling');
+            console.log('[ODP] Realtime LIVE on daily_passwords');
+            // Clear poll fallback if realtime connected
+            if (_odpState.pollInterval) {
+              clearInterval(_odpState.pollInterval);
+              _odpState.pollInterval = null;
+            }
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            console.warn('[ODP] Realtime status:', status, '— activating poll fallback');
             _odpStartPolling();
           }
         });
@@ -12639,28 +12728,31 @@
       var record = (payload && payload.new) ? payload.new : null;
       if (!record || !record.date) return;
 
+      console.log('[ODP] Realtime event received for date:', record.date);
+
       var today = _getManilaDateStr(0);
       var yest  = _getManilaDateStr(-1);
 
       // Update home card if today or yesterday changed
       if (record.date === today || record.date === yest) {
-        // Rebuild homeData from what we know
-        var hd = _odpState.homeData || { ok: true, today: {}, yesterday: {} };
-        if (record.date === today) {
-          hd.today = {
-            date: record.date,
-            label: hd.today ? hd.today.label : record.date,
-            password: record.password || ''
-          };
-        } else {
-          hd.yesterday = {
-            date: record.date,
-            label: hd.yesterday ? hd.yesterday.label : record.date,
-            password: record.password || ''
-          };
-        }
+        // Patch homeData directly from realtime payload — instant UI update, no API call needed
+        var hd = _odpState.homeData || { ok: true, today: { date: today, label: '', password: '' }, yesterday: { date: yest, label: '', password: '' } };
         hd.ok = true;
+        if (record.date === today) {
+          if (!hd.today) hd.today = {};
+          hd.today.date     = record.date;
+          hd.today.label    = hd.today.label || record.date;
+          hd.today.password = record.password || '';
+        } else {
+          if (!hd.yesterday) hd.yesterday = {};
+          hd.yesterday.date     = record.date;
+          hd.yesterday.label    = hd.yesterday.label || record.date;
+          hd.yesterday.password = record.password || '';
+        }
         _odpRenderHome(hd);
+
+        // Also do a fresh API fetch after 500ms to ensure labels are correct
+        setTimeout(_odpLoadHome, 500);
       }
 
       // Update modal table if visible and on matching month
@@ -12693,9 +12785,19 @@
   /* ── Polling fallback (if Realtime unavailable) ─────────────── */
   function _odpStartPolling() {
     if (_odpState.pollInterval) return; // already polling
+    // Poll every 15s as fallback when realtime is unavailable
     _odpState.pollInterval = setInterval(function() {
       _odpLoadHome();
-    }, 30000); // every 30s
+    }, 15000);
+    // Also refresh when tab regains focus (user switches back to window)
+    if (!_odpState._visibilityBound) {
+      _odpState._visibilityBound = true;
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+          _odpLoadHome();
+        }
+      });
+    }
   }
 
   /* ── Auto-refresh home card every 5min for date rollover ────── */
