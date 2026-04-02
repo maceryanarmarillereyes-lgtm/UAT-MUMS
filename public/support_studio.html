@@ -2191,6 +2191,77 @@
     }
     .bp-btn-close:hover { background:rgba(255,255,255,.08); color:#e6edf3; }
     /* ── END Cache Pulse Beacon ─────────────────────────────── */
+
+    /* ═══════════════════════════════════════════════════════════════
+       FLOATING CACHE NOTIFICATION TOASTS
+       position:fixed — NEVER participates in flex layout.
+       Root cause fix: old banner was a flex sibling inside .ss-body
+       which caused it to squeeze/shift the sidebar+canvas on display.
+    ═══════════════════════════════════════════════════════════════ */
+    #ss-cache-toast-host {
+      position: fixed;
+      top: 54px;           /* sits just below the 46px header */
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9998;
+      width: 580px;
+      max-width: calc(100vw - 32px);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: none;  /* host is invisible click-through */
+    }
+    /* Individual toast cards */
+    .ss-cache-toast {
+      pointer-events: all;
+      display: none;          /* hidden by default; JS uses flex */
+      align-items: center;
+      gap: 10px;
+      padding: 11px 15px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      box-shadow: 0 10px 36px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.3);
+      animation: toastSlideIn .22s cubic-bezier(.34,1.4,.64,1) both;
+    }
+    .ss-cache-toast.toast-warn {
+      background: rgba(18,14,2,.92);
+      border: 1px solid rgba(210,153,34,.35);
+      color: #f0c000;
+      backdrop-filter: blur(12px);
+    }
+    .ss-cache-toast.toast-info {
+      background: rgba(4,10,20,.92);
+      border: 1px solid rgba(88,166,255,.28);
+      color: var(--ss-text);
+      backdrop-filter: blur(12px);
+    }
+    @keyframes toastSlideIn {
+      from { opacity:0; transform:translateY(-14px) scale(.97); }
+      to   { opacity:1; transform:translateY(0)     scale(1);   }
+    }
+    @keyframes toastSlideOut {
+      from { opacity:1; transform:translateY(0)     scale(1);   }
+      to   { opacity:0; transform:translateY(-10px) scale(.96); }
+    }
+    .ss-cache-toast.toast-hiding {
+      animation: toastSlideOut .18s ease-in both !important;
+    }
+    /* Progress bar inside info toast */
+    .toast-progress-track {
+      flex: 1;
+      height: 3px;
+      background: rgba(255,255,255,.08);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 5px;
+    }
+    .toast-progress-fill {
+      height: 100%;
+      background: var(--ss-accent);
+      border-radius: 2px;
+      transition: width .3s ease;
+    }
   </style>
 </head>
 <body>
@@ -2756,29 +2827,7 @@
 
     </aside>
 
-    <!-- ── CACHE UPDATE BANNER (shown when resources are outdated) ── -->
-    <div id="ss-cache-banner" style="display:none;flex-shrink:0;padding:0 16px;">
-      <!-- Non-critical update banner -->
-      <div id="ss-cache-banner-soft" style="display:none;align-items:center;gap:10px;padding:10px 14px;background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.22);border-radius:7px;margin:10px 0 0;font-size:11px;font-weight:600;color:#f0c000;">
-        <i class="fas fa-cloud-download-alt" style="font-size:13px;flex-shrink:0;"></i>
-        <div id="ss-cache-banner-msg" style="flex:1;line-height:1.5;"></div>
-        <div style="display:flex;gap:7px;flex-shrink:0;">
-          <button onclick="window._cacheUI.dismissBanner()" style="font-size:10px;font-weight:700;padding:5px 10px;border-radius:5px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--ss-muted);cursor:pointer;font-family:var(--ss-font);">Later</button>
-          <button onclick="window._cacheUI.startSync()" style="font-size:10px;font-weight:700;padding:5px 12px;border-radius:5px;background:rgba(210,153,34,.2);border:1px solid rgba(210,153,34,.4);color:#f0c000;cursor:pointer;font-family:var(--ss-font);display:flex;align-items:center;gap:5px;"><i class="fas fa-sync-alt"></i> Update Now</button>
-        </div>
-      </div>
-      <!-- Download progress bar (shown during sync) -->
-      <div id="ss-cache-progress" style="display:none;align-items:center;gap:10px;padding:10px 14px;background:rgba(88,166,255,.06);border:1px solid rgba(88,166,255,.18);border-radius:7px;margin:10px 0 0;">
-        <i class="fas fa-spinner fa-spin" style="color:var(--ss-accent);font-size:12px;flex-shrink:0;"></i>
-        <div style="flex:1;">
-          <div id="ss-cache-progress-msg" style="font-size:11px;font-weight:700;color:var(--ss-text);margin-bottom:5px;">Syncing resources…</div>
-          <div style="height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;">
-            <div id="ss-cache-progress-bar" style="height:100%;background:var(--ss-accent);border-radius:2px;width:0%;transition:width .3s;"></div>
-          </div>
-        </div>
-        <div id="ss-cache-progress-pct" style="font-size:10px;font-weight:800;color:var(--ss-accent);font-family:'JetBrains Mono',monospace;min-width:36px;text-align:right;">0%</div>
-      </div>
-    </div>
+
 
     <!-- ── CRITICAL UPDATE MODAL ── -->
     <div id="ss-cache-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(1,4,9,.88);align-items:center;justify-content:center;padding:20px;">
@@ -9502,10 +9551,9 @@
     var msgEl = el('ss-cache-banner-msg');
     if (msgEl) msgEl.innerHTML = msg;
 
-    var banner = el('ss-cache-banner');
-    var soft   = el('ss-cache-banner-soft');
-    if (banner) banner.style.display = 'block';
-    if (soft)   soft.style.display   = 'flex';
+    // ss-cache-banner-soft is a fixed-position floating toast — show it
+    var soft = el('ss-cache-banner-soft');
+    if (soft) { soft.classList.remove('toast-hiding'); soft.style.display = 'flex'; }
 
     // Show dot on Cache Manager nav item
     var dot = el('ss-cache-nav-dot');
@@ -9546,16 +9594,15 @@
   }
 
   function showProgress(bundleId, pct, overallDone, overallTotal) {
-    var banner = el('ss-cache-banner');
-    var soft   = el('ss-cache-banner-soft');
-    var prog   = el('ss-cache-progress');
+    var soft = el('ss-cache-banner-soft');
+    var prog = el('ss-cache-progress');
     var bar    = el('ss-cache-progress-bar');
     var msgEl  = el('ss-cache-progress-msg');
     var pctEl  = el('ss-cache-progress-pct');
 
-    if (banner) banner.style.display = 'block';
-    if (soft)   soft.style.display   = 'none';
-    if (prog)   prog.style.display   = 'flex';
+    // Toast host is always visible (fixed pos); just toggle child toasts
+    if (soft) { soft.classList.add('toast-hiding'); setTimeout(function(){ if(soft) soft.style.display='none'; }, 180); }
+    if (prog) { prog.classList.remove('toast-hiding'); prog.style.display = 'flex'; }
 
     var label = bundleId === 'connect_plus' ? 'Connect+ Sites' :
                 bundleId === 'parts_number' ? 'Parts Number'   :
@@ -9571,16 +9618,22 @@
   }
 
   function hideBannerAndProgress() {
-    var banner = el('ss-cache-banner');
-    var soft   = el('ss-cache-banner-soft');
-    var prog   = el('ss-cache-progress');
-    var modal  = el('ss-cache-modal');
-    var dot    = el('ss-cache-nav-dot');
+    var soft  = el('ss-cache-banner-soft');
+    var prog  = el('ss-cache-progress');
+    var modal = el('ss-cache-modal');
+    var dot   = el('ss-cache-nav-dot');
 
     setTimeout(function() {
-      if (banner) banner.style.display = 'none';
-      if (soft)   soft.style.display   = 'none';
-      if (prog)   prog.style.display   = 'none';
+      // Animate toasts out, then hide
+      function _hideToast(el) {
+        if (!el || el.style.display === 'none') return;
+        el.classList.add('toast-hiding');
+        setTimeout(function() {
+          if (el) { el.style.display = 'none'; el.classList.remove('toast-hiding'); }
+        }, 200);
+      }
+      _hideToast(soft);
+      _hideToast(prog);
       if (modal)  modal.style.display  = 'none';
       if (dot)    dot.style.display    = 'none';
       _isSyncing = false;
@@ -9653,8 +9706,13 @@
   window._cacheUI = {
 
     dismissBanner: function() {
-      var banner = el('ss-cache-banner');
-      if (banner) banner.style.display = 'none';
+      var soft = el('ss-cache-banner-soft');
+      if (soft) {
+        soft.classList.add('toast-hiding');
+        setTimeout(function() {
+          if (soft) { soft.style.display = 'none'; soft.classList.remove('toast-hiding'); }
+        }, 200);
+      }
     },
 
     dismissModal: function() {
@@ -13327,5 +13385,52 @@
 
 })();
 </script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     FLOATING CACHE TOASTS — position:fixed, outside all flex layout
+     PERMANENT FIX: these replaced the old in-flow ss-cache-banner
+     that was squeezing the sidebar/canvas when visible.
+════════════════════════════════════════════════════════════════ -->
+<div id="ss-cache-toast-host">
+
+  <!-- Soft update toast (yellow — "Update available") -->
+  <div id="ss-cache-banner-soft" class="ss-cache-toast toast-warn">
+    <i class="fas fa-cloud-download-alt" style="font-size:14px;flex-shrink:0;"></i>
+    <div id="ss-cache-banner-msg" style="flex:1;line-height:1.5;"></div>
+    <div style="display:flex;gap:7px;flex-shrink:0;">
+      <button onclick="window._cacheUI.dismissBanner()"
+        style="font-size:10px;font-weight:700;padding:5px 11px;border-radius:6px;
+               background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
+               color:rgba(255,255,255,.55);cursor:pointer;font-family:var(--ss-font);
+               transition:background .15s;">Later</button>
+      <button onclick="window._cacheUI.startSync()"
+        style="font-size:10px;font-weight:800;padding:5px 13px;border-radius:6px;
+               background:rgba(210,153,34,.22);border:1px solid rgba(210,153,34,.45);
+               color:#f0c000;cursor:pointer;font-family:var(--ss-font);
+               display:flex;align-items:center;gap:5px;transition:background .15s;">
+        <i class="fas fa-sync-alt"></i> Update Now
+      </button>
+    </div>
+  </div>
+
+  <!-- Sync progress toast (blue — "Syncing…") -->
+  <div id="ss-cache-progress" class="ss-cache-toast toast-info">
+    <i class="fas fa-circle-notch fa-spin" style="color:var(--ss-accent);font-size:13px;flex-shrink:0;"></i>
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+        <span id="ss-cache-progress-msg" style="font-size:11px;font-weight:700;color:var(--ss-text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Syncing resources…</span>
+        <span id="ss-cache-progress-pct" style="font-size:10px;font-weight:800;color:var(--ss-accent);font-family:'JetBrains Mono',monospace;flex-shrink:0;">0%</span>
+      </div>
+      <div class="toast-progress-track">
+        <div id="ss-cache-progress-bar" class="toast-progress-fill" style="width:0%;"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /ss-cache-toast-host -->
+
+<!-- Legacy wrapper shim — keeps getElementById('ss-cache-banner') working in JS -->
+<div id="ss-cache-banner" style="display:none!important;"></div>
+
 </body>
 </html>
