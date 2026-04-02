@@ -1,6 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- MUMS AUTH GUARD — redirects unauthenticated users to login -->
+  <script>
+  (function(){
+    'use strict';
+    function _hasSession(){
+      try{
+        var raw=localStorage.getItem('mums_supabase_session')||sessionStorage.getItem('mums_supabase_session');
+        if(raw){var p=JSON.parse(raw);if(p&&(p.access_token||p.refresh_token))return true;}
+      }catch(_){}
+      try{
+        var keys=['mums_access_token','sb-access-token','supabase.auth.token'];
+        for(var i=0;i<keys.length;i++){var v=localStorage.getItem(keys[i])||sessionStorage.getItem(keys[i]);if(v&&v.length>20)return true;}
+      }catch(_){}
+      return false;
+    }
+    if(!_hasSession()){
+      try{var d=window.location.pathname+window.location.search+window.location.hash;if(d&&d!=='/'&&d!=='/login.html')sessionStorage.setItem('mums_redirect_after_login',d);}catch(_){}
+      window.location.replace('/login.html');
+    }
+  })();
+  </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Controller Lab - Enterprise Visual Studio</title>

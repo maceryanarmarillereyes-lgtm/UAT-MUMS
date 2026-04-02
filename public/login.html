@@ -573,12 +573,42 @@
       try{ _persistSavedDetails(); }catch(e){}
       try{
         if(String(window.location.protocol||'') === 'file:'){
+          (function(){
+            try {
+              var dest = sessionStorage.getItem('mums_redirect_after_login');
+              if (dest && dest.length > 1 && !dest.includes('login')) {
+                sessionStorage.removeItem('mums_redirect_after_login');
+                window.location.replace(dest);
+                return;
+              }
+            } catch(_) {}
+          })();
           window.location.replace("./index.html#dashboard");
         }else{
+          (function(){
+            try {
+              var dest = sessionStorage.getItem('mums_redirect_after_login');
+              if (dest && dest.length > 1 && !dest.includes('login')) {
+                sessionStorage.removeItem('mums_redirect_after_login');
+                window.location.replace(dest);
+                return;
+              }
+            } catch(_) {}
+          })();
           window.location.replace("./dashboard");
         }
       }catch(_){
-        window.location.replace("./index.html#dashboard");
+        (function(){
+            try {
+              var dest = sessionStorage.getItem('mums_redirect_after_login');
+              if (dest && dest.length > 1 && !dest.includes('login')) {
+                sessionStorage.removeItem('mums_redirect_after_login');
+                window.location.replace(dest);
+                return;
+              }
+            } catch(_) {}
+          })();
+          window.location.replace("./index.html#dashboard");
       }
     }
 
