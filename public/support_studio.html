@@ -3493,12 +3493,13 @@
             <div style="margin-bottom:16px;">
               <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);display:block;margin-bottom:6px;">QuickBase On-Call Schedule Report Link</label>
               <input type="text" id="ocs-report-link" class="ss-input"
-                placeholder="https://your-realm.quickbase.com/nav/app/.../table/.../action/q?qid=..."
+                placeholder="https://realm.quickbase.com/nav/app/{appId}/table/{tableId}/action/q?qid=..."
                 style="font-size:11px;"
                 oninput="window._ocsAutoFill(this.value)"
                 onpaste="setTimeout(function(){window._ocsAutoFill(document.getElementById('ocs-report-link').value)},10)">
-              <div style="font-size:10px;color:rgba(34,211,238,.7);margin-top:5px;display:flex;align-items:center;gap:5px;">
-                <i class="fas fa-bolt" style="font-size:9px;"></i> Realm, Table ID and QID are auto-extracted from the URL
+              <div style="font-size:10px;color:rgba(34,211,238,.7);margin-top:5px;display:flex;align-items:flex-start;gap:5px;flex-direction:column;">
+                <div style="display:flex;align-items:center;gap:5px;"><i class="fas fa-bolt" style="font-size:9px;"></i> Realm, Table ID and QID are auto-extracted from the URL</div>
+                <div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.3);"><i class="fas fa-info-circle" style="font-size:9px;"></i> Use the full URL from the QB report (must include <code style="background:rgba(255,255,255,.06);padding:0 4px;border-radius:3px;font-size:9px;">/table/</code> and <code style="background:rgba(255,255,255,.06);padding:0 4px;border-radius:3px;font-size:9px;">?qid=</code>)</div>
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
@@ -13055,15 +13056,24 @@
     if (!url) return out;
     try {
       var u = new URL(url);
+      // Realm from hostname: realm.quickbase.com
       var host = String(u.hostname || '').toLowerCase();
       var m = host.match(/^([a-z0-9-]+)\.quickbase\.com$/i);
       if (m) out.realm = m[1];
       var segs = u.pathname.split('/').filter(Boolean);
+      // Primary: /table/{tableId}
       var ti = segs.findIndex(function(s) { return s.toLowerCase() === 'table'; });
       if (ti >= 0 && segs[ti + 1]) out.tableId = segs[ti + 1];
+      // Legacy /db/{tableId}
       if (!out.tableId) {
         var di = segs.findIndex(function(s) { return s.toLowerCase() === 'db'; });
         if (di >= 0 && segs[di + 1]) out.tableId = segs[di + 1];
+      }
+      // Fallback: QB short URLs /nav/app/{id}/action/q (no /table/ present)
+      // treat the segment after /app/ as tableId
+      if (!out.tableId) {
+        var ai = segs.findIndex(function(s) { return s.toLowerCase() === 'app'; });
+        if (ai >= 0 && segs[ai + 1]) out.tableId = segs[ai + 1];
       }
       var rawQid = u.searchParams.get('qid') || '';
       var qm = rawQid.match(/-?\d+/);
@@ -13148,17 +13158,20 @@
     fetch('/api/studio/oncall_schedule', { headers: _authHeaders() })
       .then(function(r) { return r.json(); })
       .then(function(d) {
-        if (!d.ok && !d.configured) {
-          _showMsg('ocs-save-msg', '✗ ' + (d.message || 'Not configured'), false);
+        if (d.error === 'not_found' || d.path) {
+          // Route 404 — server not yet deployed with this route
+          _showMsg('ocs-save-msg', '✗ API route not found — redeploy the server', false);
+        } else if (!d.ok && !d.configured) {
+          _showMsg('ocs-save-msg', '✗ ' + (d.message || 'Not configured — save the report link first'), false);
         } else if (!d.ok) {
-          _showMsg('ocs-save-msg', '✗ ' + (d.message || d.error || 'QB error'), false);
+          _showMsg('ocs-save-msg', '✗ QB Error: ' + (d.message || d.error || 'Unknown QB error'), false);
         } else if (d.onDutyToday) {
-          _showMsg('ocs-save-msg', '✓ Connected! On duty: ' + d.wmTech, true);
+          _showMsg('ocs-save-msg', '✓ Connected! On duty: ' + d.wmTech + ' (' + d.daysLeft + 'd left)', true);
         } else {
-          _showMsg('ocs-save-msg', '✓ Connected — no schedule for today (' + d.todayPHT + ' PHT)', true);
+          _showMsg('ocs-save-msg', '✓ Connected — checked ' + (d.totalRecords || 0) + ' records, no schedule for today (' + d.todayPHT + ' PHT)', true);
         }
       })
-      .catch(function(err) { _showMsg('ocs-save-msg', '✗ ' + err.message, false); });
+      .catch(function(err) { _showMsg('ocs-save-msg', '✗ Network error: ' + err.message, false); });
   };
 
   /* ══════════════════════════════════════════════════════════════
@@ -13191,8 +13204,19 @@
     fetch('/api/studio/oncall_schedule', { headers: _authHeaders() })
       .then(function(r) { return r.json(); })
       .then(function(d) {
+        // Route not found (server not yet deployed) — treat as not configured
+        if (d.error === 'not_found') {
+          _setCardState('not-configured');
+          return;
+        }
         if (!d.configured) {
           _setCardState('not-configured');
+          return;
+        }
+        if (!d.ok) {
+          // QB API error — show in no-schedule state with message
+          _setCardState('no-schedule');
+          _setText('oc-no-sched-date', d.message || d.error || 'QB error');
           return;
         }
         if (!d.onDutyToday) {
@@ -13202,11 +13226,11 @@
         }
         // On duty — populate fields
         _setText('oc-sched-dates', d.startDateLabel + '  →  ' + d.endDateLabel);
-        _setText('oc-wm-name',     d.wmTech   || '—');
-        _setText('oc-wm-ava',      d.wmInitials|| '??');
+        _setText('oc-wm-name',     d.wmTech    || '—');
+        _setText('oc-wm-ava',      d.wmInitials || '??');
         _setText('oc-wm-phone',    d.wmPhone   || '—');
         _setText('oc-ca-name',     d.caTech    || '—');
-        _setText('oc-ca-ava',      d.caInitials|| '??');
+        _setText('oc-ca-ava',      d.caInitials || '??');
         _setText('oc-ca-phone',    d.caPhone   || '—');
         var daysLabel = d.daysLeft !== undefined ? d.daysLeft + ' day' + (d.daysLeft !== 1 ? 's' : '') + ' left' : '';
         _setText('oc-days-left-wm', daysLabel);

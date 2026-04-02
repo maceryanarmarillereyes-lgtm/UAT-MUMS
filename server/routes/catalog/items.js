@@ -48,7 +48,12 @@ module.exports = async (req, res) => {
       const out = await serviceSelect('support_catalog',
         'select=id,item_code,name,category,brand,part_number,specs,user_guide,troubleshooting,compatible_units,status,parent_id,assigned_to,assigned_to_name,created_at,updated_at&order=item_code.asc'
       );
-      if (!out.ok) return sendJson(res, 500, { ok: false, error: 'db_error' });
+      // Graceful fallback: return empty list instead of 500 so home page / cache
+      // can still load even if the support_catalog table is not yet provisioned.
+      if (!out.ok) {
+        console.warn('[catalog/items] DB read failed — returning empty list. Detail:', out.text || out.status);
+        return sendJson(res, 200, { ok: true, items: [], role: { isSA, isSU, canManage: mgr }, _warn: 'catalog_unavailable' });
+      }
       return sendJson(res, 200, { ok: true, items: out.json || [], role: { isSA, isSU, canManage: mgr } });
     }
 

@@ -31,16 +31,31 @@ function parseQbUrl(url) {
   if (!url) return out;
   try {
     const u = new URL(url);
+    // Realm from hostname: realm.quickbase.com
     const host = String(u.hostname || '').toLowerCase();
     const m = host.match(/^([a-z0-9-]+)\.quickbase\.com$/i);
     if (m) out.realm = m[1];
+
     const segs = u.pathname.split('/').filter(Boolean);
+
+    // Primary: /table/{tableId}
     const ti = segs.findIndex(s => s.toLowerCase() === 'table');
     if (ti >= 0 && segs[ti + 1]) out.tableId = segs[ti + 1];
+
+    // Legacy /db/{tableId}
     if (!out.tableId) {
       const di = segs.findIndex(s => s.toLowerCase() === 'db');
       if (di >= 0 && segs[di + 1]) out.tableId = segs[di + 1];
     }
+
+    // Fallback: QB short URLs use /nav/app/{appId}/action/q — when no /table/ is present
+    // the segment after /app/ may double as the tableId (single-table app or copied from nav)
+    if (!out.tableId) {
+      const ai = segs.findIndex(s => s.toLowerCase() === 'app');
+      if (ai >= 0 && segs[ai + 1]) out.tableId = segs[ai + 1];
+    }
+
+    // QID from ?qid= param
     const rawQid = u.searchParams.get('qid') || '';
     const qm = rawQid.match(/-?\d+/);
     if (qm) out.qid = qm[0];

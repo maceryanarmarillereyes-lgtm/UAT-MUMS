@@ -26,16 +26,31 @@ function parseQbUrl(url) {
   if (!url) return out;
   try {
     const u = new URL(url);
+    // Realm from hostname: realm.quickbase.com
     const host = String(u.hostname || '').toLowerCase();
     const m = host.match(/^([a-z0-9-]+)\.quickbase\.com$/i);
     if (m) out.realm = m[1];
+
     const segs = u.pathname.split('/').filter(Boolean);
+
+    // Primary: /table/{tableId}
     const ti = segs.findIndex(s => s.toLowerCase() === 'table');
     if (ti >= 0 && segs[ti + 1]) out.tableId = segs[ti + 1];
+
+    // Legacy /db/{tableId}
     if (!out.tableId) {
       const di = segs.findIndex(s => s.toLowerCase() === 'db');
       if (di >= 0 && segs[di + 1]) out.tableId = segs[di + 1];
     }
+
+    // Fallback: QB short URLs use /nav/app/{appId}/action/q — when no /table/ is present
+    // the segment after /app/ may double as the tableId (single-table app or copied from nav)
+    if (!out.tableId) {
+      const ai = segs.findIndex(s => s.toLowerCase() === 'app');
+      if (ai >= 0 && segs[ai + 1]) out.tableId = segs[ai + 1];
+    }
+
+    // QID from ?qid= param
     const rawQid = u.searchParams.get('qid') || '';
     const qm = rawQid.match(/-?\d+/);
     if (qm) out.qid = qm[0];
@@ -147,7 +162,7 @@ module.exports = async (req, res) => {
 
     // Step 3: Run the QB report via API
     const realmHost  = realm.includes('.') ? realm : `${realm}.quickbase.com`;
-    const reportUrl  = `https://api.quickbase.com/v1/reports/${encodeURIComponent(qid)}/run?tableId=${encodeURIComponent(tableId)}&skip=0&top=200`;
+    const reportUrl  = `https://api.quickbase.com/v1/reports/${encodeURIComponent(qid)}/run?tableId=${encodeURIComponent(tableId)}&skip=0&top=500`;
 
     let qbData;
     try {
@@ -157,15 +172,18 @@ module.exports = async (req, res) => {
           'QB-Realm-Hostname': realmHost,
           'Authorization':     `QB-USER-TOKEN ${token}`,
           'Content-Type':      'application/json',
+          'User-Agent':        'MUMS-SupportStudio/1.0',
         },
         body: JSON.stringify({}),
       });
       const rawText = await qbResp.text();
       qbData = rawText ? JSON.parse(rawText) : {};
       if (!qbResp.ok) {
-        return sendJson(res, 200, { ok: false, configured: true, error: 'qb_api_error', message: qbData.message || `QB returned ${qbResp.status}` });
+        _cache.data = null; // invalidate cache on QB error
+        return sendJson(res, 200, { ok: false, configured: true, error: 'qb_api_error', status: qbResp.status, message: qbData.message || `QB returned HTTP ${qbResp.status}` });
       }
     } catch(fetchErr) {
+      _cache.data = null;
       return sendJson(res, 200, { ok: false, configured: true, error: 'fetch_failed', message: String(fetchErr.message) });
     }
 
@@ -178,24 +196,25 @@ module.exports = async (req, res) => {
 
     // Step 4: Find today's record
     // QB On-Call Start Date ≤ today (PHT) < On-Call End Date
-    // Dates in QB are stored as epoch ms (EST-based) — we compare date strings
     const todayPHT = getPHTDateOnly();
 
     let todayRecord = null;
     for (const row of records) {
-      // Build snap-style fields object
       const snapFields = {};
       Object.keys(row).forEach(fid => { snapFields[fid] = row[fid]; });
 
-      const startRaw = getFieldByLabel(snapFields, columnMap, ['on-call start date', 'start date', 'oncall start']);
-      const endRaw   = getFieldByLabel(snapFields, columnMap, ['on-call end date',   'end date',   'oncall end']);
+      // Broad keyword sets — QB column labels may vary slightly in customer installs
+      const startRaw = getFieldByLabel(snapFields, columnMap,
+        ['on-call start', 'oncall start', 'start date', 'schedule start', 'duty start']);
+      const endRaw   = getFieldByLabel(snapFields, columnMap,
+        ['on-call end',   'oncall end',   'end date',   'schedule end',   'duty end']);
 
       const startDate = parseQbDate(startRaw);
       const endDate   = parseQbDate(endRaw);
 
       if (!startDate || !endDate) continue;
 
-      // today >= startDate AND today < endDate
+      // today >= startDate AND today < endDate (string comparison works for ISO dates)
       if (todayPHT >= startDate && todayPHT < endDate) {
         todayRecord = { snapFields, startDate, endDate };
         break;
@@ -203,18 +222,24 @@ module.exports = async (req, res) => {
     }
 
     if (!todayRecord) {
-      const result = { ok: true, configured: true, onDutyToday: false, todayPHT, message: `No on-call schedule found for today (${todayPHT} PHT).` };
+      const result = { ok: true, configured: true, onDutyToday: false, todayPHT,
+        totalRecords: records.length,
+        message: `No on-call schedule found for today (${todayPHT} PHT). ${records.length} records checked.` };
       _cache.data = result; _cache.ts = Date.now();
       return sendJson(res, 200, result);
     }
 
     const { snapFields, startDate, endDate } = todayRecord;
 
-    // Extract technician details
-    const wmTech  = getFieldByLabel(snapFields, columnMap, ['walmart technician', 'wm tech', 'walmart tech']);
-    const wmPhone = getFieldByLabel(snapFields, columnMap, ['wm tech number', 'wm technician number', 'walmart tech number']);
-    const caTech  = getFieldByLabel(snapFields, columnMap, ['ca technician', 'ca tech']);
-    const caPhone = getFieldByLabel(snapFields, columnMap, ['ca tech number', 'ca technician number']);
+    // Extract technician details — broad keyword matching for different QB setups
+    const wmTech  = getFieldByLabel(snapFields, columnMap,
+      ['walmart technician', 'wm tech', 'walmart tech', 'wm technician', 'walmart on-call']);
+    const wmPhone = getFieldByLabel(snapFields, columnMap,
+      ['wm tech number', 'wm technician number', 'walmart tech number', 'wm number', 'wm phone']);
+    const caTech  = getFieldByLabel(snapFields, columnMap,
+      ['ca technician', 'ca tech', 'ca on-call', 'coldchain tech', 'ca on call']);
+    const caPhone = getFieldByLabel(snapFields, columnMap,
+      ['ca tech number', 'ca technician number', 'ca number', 'ca phone', 'coldchain number']);
 
     // Calculate days remaining
     const endMs   = new Date(endDate).getTime();
