@@ -129,7 +129,11 @@ async function getRoutes(env) {
     'studio/kb_settings':         unwrapCjs(await import('../../server/routes/studio/kb_settings.js')),
     'studio/kb_sync':             unwrapCjs(await import('../../server/routes/studio/kb_sync.js')),
     'studio/kb_download':         unwrapCjs(await import('../../server/routes/studio/kb_download.js')),
-    'studio/daily_passwords':     unwrapCjs(await import('../../server/routes/studio/daily_passwords.js'))
+    'studio/daily_passwords':     unwrapCjs(await import('../../server/routes/studio/daily_passwords.js')),
+
+    // ── ICare Oncall Tech — QB On-Call Schedule ──────────────────────────────
+    'studio/oncall_settings':     unwrapCjs(await import('../../server/routes/studio/oncall_settings.js')),
+    'studio/oncall_schedule':     unwrapCjs(await import('../../server/routes/studio/oncall_schedule.js')),
   };
 
   return ROUTES;
