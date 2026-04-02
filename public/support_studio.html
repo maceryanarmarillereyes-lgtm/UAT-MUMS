@@ -5053,73 +5053,79 @@
 
     <!-- ── PERSISTENT RIGHT SIDEBAR ──────────────────────────── -->
     <!-- Hidden by default; toggled by Call Widget button -->
-    <aside class="ss-sidebar right" id="ss-right-sidebar" style="display:none;flex-direction:column;">
+    <!-- ── PERSISTENT RIGHT SIDEBAR ─────────────────────────────
+         Always visible. Call Information section toggles on/off
+         via the Call Widget button. Recent Notes always shown.
+    ──────────────────────────────────────────────────────────── -->
+    <aside class="ss-sidebar right" id="ss-right-sidebar" style="display:flex;flex-direction:column;">
 
       <!-- ── Active Call Timer Bar (shown while call is running) ── -->
       <div id="ci-timer-bar">
         <div class="ci-timer-dot"></div>
-        <span class="ci-timer-label">Call Duration</span>
+        <span class="ci-timer-label">Duration</span>
         <span class="ci-timer-display" id="ci-timer-display">0:00</span>
         <button class="ci-timer-end-btn" onclick="window._cwEndCall()">
           <i class="fas fa-stop-circle" style="margin-right:3px;"></i>End Call
         </button>
       </div>
 
-      <!-- Call Information panel -->
-      <div class="ss-panel grow" id="right-call-info">
-        <div class="ss-panel-title"><i class="fas fa-phone-alt"></i> Call Information</div>
-        <div class="ss-field-group">
-          <div class="ss-field-label">Caller Name</div>
-          <input class="ss-input" type="text" id="ci-caller-name" placeholder="Enter caller name…">
+      <!-- ── CALL INFORMATION — hidden by default, toggle via widget ── -->
+      <div id="ci-call-info-section" style="display:none;flex-direction:column;border-bottom:1px solid var(--ss-border2);overflow-y:auto;flex-shrink:0;">
+        <div class="ss-panel" style="flex:1;">
+          <div class="ss-panel-title"><i class="fas fa-phone-alt"></i> Call Information</div>
+          <div class="ss-field-group">
+            <div class="ss-field-label">Caller Name</div>
+            <input class="ss-input" type="text" id="ci-caller-name" placeholder="Enter caller name…">
+          </div>
+          <div class="ss-field-group">
+            <div class="ss-field-label">Contact / Ticket #</div>
+            <input class="ss-input" type="text" id="ci-ticket" placeholder="Ticket or contact #…">
+          </div>
+          <div class="ss-field-group">
+            <div class="ss-field-label">Issue Summary</div>
+            <textarea class="ss-input" id="ci-issue" placeholder="Brief description of issue…" style="resize:vertical;min-height:60px;"></textarea>
+          </div>
+          <div class="ss-field-group">
+            <div class="ss-field-label">Product / Item</div>
+            <input class="ss-input" type="text" id="ci-product" placeholder="e.g. CTR-001 or product name…">
+          </div>
+          <div class="ss-field-group">
+            <div class="ss-field-label">Call Notes</div>
+            <textarea class="ss-input" id="ci-notes" placeholder="Detailed call notes…" style="resize:vertical;min-height:80px;"></textarea>
+          </div>
+          <div class="ss-field-group">
+            <div class="ss-field-label">Status</div>
+            <select class="ss-input" id="ci-status" style="background:var(--ss-surface3);color:var(--ss-text);">
+              <option value="">— Select status —</option>
+              <option value="Open">Open</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Escalated">Escalated</option>
+              <option value="Resolved">Resolved</option>
+              <option value="Follow-up">Follow-up Required</option>
+            </select>
+          </div>
+          <div class="ss-btn-row" style="margin-top:8px;gap:6px;">
+            <button id="ci-save-btn" onclick="window._ciSaveNote()" style="flex:1;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);border-radius:7px;color:#3fb950;padding:7px 10px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s;">
+              <i class="fas fa-save"></i> Save Note
+            </button>
+            <button id="ci-clear-btn" onclick="window._ciClearForm()" style="flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:7px;color:var(--ss-muted);padding:7px 10px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s;">
+              <i class="fas fa-times"></i> Clear
+            </button>
+          </div>
+          <div id="ci-save-msg" style="font-size:10px;color:#3fb950;text-align:center;margin-top:4px;opacity:0;transition:opacity .3s;"></div>
         </div>
-        <div class="ss-field-group">
-          <div class="ss-field-label">Contact / Ticket #</div>
-          <input class="ss-input" type="text" id="ci-ticket" placeholder="Ticket or contact #…">
-        </div>
-        <div class="ss-field-group">
-          <div class="ss-field-label">Issue Summary</div>
-          <textarea class="ss-input" id="ci-issue" placeholder="Brief description of issue…" style="resize:vertical;min-height:60px;"></textarea>
-        </div>
-        <div class="ss-field-group">
-          <div class="ss-field-label">Product / Item</div>
-          <input class="ss-input" type="text" id="ci-product" placeholder="e.g. CTR-001 or product name…">
-        </div>
-        <div class="ss-field-group">
-          <div class="ss-field-label">Call Notes</div>
-          <textarea class="ss-input" id="ci-notes" placeholder="Detailed call notes…" style="resize:vertical;min-height:80px;"></textarea>
-        </div>
-        <div class="ss-field-group">
-          <div class="ss-field-label">Status</div>
-          <select class="ss-input" id="ci-status" style="background:var(--ss-surface3);color:var(--ss-text);">
-            <option value="">— Select status —</option>
-            <option value="Open">Open</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Escalated">Escalated</option>
-            <option value="Resolved">Resolved</option>
-            <option value="Follow-up">Follow-up Required</option>
-          </select>
-        </div>
-        <div class="ss-btn-row" style="margin-top:8px;gap:6px;">
-          <button id="ci-save-btn" onclick="window._ciSaveNote()" style="flex:1;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);border-radius:7px;color:#3fb950;padding:7px 10px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s;">
-            <i class="fas fa-save"></i> Save Note
-          </button>
-          <!-- Save Note stops the timer and saves call duration -->
-          <button id="ci-clear-btn" onclick="window._ciClearForm()" style="flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:7px;color:var(--ss-muted);padding:7px 10px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s;">
-            <i class="fas fa-times"></i> Clear
-          </button>
-        </div>
-        <div id="ci-save-msg" style="font-size:10px;color:#3fb950;text-align:center;margin-top:4px;opacity:0;transition:opacity .3s;"></div>
-        <hr class="ss-divider" style="margin:10px 0;">
+      </div>
+
+      <!-- ── RECENT NOTES — always visible ── -->
+      <div class="ss-panel grow" id="right-call-info" style="display:flex;flex-direction:column;overflow:hidden;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
           <div class="ss-panel-title" style="margin-bottom:0;"><i class="fas fa-clock"></i> Recent Notes</div>
           <button onclick="window._ciOpenNotesPanel()" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:5px;color:#58a6ff;font-size:9px;font-weight:700;padding:3px 8px;cursor:pointer;font-family:var(--ss-font);white-space:nowrap;">View All</button>
         </div>
-        <div id="ci-recent-list" style="display:flex;flex-direction:column;gap:4px;overflow-y:auto;max-height:160px;">
+        <div id="ci-recent-list" style="display:flex;flex-direction:column;gap:4px;overflow-y:auto;flex:1;">
           <div class="ss-empty-note" style="padding:8px 0;font-size:10px;">No saved notes yet.</div>
         </div>
       </div>
-
-
 
     </aside>
 
@@ -6689,7 +6695,7 @@
                     dt.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'});
       var statusColor = {Open:'#58a6ff','In Progress':'#d29922',Escalated:'#f85149',Resolved:'#3fb950','Follow-up Required':'#a25ddc'}[n.status] || 'var(--ss-muted)';
       var statusDot = n.status ? '<span style="width:6px;height:6px;border-radius:50%;background:' + statusColor + ';display:inline-block;margin-right:5px;flex-shrink:0;"></span>' : '';
-      var durBadge = n.callDuration ? '<span style="margin-left:auto;font-size:8px;font-weight:800;color:#f85149;font-family:var(--ss-mono,monospace);background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.2);border-radius:4px;padding:1px 5px;flex-shrink:0;"><i class="fas fa-clock" style="margin-right:2px;"></i>' + n.callDuration + '</span>' : '';
+      var durBadge = n.callDuration ? '<span style="margin-left:auto;font-size:8px;font-weight:800;color:#f85149;font-family:var(--ss-font);background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.2);border-radius:4px;padding:2px 6px;flex-shrink:0;display:inline-flex;align-items:center;gap:3px;"><i class="fas fa-phone-volume" style="font-size:7px;"></i>' + n.callDuration + '</span>' : '';
       return '<div class="ci-note-card" data-idx="' + i + '" onclick="window._ciLoadNote(' + i + ')" style="cursor:pointer;">' +
         '<div class="ci-note-time" style="display:flex;align-items:center;gap:4px;">' + timeStr + (n.status ? ' · ' + statusDot + '<span style="color:' + statusColor + ';font-weight:700;">' + n.status + '</span>' : '') + durBadge + '</div>' +
         '<div class="ci-note-caller">' + (n.callerName || '(no name)') + (n.ticket ? ' &nbsp;·&nbsp; ' + n.ticket : '') + '</div>' +
@@ -6709,6 +6715,9 @@
     if (el('ci-product'))     el('ci-product').value     = n.product    || '';
     if (el('ci-notes'))       el('ci-notes').value       = n.notes      || '';
     if (el('ci-status'))      el('ci-status').value      = n.status     || '';
+    // Re-open Call Information so user can edit and re-save
+    _cwShowCallInfo();
+    if (!_cwCallStartTime) _cwStartTimer();
   };
 
   /* ── Save & Clear ───────────────────────────────────── */
@@ -6733,17 +6742,19 @@
     saveCallNotes(all);
     renderRecentNotes();
 
-    // Stop timer after saving
+    // Stop timer + hide Call Information section after saving
     if (_cwCallStartTime) _cwStopTimer();
+    // Small delay so user sees "Note saved!" before panel closes
+    setTimeout(function() { _cwHideCallInfo(); }, 900);
 
     // Show success message
     var ciMsg = el('ci-save-msg');
     if (ciMsg) {
-      var durationTxt = durLabel ? ' (Duration: ' + durLabel + ')' : '';
+      var durationTxt = durLabel ? ' (' + durLabel + ')' : '';
       ciMsg.textContent = '✓ Note saved!' + durationTxt;
       ciMsg.style.cssText = 'font-size:10px;color:#3fb950;text-align:center;margin-top:4px;opacity:1;transition:opacity .4s;';
       clearTimeout(ciMsg._t);
-      ciMsg._t = setTimeout(function() { ciMsg.style.opacity = '0'; }, 3000);
+      ciMsg._t = setTimeout(function() { ciMsg.style.opacity = '0'; }, 2500);
     }
   };
 
@@ -6879,7 +6890,7 @@
   };
 
   window._ciLoadNoteAndClose = function(idx) {
-    window._ciLoadNote(idx);
+    window._ciLoadNote(idx);  // _ciLoadNote already calls _cwShowCallInfo
     window._ciCloseNotesPanel();
   };
 
@@ -6904,10 +6915,30 @@
 
 
   // ── Call Widget & Timer ───────────────────────────────────────────────────
+  // DESIGN:
+  //   • Right sidebar is ALWAYS visible (Recent Notes panel always shown)
+  //   • Call Information section slides open when widget is clicked → timer starts
+  //   • After Save Note OR End Call → Call Information hides, Recent Notes stays
+  //   • Clicking a note's Load button → Call Information re-opens for editing
+
   var _cwCallStartTime = null;
   var _cwTimerInterval = null;
 
+  // ── FIX: Human-readable duration format ──────────────────────────────────
+  // "1m 27s" instead of "1:27" or "0:87" (which was the bug — seconds > 59 display)
   function _cwFmtTime(secs) {
+    secs = Math.floor(Math.max(0, Number(secs) || 0));
+    var h = Math.floor(secs / 3600);
+    var m = Math.floor((secs % 3600) / 60);
+    var s = secs % 60;
+    if (h > 0) return h + 'h ' + m + 'm ' + (s < 10 ? '0' : '') + s + 's';
+    if (m > 0) return m + 'm ' + (s < 10 ? '0' : '') + s + 's';
+    return s + 's';
+  }
+
+  // Badge label keeps compact format for the widget bubble: "1:27"
+  function _cwFmtBadge(secs) {
+    secs = Math.floor(Math.max(0, Number(secs) || 0));
     var m = Math.floor(secs / 60);
     var s = secs % 60;
     return m + ':' + (s < 10 ? '0' : '') + s;
@@ -6916,64 +6947,75 @@
   function _cwUpdateDisplay() {
     if (!_cwCallStartTime) return;
     var elapsed = Math.floor((Date.now() - _cwCallStartTime) / 1000);
-    var label = _cwFmtTime(elapsed);
     var disp  = document.getElementById('ci-timer-display');
     var badge = document.getElementById('cw-timer-badge');
-    if (disp)  disp.textContent  = label;
-    if (badge) badge.textContent = label;
+    if (disp)  disp.textContent  = _cwFmtBadge(elapsed);
+    if (badge) badge.textContent = _cwFmtBadge(elapsed);
+  }
+
+  function _cwShowCallInfo() {
+    var sec = document.getElementById('ci-call-info-section');
+    if (sec) sec.style.display = 'flex';
+  }
+
+  function _cwHideCallInfo() {
+    var sec = document.getElementById('ci-call-info-section');
+    if (sec) sec.style.display = 'none';
   }
 
   function _cwStartTimer() {
-    if (_cwTimerInterval) return; // already running
+    if (_cwTimerInterval) return;
     _cwCallStartTime = _cwCallStartTime || Date.now();
     _cwUpdateDisplay();
     _cwTimerInterval = setInterval(_cwUpdateDisplay, 1000);
-    // Show timer bar
     var bar = document.getElementById('ci-timer-bar');
     if (bar) bar.classList.add('active');
-    // Activate widget visual
     var btn = document.getElementById('ss-call-widget-btn');
     if (btn) btn.classList.add('call-active');
   }
 
   function _cwStopTimer() {
     clearInterval(_cwTimerInterval);
-    _cwTimerInterval  = null;
-    _cwCallStartTime  = null;
-    // Hide timer bar
+    _cwTimerInterval = null;
+    _cwCallStartTime = null;
     var bar = document.getElementById('ci-timer-bar');
     if (bar) bar.classList.remove('active');
-    // Reset widget visual
     var btn = document.getElementById('ss-call-widget-btn');
     if (btn) btn.classList.remove('call-active');
-    // Reset display
     var disp  = document.getElementById('ci-timer-display');
     var badge = document.getElementById('cw-timer-badge');
     if (disp)  disp.textContent  = '0:00';
     if (badge) badge.textContent = '0:00';
   }
 
-  // Toggle panel visibility and start timer when panel opens
+  // ── Toggle: widget click shows Call Info + starts timer ──────────────────
   window._cwTogglePanel = function() {
-    var sidebar = document.getElementById('ss-right-sidebar');
-    if (!sidebar) return;
-    var isVisible = sidebar.style.display !== 'none';
-    if (isVisible) {
-      // Collapsing: stop timer if no call in progress (safety: keep timer if started)
-      sidebar.style.display = 'none';
+    var sec = document.getElementById('ci-call-info-section');
+    if (!sec) return;
+    var isOpen = sec.style.display !== 'none';
+    if (isOpen) {
+      // Second click while open: close without saving (just hide)
+      _cwStopTimer();
+      _cwHideCallInfo();
     } else {
-      sidebar.style.display = 'flex';
-      // Auto-start timer when panel is opened for a new call interaction
+      // Open Call Information and start a new call timer
+      _cwShowCallInfo();
       if (!_cwCallStartTime) _cwStartTimer();
-      // Fetch notes from server on first open
       if (!_ciNotesLoaded) _ciFetchFromServer();
+      // Scroll to top of call info section
+      if (sec.scrollTop !== undefined) sec.scrollTop = 0;
     }
   };
 
-  // End Call button: stop timer, keep panel open
+  // ── End Call button: stop timer + hide Call Information ──────────────────
   window._cwEndCall = function() {
     _cwStopTimer();
+    _cwHideCallInfo();
   };
+
+  // Expose for other modules
+  window._cwShowCallInfo = _cwShowCallInfo;
+  window._cwHideCallInfo = _cwHideCallInfo;
 
   // Boot: fetch notes from Supabase when auth token becomes available
   window.addEventListener('mums:authtoken', function() {
