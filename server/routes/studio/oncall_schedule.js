@@ -14,6 +14,9 @@ const DOC_KEY = 'ss_oncall_tech_settings';
 // Cache so multiple home-page loads don't hammer QB
 const _cache = { data: null, ts: 0, ttl: 5 * 60 * 1000 }; // 5 min TTL
 
+// Bust stale cache on module load so first deploy serves fresh data
+_cache.data = null; _cache.ts = 0;
+
 function sendJson(res, code, body) {
   res.statusCode = code;
   res.setHeader('Content-Type', 'application/json');
@@ -102,7 +105,41 @@ function fmtDate(ymd) {
   });
 }
 
-// Get field value by label keyword match
+// Normalize any QB field value to a plain string.
+// QB REST API v1 returns complex objects for User, Multi-user, Lookup, and File fields:
+//   Text field:    { value: "Paul Humphreys" }          → "Paul Humphreys"
+//   User field:    { value: { id:.., name:.., email:.. }} → "Paul Humphreys"
+//   Multi-user:    { value: [{ id:.., name:.. }, ...] }  → "Paul Humphreys, John Doe"
+//   Lookup/Ref:    { value: { value: "text" } }          → "text"
+//   File:          { value: { url: ".." } }              → url string
+//   Empty:         { value: null } or { value: "" }      → ""
+// Using String() directly on an object → "[object Object]" (the bug).
+function normalizeQbValue(raw) {
+  if (raw == null || raw === '') return '';
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    // File attachment
+    if (raw.url)       return String(raw.url);
+    // User / staff record — most common case for Technician fields
+    if (raw.name)      return String(raw.name);
+    if (raw.userName)  return String(raw.userName);
+    if (raw.label)     return String(raw.label);
+    if (raw.text)      return String(raw.text);
+    // Nested value wrapper
+    if (raw.value != null) return normalizeQbValue(raw.value);
+    // Numeric relation ID only
+    if (raw.id != null) return String(raw.id);
+    return '';
+  }
+  if (Array.isArray(raw)) {
+    return raw
+      .map(x => (x && typeof x === 'object') ? (x.name || x.label || x.value || x.id || '') : String(x || ''))
+      .filter(Boolean)
+      .join(', ');
+  }
+  return String(raw);
+}
+
+// Get field value by label keyword match — returns a plain normalized string
 function getFieldByLabel(fields, columnMap, keywords) {
   if (!fields || !columnMap) return '';
   const colId = Object.keys(columnMap).find(id => {
@@ -111,7 +148,11 @@ function getFieldByLabel(fields, columnMap, keywords) {
   });
   if (!colId) return '';
   const f = fields[colId];
-  return f && f.value != null ? String(f.value) : '';
+  if (!f) return '';
+  // f is the raw QB cell: { value: <any> }
+  const raw = (typeof f === 'object' && f !== null && Object.prototype.hasOwnProperty.call(f, 'value'))
+    ? f.value : f;
+  return normalizeQbValue(raw);
 }
 
 // Extract initials from full name
