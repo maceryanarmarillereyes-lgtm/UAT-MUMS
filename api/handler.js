@@ -103,6 +103,8 @@ const ROUTES = {
   'studio/kb_sync':            require('../server/routes/studio/kb_sync'),
   'studio/kb_download':        require('../server/routes/studio/kb_download'),
   'studio/daily_passwords':    require('../server/routes/studio/daily_passwords'),
+  'studio/oncall_settings':   require('../server/routes/studio/oncall_settings'),
+  'studio/oncall_schedule':   require('../server/routes/studio/oncall_schedule'),
 };
 
 const DYNAMIC_ROUTES = [

@@ -799,22 +799,44 @@
     /* legacy — keep existing hp-pw-val id wired up */
     #hp-oneday-pw { display:none; }
 
-    /* oncall */
-    .hp-oncall-row {
-      display: flex; align-items: center; gap: 8px; padding: 7px 8px;
-      border-radius: 7px; border: 1px solid rgba(34,211,238,.1); background: rgba(34,211,238,.03);
+    /* ── ICare Oncall Tech — QB-powered ── */
+    .oc-live-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 8px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 20px;
+      background: rgba(63,185,80,.12); color: var(--ss-green); border: 1px solid rgba(63,185,80,.3);
     }
-    .hp-oc-ava {
-      width: 28px; height: 28px; border-radius: 7px;
-      background: rgba(34,211,238,.12); color: var(--ss-cyan);
-      font: 800 10px var(--ss-font); display: flex; align-items: center; justify-content: center;
-    }
-    .hp-oc-name { font-size: 11px; font-weight: 700; color: #e6edf3; }
-    .hp-oc-role { font-size: 9px; color: var(--ss-muted); }
-    .hp-oc-live {
-      margin-left: auto; font-size: 8px; font-weight: 800; padding: 2px 6px;
-      border-radius: 4px; background: rgba(63,185,80,.12); color: var(--ss-green); border: 1px solid rgba(63,185,80,.25);
-    }
+    .oc-live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ss-green); box-shadow: 0 0 5px rgba(63,185,80,.6); animation: oclivepulse 1.8s infinite; }
+    @keyframes oclivepulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+    .oc-sched-bar { padding: 6px 13px; border-bottom: 1px solid var(--ss-border2); display: flex; align-items: center; gap: 9px; background: rgba(34,211,238,.03); flex-shrink: 0; }
+    .oc-sched-dates { font-size: 10px; font-weight: 700; color: var(--ss-cyan); font-family: var(--ss-mono); }
+    .oc-sched-badge { margin-left: auto; font-size: 8px; font-weight: 800; padding: 2px 7px; border-radius: 4px; background: rgba(34,211,238,.1); color: var(--ss-cyan); border: 1px solid rgba(34,211,238,.25); text-transform: uppercase; letter-spacing: .06em; }
+    .oc-techs-grid { display: grid; grid-template-columns: 1fr 1fr; }
+    .oc-tech-col { padding: 12px 13px; display: flex; flex-direction: column; gap: 7px; }
+    .oc-tech-col:first-child { border-right: 1px solid var(--ss-border2); }
+    .oc-col-lbl { font-size: 8px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ss-muted); display: flex; align-items: center; gap: 5px; }
+    .oc-tech-row { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 8px; }
+    .oc-tech-row.wm { border: 1px solid rgba(88,166,255,.15); background: rgba(88,166,255,.04); }
+    .oc-tech-row.ca { border: 1px solid rgba(251,146,60,.15);  background: rgba(251,146,60,.04); }
+    .oc-ava { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; flex-shrink: 0; }
+    .oc-ava.wm { background: rgba(88,166,255,.15); color: var(--ss-accent); }
+    .oc-ava.ca { background: rgba(251,146,60,.15);  color: var(--ss-orange); }
+    .oc-info { flex: 1; min-width: 0; }
+    .oc-name { font-size: 12px; font-weight: 800; color: #e6edf3; }
+    .oc-role { font-size: 9px; color: var(--ss-muted); margin-top: 1px; }
+    .oc-phone { display: inline-flex; align-items: center; gap: 5px; margin-top: 5px; padding: 3px 7px; border-radius: 5px; background: rgba(0,0,0,.2); border: 1px solid rgba(255,255,255,.06); }
+    .oc-phone-num { font: 700 10px var(--ss-mono); color: #e6edf3; letter-spacing: .04em; }
+    .oc-duty-tag { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
+    .oc-on-tag { font-size: 8px; font-weight: 800; padding: 2px 7px; border-radius: 4px; background: rgba(63,185,80,.12); color: var(--ss-green); border: 1px solid rgba(63,185,80,.25); }
+    .oc-days-left { font-size: 8px; color: var(--ss-muted); text-align: right; white-space: nowrap; }
+    .oc-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; gap: 7px; text-align: center; }
+    .oc-state i { font-size: 22px; opacity: .15; }
+    .oc-state .oc-st-main { font-size: 11px; color: var(--ss-muted); font-weight: 600; }
+    .oc-state .oc-st-sub  { font-size: 9px; color: rgba(255,255,255,.2); }
+    .oc-not-cfg { margin: 10px 13px; padding: 10px 12px; border-radius: 8px; text-align: center; background: rgba(210,153,34,.05); border: 1px dashed rgba(210,153,34,.25); }
+    .oc-not-cfg i { font-size: 18px; color: var(--ss-warn); opacity: .5; display: block; margin-bottom: 6px; }
+    .oc-not-cfg span { font-size: 11px; color: var(--ss-muted); display: block; }
+    .oc-not-cfg small { font-size: 9px; color: rgba(255,255,255,.2); }
     /* lab rows */
 .hp-lab-row:last-child { border-bottom: none; }
 .ss-home-wrap { padding: 32px 36px; max-width: 960px; margin: 0 auto; }
@@ -2378,6 +2400,15 @@
             <span>Knowledge Base Sync</span>
           </button>
 
+          <!-- ── Oncall Tech Settings ── -->
+          <button class="ss-settings-nav-btn" data-settings-section="oncall-tech-settings"
+            style="width:100%;padding:10px 16px;background:transparent;border:none;border-left:3px solid transparent;color:var(--ss-muted);cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;font-family:var(--ss-font);font-weight:600;text-align:left;transition:all .15s;">
+            <span style="width:26px;height:26px;border-radius:7px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="fas fa-headset" style="font-size:11px;color:#22d3ee;"></i>
+            </span>
+            <span>Oncall Tech Settings</span>
+          </button>
+
           <!-- ── Separator ── -->
           <div style="height:1px;background:var(--ss-border2);margin:6px 12px;"></div>
 
@@ -2836,17 +2867,74 @@
                 </div>
               </div>
 
-              <!-- ICare Oncall Tech -->
-              <div class="hp-card">
-                <div class="hp-card-head">
+              <!-- ICare Oncall Tech — QB-powered -->
+              <div class="hp-card" id="oc-card" style="display:flex;flex-direction:column;overflow:hidden;">
+                <div class="hp-card-head" style="flex-shrink:0;">
                   <div class="hp-icon" style="background:rgba(34,211,238,.15);border:1px solid rgba(34,211,238,.25);color:var(--ss-cyan);"><i class="fas fa-headset"></i></div>
                   <span class="hp-title">ICare Oncall Tech</span>
+                  <div id="oc-live-wrap" style="margin-left:auto;display:none;">
+                    <span class="oc-live-badge"><span class="oc-live-dot"></span>On Duty Today</span>
+                  </div>
                 </div>
-                <div class="hp-body">
-                  <div class="hp-oncall-row">
-                    <div class="hp-oc-ava">JG</div>
-                    <div><div class="hp-oc-name">John V. Gernan</div><div class="hp-oc-role">On-Call Support Tech</div></div>
-                    <span class="hp-oc-live">Live</span>
+                <!-- Schedule bar (shown when on duty) -->
+                <div class="oc-sched-bar" id="oc-sched-bar" style="display:none;">
+                  <i class="fas fa-calendar-alt" style="font-size:9px;color:var(--ss-cyan);opacity:.7;"></i>
+                  <span id="oc-sched-label" style="font-size:9px;font-weight:700;color:var(--ss-muted);text-transform:uppercase;letter-spacing:.06em;">Active Schedule</span>
+                  <span class="oc-sched-dates" id="oc-sched-dates"></span>
+                  <span style="font-size:8px;color:var(--ss-muted);margin-left:2px;">(PHT)</span>
+                  <span class="oc-sched-badge">✓ Active Now</span>
+                </div>
+                <!-- Technician grid (shown when on duty) -->
+                <div class="oc-techs-grid" id="oc-techs-grid" style="display:none;">
+                  <!-- WM -->
+                  <div class="oc-tech-col">
+                    <div class="oc-col-lbl"><i class="fas fa-store" style="font-size:9px;"></i> Walmart Technician</div>
+                    <div class="oc-tech-row wm">
+                      <div class="oc-ava wm" id="oc-wm-ava">??</div>
+                      <div class="oc-info">
+                        <div class="oc-name" id="oc-wm-name">—</div>
+                        <div class="oc-role">WM On-Call Technician</div>
+                        <div class="oc-phone"><i class="fas fa-phone-alt" style="font-size:9px;color:var(--ss-muted);"></i><span class="oc-phone-num" id="oc-wm-phone">—</span></div>
+                      </div>
+                      <div class="oc-duty-tag">
+                        <span class="oc-on-tag">ON DUTY</span>
+                        <div class="oc-days-left" id="oc-days-left-wm"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- CA -->
+                  <div class="oc-tech-col">
+                    <div class="oc-col-lbl"><i class="fas fa-leaf" style="font-size:9px;"></i> CA Technician</div>
+                    <div class="oc-tech-row ca">
+                      <div class="oc-ava ca" id="oc-ca-ava">??</div>
+                      <div class="oc-info">
+                        <div class="oc-name" id="oc-ca-name">—</div>
+                        <div class="oc-role">CA On-Call Technician</div>
+                        <div class="oc-phone"><i class="fas fa-phone-alt" style="font-size:9px;color:var(--ss-muted);"></i><span class="oc-phone-num" id="oc-ca-phone">—</span></div>
+                      </div>
+                      <div class="oc-duty-tag">
+                        <span class="oc-on-tag">ON DUTY</span>
+                        <div class="oc-days-left" id="oc-days-left-ca"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- State: Loading -->
+                <div id="oc-loading" class="oc-state">
+                  <div style="display:flex;align-items:center;gap:8px;"><div style="width:16px;height:16px;border:2px solid rgba(255,255,255,.1);border-top-color:var(--ss-cyan);border-radius:50%;animation:hp-spin .7s linear infinite;"></div><span class="oc-st-main">Fetching schedule…</span></div>
+                </div>
+                <!-- State: No schedule -->
+                <div id="oc-no-schedule" class="oc-state" style="display:none;">
+                  <i class="fas fa-calendar-times"></i>
+                  <span class="oc-st-main">No schedule for today</span>
+                  <span class="oc-st-sub" id="oc-no-sched-date"></span>
+                </div>
+                <!-- State: Not configured -->
+                <div id="oc-not-configured" style="display:none;">
+                  <div class="oc-not-cfg">
+                    <i class="fas fa-link-slash"></i>
+                    <span>QuickBase not configured</span>
+                    <small>Go to General Settings → Oncall Tech Settings</small>
                   </div>
                 </div>
               </div>
@@ -3382,6 +3470,70 @@
                section-id: studio-appearance
                Accent color: #a78bfa (violet)
           ════════════════════════════════════════════════════════ -->
+
+          <!-- ══════════════════════════════════════════════════════
+               SECTION: Oncall Tech Settings
+               section-id: oncall-tech-settings
+          ══════════════════════════════════════════════════════ -->
+          <div id="settings-section-oncall-tech-settings" style="display:none;">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:0;">
+              <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,rgba(34,211,238,.15),rgba(6,182,212,.08));border:1px solid rgba(34,211,238,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 16px rgba(34,211,238,.12);">
+                <i class="fas fa-headset" style="color:#22d3ee;font-size:18px;"></i>
+              </div>
+              <div>
+                <div style="font-size:17px;font-weight:900;color:#e6edf3;letter-spacing:-.01em;">Oncall Tech Settings</div>
+                <div style="font-size:11px;color:var(--ss-muted);margin-top:2px;">Configure the QuickBase On-Call Schedule report for the <strong style="color:#22d3ee;">ICare Oncall Tech</strong> section on the home page.</div>
+              </div>
+            </div>
+            <div style="height:1px;background:linear-gradient(90deg,rgba(34,211,238,.3),transparent);margin:18px 0 20px;"></div>
+            <div style="padding:10px 14px;border-radius:8px;margin-bottom:16px;background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.2);display:flex;align-items:center;gap:10px;font-size:11px;color:#22d3ee;">
+              <i class="fas fa-info-circle" style="font-size:14px;flex-shrink:0;"></i>
+              <div><strong>Token auto-inherited</strong> &mdash; Uses the same QB User Token from <em>Studio Quickbase Settings</em>. Only the QB Report Link is needed here.</div>
+            </div>
+            <div style="margin-bottom:16px;">
+              <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);display:block;margin-bottom:6px;">QuickBase On-Call Schedule Report Link</label>
+              <input type="text" id="ocs-report-link" class="ss-input"
+                placeholder="https://your-realm.quickbase.com/nav/app/.../table/.../action/q?qid=..."
+                style="font-size:11px;"
+                oninput="window._ocsAutoFill(this.value)"
+                onpaste="setTimeout(function(){window._ocsAutoFill(document.getElementById('ocs-report-link').value)},10)">
+              <div style="font-size:10px;color:rgba(34,211,238,.7);margin-top:5px;display:flex;align-items:center;gap:5px;">
+                <i class="fas fa-bolt" style="font-size:9px;"></i> Realm, Table ID and QID are auto-extracted from the URL
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
+              <div><label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);display:block;margin-bottom:5px;">Realm (auto)</label><input type="text" id="ocs-realm" class="ss-input" placeholder="e.g. company-name" style="font-size:11px;opacity:.6;cursor:default;" readonly></div>
+              <div><label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);display:block;margin-bottom:5px;">Table ID (auto)</label><input type="text" id="ocs-table-id" class="ss-input" placeholder="e.g. bpvmztzr5" style="font-size:11px;opacity:.6;cursor:default;" readonly></div>
+              <div><label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);display:block;margin-bottom:5px;">QID (auto)</label><input type="text" id="ocs-qid" class="ss-input" placeholder="e.g. 242" style="font-size:11px;opacity:.6;cursor:default;" readonly></div>
+            </div>
+            <div style="margin-bottom:16px;">
+              <label style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);display:block;margin-bottom:8px;">Expected QB Report Columns</label>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;padding:12px;background:rgba(34,211,238,.04);border:1px solid rgba(34,211,238,.14);border-radius:8px;margin-bottom:6px;">
+                <span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;background:rgba(88,166,255,.1);color:#58a6ff;border:1px solid rgba(88,166,255,.2);">On-Call Start Date</span>
+                <span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;background:rgba(88,166,255,.1);color:#58a6ff;border:1px solid rgba(88,166,255,.2);">On-Call End Date</span>
+                <span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;background:rgba(88,166,255,.1);color:#58a6ff;border:1px solid rgba(88,166,255,.2);">Walmart Technician</span>
+                <span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;background:rgba(88,166,255,.1);color:#58a6ff;border:1px solid rgba(88,166,255,.2);">WM Tech Number</span>
+                <span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;background:rgba(34,211,238,.1);color:#22d3ee;border:1px solid rgba(34,211,238,.2);">CA Technician</span>
+                <span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;background:rgba(34,211,238,.1);color:#22d3ee;border:1px solid rgba(34,211,238,.2);">CA Tech Number</span>
+              </div>
+            </div>
+            <div style="padding:10px 14px;border-radius:8px;background:rgba(210,153,34,.06);border:1px solid rgba(210,153,34,.2);font-size:11px;color:var(--ss-warn);display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+              <i class="fas fa-clock" style="flex-shrink:0;"></i>
+              <div>On-Call dates from QuickBase are in <strong>Eastern Time (EST/EDT)</strong> and are automatically converted to <strong>Philippine Time (PHT, UTC+8)</strong>.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding-top:16px;border-top:1px solid var(--ss-border2);">
+              <button id="ocs-save-btn" onclick="window._ocsSaveSettings()"
+                style="background:linear-gradient(135deg,#0e7490,#155e75);border:1px solid rgba(34,211,238,.4);color:#fff;padding:10px 22px;border-radius:9px;font-size:12px;font-weight:800;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(34,211,238,.2);">
+                <i class="fas fa-save"></i> Save Oncall Settings
+              </button>
+              <button onclick="window._ocsTestConnection()"
+                style="background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.2);color:#22d3ee;padding:10px 16px;border-radius:9px;font-size:12px;font-weight:600;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;gap:7px;">
+                <i class="fas fa-satellite-dish" style="font-size:11px;"></i> Test Connection
+              </button>
+              <span id="ocs-save-msg" style="font-size:11px;opacity:0;font-weight:600;transition:opacity .3s;"></span>
+            </div>
+          </div><!-- /settings-section-oncall-tech-settings -->
+
           <div id="settings-section-studio-appearance" style="display:none;">
 
             <!-- Header -->
@@ -6545,6 +6697,7 @@
     'studio-appearance':      { fg: '#0ea5e9', bg: 'rgba(14,165,233,.1)',  border: '#0ea5e9' },
     'studio-cache':           { fg: '#22d3ee', bg: 'rgba(34,211,238,.1)',  border: '#22d3ee' },
     'studio-integrations':    { fg: '#3fb950', bg: 'rgba(63,185,80,.1)',   border: '#3fb950' },
+    'oncall-tech-settings':   { fg: '#22d3ee', bg: 'rgba(34,211,238,.1)',  border: '#22d3ee' },
   };
 
   document.querySelectorAll('.ss-settings-nav-btn').forEach(function(btn) {
@@ -6590,6 +6743,8 @@
         // FIX BUG 1: was missing — KB Settings fields were always blank
         // because _kbLoadSettings() was never called when clicking this nav item.
         window._kbLoadSettings();
+      } else if (section === 'oncall-tech-settings' && typeof window._ocsLoadSettings === 'function') {
+        window._ocsLoadSettings();
       }
     });
   });
@@ -12865,6 +13020,246 @@
 
   // Expose for external triggers
   window._odpRefreshHome = _odpLoadHome;
+
+})();
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   ONCALL TECH SETTINGS & SCHEDULE MODULE v1.0
+   Settings:  GET/POST /api/studio/oncall_settings
+   Schedule:  GET      /api/studio/oncall_schedule
+   Renders the ICare Oncall Tech card on the Home page with live QB data.
+   Token inherited from Studio QB Settings — only report link stored here.
+═══════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  /* ── auth token ─────────────────────────────────────────────── */
+  function _getToken() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) { var p = JSON.parse(raw); if (p && p.access_token) return p.access_token; }
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken() || '';
+    } catch(_) {}
+    return '';
+  }
+  function _authHeaders() {
+    var t = _getToken();
+    return t ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t } : { 'Content-Type': 'application/json' };
+  }
+
+  /* ── URL parser (same logic as server) ─────────────────────── */
+  function _parseQbUrl(url) {
+    var out = { realm: '', tableId: '', qid: '' };
+    if (!url) return out;
+    try {
+      var u = new URL(url);
+      var host = String(u.hostname || '').toLowerCase();
+      var m = host.match(/^([a-z0-9-]+)\.quickbase\.com$/i);
+      if (m) out.realm = m[1];
+      var segs = u.pathname.split('/').filter(Boolean);
+      var ti = segs.findIndex(function(s) { return s.toLowerCase() === 'table'; });
+      if (ti >= 0 && segs[ti + 1]) out.tableId = segs[ti + 1];
+      if (!out.tableId) {
+        var di = segs.findIndex(function(s) { return s.toLowerCase() === 'db'; });
+        if (di >= 0 && segs[di + 1]) out.tableId = segs[di + 1];
+      }
+      var rawQid = u.searchParams.get('qid') || '';
+      var qm = rawQid.match(/-?\d+/);
+      if (qm) out.qid = qm[0];
+      if (!out.qid) {
+        var rm = url.match(/[?&]qid=(-?\d+)/i);
+        if (rm) out.qid = rm[1];
+      }
+    } catch(_) {}
+    return out;
+  }
+
+  /* ── show save message helper ───────────────────────────────── */
+  function _showMsg(id, text, ok) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.style.cssText = 'font-size:11px;opacity:1;font-weight:600;color:' + (ok ? '#3fb950' : '#f85149') + ';transition:opacity .3s;';
+    clearTimeout(el._t);
+    el._t = setTimeout(function() { el.style.opacity = '0'; }, 4000);
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     SETTINGS: load / save / autofill
+  ══════════════════════════════════════════════════════════════ */
+  window._ocsAutoFill = function(val) {
+    var p = _parseQbUrl(val);
+    var el = function(id) { return document.getElementById(id); };
+    if (el('ocs-realm'))    el('ocs-realm').value    = p.realm;
+    if (el('ocs-table-id')) el('ocs-table-id').value = p.tableId;
+    if (el('ocs-qid'))      el('ocs-qid').value      = p.qid;
+  };
+
+  window._ocsLoadSettings = function() {
+    fetch('/api/studio/oncall_settings', { headers: _authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok || !d.settings) return;
+        var s = d.settings;
+        var el = function(id) { return document.getElementById(id); };
+        if (el('ocs-report-link')) el('ocs-report-link').value = s.reportLink || '';
+        if (el('ocs-realm'))       el('ocs-realm').value       = s.realm      || '';
+        if (el('ocs-table-id'))    el('ocs-table-id').value    = s.tableId    || '';
+        if (el('ocs-qid'))         el('ocs-qid').value         = s.qid        || '';
+      })
+      .catch(function() {});
+  };
+
+  window._ocsSaveSettings = function() {
+    var el = function(id) { return document.getElementById(id); };
+    var reportLink = el('ocs-report-link') ? el('ocs-report-link').value.trim() : '';
+    var btn = el('ocs-save-btn');
+    if (!reportLink) { _showMsg('ocs-save-msg', '✗ Enter the QB Report Link first', false); return; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; btn.style.opacity = '.7'; }
+    var parsed = _parseQbUrl(reportLink);
+    fetch('/api/studio/oncall_settings', {
+      method: 'POST',
+      headers: _authHeaders(),
+      body: JSON.stringify({ reportLink: reportLink, realm: parsed.realm, tableId: parsed.tableId, qid: parsed.qid })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) throw new Error(d.error || 'Save failed');
+      _showMsg('ocs-save-msg', '✓ Saved! Home page will refresh.', true);
+      // Auto-fill extracted fields
+      if (el('ocs-realm'))    el('ocs-realm').value    = d.settings.realm    || parsed.realm;
+      if (el('ocs-table-id')) el('ocs-table-id').value = d.settings.tableId  || parsed.tableId;
+      if (el('ocs-qid'))      el('ocs-qid').value      = d.settings.qid      || parsed.qid;
+      // Refresh home card
+      _ocsLoadHomeCard();
+    })
+    .catch(function(err) { _showMsg('ocs-save-msg', '✗ ' + (err.message || 'Save failed'), false); })
+    .finally(function() {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Oncall Settings'; btn.style.opacity = '1'; }
+    });
+  };
+
+  window._ocsTestConnection = function() {
+    var el = function(id) { return document.getElementById(id); };
+    var msg = el('ocs-save-msg');
+    if (msg) { msg.textContent = 'Testing…'; msg.style.cssText = 'font-size:11px;opacity:1;color:#22d3ee;font-weight:600;'; }
+    fetch('/api/studio/oncall_schedule', { headers: _authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.ok && !d.configured) {
+          _showMsg('ocs-save-msg', '✗ ' + (d.message || 'Not configured'), false);
+        } else if (!d.ok) {
+          _showMsg('ocs-save-msg', '✗ ' + (d.message || d.error || 'QB error'), false);
+        } else if (d.onDutyToday) {
+          _showMsg('ocs-save-msg', '✓ Connected! On duty: ' + d.wmTech, true);
+        } else {
+          _showMsg('ocs-save-msg', '✓ Connected — no schedule for today (' + d.todayPHT + ' PHT)', true);
+        }
+      })
+      .catch(function(err) { _showMsg('ocs-save-msg', '✗ ' + err.message, false); });
+  };
+
+  /* ══════════════════════════════════════════════════════════════
+     HOME CARD: render the ICare Oncall Tech card
+  ══════════════════════════════════════════════════════════════ */
+  function _el(id) { return document.getElementById(id); }
+  function _show(id) { var e = _el(id); if (e) e.style.display = ''; }
+  function _hide(id) { var e = _el(id); if (e) e.style.display = 'none'; }
+  function _setText(id, txt) { var e = _el(id); if (e) e.textContent = txt; }
+
+  function _setCardState(state) {
+    // states: 'loading' | 'on-duty' | 'no-schedule' | 'not-configured'
+    _hide('oc-loading');
+    _hide('oc-no-schedule');
+    _hide('oc-not-configured');
+    _hide('oc-techs-grid');
+    _hide('oc-sched-bar');
+    _hide('oc-live-wrap');
+    if (state === 'loading')        { _show('oc-loading'); }
+    else if (state === 'on-duty')   { _show('oc-live-wrap'); _show('oc-sched-bar'); _show('oc-techs-grid'); }
+    else if (state === 'no-schedule') { _show('oc-no-schedule'); }
+    else if (state === 'not-configured') { _show('oc-not-configured'); }
+  }
+
+  function _ocsLoadHomeCard() {
+    if (!_el('oc-card')) return; // card not in DOM yet
+
+    _setCardState('loading');
+
+    fetch('/api/studio/oncall_schedule', { headers: _authHeaders() })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.configured) {
+          _setCardState('not-configured');
+          return;
+        }
+        if (!d.onDutyToday) {
+          _setCardState('no-schedule');
+          _setText('oc-no-sched-date', d.todayPHT ? d.todayPHT + ' PHT' : '');
+          return;
+        }
+        // On duty — populate fields
+        _setText('oc-sched-dates', d.startDateLabel + '  →  ' + d.endDateLabel);
+        _setText('oc-wm-name',     d.wmTech   || '—');
+        _setText('oc-wm-ava',      d.wmInitials|| '??');
+        _setText('oc-wm-phone',    d.wmPhone   || '—');
+        _setText('oc-ca-name',     d.caTech    || '—');
+        _setText('oc-ca-ava',      d.caInitials|| '??');
+        _setText('oc-ca-phone',    d.caPhone   || '—');
+        var daysLabel = d.daysLeft !== undefined ? d.daysLeft + ' day' + (d.daysLeft !== 1 ? 's' : '') + ' left' : '';
+        _setText('oc-days-left-wm', daysLabel);
+        _setText('oc-days-left-ca', daysLabel);
+        _setCardState('on-duty');
+      })
+      .catch(function(err) {
+        console.warn('[OCS] Failed to load oncall schedule:', err.message);
+        _setCardState('not-configured');
+      });
+  }
+
+  /* ── expose for external calls ──────────────────────────────── */
+  window._ocsLoadHomeCard   = _ocsLoadHomeCard;
+  window._ocsRefreshHomeCard = _ocsLoadHomeCard;
+
+  /* ── auto-load when home tab is active ──────────────────────── */
+  // Hook into the home tab activation
+  var _ocLoaded = false;
+
+  function _tryLoadOC() {
+    var homeCanvas = document.getElementById('canvas-home');
+    if (homeCanvas && homeCanvas.classList.contains('active')) {
+      _ocsLoadHomeCard();
+      _ocLoaded = true;
+    }
+  }
+
+  // Watch for home tab clicks
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-tab="home"]');
+    if (btn) { setTimeout(_ocsLoadHomeCard, 300); }
+  });
+
+  // Also hook into activateTab
+  var _origActivateTab = window.activateTab;
+  if (typeof _origActivateTab === 'function') {
+    window.activateTab = function(target) {
+      _origActivateTab(target);
+      if (target === 'home') { setTimeout(_ocsLoadHomeCard, 350); }
+    };
+  }
+
+  // Load on DOM ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(_tryLoadOC, 600); });
+  } else {
+    setTimeout(_tryLoadOC, 600);
+  }
+
+  // Also try after auth is ready
+  window.addEventListener('mums:authtoken', function() { setTimeout(_ocsLoadHomeCard, 400); });
+  window.addEventListener('mums:auth',      function() { setTimeout(_ocsLoadHomeCard, 400); });
 
 })();
 </script>
