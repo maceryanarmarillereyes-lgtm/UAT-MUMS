@@ -119,6 +119,7 @@ async function getRoutes(env) {
     'studio/qb_settings':        unwrapCjs(await import('../../server/routes/studio/qb_settings.js')),
     'studio/qb_data':            unwrapCjs(await import('../../server/routes/studio/qb_data.js')),
     'studio/yct_data':           unwrapCjs(await import('../../server/routes/studio/yct_data.js')),
+    'studio/call_notes':         unwrapCjs(await import('../../server/routes/studio/call_notes.js')),
     'studio/qb_settings_global': unwrapCjs(await import('../../server/routes/studio/qb_settings_global.js')),
     'studio/qb_monitoring':      unwrapCjs(await import('../../server/routes/studio/qb_monitoring.js')),
     'studio/qb_search':          unwrapCjs(await import('../../server/routes/studio/qb_search.js')),
