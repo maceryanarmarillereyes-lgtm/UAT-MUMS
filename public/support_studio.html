@@ -569,15 +569,17 @@
     .hp-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      grid-auto-rows: min-content;
       gap: 10px;
-      align-content: start;
+    }
+    /* First row (ODP + Oncall) — equal height, fill each other */
+    .hp-grid > .hp-card:nth-child(1),
+    .hp-grid > .hp-card:nth-child(2) {
+      align-self: stretch;
     }
     .hp-card {
-      border: 1px solid var(--ss-border); border-radius: 11px;
+      border: 1px solid var(--ss-border); border-radius: 12px;
       background: var(--ss-surface); overflow: hidden;
       display: flex; flex-direction: column;
-      height: fit-content; /* prevent stretching to fill grid row */
     }
     .hp-card-head {
       padding: 9px 12px 8px; border-bottom: 1px solid var(--ss-border2);
@@ -597,53 +599,59 @@
     .hp-empty i { font-size: 18px; opacity: .1; }
     .hp-empty span { font-size: 10px; color: rgba(255,255,255,.18); }
 
-    /* ── Oneday Password Card ────────────────────────────────── */
+    /* ── Oneday Password Card — Premium v2 ─────────────────── */
     .hp-odp-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1;
     }
     .hp-odp-cell {
-      background: rgba(251,146,60,.05);
-      border: 1px solid rgba(251,146,60,.12);
-      border-radius: 9px;
-      padding: 10px 12px;
-      display: flex; flex-direction: column; gap: 4px;
+      background: rgba(251,146,60,.04);
+      border: 1px solid rgba(251,146,60,.1);
+      border-radius: 10px;
+      padding: 14px 14px 12px;
+      display: flex; flex-direction: column; gap: 6px;
       transition: border-color .2s, background .2s;
+      flex: 1;
     }
     .hp-odp-cell.is-today {
-      background: rgba(251,146,60,.09);
-      border-color: rgba(251,146,60,.28);
-      box-shadow: 0 0 0 1px rgba(251,146,60,.08) inset;
+      background: rgba(251,146,60,.08);
+      border-color: rgba(251,146,60,.3);
+      box-shadow: 0 0 0 1px rgba(251,146,60,.06) inset, 0 4px 16px rgba(251,146,60,.06);
     }
     .hp-odp-cell-date {
       font-size: 9px; font-weight: 800; color: var(--ss-muted);
-      text-transform: uppercase; letter-spacing: .06em;
+      text-transform: uppercase; letter-spacing: .08em;
     }
     .hp-odp-cell.is-today .hp-odp-cell-date { color: var(--ss-orange); }
     .hp-odp-cell-pw {
-      font: 800 17px var(--ss-mono);
+      font: 900 20px var(--ss-mono);
       color: #e6edf3;
-      letter-spacing: .12em;
-      min-height: 22px;
+      letter-spacing: .14em;
+      min-height: 26px;
       display: flex; align-items: center;
+      flex: 1;
     }
-    .hp-odp-cell.is-today .hp-odp-cell-pw { color: var(--ss-orange); }
-    .hp-odp-cell-pw.odp-empty { color: rgba(255,255,255,.2); font-size: 12px; font-style: italic; letter-spacing: 0; }
+    .hp-odp-cell.is-today .hp-odp-cell-pw { color: var(--ss-orange); text-shadow: 0 0 20px rgba(251,146,60,.25); }
+    .hp-odp-cell-pw.odp-empty { color: rgba(255,255,255,.15); font-size: 13px; font-style: italic; letter-spacing: 0; font-weight: 400; }
     .hp-odp-cell-label {
-      font-size: 8px; color: rgba(255,255,255,.35); margin-top: 2px;
+      font-size: 8px; font-weight: 700; color: rgba(255,255,255,.3); margin-top: 2px;
+      text-transform: uppercase; letter-spacing: .06em;
     }
+    .hp-odp-cell.is-today .hp-odp-cell-label { color: rgba(251,146,60,.6); }
     .hp-odp-edit-btn {
-      background: transparent;
-      border: none;
-      color: rgba(255,255,255,.3);
+      background: rgba(251,146,60,.08);
+      border: 1px solid rgba(251,146,60,.18);
+      color: rgba(251,146,60,.7);
       cursor: pointer;
-      font-size: 11px;
-      padding: 2px 4px;
-      border-radius: 5px;
-      transition: color .15s, background .15s;
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      transition: color .15s, background .15s, border-color .15s;
       margin-left: auto;
       line-height: 1;
+      display: flex; align-items: center; gap: 4px;
+      font-weight: 700; font-family: var(--ss-font);
     }
-    .hp-odp-edit-btn:hover { color: var(--ss-orange); background: rgba(251,146,60,.1); }
+    .hp-odp-edit-btn:hover { color: var(--ss-orange); background: rgba(251,146,60,.15); border-color: rgba(251,146,60,.35); }
 
     /* ── Oneday Password Modal ───────────────────────────────── */
     #odp-modal {
@@ -815,20 +823,41 @@
     .oc-tech-col { padding: 12px 13px; display: flex; flex-direction: column; gap: 7px; }
     .oc-tech-col:first-child { border-right: 1px solid var(--ss-border2); }
     .oc-col-lbl { font-size: 8px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ss-muted); display: flex; align-items: center; gap: 5px; }
-    .oc-tech-row { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 8px; }
-    .oc-tech-row.wm { border: 1px solid rgba(88,166,255,.15); background: rgba(88,166,255,.04); }
-    .oc-tech-row.ca { border: 1px solid rgba(251,146,60,.15);  background: rgba(251,146,60,.04); }
-    .oc-ava { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; flex-shrink: 0; }
-    .oc-ava.wm { background: rgba(88,166,255,.15); color: var(--ss-accent); }
-    .oc-ava.ca { background: rgba(251,146,60,.15);  color: var(--ss-orange); }
+    .oc-tech-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; }
+    .oc-tech-row.wm {
+      border: 1px solid rgba(88,166,255,.2); background: rgba(88,166,255,.06);
+      box-shadow: 0 2px 10px rgba(88,166,255,.06);
+    }
+    .oc-tech-row.ca {
+      border: 1px solid rgba(251,146,60,.2);  background: rgba(251,146,60,.06);
+      box-shadow: 0 2px 10px rgba(251,146,60,.06);
+    }
+    .oc-ava {
+      width: 40px; height: 40px; border-radius: 11px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 900; flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    }
+    .oc-ava.wm { background: linear-gradient(135deg,rgba(88,166,255,.25),rgba(88,166,255,.12)); color: #79c0ff; border: 1px solid rgba(88,166,255,.3); }
+    .oc-ava.ca { background: linear-gradient(135deg,rgba(251,146,60,.25),rgba(251,146,60,.12));  color: #ffab70; border: 1px solid rgba(251,146,60,.3); }
     .oc-info { flex: 1; min-width: 0; }
-    .oc-name { font-size: 12px; font-weight: 800; color: #e6edf3; }
-    .oc-role { font-size: 9px; color: var(--ss-muted); margin-top: 1px; }
-    .oc-phone { display: inline-flex; align-items: center; gap: 5px; margin-top: 5px; padding: 3px 7px; border-radius: 5px; background: rgba(0,0,0,.2); border: 1px solid rgba(255,255,255,.06); }
-    .oc-phone-num { font: 700 10px var(--ss-mono); color: #e6edf3; letter-spacing: .04em; }
-    .oc-duty-tag { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
-    .oc-on-tag { font-size: 8px; font-weight: 800; padding: 2px 7px; border-radius: 4px; background: rgba(63,185,80,.12); color: var(--ss-green); border: 1px solid rgba(63,185,80,.25); }
-    .oc-days-left { font-size: 8px; color: var(--ss-muted); text-align: right; white-space: nowrap; }
+    .oc-name { font-size: 13px; font-weight: 900; color: #e6edf3; letter-spacing: -.01em; }
+    .oc-role { font-size: 9px; color: var(--ss-muted); margin-top: 2px; font-weight: 600; }
+    .oc-phone {
+      display: inline-flex; align-items: center; gap: 5px;
+      margin-top: 6px; padding: 4px 9px; border-radius: 6px;
+      background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.08);
+      transition: border-color .15s;
+    }
+    .oc-phone:hover { border-color: rgba(255,255,255,.15); }
+    .oc-phone-num { font: 700 10px var(--ss-mono); color: #c9d1d9; letter-spacing: .06em; }
+    .oc-duty-tag { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+    .oc-on-tag {
+      font-size: 8px; font-weight: 800; padding: 3px 8px; border-radius: 5px;
+      background: rgba(63,185,80,.14); color: #56d364; border: 1px solid rgba(63,185,80,.3);
+      letter-spacing: .05em;
+    }
+    .oc-days-left { font-size: 8px; color: var(--ss-muted); text-align: right; white-space: nowrap; font-weight: 600; }
     .oc-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; gap: 7px; text-align: center; }
     .oc-state i { font-size: 22px; opacity: .15; }
     .oc-state .oc-st-main { font-size: 11px; color: var(--ss-muted); font-weight: 600; }
@@ -2839,16 +2868,16 @@
             <div class="hp-grid">
 
               <!-- Oneday Password -->
-              <div class="hp-card" id="hp-odp-card">
-                <div class="hp-card-head">
-                  <div class="hp-icon" style="background:rgba(251,146,60,.15);border:1px solid rgba(251,146,60,.25);color:var(--ss-orange);"><i class="fas fa-key"></i></div>
-                  <span class="hp-title">ONEDAY PASSWORD</span>
-                  <button class="hp-odp-edit-btn" id="hp-odp-edit-btn" title="Manage passwords" onclick="window._odpOpenModal()">
-                    <i class="fas fa-pen-to-square"></i>
+              <div class="hp-card" id="hp-odp-card" style="background:linear-gradient(160deg,rgba(251,146,60,.03) 0%,var(--ss-surface) 60%);">
+                <div class="hp-card-head" style="background:rgba(251,146,60,.04);border-bottom:1px solid rgba(251,146,60,.12);">
+                  <div class="hp-icon" style="background:rgba(251,146,60,.18);border:1px solid rgba(251,146,60,.3);color:var(--ss-orange);"><i class="fas fa-key"></i></div>
+                  <span class="hp-title" style="color:var(--ss-orange);">ONEDAY PASSWORD</span>
+                  <button class="hp-odp-edit-btn" id="hp-odp-edit-btn" title="Manage all passwords" onclick="window._odpOpenModal()">
+                    <i class="fas fa-table-list"></i> Manage
                   </button>
                 </div>
-                <div class="hp-body" style="padding:8px 10px;">
-                  <div class="hp-odp-grid" id="hp-odp-grid">
+                <div style="padding:10px;display:flex;flex-direction:column;flex:1;">
+                  <div class="hp-odp-grid" id="hp-odp-grid" style="flex:1;">
                     <!-- Yesterday -->
                     <div class="hp-odp-cell" id="hp-odp-cell-yesterday">
                       <div class="hp-odp-cell-date" id="hp-odp-label-yesterday">—</div>
@@ -2862,16 +2891,16 @@
                       <div class="hp-odp-cell-label">Today</div>
                     </div>
                   </div>
-                  <!-- legacy hook — hidden, keeps old id alive -->
+                  <!-- legacy hook — hidden -->
                   <div class="hp-pw-val" id="hp-oneday-pw" style="display:none;"></div>
                 </div>
               </div>
 
               <!-- ICare Oncall Tech — QB-powered -->
-              <div class="hp-card" id="oc-card" style="display:flex;flex-direction:column;overflow:hidden;">
-                <div class="hp-card-head" style="flex-shrink:0;">
-                  <div class="hp-icon" style="background:rgba(34,211,238,.15);border:1px solid rgba(34,211,238,.25);color:var(--ss-cyan);"><i class="fas fa-headset"></i></div>
-                  <span class="hp-title">ICare Oncall Tech</span>
+              <div class="hp-card" id="oc-card" style="display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(160deg,rgba(34,211,238,.03) 0%,var(--ss-surface) 60%);">
+                <div class="hp-card-head" style="flex-shrink:0;background:rgba(34,211,238,.04);border-bottom:1px solid rgba(34,211,238,.12);">
+                  <div class="hp-icon" style="background:rgba(34,211,238,.18);border:1px solid rgba(34,211,238,.3);color:var(--ss-cyan);"><i class="fas fa-headset"></i></div>
+                  <span class="hp-title" style="color:var(--ss-cyan);">ICARE ONCALL TECH</span>
                   <div id="oc-live-wrap" style="margin-left:auto;display:none;">
                     <span class="oc-live-badge"><span class="oc-live-dot"></span>On Duty Today</span>
                   </div>
@@ -2888,7 +2917,7 @@
                 <div class="oc-techs-grid" id="oc-techs-grid" style="display:none;">
                   <!-- WM -->
                   <div class="oc-tech-col">
-                    <div class="oc-col-lbl"><i class="fas fa-store" style="font-size:9px;"></i> Walmart Technician</div>
+                    <div class="oc-col-lbl"><i class="fas fa-store" style="font-size:9px;color:#79c0ff;"></i> <span style="color:#79c0ff;">Walmart Technician</span></div>
                     <div class="oc-tech-row wm">
                       <div class="oc-ava wm" id="oc-wm-ava">??</div>
                       <div class="oc-info">
@@ -2904,7 +2933,7 @@
                   </div>
                   <!-- CA -->
                   <div class="oc-tech-col">
-                    <div class="oc-col-lbl"><i class="fas fa-leaf" style="font-size:9px;"></i> CA Technician</div>
+                    <div class="oc-col-lbl"><i class="fas fa-leaf" style="font-size:9px;color:#ffab70;"></i> <span style="color:#ffab70;">CA Technician</span></div>
                     <div class="oc-tech-row ca">
                       <div class="oc-ava ca" id="oc-ca-ava">??</div>
                       <div class="oc-info">
@@ -11882,10 +11911,21 @@
       var assignedTo    = _fv(snap, ['assigned to','assigned','agent']);
       var assignedLower = assignedTo.toLowerCase();
 
-      // Match by qb_name (partial — handles "Mace Ryan Reyes" vs myName)
-      var isAssignedToMe = myNameLower
-        ? (assignedLower.includes(myNameLower) || myNameLower.includes(assignedLower.split(' ')[0].toLowerCase()))
-        : false;
+      // STRICT FILTER: assignedTo must be non-empty AND match myName
+      // - Skip records with empty/blank "Assigned to" (prevents unassigned cases leaking in)
+      // - Use contains() for full-name flexibility ("Mace Ryan Reyes" ↔ stored qb_name)
+      // - Secondary: first-name prefix match as fallback only when both sides are non-trivial
+      if (!assignedLower.trim()) return; // skip — no assignee at all
+      if (!myNameLower) return;          // skip — current user's qb_name not set
+
+      var isAssignedToMe = assignedLower.includes(myNameLower);
+      // Fallback: first word of assignedTo matches first word of myName (handles abbreviated names)
+      // Only apply when myName has >4 chars to avoid matching single-letter or very short names
+      if (!isAssignedToMe && myNameLower.length > 4) {
+        var myFirst       = myNameLower.split(' ')[0];
+        var assignedFirst = assignedLower.split(' ')[0];
+        isAssignedToMe = myFirst.length > 3 && assignedFirst === myFirst;
+      }
       if (!isAssignedToMe) return;
 
       // ONLY show cases with a TODAY-dated note entry (per user requirement)
