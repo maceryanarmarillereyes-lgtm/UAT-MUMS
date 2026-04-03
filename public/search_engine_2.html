@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Search Engine 2</title>
+  <style>
+    :root {
+      --bg:#050b1d; --surface:#0d1630; --surface2:#101b3a; --text:#e8eefb; --muted:#86a0c7;
+      --border:rgba(116,151,212,.25); --accent:#39a0ff;
+    }
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:1100px;margin:0 auto;padding:18px}
+    .head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+    .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#1f7cf0,#47b3ff);display:grid;place-items:center;font-weight:700}
+    .sub{font-size:11px;color:var(--muted)}
+    .search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px}
+    .search input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-size:18px}
+    .cards{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;margin:14px 0}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center}
+    .n{font-size:28px;font-weight:800}
+    .k{font-size:12px;color:var(--muted)}
+    .list{display:flex;flex-direction:column;gap:8px}
+    .item{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px}
+    .meta{font-size:12px;color:var(--muted);margin-bottom:6px;display:flex;gap:8px;flex-wrap:wrap}
+    mark{background:rgba(57,160,255,.28);color:#fff;border-radius:4px;padding:0 2px}
+    .empty{padding:48px 10px;text-align:center;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <div class="logo">⚡</div>
+      <div>
+        <div style="font-weight:700;">MUMS Support Studio</div>
+        <div class="sub">Search Engine 2</div>
+      </div>
+    </div>
+
+    <div class="search">
+      <span style="opacity:.7">🔎</span>
+      <input id="q" type="text" placeholder="Search support records, cases, users..." />
+      <span class="sub" id="count">Loading…</span>
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="n" id="c-total">0</div><div class="k">Indexed</div></div>
+      <div class="card"><div class="n" id="c-match">0</div><div class="k">Matched</div></div>
+      <div class="card"><div class="n" id="c-open">0</div><div class="k">Open-like</div></div>
+      <div class="card"><div class="n" id="c-case">0</div><div class="k">With Case #</div></div>
+    </div>
+
+    <div id="results" class="list"></div>
+  </div>
+
+<script>
+(() => {
+  const state = { all: [], filtered: [] };
+  const qEl = document.getElementById('q');
+  const listEl = document.getElementById('results');
+  const esc = (s='') => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  function highlight(text, q){
+    const s = String(text || '');
+    const t = String(q || '').trim();
+    if (!t) return esc(s);
+    const safe = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return esc(s).replace(new RegExp('(' + safe + ')', 'ig'), '<mark>$1</mark>');
+  }
+
+  function search(rows, q){
+    const term = q.trim().toLowerCase();
+    if (!term) return [];
+    return rows.filter(r => {
+      const blob = [r.title, r.res, r.cat, r.case, r.eu].join(' ').toLowerCase();
+      return blob.includes(term);
+    });
+  }
+
+  function render() {
+    const q = qEl.value || '';
+    state.filtered = q ? search(state.all, q) : [];
+
+    document.getElementById('c-total').textContent = state.all.length.toLocaleString();
+    document.getElementById('c-match').textContent = state.filtered.length.toLocaleString();
+    document.getElementById('c-open').textContent = state.filtered.filter(r => /open|pending|investigating/i.test(r.res || '')).length.toLocaleString();
+    document.getElementById('c-case').textContent = state.filtered.filter(r => r.case).length.toLocaleString();
+    document.getElementById('count').textContent = q ? `${state.filtered.length.toLocaleString()} results` : `${state.all.length.toLocaleString()} indexed`;
+
+    if (!q) {
+      listEl.innerHTML = `<div class="empty">Type a keyword to search across Support Records knowledge data.</div>`;
+      return;
+    }
+    if (!state.filtered.length) {
+      listEl.innerHTML = `<div class="empty">No results found for <b>${esc(q)}</b>.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = state.filtered.slice(0, 120).map(r => `
+      <div class="item">
+        <div class="meta">
+          <span>${esc(r.cat || 'Support')}</span>
+          ${r.case ? `<span>#${esc(r.case)}</span>` : ''}
+          ${r.eu ? `<span>${esc(r.eu)}</span>` : ''}
+        </div>
+        <div style="font-weight:700;margin-bottom:6px;">${highlight(r.title, q)}</div>
+        <div style="color:var(--muted);font-size:13px;line-height:1.45;">${highlight((r.res || '').slice(0, 380), q)}${(r.res || '').length > 380 ? '…' : ''}</div>
+      </div>
+    `).join('');
+  }
+
+  qEl.addEventListener('input', render);
+
+  fetch('/support_records_kb.json')
+    .then(r => r.json())
+    .then(j => {
+      state.all = Array.isArray(j.flat) ? j.flat : [];
+      render();
+      qEl.focus();
+    })
+    .catch(() => {
+      listEl.innerHTML = `<div class="empty">Failed to load <code>support_records_kb.json</code>.</div>`;
+      document.getElementById('count').textContent = 'Load failed';
+    });
+})();
+</script>
+</body>
+</html>
