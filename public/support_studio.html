@@ -11783,7 +11783,7 @@
   function el(id)  { return document.getElementById(id); }
 
   /* ── Init ──────────────────────────────────────────────────── */
-  window._pnInit = function() {
+  window._ctiInit = function() {
     if (_initialized && _allData.length) {
       _render();
       return;
@@ -11791,7 +11791,7 @@
     _loadData();
   };
 
-  window._pnRefresh = function() {
+  window._ctiRefresh = function() {
     _initialized = false;
     _allData     = [];
     _filtered    = [];
