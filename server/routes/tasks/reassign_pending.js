@@ -5,6 +5,7 @@
    DO NOT modify any existing logic, layout, or structure in this file without
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
+
 const { sendJson, requireAuthedUser, roleFlags, serviceSelect, serviceUpdate } = require('./_common');
 function isUuid(v){
   return /^[0-9a-fA-F-]{20,}$/.test(String(v||''));
