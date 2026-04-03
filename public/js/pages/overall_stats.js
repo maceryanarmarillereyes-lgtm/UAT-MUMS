@@ -5,6 +5,7 @@
    DO NOT modify any existing logic, layout, or structure in this file without
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
+
 /* File: public/js/pages/overall_stats.js */
 
 (window.Pages = window.Pages || {}, window.Pages.overall_stats = function(root){

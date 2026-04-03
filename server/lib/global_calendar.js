@@ -5,6 +5,7 @@
    DO NOT modify any existing logic, layout, or structure in this file without
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
+
 // server/lib/global_calendar.js
 // Reads/writes Manila Calendar QB Settings from the mums_documents key-value table.
 // Key: 'mums_global_calendar_settings'
