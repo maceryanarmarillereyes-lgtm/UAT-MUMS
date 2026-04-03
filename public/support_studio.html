@@ -12064,6 +12064,21 @@
       return true;
     });
 
+    // De-duplicate exact search hits:
+    // If user search term is an exact match for a field value and multiple rows are 100% identical,
+    // show only one copy of the same row to prevent duplicate clutter.
+    if (q) {
+      var colsForSearch = (searchCols && searchCols.length) ? searchCols : _columns;
+      var exactHitKeys = Object.create(null);
+      _filtered = _filtered.filter(function(row) {
+        if (!_ctiRowHasExactMatch(row, q, colsForSearch)) return true;
+        var sig = _ctiRowSignature(row);
+        if (exactHitKeys[sig]) return false;
+        exactHitKeys[sig] = true;
+        return true;
+      });
+    }
+
     // Sort
     if (_sortKey) {
       var sk = _sortKey, sd = _sortDir;
@@ -12076,6 +12091,27 @@
 
     _page = 1;
     _render();
+  }
+
+  function _ctiNormalize(val) {
+    return String(val || '')
+      .toLowerCase()
+      .replace(/\s+/g, '')
+      .replace(/[()\-\u00a0]/g, '');
+  }
+
+  function _ctiRowHasExactMatch(row, query, cols) {
+    var nq = _ctiNormalize(query);
+    if (!nq) return false;
+    return (cols || []).some(function(col) {
+      return _ctiNormalize(row[col]) === nq;
+    });
+  }
+
+  function _ctiRowSignature(row) {
+    return (_columns || []).map(function(col) {
+      return String(row[col] || '').trim();
+    }).join('\u241F');
   }
 
   /* ── Render table ───────────────────────────────────────────── */
