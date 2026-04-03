@@ -2102,7 +2102,7 @@
     .sr-cat-btn { transition: all .1s; }
 
     /* ── Left panels that are NOT cp/pn stay at flex display ────── */
-    #left-panel-connectplus.active, #left-panel-parts_number.active { display: flex; }
+    #left-panel-connectplus.active, #left-panel-parts_number.active, #left-panel-contact_information.active { display: flex; }
 
     /* ── Sidebar scrollbar tints per tab ────────────────────────── */
     #cp-sidebar-country-list::-webkit-scrollbar-thumb,
@@ -2155,7 +2155,7 @@
     #left-panel-support_records.active { display: flex; }
 
     /* ── Canvas backgrounds improved ──────────────────────────────── */
-    #canvas-connectplus, #canvas-parts_number, #canvas-support_records { background: var(--ss-bg); }
+    #canvas-connectplus, #canvas-parts_number, #canvas-contact_information, #canvas-support_records { background: var(--ss-bg); }
 
     /* ── SS input improvements ──────────────────────────────────── */
     .ss-input {
@@ -2433,6 +2433,9 @@
         <button class="ss-tab" data-tab="parts_number" id="ss-tab-parts_number">
           <i class="fas fa-barcode"></i> Parts Number
         </button>
+        <button class="ss-tab" data-tab="contact_information" id="ss-tab-contact_information">
+          <i class="fas fa-address-book"></i> Contact Information
+        </button>
         <button class="ss-tab" data-tab="knowledge_base" id="ss-tab-knowledge_base">
           <i class="fas fa-book"></i> Knowledge Base
         </button>
@@ -2618,6 +2621,15 @@
               <i class="fas fa-barcode" style="font-size:11px;color:#fb923c;"></i>
             </span>
             <span>Part Number Settings</span>
+          </button>
+
+          <!-- ── Contact Information Settings ── -->
+          <button class="ss-settings-nav-btn" data-settings-section="contact-information-settings"
+            style="width:100%;padding:10px 16px;background:transparent;border:none;border-left:3px solid transparent;color:var(--ss-muted);cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;font-family:var(--ss-font);font-weight:600;text-align:left;transition:all .15s;">
+            <span style="width:26px;height:26px;border-radius:7px;background:rgba(20,184,166,.08);border:1px solid rgba(20,184,166,.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="fas fa-address-book" style="font-size:11px;color:#14b8a6;"></i>
+            </span>
+            <span>Contact Information Settings</span>
           </button>
           <button class="ss-settings-nav-btn" data-settings-section="kb-settings"
             style="width:100%;padding:10px 16px;background:transparent;border:none;border-left:3px solid transparent;color:var(--ss-muted);cursor:pointer;display:flex;align-items:center;gap:10px;font-size:12px;font-family:var(--ss-font);font-weight:600;text-align:left;transition:all .15s;">
@@ -2896,6 +2908,63 @@
         </div>
         <div style="display:none;" aria-hidden="true">
           <select id="pn-cat-filter" onchange="window._pnApplyFilters()"><option value="">All Categories</option></select>
+        </div>
+      </div>
+
+      <!-- Contact Information left panel — PREMIUM v35 — CORRECTLY IN SIDEBAR -->
+      <div id="left-panel-contact_information" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
+        <div class="prem-sb-header">
+          <div class="prem-sb-identity">
+            <div class="prem-sb-icon cyan"><i class="fas fa-address-book"></i></div>
+            <div>
+              <div class="prem-sb-title">Contact Information</div>
+              <div class="prem-sb-sub">Search contact names, companies, and phone numbers</div>
+            </div>
+          </div>
+          <div class="prem-stats-grid">
+            <div class="prem-stat-pill cyan">
+              <div class="prem-stat-num cyan" id="cti-stats-total">—</div>
+              <div class="prem-stat-lbl">Total Contacts</div>
+            </div>
+            <div class="prem-stat-pill purple">
+              <div class="prem-stat-num purple" id="cti-stats-cats">—</div>
+              <div class="prem-stat-lbl">End Users</div>
+            </div>
+          </div>
+        </div>
+        <div class="prem-sb-search">
+          <div class="prem-search-wrap">
+            <i class="fas fa-search prem-search-icon"></i>
+            <input id="cti-search-input" type="text" class="prem-search-inp cyan"
+              placeholder="Search contact information…" autocomplete="off"
+              oninput="window._ctiOnSearch(this.value);document.getElementById('cti-sb-clear').style.display=this.value?'block':'none';"
+              onkeydown="if(event.key==='Enter')window._ctiOnSearch(this.value);">
+            <button id="cti-sb-clear" class="prem-search-clear"
+              onclick="document.getElementById('cti-search-input').value='';this.style.display='none';window._ctiOnSearch('');">✕</button>
+          </div>
+          <div class="prem-search-meta">
+            <span class="prem-search-status" id="cti-status"></span>
+            <span class="prem-search-count" id="cti-search-count"></span>
+          </div>
+        </div>
+        <div id="cti-active-filter" class="prem-active-filter cyan">
+          <i class="fas fa-filter"></i>
+          <span id="cti-filter-label"></span>
+          <button onclick="window._ctiClearSidebarFilter()">✕</button>
+        </div>
+        <div id="cti-filter-chips" style="display:none;" aria-hidden="true"></div>
+        <div id="cti-results-list" style="display:none;" aria-hidden="true"></div>
+        <div class="prem-section-head" style="margin-top:6px;">
+          <div class="prem-section-row">
+            <span class="prem-section-lbl">End User</span>
+            <button class="prem-section-toggle" id="cti-cat-toggle-btn" onclick="window._ctiToggleSection()">▾</button>
+          </div>
+        </div>
+        <div id="cti-sidebar-cat-list" class="prem-filter-list" style="flex:1;">
+          <div style="padding:8px 12px;text-align:center;font-size:10px;color:rgba(255,255,255,.2);">Loading…</div>
+        </div>
+        <div style="display:none;" aria-hidden="true">
+          <select id="cti-cat-filter" onchange="window._ctiApplyFilters()"><option value="">All End Users</option></select>
         </div>
       </div>
 
@@ -3656,6 +3725,56 @@
             </div>
           </div><!-- /settings-section-parts-number-settings -->
 
+          <div id="settings-section-contact-information-settings" style="display:none;">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:0;">
+              <div style="width:44px;height:44px;border-radius:12px;background:rgba(20,184,166,.1);border:1px solid rgba(20,184,166,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <i class="fas fa-address-book" style="color:#14b8a6;font-size:18px;"></i>
+              </div>
+              <div>
+                <div style="font-size:17px;font-weight:900;color:#e6edf3;letter-spacing:-.01em;">Contact Information Settings</div>
+                <div style="font-size:11px;color:var(--ss-muted);margin-top:2px;">Configure the Google Sheets data source and search behaviour for the <a onclick="document.querySelector('[data-tab=contact_information]').click()" style="color:#14b8a6;cursor:pointer;text-decoration:none;font-weight:700;">Contact Information</a> tab.</div>
+              </div>
+            </div>
+            <hr style="border:none;border-top:1px solid var(--ss-border2);margin:18px 0 16px;">
+            <div style="display:flex;gap:0;border-bottom:1px solid var(--ss-border2);margin-bottom:18px;">
+              <button class="ctis-tab" data-ctis-tab="data-source" onclick="window._ctisSwitchTab('data-source')"
+                style="padding:8px 18px;background:none;border:none;border-bottom:2px solid #14b8a6;color:#14b8a6;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--ss-font);">Data Source</button>
+              <button class="ctis-tab" data-ctis-tab="search-columns" onclick="window._ctisSwitchTab('search-columns')"
+                style="padding:8px 18px;background:none;border:none;border-bottom:2px solid transparent;color:var(--ss-muted);font-size:12px;font-weight:700;cursor:pointer;font-family:var(--ss-font);">Search Columns</button>
+            </div>
+            <div id="ctis-panel-data-source" style="display:block;">
+              <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);margin-bottom:6px;">Google Sheets CSV URL</div>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+                <input class="ss-input" type="text" id="ctis-csv-url" placeholder="https://docs.google.com/spreadsheets/d/…/pub?output=csv" style="flex:1;font-size:11px;font-family:monospace;" oninput="window._ctisOnUrlInput && window._ctisOnUrlInput(this.value)">
+                <button onclick="window._ctisTestUrl && window._ctisTestUrl()" style="background:rgba(20,184,166,.12);border:1px solid rgba(20,184,166,.28);color:#14b8a6;padding:7px 13px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--ss-font);white-space:nowrap;"><i class="fas fa-eye" style="margin-right:4px;"></i> Test &amp; Preview</button>
+              </div>
+              <div style="font-size:10px;color:var(--ss-muted);margin-bottom:14px;"><i class="fas fa-info-circle" style="color:#14b8a6;margin-right:4px;"></i>Google Sheets: File → Share → Publish to web → Select sheet → CSV → Copy link</div>
+              <div id="ctis-url-status" style="display:none;"></div>
+              <div id="ctis-columns-preview" style="display:none;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                  <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ss-muted);">Detected Columns</div>
+                  <span id="ctis-row-count" style="font-size:10px;font-weight:700;color:#14b8a6;"></span>
+                </div>
+                <div id="ctis-col-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;"></div>
+              </div>
+              <div style="display:flex;gap:10px;align-items:center;">
+                <button id="ctis-save-btn" onclick="window._ctisSaveSettings && window._ctisSaveSettings()" style="background:linear-gradient(135deg,#14b8a6,#0f766e);border:none;color:#fff;padding:9px 20px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--ss-font);display:flex;align-items:center;gap:7px;"><i class="fas fa-save"></i> Save Contact Information Settings</button>
+                <button onclick="window._ctisTestUrl && window._ctisTestUrl()" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--ss-muted);padding:9px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--ss-font);display:flex;align-items:center;gap:7px;"><i class="fas fa-flask"></i> Test &amp; Preview</button>
+                <span id="ctis-save-msg" style="font-size:11px;opacity:0;font-weight:600;transition:opacity .3s;"></span>
+              </div>
+            </div>
+            <div id="ctis-panel-search-columns" style="display:none;">
+              <div style="font-size:10px;color:var(--ss-muted);margin-bottom:12px;">Select which columns the Contact Information search box targets. All checked columns will be searched.</div>
+              <div style="display:flex;gap:8px;margin-bottom:12px;">
+                <button onclick="window._ctisSelectAllCols && window._ctisSelectAllCols(true)" style="background:rgba(20,184,166,.12);border:1px solid rgba(20,184,166,.28);color:#14b8a6;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--ss-font);">Select All</button>
+                <button onclick="window._ctisSelectAllCols && window._ctisSelectAllCols(false)" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:var(--ss-muted);padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--ss-font);">Clear All</button>
+              </div>
+              <div id="ctis-col-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;min-height:32px;"><span style="font-size:11px;color:var(--ss-muted);font-style:italic;">Load a CSV URL first to see columns.</span></div>
+              <button onclick="window._ctisSaveSearchCols && window._ctisSaveSearchCols()" style="background:linear-gradient(135deg,#14b8a6,#0f766e);border:none;color:#fff;padding:9px 20px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--ss-font);display:flex;align-items:center;gap:7px;"><i class="fas fa-save"></i> Save Search Columns</button>
+              <span id="ctis-cols-msg" style="font-size:11px;opacity:0;font-weight:600;margin-left:12px;transition:opacity .3s;"></span>
+            </div>
+          </div><!-- /settings-section-contact-information-settings -->
+
           <div id="settings-section-kb-settings" style="display:none;">
             <div style="display:flex;align-items:center;gap:14px;margin-bottom:0;">
               <div style="width:44px;height:44px;border-radius:12px;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas fa-book" style="color:#22d3ee;font-size:18px;"></i></div>
@@ -4157,6 +4276,35 @@
           <button onclick="window._pnChangePage(1)" id="pn-next-btn" class="prem-page-nav">Next ›</button>
         </div>
       </div><!-- /canvas-parts_number -->
+
+      <!-- Contact Information canvas -->
+      <div id="canvas-contact_information" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
+        <div class="ss-canvas-toolbar" style="flex-shrink:0;">
+          <div class="ss-canvas-toolbar-left">
+            <span class="ss-mode-badge" style="background:rgba(20,184,166,.1);color:#14b8a6;border-color:rgba(20,184,166,.3);"><i class="fas fa-address-book" style="font-size:9px;margin-right:4px;"></i> Contact Information</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px;margin-left:auto;">
+            <span id="cti-record-count" class="prem-count-badge cyan"></span>
+            <button onclick="window._ctiExportCsv()" class="prem-tb-btn"><i class="fas fa-download"></i> Export CSV</button>
+            <button onclick="window._ctiRefresh()" class="prem-tb-btn"><i class="fas fa-sync-alt"></i> Reload</button>
+          </div>
+        </div>
+        <input type="text" id="cti-main-search" style="display:none;" aria-hidden="true">
+        <div style="flex-shrink:0;overflow-x:auto;background:var(--ss-surface3);">
+          <table id="cti-table-head" class="prem-table cyan" style="min-width:700px;">
+            <thead id="cti-thead-row"><tr><th style="width:38px;">#</th></tr></thead>
+          </table>
+        </div>
+        <div id="cti-table-body" style="flex:1;overflow:auto;min-height:0;">
+          <div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--ss-muted);"><i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.35;"></i><span style="font-size:12px;opacity:.45;">Loading Contact Information data…</span></div>
+        </div>
+        <div id="cti-pagination" class="prem-pagination">
+          <span id="cti-page-info" class="prem-page-info"></span>
+          <button onclick="window._ctiChangePage(-1)" id="cti-prev-btn" class="prem-page-nav">‹ Prev</button>
+          <div id="cti-page-btns" style="display:flex;gap:4px;"></div>
+          <button onclick="window._ctiChangePage(1)" id="cti-next-btn" class="prem-page-nav">Next ›</button>
+        </div>
+      </div><!-- /canvas-contact_information -->
 
       <!-- ═══════════════════════════════════════════════════════════════
            KNOWLEDGE BASE — Canvas
@@ -6602,7 +6750,7 @@
   'use strict';
 
   // ── Tab switching — single persistent layout ────────────────────
-  const LEFT_PANELS = ['home','catalog','config','qbs','connectplus','parts_number','knowledge_base','support_records'];
+  const LEFT_PANELS = ['home','catalog','config','qbs','connectplus','parts_number','contact_information','knowledge_base','support_records'];
 
   function activateTab(target) {
     document.querySelectorAll('.ss-tab').forEach(t =>
@@ -6628,6 +6776,8 @@
         window._sqbLoadSettings();
       } else if (activeSection === 'connectplus-settings' && typeof window._cpsLoadSettings === 'function') {
         window._cpsLoadSettings();
+      } else if (activeSection === 'contact-information-settings' && typeof window._ctisLoadSettings === 'function') {
+        window._ctisLoadSettings();
       } else if (activeSection === 'kb-settings' && typeof window._kbLoadSettings === 'function') {
         window._kbLoadSettings();
       }
@@ -6642,6 +6792,9 @@
     }
     if (target === 'parts_number') {
       if (typeof window._pnInit === 'function') window._pnInit();
+    }
+    if (target === 'contact_information') {
+      if (typeof window._ctiInit === 'function') window._ctiInit();
     }
     if (target === 'knowledge_base') {
       if (typeof window._kbInit === 'function') window._kbInit();
@@ -7275,6 +7428,7 @@
     'studio-qb':              { fg: '#58a6ff', bg: 'rgba(88,166,255,.1)',  border: '#58a6ff' },
     'connectplus-settings':   { fg: '#22d3ee', bg: 'rgba(34,211,238,.1)',  border: '#22d3ee' },
     'parts-number-settings':  { fg: '#fb923c', bg: 'rgba(251,146,60,.1)',  border: '#fb923c' },
+    'contact-information-settings': { fg: '#14b8a6', bg: 'rgba(20,184,166,.1)', border: '#14b8a6' },
     'studio-appearance':      { fg: '#0ea5e9', bg: 'rgba(14,165,233,.1)',  border: '#0ea5e9' },
     'studio-cache':           { fg: '#22d3ee', bg: 'rgba(34,211,238,.1)',  border: '#22d3ee' },
     'studio-integrations':    { fg: '#3fb950', bg: 'rgba(63,185,80,.1)',   border: '#3fb950' },
@@ -7316,6 +7470,8 @@
         window._cpsLoadSettings();
       } else if (section === 'parts-number-settings' && typeof window._pnsLoadSettings === 'function') {
         window._pnsLoadSettings();
+      } else if (section === 'contact-information-settings' && typeof window._ctisLoadSettings === 'function') {
+        window._ctisLoadSettings();
       } else if (section === 'studio-cache' && typeof window._cacheUI !== 'undefined') {
         window._cacheUI.refreshPanel();
       } else if (section === 'studio-appearance' && typeof window._appLoadDisplay === 'function') {
@@ -7387,7 +7543,17 @@
         }
       }).catch(function() {});
 
-    Promise.all([p1, p2]).then(function() {
+    var p3 = fetch('/api/studio/csv_settings?type=contact_information', { headers: headers })
+      .then(function(r) { return r.ok ? r.json().catch(function() { return null; }) : null; })
+      .then(function(d) {
+        if (d && d.ok && d.settings && d.settings.csvUrl) {
+          window._ctiCsvUrl    = d.settings.csvUrl;
+          window._ctiSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+            ? d.settings.searchColumns : null;
+        }
+      }).catch(function() {});
+
+    Promise.all([p1, p2, p3]).then(function() {
       _preloaded  = true;
       _preloading = false;
     }).catch(function() { _preloading = false; });
@@ -10827,6 +10993,278 @@
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════
+   CONTACT INFORMATION SETTINGS — General Settings > Contact Information Settings
+   ═══════════════════════════════════════════════════════════════════
+   Storage: localStorage key 'ss_contact_information_settings'
+   Shape: { csvUrl: string, searchColumns: string[] | null }
+   - csvUrl: the Google Sheets published CSV link
+   - searchColumns: array of column names to search (null = all)
+
+   Exposed globals:
+   - window._ctisLoadSettings()     → called when nav btn is clicked
+   - window._ctisSwitchTab(tabId)   → switches inner tabs
+   - window._ctisSaveSettings()     → saves csvUrl + triggers tab reload
+   - window._ctisSaveSearchCols()   → saves searchColumns selection
+   - window._ctisTestUrl()          → validates URL and populates columns
+   - window._ctisSelectAllCols(bool)→ check/uncheck all column checkboxes
+   - window._ctiSearchCols          → live array of active search columns
+   - window._ctiCsvUrl              → live CSV URL (read by Parts Number tab)
+   DO NOT modify the Contact Information tab JS (_ctiInit, _ctiLoad etc.) from here.
+═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  var LS_KEY = 'ss_contact_information_settings';
+
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function loadStoredSettings() {
+    try { var r = localStorage.getItem(LS_KEY); if (r) return JSON.parse(r); } catch(_) {}
+    return { csvUrl: '', searchColumns: null };
+  }
+
+  function storeSettings(obj) {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch(_) {}
+  }
+
+  function _getApiTok() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) { var p = JSON.parse(raw); if (p && p.access_token) return p.access_token; }
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken();
+    } catch(_) {} return '';
+  }
+
+  function showMsg(id, text, ok) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.style.cssText = 'font-size:11px;opacity:1;font-weight:600;color:' + (ok ? '#3fb950' : '#f85149') + ';transition:opacity .3s;';
+    clearTimeout(el._t);
+    el._t = setTimeout(function() { el.style.opacity = '0'; }, 4000);
+  }
+
+  function setUrlStatus(msg, type) {
+    var el = document.getElementById('ctis-url-status');
+    if (!el) return;
+    if (!msg) { el.style.display = 'none'; return; }
+    var colors = {
+      ok:   { bg: 'rgba(63,185,80,.08)',   border: 'rgba(63,185,80,.25)',   text: '#3fb950' },
+      err:  { bg: 'rgba(248,81,73,.08)',   border: 'rgba(248,81,73,.25)',   text: '#f85149' },
+      info: { bg: 'rgba(20,184,166,.08)',  border: 'rgba(20,184,166,.24)',   text: '#14b8a6' }
+    };
+    var c = colors[type] || colors.info;
+    el.style.cssText = 'display:block;margin-bottom:16px;padding:12px 14px;border-radius:8px;font-size:11px;line-height:1.6;background:' + c.bg + ';border:1px solid ' + c.border + ';color:' + c.text + ';';
+    el.innerHTML = msg;
+  }
+
+  // ── Tab switcher ─────────────────────────────────────────────────
+  window._ctisSwitchTab = function(tabId) {
+    document.querySelectorAll('.ctis-tab').forEach(function(btn) {
+      var active = btn.dataset.ctisTab === tabId;
+      btn.style.borderBottomColor = active ? '#14b8a6' : 'transparent';
+      btn.style.color = active ? '#14b8a6' : 'var(--ss-muted)';
+    });
+    ['data-source','search-columns'].forEach(function(id) {
+      var el = document.getElementById('ctis-panel-' + id);
+      if (el) el.style.display = (id === tabId) ? 'block' : 'none';
+    });
+    if (tabId === 'search-columns') _ctisRenderColCheckboxes();
+  };
+
+  // ── Load settings into form ───────────────────────────────────────
+  window._ctisLoadSettings = function() {
+    fetch('/api/studio/csv_settings?type=contact_information', { headers: { 'Authorization': 'Bearer ' + _getApiTok() } })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var stored = (d.ok && d.settings) ? d.settings : loadStoredSettings();
+      storeSettings(stored);
+      var urlEl = document.getElementById('ctis-csv-url');
+      if (urlEl) urlEl.value = stored.csvUrl || '';
+      window._ctiCsvUrl = stored.csvUrl || '';
+      window._ctiSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
+      if (stored.csvUrl && stored.detectedColumns && stored.detectedColumns.length) {
+        _showColumnsPreview(stored.detectedColumns, stored.rowCount || null);
+      }
+      setUrlStatus('', '');
+    }).catch(function(){});
+  };
+
+  // ── URL normalizer (same logic as Connect+ settings) ─────────────
+  function _normalizeUrl(raw) {
+    var url = String(raw || '').trim();
+    if (!url) return url;
+    if (url.includes('output=csv')) return url;
+    try {
+      var u = new URL(url);
+      if (u.pathname.includes('/pub')) {
+        u.searchParams.set('output', 'csv');
+        return u.toString();
+      }
+      if (u.pathname.includes('/pubhtml')) {
+        var gid = u.searchParams.get('gid') || '';
+        u.pathname = u.pathname.replace('/pubhtml', '/pub');
+        u.searchParams.set('output', 'csv');
+        if (gid) u.searchParams.set('gid', gid);
+        return u.toString();
+      }
+      if (u.pathname.includes('/edit') || u.pathname.includes('/view')) {
+        var m = u.pathname.match(/\/d\/([^/]+)/);
+        if (m) {
+          u.pathname = '/spreadsheets/d/' + m[1] + '/pub';
+          u.search = '?output=csv';
+          return u.toString();
+        }
+      }
+    } catch(_) {}
+    return url;
+  }
+
+  // ── onInput: live normalize the URL field ─────────────────────────
+  window._ctisOnUrlInput = function(val) {
+    var normalized = _normalizeUrl(val);
+    if (normalized && normalized !== val) {
+      var el = document.getElementById('ctis-csv-url');
+      if (el && document.activeElement !== el) el.value = normalized;
+    }
+  };
+
+  // ── Show detected columns as tags ────────────────────────────────
+  function _showColumnsPreview(cols, rowCount) {
+    var preview = document.getElementById('ctis-columns-preview');
+    var tagsEl  = document.getElementById('ctis-col-tags');
+    var countEl = document.getElementById('ctis-row-count');
+    if (!preview || !tagsEl) return;
+    preview.style.display = 'block';
+    if (countEl && rowCount) countEl.textContent = Number(rowCount).toLocaleString() + ' rows';
+    tagsEl.innerHTML = cols.map(function(c) {
+      return '<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;background:rgba(20,184,166,.1);border:1px solid rgba(20,184,166,.22);font-size:10px;font-weight:600;color:#14b8a6;">' +
+        '<i class="fas fa-columns" style="font-size:9px;opacity:.7;"></i>' + esc(c) + '</span>';
+    }).join('');
+  }
+
+  // ── Test URL ──────────────────────────────────────────────────────
+  window._ctisTestUrl = function() {
+    var urlEl = document.getElementById('ctis-csv-url');
+    if (!urlEl) return;
+    var raw  = (urlEl.value || '').trim();
+    var url  = _normalizeUrl(raw);
+    if (!url) { setUrlStatus('<i class="fas fa-exclamation-circle" style="margin-right:6px;"></i>Enter a Google Sheets CSV URL first.', 'err'); return; }
+    urlEl.value = url;
+    setUrlStatus('<i class="fas fa-spinner fa-spin" style="margin-right:6px;"></i>Fetching preview from Google Sheets…', 'info');
+
+    fetch(url).then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }).then(function(text) {
+      var lines = text.split('\n').filter(Boolean);
+      if (!lines.length) throw new Error('Empty CSV');
+      var headers = lines[0].split(',').map(function(h) { return h.replace(/^"|"$/g,'').trim(); });
+      var rowCount = lines.length - 1;
+      var stored = loadStoredSettings();
+      stored.csvUrl          = url;
+      stored.detectedColumns = headers;
+      stored.rowCount        = rowCount;
+      storeSettings(stored);
+      window._ctiCsvUrl = url;
+      _showColumnsPreview(headers, rowCount);
+      setUrlStatus(
+        '<i class="fas fa-check-circle" style="margin-right:6px;"></i>' +
+        '<strong>Connected!</strong> Detected <strong>' + headers.length + ' columns</strong> · ' +
+        '<strong>' + rowCount.toLocaleString() + ' rows</strong><br>' +
+        '<span style="opacity:.75;">Columns: ' + headers.slice(0,8).map(esc).join(', ') + (headers.length > 8 ? '…' : '') + '</span>',
+        'ok'
+      );
+    }).catch(function(e) {
+      setUrlStatus('<i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i><strong>Failed:</strong> ' + esc(e.message) + '<br><span style="opacity:.75;">Make sure the sheet is Published to the web as CSV.</span>', 'err');
+    });
+  };
+
+  // ── Save CSV URL ──────────────────────────────────────────────────
+  window._ctisSaveSettings = function() {
+    var urlEl = document.getElementById('ctis-csv-url');
+    var url   = urlEl ? urlEl.value.trim() : '';
+    var btn   = document.getElementById('ctis-save-btn');
+    if (!url) { showMsg('ctis-save-msg', '✗ Enter a CSV URL first', false); return; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; btn.style.opacity = '.7'; }
+    var stored = loadStoredSettings();
+    stored.csvUrl = url;
+    fetch('/api/studio/csv_settings?type=contact_information', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
+      body: JSON.stringify(stored)
+    }).then(function(r){
+      if (!r.ok) return r.json().catch(function(){ return { ok: false, error: 'HTTP ' + r.status }; })
+                               .then(function(d){ throw new Error(d && d.error ? String(d.error) : 'HTTP ' + r.status); });
+      return r.json().catch(function(){ return { ok: true }; });
+    }).then(function(d){
+      if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
+      storeSettings(stored);
+      window._ctiCsvUrl = url;
+      showMsg('ctis-save-msg', '✓ Saved globally! Reload Contact Information to apply.', true);
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Contact Information Settings'; btn.style.opacity = '1'; }
+      if (typeof window._preloadStudioSettings === 'function') window._preloadStudioSettings();
+      if (typeof window._ctiRefresh === 'function') window._ctiRefresh();
+    }).catch(function(err){
+      showMsg('ctis-save-msg', '✗ Save failed: ' + (err && err.message ? err.message : 'Network error'), false);
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Contact Information Settings'; btn.style.opacity = '1'; }
+    });
+  };
+
+  // ── Search columns checkbox rendering ────────────────────────────
+  function _ctisRenderColCheckboxes() {
+    var container = document.getElementById('ctis-col-checkboxes');
+    if (!container) return;
+    var stored = loadStoredSettings();
+    var cols   = stored.detectedColumns || [];
+    var active = stored.searchColumns || null;
+    if (!cols.length) {
+      container.innerHTML = '<span style="font-size:11px;color:var(--ss-muted);font-style:italic;">Load a CSV URL first to see columns.</span>';
+      return;
+    }
+    container.innerHTML = cols.map(function(col) {
+      var checked = !active || active.indexOf(col) >= 0;
+      return '<label style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);cursor:pointer;font-size:11px;color:var(--ss-text);">' +
+        '<input type="checkbox" data-ctis-col="' + esc(col) + '" ' + (checked ? 'checked' : '') +
+        ' style="accent-color:#14b8a6;cursor:pointer;">' + esc(col) + '</label>';
+    }).join('');
+  }
+
+  window._ctisSelectAllCols = function(val) {
+    document.querySelectorAll('[data-ctis-col]').forEach(function(cb) { cb.checked = val; });
+  };
+
+  window._ctisSaveSearchCols = function() {
+    var checked = [];
+    document.querySelectorAll('[data-ctis-col]:checked').forEach(function(cb) { checked.push(cb.dataset.ctisCol); });
+    var stored = loadStoredSettings();
+    var allCols = stored.detectedColumns || [];
+    stored.searchColumns = (checked.length === allCols.length) ? null : checked;
+    storeSettings(stored);
+    fetch('/api/studio/csv_settings?type=contact_information', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _getApiTok() },
+      body: JSON.stringify(stored)
+    }).then(function(r){
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json().catch(function(){ return { ok: true }; });
+    }).then(function(d){
+      if (!d || !d.ok) throw new Error(d && d.error ? String(d.error) : 'Server error');
+      window._ctiSearchCols = stored.searchColumns;
+      showMsg('ctis-cols-msg', '✓ Search columns saved.', true);
+    }).catch(function(err){
+      showMsg('ctis-cols-msg', '✗ Failed: ' + (err && err.message ? err.message : 'Network error'), false);
+    });
+    window._ctiSearchCols = stored.searchColumns;
+    showMsg('ctis-cols-msg', '✓ Search columns saved.', true);
+  };
+
+})();
+
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
    PARTS NUMBER TAB — Tab logic for the Parts Number tab
    ═══════════════════════════════════════════════════════════════════
    Reads:  window._pnCsvUrl       (set by Part Number Settings)
@@ -11065,6 +11503,7 @@
   }
 
   var _displayCols = [];
+  var _ctiSidebarCat = '';
 
   /* ── Apply search + filter ──────────────────────────────────── */
   function _applySearchAndFilter() {
@@ -11304,6 +11743,551 @@
   };
 
 })();
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   CONTACT INFORMATION TAB — Tab logic for the Contact Information tab
+   ═══════════════════════════════════════════════════════════════════
+   Reads:  window._ctiCsvUrl       (set by Contact Information Settings)
+           window._ctiSearchCols   (set by Contact Information Settings)
+           window.StudioCache     (IndexedDB cache layer)
+
+   Exposes:
+   - window._ctiInit()          → entry point (called by activateTab)
+   - window._ctiRefresh()       → force reload from network
+   - window._ctiOnSearch(q)     → search handler (sidebar + main search)
+   - window._ctiApplyFilters()  → category filter change
+   - window._ctiSort(col)       → sort by column key
+   - window._ctiChangePage(dir) → pagination
+   - window._ctiExportCsv()     → export filtered data as CSV
+═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  /* ── State ─────────────────────────────────────────────────── */
+  var _allData     = [];   // full parsed dataset
+  var _filtered    = [];   // after search + filter
+  var _columns     = [];   // detected column keys (lowercase-normalized)
+  var _colLabels   = {};   // { key: 'Original Header' }
+  var _sortKey     = '';
+  var _sortDir     = 1;    // 1=asc, -1=desc
+  var _query       = '';
+  var _catFilter   = '';
+  var _page        = 1;
+  var _perPage     = 100;
+  var _initialized = false;
+  var _loading     = false;
+
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function el(id)  { return document.getElementById(id); }
+
+  /* ── Init ──────────────────────────────────────────────────── */
+  window._pnInit = function() {
+    if (_initialized && _allData.length) {
+      _render();
+      return;
+    }
+    _loadData();
+  };
+
+  window._pnRefresh = function() {
+    _initialized = false;
+    _allData     = [];
+    _filtered    = [];
+    _columns     = [];
+    _colLabels   = {};
+    _loadData();
+  };
+
+  /* ── Load data (cache-first, then network) ─────────────────── */
+  function _loadData() {
+    if (_loading) return;
+    _loading = true;
+    _setBodyLoading('Loading Contact Information data…');
+
+    // 1. Try StudioCache first
+    var cacheAvailable = typeof window.StudioCache !== 'undefined';
+    var cachePromise = cacheAvailable
+      ? window.StudioCache.getBundle('contact_information')
+      : Promise.resolve(null);
+
+    cachePromise.then(function(cached) {
+      if (cached && cached.data && cached.data.length) {
+        _parseData(cached.data, true);
+        return;
+      }
+      // 2. Fall back to network
+      return _fetchFromNetwork();
+    }).catch(function() {
+      return _fetchFromNetwork();
+    }).catch(function(e) {
+      _loading = false;
+      _setBodyError(e.message);
+    });
+  }
+
+  function _fetchFromNetwork() {
+    function _loadSettingsIfNeeded() {
+      if (window._ctiCsvUrl) return Promise.resolve();
+      var tok = '';
+      try {
+        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+        if (raw) {
+          var p = JSON.parse(raw);
+          if (p && p.access_token) tok = p.access_token;
+        }
+        if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken();
+      } catch(_) {}
+      if (!tok) return Promise.resolve(); // no token yet — caller will handle empty url
+      return fetch('/api/studio/csv_settings?type=contact_information', {
+        headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-cache' }
+      }).then(function(resp) { return resp.ok ? resp.json().catch(function(){ return null; }) : null; })
+        .then(function(d) {
+          if (d && d.ok && d.settings && d.settings.csvUrl) {
+            window._ctiCsvUrl = d.settings.csvUrl;
+            window._ctiSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
+              ? d.settings.searchColumns : null;
+          }
+        })
+        .catch(function() {});
+    }
+
+    return _loadSettingsIfNeeded().then(function() {
+      var url = window._ctiCsvUrl;
+      if (!url) {
+        // Try to read from localStorage
+        try {
+          var s = localStorage.getItem('ss_contact_information_settings');
+          if (s) { var p = JSON.parse(s); url = p.csvUrl || ''; }
+        } catch(_) {}
+      }
+      if (!url) {
+        _loading = false;
+        _setBodyEmpty();
+        return Promise.resolve();
+      }
+      return fetch(url).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' — check if sheet is published as CSV');
+        return r.text();
+      }).then(function(text) {
+        var data = _parseCsv(text);
+        if (typeof window.StudioCache !== 'undefined') {
+          window.StudioCache.setBundle('contact_information', data, '', data.length).catch(function() {});
+        }
+        _parseData(data, false);
+      });
+    });
+  }
+
+  /* ── CSV Parser ─────────────────────────────────────────────── */
+  function _parseCsv(text) {
+    var lines   = text.split('\n');
+    var headers = [];
+    var rows    = [];
+
+    function parseLine(line) {
+      var result = [], cur = '', inQ = false;
+      for (var i = 0; i < line.length; i++) {
+        var ch = line[i];
+        if (ch === '"') { inQ = !inQ; continue; }
+        if (ch === ',' && !inQ) { result.push(cur.trim()); cur = ''; continue; }
+        cur += ch;
+      }
+      result.push(cur.trim());
+      return result;
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].replace(/\r/,'').trim();
+      if (!line) continue;
+      var cells = parseLine(line);
+      if (i === 0) { headers = cells; continue; }
+      var row = {};
+      headers.forEach(function(h, idx) { row[h] = cells[idx] || ''; });
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  /* ── Parse + store data ────────────────────────────────────── */
+  function _parseData(rows, fromCache) {
+    _loading    = false;
+    _initialized = true;
+    _allData    = rows;
+
+    if (rows.length) {
+      var firstRow = rows[0];
+      _columns  = Object.keys(firstRow);
+      _colLabels = {};
+      _columns.forEach(function(k) { _colLabels[k] = k; });
+
+      // Try to load configured search cols from settings
+      try {
+        var s = localStorage.getItem('ss_contact_information_settings');
+        if (s) {
+          var p = JSON.parse(s);
+          window._ctiCsvUrl    = p.csvUrl || window._ctiCsvUrl || '';
+          window._ctiSearchCols = (Array.isArray(p.searchColumns) && p.searchColumns.length)
+            ? p.searchColumns : null;
+        }
+      } catch(_) {}
+    }
+
+    _buildCategoryFilter();
+    _buildTableHeader();
+    _applySearchAndFilter();
+  }
+
+  /* ── Build dynamic category filter ─────────────────────────── */
+  function _buildCategoryFilter() {
+    var catEl = el('cti-cat-filter');
+    if (!catEl || !_columns.length) return;
+
+    // Look for a 'category' or 'type' column (case-insensitive)
+    var catCol = _columns.find(function(c) {
+      return /category|type|group|class/i.test(c);
+    });
+
+    catEl.innerHTML = '<option value="">All End Users</option>';
+    if (!catCol) return;
+
+    var cats = {};
+    _allData.forEach(function(row) {
+      var v = (row[catCol] || '').trim();
+      if (v) cats[v] = (cats[v] || 0) + 1;
+    });
+
+    Object.keys(cats).sort().forEach(function(cat) {
+      var opt = document.createElement('option');
+      opt.value       = cat;
+      opt.textContent = cat + ' (' + cats[cat] + ')';
+      catEl.appendChild(opt);
+    });
+
+    catEl._catCol = catCol;
+    _ctiPopulateSidebarList();
+  }
+
+  function _ctiPopulateSidebarList() {
+    var container = el('cti-sidebar-cat-list');
+    var catEl = el('cti-cat-filter');
+    if (!container || !catEl) return;
+    var total = (_allData || []).length;
+    var html = '';
+    html += '<button class="prem-filter-btn ov' + (_ctiSidebarCat ? '' : ' active') + '" onclick="window._ctiSetSidebarFilter(\'\')">' +
+      '<span class="prem-filter-inner"><span class="prem-filter-ico active"><i class="fas fa-users"></i></span><span class="prem-filter-lbl">All End Users</span></span>' +
+      '<span class="prem-filter-cnt">' + total.toLocaleString() + '</span></button>';
+    for (var i = 0; i < catEl.options.length; i++) {
+      var opt = catEl.options[i];
+      if (!opt.value) continue;
+      var isActive = _ctiSidebarCat === opt.value;
+      var lbl = opt.textContent.trim();
+      var m = lbl.match(/^(.+?)\s*\((\d+)\)$/);
+      var clean = m ? m[1] : lbl;
+      var cnt = m ? m[2] : '';
+      html += '<button class="prem-filter-btn ov' + (isActive ? ' active' : '') + '" onclick="window._ctiSetSidebarFilter(\'' + opt.value.replace(/'/g,"\\'") + '\')">' +
+        '<span class="prem-filter-inner"><span class="prem-filter-ico ' + (isActive ? 'active' : 'idle') + '"><i class="fas fa-user"></i></span><span class="prem-filter-lbl">' + esc(clean) + '</span></span>' +
+        '<span class="prem-filter-cnt">' + cnt + '</span></button>';
+    }
+    container.innerHTML = html;
+  }
+
+  function _ctiUpdateFilterBadge(val) {
+    var badge = el('cti-active-filter');
+    var label = el('cti-filter-label');
+    if (!badge || !label) return;
+    if (val) {
+      label.textContent = val;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  /* ── Build dynamic table header ─────────────────────────────── */
+  function _buildTableHeader() {
+    var thead = el('cti-thead-row');
+    if (!thead) return;
+    var displayCols = _columns.slice(0, 8);
+    thead.innerHTML = '<th style="width:38px;">#</th>' +
+      displayCols.map(function(col) {
+        var iconId = 'cti-sort-' + col.replace(/\W/g,'_');
+        return '<th onclick="window._ctiSort(\'' + col.replace(/'/g,"\\'") + '\')" style="white-space:nowrap;cursor:pointer;">' +
+          esc(col) + ' <i class="fas fa-sort" id="' + iconId + '" style="opacity:.3;font-size:8px;"></i></th>';
+      }).join('') +
+      (_columns.some(function(c) { return /url|link|href/i.test(c); }) ?
+        '<th>Link</th>' : '');
+    _displayCols = displayCols;
+  }
+
+  var _displayCols = [];
+
+  /* ── Apply search + filter ──────────────────────────────────── */
+  function _applySearchAndFilter() {
+    var q       = (_query || '').trim().toLowerCase();
+    var catCol  = el('cti-cat-filter') ? el('cti-cat-filter')._catCol : null;
+    var catVal  = (_catFilter || '').trim();
+    var searchCols = window._ctiSearchCols || null;
+
+    _filtered = _allData.filter(function(row) {
+      // Category filter
+      if (catVal && catCol && (row[catCol] || '').trim() !== catVal) return false;
+      // Text search
+      if (q) {
+        var cols = searchCols || _columns;
+        return cols.some(function(col) {
+          return (row[col] || '').toLowerCase().indexOf(q) >= 0;
+        });
+      }
+      return true;
+    });
+
+    // Sort
+    if (_sortKey) {
+      var sk = _sortKey, sd = _sortDir;
+      _filtered.sort(function(a, b) {
+        var av = (a[sk] || '').toLowerCase();
+        var bv = (b[sk] || '').toLowerCase();
+        return av < bv ? -sd : av > bv ? sd : 0;
+      });
+    }
+
+    _page = 1;
+    _render();
+  }
+
+  /* ── Render table ───────────────────────────────────────────── */
+  function _render() {
+    var body     = el('cti-table-body');
+    var pageInfo = el('cti-page-info');
+    var pageBtns = el('cti-page-btns');
+    var prevBtn  = el('cti-prev-btn');
+    var nextBtn  = el('cti-next-btn');
+    var recCnt   = el('cti-record-count');
+    var schCnt   = el('cti-search-count');
+
+    var total    = _filtered.length;
+    var pages    = Math.max(1, Math.ceil(total / _perPage));
+    _page        = Math.max(1, Math.min(_page, pages));
+    var start    = (_page - 1) * _perPage;
+    var end      = Math.min(start + _perPage, total);
+    var slice    = _filtered.slice(start, end);
+
+    // Record count badge — HD
+    if (recCnt) {
+      recCnt.innerHTML =
+        '<span style="font-weight:700;margin-right:3px;">' + total.toLocaleString() + '</span>' +
+        '<span style="font-size:10px;font-weight:400;color:var(--ss-muted);">of ' + _allData.length.toLocaleString() + ' total</span>';
+    }
+    if (schCnt) schCnt.textContent = total.toLocaleString() + ' total';
+
+    var statusEl = el('cti-status');
+    if (statusEl) statusEl.textContent = total.toLocaleString() + ' result' + (total !== 1 ? 's' : '');
+
+    _renderSidebarList(slice, start);
+    _updateSidebarStats();
+
+    if (!body) return;
+    if (!slice.length) {
+      body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:10px;color:var(--ss-muted);">' +
+        '<i class="fas fa-barcode" style="font-size:26px;opacity:.2;"></i>' +
+        '<div style="font-size:12px;opacity:.5;">No results found</div>' +
+        '<div style="font-size:10px;opacity:.4;">' + (_query ? 'Try a different search term' : 'No data loaded') + '</div></div>';
+    } else {
+      var linkCol = _columns.find(function(c) { return /url|link|href/i.test(c); });
+      var html = '<table class="prem-table cyan" style="width:100%;min-width:700px;">';
+      slice.forEach(function(row, i) {
+        var rowNum = start + i + 1;
+        var rowBg = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.012)';
+        html += '<tr style="background:' + rowBg + ';" ' +
+          'onmouseover="this.querySelectorAll(\'td\').forEach(function(t){t.style.background=\'rgba(20,184,166,.08)\'})" ' +
+          'onmouseout="this.querySelectorAll(\'td\').forEach(function(t){t.style.background=\'\'});">' +
+          '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);font-size:10px;color:var(--ss-muted);width:38px;">' + rowNum + '</td>';
+        (_displayCols.length ? _displayCols : _columns.slice(0,8)).forEach(function(col, ci) {
+          var val = row[col] || '';
+          // First col = brand badge, second = type text, third = part number, rest = description
+          var cellContent;
+          if (ci === 0) cellContent = '<span class="pn-brand-badge">' + esc(val) + '</span>';
+          else if (ci === 2) cellContent = '<span class="pn-partno">' + esc(val) + '</span>';
+          else if (ci === 3) cellContent = '<span class="pn-desc">' + esc(val) + '</span>';
+          else cellContent = '<span style="color:var(--ss-muted);font-size:11px;">' + esc(val) + '</span>';
+          html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;" title="' + esc(val) + '">' + cellContent + '</td>';
+        });
+        if (linkCol && row[linkCol]) {
+          html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);"><a href="' + esc(row[linkCol]) + '" target="_blank" rel="noopener" ' +
+            'style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;background:rgba(20,184,166,.1);border:1px solid rgba(20,184,166,.26);color:#14b8a6;font-size:9px;font-weight:700;text-decoration:none;">' +
+            '<i class="fas fa-external-link-alt" style="font-size:8px;"></i> Open</a></td>';
+        } else if (_columns.some(function(c) { return /url|link|href/i.test(c); })) {
+          html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);font-size:10px;color:var(--ss-muted);">—</td>';
+        }
+        html += '</tr>';
+      });
+      html += '</table>';
+      body.innerHTML = html;
+    }
+
+    // Pagination HD
+    if (pageInfo) pageInfo.textContent = 'Showing ' + (total ? (start+1).toLocaleString() : 0) + '–' + end.toLocaleString() + ' of ' + total.toLocaleString() + ' entries';
+    if (prevBtn) { prevBtn.disabled = _page <= 1; prevBtn.style.opacity = _page <= 1 ? '.35' : '1'; }
+    if (nextBtn) { nextBtn.disabled = _page >= pages; nextBtn.style.opacity = _page >= pages ? '.35' : '1'; }
+    if (pageBtns) {
+      var btnHtml = '';
+      var lo = Math.max(1, _page-2), hi = Math.min(pages, _page+2);
+      for (var p = lo; p <= hi; p++) {
+        var isActive = p === _page;
+        btnHtml += '<button onclick="window._ctiGoPage(' + p + ')" class="prem-page-num ' + (isActive ? 'cyan' : '') + '" ' +
+          (!isActive ? 'style="border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:var(--ss-muted);"' : '') +
+          '>' + p + '</button>';
+      }
+      pageBtns.innerHTML = btnHtml;
+    }
+  }
+
+  /* ── Sidebar list ───────────────────────────────────────────── */
+  function _renderSidebarList(slice, startIdx) {
+    var listEl = el('cti-results-list');
+    if (!listEl) return;
+    if (!slice.length) {
+      listEl.innerHTML = '<div style="padding:16px 12px;text-align:center;color:var(--ss-muted);">' +
+        '<i class="fas fa-search" style="font-size:18px;opacity:.2;display:block;margin-bottom:8px;"></i>' +
+        '<div style="font-size:11px;">No results</div></div>';
+      return;
+    }
+    var firstCol  = _displayCols[0] || _columns[0] || '';
+    var secondCol = _displayCols[1] || _columns[1] || '';
+    listEl.innerHTML = slice.slice(0, 50).map(function(row, i) {
+      var num   = startIdx + i + 1;
+      var title = esc(row[firstCol] || '—');
+      var sub   = secondCol ? esc(row[secondCol] || '') : '';
+      return '<div style="padding:9px 12px;border-bottom:1px solid var(--ss-border2);cursor:default;transition:background .12s;" ' +
+        'onmouseover="this.style.background=\'rgba(20,184,166,.08)\'" onmouseout="this.style.background=\'\'">' +
+        '<div style="display:flex;align-items:center;gap:6px;">' +
+        '<span style="font-size:9px;color:var(--ss-muted);min-width:22px;">' + num + '</span>' +
+        '<div style="min-width:0;">' +
+        '<div style="font-size:11px;font-weight:700;color:#e6edf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>' +
+        (sub ? '<div style="font-size:9px;color:var(--ss-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + sub + '</div>' : '') +
+        '</div></div></div>';
+    }).join('');
+  }
+
+  /* ── Loading / empty / error states ────────────────────────── */
+  function _setBodyLoading(msg) {
+    var body = el('cti-table-body');
+    if (body) body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--ss-muted);">' +
+      '<i class="fas fa-spinner fa-spin" style="font-size:20px;opacity:.4;"></i>' +
+      '<span style="font-size:13px;opacity:.5;">' + esc(msg) + '</span></div>';
+    var list = el('cti-results-list');
+    if (list) list.innerHTML = '<div style="padding:16px 12px;text-align:center;color:var(--ss-muted);">' +
+      '<i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.3;display:block;margin-bottom:8px;"></i>' +
+      '<div style="font-size:11px;">' + esc(msg) + '</div></div>';
+  }
+
+  function _setBodyEmpty() {
+    var body = el('cti-table-body');
+    if (body) body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:10px;color:var(--ss-muted);">' +
+      '<i class="fas fa-link-slash" style="font-size:28px;opacity:.4;"></i>' +
+      '<div style="font-size:13px;">No CSV URL configured</div>' +
+      '<div style="font-size:11px;opacity:.6;">Go to General Settings → Contact Information Settings</div></div>';
+    var list = el('cti-results-list');
+    if (list) list.innerHTML = '<div style="padding:16px 12px;text-align:center;color:var(--ss-muted);">' +
+      '<i class="fas fa-barcode" style="font-size:20px;opacity:.2;display:block;margin-bottom:8px;"></i>' +
+      '<div style="font-size:11px;opacity:.7;">No CSV URL configured.<br><span style="opacity:.6;">General Settings → Contact Information Settings</span></div></div>';
+  }
+
+  function _setBodyError(msg) {
+    var body = el('cti-table-body');
+    if (body) body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:10px;color:#f85149;">' +
+      '<i class="fas fa-exclamation-triangle" style="font-size:28px;opacity:.6;"></i>' +
+      '<div style="font-size:13px;">Failed to load Contact Information data</div>' +
+      '<div style="font-size:11px;opacity:.6;">' + esc(msg) + '</div>' +
+      '<button onclick="window._ctiRefresh()" style="margin-top:8px;background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:#f85149;padding:7px 16px;border-radius:6px;font-size:12px;font-weight:700;font-family:var(--ss-font);cursor:pointer;">' +
+      '<i class="fas fa-redo"></i> Retry</button></div>';
+  }
+
+  /* ── Public handlers ────────────────────────────────────────── */
+  window._ctiOnSearch = function(q) {
+    _query = q || '';
+    // Sync both search inputs
+    var si = el('cti-search-input'), mi = el('cti-main-search');
+    if (si && si.value !== _query) si.value = _query;
+    if (mi && mi.value !== _query) mi.value = _query;
+    _applySearchAndFilter();
+  };
+
+  window._ctiApplyFilters = function() {
+    var cf = el('cti-cat-filter');
+    _catFilter = cf ? cf.value : '';
+    _ctiSidebarCat = _catFilter || '';
+    _ctiPopulateSidebarList();
+    _ctiUpdateFilterBadge(_ctiSidebarCat);
+    _applySearchAndFilter();
+  };
+
+  window._ctiSort = function(col) {
+    if (_sortKey === col) { _sortDir = -_sortDir; }
+    else { _sortKey = col; _sortDir = 1; }
+    // Update sort icons
+    document.querySelectorAll('[id^="cti-sort-"]').forEach(function(ic) {
+      ic.className = 'fas fa-sort'; ic.style.opacity = '.3';
+    });
+    var iconId = 'cti-sort-' + col.replace(/\W/g,'_');
+    var icon = el(iconId);
+    if (icon) { icon.className = 'fas fa-sort-' + (_sortDir > 0 ? 'up' : 'down'); icon.style.opacity = '1'; }
+    _applySearchAndFilter();
+  };
+
+  window._ctiChangePage = function(dir) {
+    var pages = Math.max(1, Math.ceil(_filtered.length / _perPage));
+    _page = Math.max(1, Math.min(_page + dir, pages));
+    _render();
+  };
+
+  window._ctiGoPage = function(p) {
+    _page = p;
+    _render();
+  };
+
+  window._ctiExportCsv = function() {
+    if (!_filtered.length || !_columns.length) return;
+    var rows = [_columns.join(',')].concat(_filtered.map(function(row) {
+      return _columns.map(function(c) {
+        var v = String(row[c] || '');
+        return /[,"\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v;
+      }).join(',');
+    }));
+    var blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    var a    = document.createElement('a');
+    a.href   = URL.createObjectURL(blob);
+    a.download = 'contact_information_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  window._ctiSetSidebarFilter = function(val) {
+    _ctiSidebarCat = val || '';
+    var cf = el('cti-cat-filter');
+    if (cf) cf.value = _ctiSidebarCat;
+    _ctiUpdateFilterBadge(_ctiSidebarCat);
+    _ctiPopulateSidebarList();
+    window._ctiApplyFilters();
+  };
+
+  window._ctiClearSidebarFilter = function() {
+    window._ctiSetSidebarFilter('');
+  };
+
+  window._ctiToggleSection = function() {
+    var list = el('cti-sidebar-cat-list');
+    var btn  = el('cti-cat-toggle-btn');
+    if (!list) return;
+    var hidden = list.style.display === 'none';
+    list.style.display = hidden ? 'flex' : 'none';
+    if (btn) btn.textContent = hidden ? '▾' : '▸';
+  };
+
+})();
+
 </script>
 
 <style>
