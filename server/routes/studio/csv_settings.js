@@ -23,11 +23,16 @@ module.exports = async (req, res) => {
     if (!user) return sendJson(res, 401, { ok: false, error: 'unauthorized' });
 
     const type = req.query.type;
-    if (type !== 'connect_plus' && type !== 'parts_number') {
+    if (type !== 'connect_plus' && type !== 'parts_number' && type !== 'contact_information') {
       return sendJson(res, 400, { ok: false, error: 'invalid_type' });
     }
 
-    const docKey = type === 'connect_plus' ? 'ss_connectplus_settings' : 'ss_parts_number_settings';
+    const docKey =
+      type === 'connect_plus'
+        ? 'ss_connectplus_settings'
+        : type === 'contact_information'
+          ? 'ss_contact_information_settings'
+          : 'ss_parts_number_settings';
 
     // ── GET: return stored settings ───────────────────────────────────
     if (req.method === 'GET') {
