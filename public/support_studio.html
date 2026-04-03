@@ -6777,21 +6777,23 @@
   const LEFT_PANELS = ['home','catalog','config','qbs','connectplus','parts_number','contact_information','knowledge_base','support_records','search_engine_2'];
 
   function activateTab(target) {
+    const contentTarget = (target === 'search_engine_2') ? 'support_records' : target;
+
     document.querySelectorAll('.ss-tab').forEach(t =>
       t.classList.toggle('active', t.dataset.tab === target));
     LEFT_PANELS.forEach(id => {
       const el = document.getElementById('left-panel-' + id);
       if (!el) return;
-      el.style.display = (id === target) ? 'flex' : 'none';
+      el.style.display = (id === contentTarget) ? 'flex' : 'none';
     });
     document.querySelectorAll('.ss-canvas-inner').forEach(el =>
       el.classList.remove('active'));
-    const canvas = document.getElementById('canvas-' + target);
+    const canvas = document.getElementById('canvas-' + contentTarget);
     if (canvas) canvas.classList.add('active');
-    if (target === 'catalog' && typeof window._catInit === 'function') {
+    if (contentTarget === 'catalog' && typeof window._catInit === 'function') {
       window._catInit();
     }
-    if (target === 'config') {
+    if (contentTarget === 'config') {
       // Load the currently active settings section
       // Guard: _sqbLoadSettings may not be defined if called before its script block loads
       const activeNavBtn = document.querySelector('.ss-settings-nav-btn.active, .ss-settings-nav-btn[style*="border-left-color: rgb"]');
@@ -6806,24 +6808,24 @@
         window._kbLoadSettings();
       }
     }
-    if (target === 'qbs') {
+    if (contentTarget === 'qbs') {
       // Guard: _qbsInit is defined in a later script block
       if (typeof window._qbsInit === 'function') window._qbsInit();
       else setTimeout(function() { if (typeof window._qbsInit === 'function') window._qbsInit(); }, 200);
     }
-    if (target === 'connectplus') {
+    if (contentTarget === 'connectplus') {
       if (typeof window._cpInit === 'function') window._cpInit();
     }
-    if (target === 'parts_number') {
+    if (contentTarget === 'parts_number') {
       if (typeof window._pnInit === 'function') window._pnInit();
     }
-    if (target === 'contact_information') {
+    if (contentTarget === 'contact_information') {
       if (typeof window._ctiInit === 'function') window._ctiInit();
     }
-    if (target === 'knowledge_base') {
+    if (contentTarget === 'knowledge_base') {
       if (typeof window._kbInit === 'function') window._kbInit();
     }
-    if (target === 'support_records') {
+    if (contentTarget === 'support_records') {
       if (typeof window._srInit === 'function') window._srInit();
     }
     if (target === 'search_engine_2') {
