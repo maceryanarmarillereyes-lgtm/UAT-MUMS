@@ -5120,38 +5120,66 @@
       <!-- ── CALL INFORMATION — hidden by default, toggle via widget ── -->
       <div id="ci-call-info-section" style="display:none;flex-direction:column;border-bottom:1px solid var(--ss-border2);overflow-y:auto;flex-shrink:0;">
         <div class="ss-panel" style="flex:1;">
-          <div class="ss-panel-title"><i class="fas fa-phone-alt"></i> Call Information</div>
+          <div class="ss-panel-title" style="display:flex;align-items:center;gap:7px;">
+            <i class="fas fa-phone-alt"></i> Call Information
+            <span id="ci-edit-badge" style="display:none;font-size:8px;font-weight:800;padding:2px 7px;border-radius:10px;background:rgba(210,153,34,.15);border:1px solid rgba(210,153,34,.3);color:#d29922;letter-spacing:.04em;margin-left:4px;">EDITING</span>
+          </div>
+
+          <!-- Caller Name * -->
           <div class="ss-field-group">
-            <div class="ss-field-label">Caller Name</div>
+            <div class="ss-field-label">Caller Name <span style="color:#f85149;">*</span></div>
             <input class="ss-input" type="text" id="ci-caller-name" placeholder="Enter caller name…">
           </div>
+
+          <!-- Company (optional) -->
           <div class="ss-field-group">
-            <div class="ss-field-label">Contact / Ticket #</div>
-            <input class="ss-input" type="text" id="ci-ticket" placeholder="Ticket or contact #…">
+            <div class="ss-field-label">Company</div>
+            <input class="ss-input" type="text" id="ci-company" placeholder="Company or organisation…">
           </div>
+
+          <!-- Contact Number * -->
           <div class="ss-field-group">
-            <div class="ss-field-label">Issue Summary</div>
-            <textarea class="ss-input" id="ci-issue" placeholder="Brief description of issue…" style="resize:vertical;min-height:60px;"></textarea>
+            <div class="ss-field-label">Contact Number <span style="color:#f85149;">*</span></div>
+            <input class="ss-input" type="text" id="ci-contact-number" placeholder="e.g. +63 917 …">
           </div>
+
+          <!-- End User * -->
           <div class="ss-field-group">
-            <div class="ss-field-label">Product / Item</div>
-            <input class="ss-input" type="text" id="ci-product" placeholder="e.g. CTR-001 or product name…">
+            <div class="ss-field-label">End User <span style="color:#f85149;">*</span></div>
+            <input class="ss-input" type="text" id="ci-end-user" placeholder="e.g. Woolworths, iCare…">
           </div>
+
+          <!-- Case # — with live QB status lookup -->
           <div class="ss-field-group">
-            <div class="ss-field-label">Call Notes</div>
-            <textarea class="ss-input" id="ci-notes" placeholder="Detailed call notes…" style="resize:vertical;min-height:80px;"></textarea>
+            <div class="ss-field-label" style="display:flex;align-items:center;gap:6px;">
+              Case #
+              <span id="ci-case-status-badge" style="display:none;font-size:8px;font-weight:800;padding:2px 8px;border-radius:10px;border:1px solid rgba(88,166,255,.3);background:rgba(88,166,255,.12);color:#58a6ff;letter-spacing:.03em;"></span>
+              <span id="ci-case-lookup-spin" style="display:none;width:10px;height:10px;border:2px solid rgba(255,255,255,.1);border-top-color:#58a6ff;border-radius:50%;animation:yct-spin .7s linear infinite;"></span>
+            </div>
+            <input class="ss-input" type="text" id="ci-case-num" placeholder="e.g. 523714" oninput="window._ciCaseLookup(this.value)">
           </div>
+
+          <!-- Short Description * -->
           <div class="ss-field-group">
-            <div class="ss-field-label">Status</div>
-            <select class="ss-input" id="ci-status" style="background:var(--ss-surface3);color:var(--ss-text);">
-              <option value="">— Select status —</option>
-              <option value="Open">Open</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Escalated">Escalated</option>
-              <option value="Resolved">Resolved</option>
-              <option value="Follow-up">Follow-up Required</option>
-            </select>
+            <div class="ss-field-label">Short Description <span style="color:#f85149;">*</span></div>
+            <input class="ss-input" type="text" id="ci-short-desc" placeholder="Brief summary of the issue…">
           </div>
+
+          <!-- Detailed Description * -->
+          <div class="ss-field-group">
+            <div class="ss-field-label">Detailed Description <span style="color:#f85149;">*</span></div>
+            <textarea class="ss-input" id="ci-detail-desc" placeholder="Full description of the call…" style="resize:vertical;min-height:68px;"></textarea>
+          </div>
+
+          <!-- Action Taken * -->
+          <div class="ss-field-group">
+            <div class="ss-field-label">Action Taken <span style="color:#f85149;">*</span></div>
+            <textarea class="ss-input" id="ci-action-taken" placeholder="Steps taken, resolution, follow-up…" style="resize:vertical;min-height:60px;"></textarea>
+          </div>
+
+          <!-- Validation message -->
+          <div id="ci-req-msg" style="font-size:10px;color:#f85149;margin-bottom:4px;opacity:0;transition:opacity .3s;"></div>
+
           <div class="ss-btn-row" style="margin-top:8px;gap:6px;">
             <button id="ci-save-btn" onclick="window._ciSaveNote()" style="flex:1;background:rgba(63,185,80,.15);border:1px solid rgba(63,185,80,.4);border-radius:7px;color:#3fb950;padding:7px 10px;font-size:11px;font-weight:700;font-family:var(--ss-font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s;">
               <i class="fas fa-save"></i> Save Note
@@ -6680,6 +6708,10 @@
   var _ciNotesMemory = null;  // in-memory cache
   var _ciNotesLoaded = false; // flag: have we fetched from Supabase yet?
 
+  // ── BUG FIX: editing state tracker ───────────────────────────────────────
+  // -1 = new note; >= 0 = index of note being edited
+  var _ciEditingIdx = -1;
+
   // ── Auth token helper ─────────────────────────────────────────────────────
   function _ciGetToken() {
     try {
@@ -6693,7 +6725,6 @@
   // ── Load from Supabase (on first open) ────────────────────────────────────
   function loadCallNotes() {
     if (_ciNotesMemory !== null) return _ciNotesMemory.slice();
-    // Return local cache while Supabase fetch is in progress
     try { var raw = localStorage.getItem(CI_KEY); if (raw) { _ciNotesMemory = JSON.parse(raw) || []; return _ciNotesMemory.slice(); } } catch(_) {}
     _ciNotesMemory = [];
     return [];
@@ -6728,6 +6759,109 @@
     }).catch(function() {});
   }
 
+  /* ── Helper: read all CI field values ────────────────────────────── */
+  function _ciReadFields() {
+    function v(id) { var e = document.getElementById(id); return e ? e.value.trim() : ''; }
+    return {
+      callerName:    v('ci-caller-name'),
+      company:       v('ci-company'),
+      contactNumber: v('ci-contact-number'),
+      endUser:       v('ci-end-user'),
+      caseNum:       v('ci-case-num'),
+      caseStatus:    (document.getElementById('ci-case-status-badge') || {}).textContent || '',
+      shortDesc:     v('ci-short-desc'),
+      detailDesc:    v('ci-detail-desc'),
+      actionTaken:   v('ci-action-taken'),
+    };
+  }
+
+  /* ── Helper: populate CI fields from a saved note ────────────────── */
+  function _ciPopulateFields(n) {
+    function s(id, val) { var e = document.getElementById(id); if (e) e.value = val || ''; }
+    s('ci-caller-name',    n.callerName);
+    s('ci-company',        n.company);
+    s('ci-contact-number', n.contactNumber);
+    s('ci-end-user',       n.endUser);
+    s('ci-case-num',       n.caseNum);
+    s('ci-short-desc',     n.shortDesc);
+    s('ci-detail-desc',    n.detailDesc);
+    s('ci-action-taken',   n.actionTaken);
+    // Restore QB status badge if stored
+    var badge = document.getElementById('ci-case-status-badge');
+    if (badge) {
+      if (n.caseStatus) {
+        badge.textContent = n.caseStatus;
+        badge.style.display = '';
+        _ciStyleStatusBadge(badge, n.caseStatus);
+      } else {
+        badge.style.display = 'none';
+        badge.textContent = '';
+      }
+    }
+  }
+
+  function _ciStyleStatusBadge(badge, statusText) {
+    var s = (statusText || '').toLowerCase();
+    var color = '#58a6ff'; // default blue
+    if (s.includes('invest'))  color = '#58a6ff';
+    else if (s.includes('init'))    color = '#d29922';
+    else if (s.includes('wait'))    color = '#a25ddc';
+    else if (s.includes('resolv'))  color = '#3fb950';
+    else if (s.includes('close') || s.includes('soft')) color = '#7d8590';
+    badge.style.background    = 'rgba(' + (color === '#58a6ff' ? '88,166,255' : color === '#d29922' ? '210,153,34' : color === '#a25ddc' ? '162,93,220' : color === '#3fb950' ? '63,185,80' : '125,133,144') + ',.12)';
+    badge.style.borderColor   = color + '55';
+    badge.style.color         = color;
+  }
+
+  /* ── QB Case# Status Lookup — debounced ───────────────────────────── */
+  var _ciCaseLookupTimer = null;
+  window._ciCaseLookup = function(val) {
+    var badge = document.getElementById('ci-case-status-badge');
+    var spin  = document.getElementById('ci-case-lookup-spin');
+    clearTimeout(_ciCaseLookupTimer);
+    var q = String(val || '').trim();
+    if (!q) {
+      if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
+      if (spin)  spin.style.display = 'none';
+      return;
+    }
+    if (spin) spin.style.display = '';
+    if (badge) badge.style.display = 'none';
+    _ciCaseLookupTimer = setTimeout(function() {
+      var tok = _ciGetToken();
+      if (!tok) { if (spin) spin.style.display = 'none'; return; }
+      fetch('/api/studio/qb_search?q=' + encodeURIComponent(q) + '&skip=0&top=10', {
+        headers: { 'Authorization': 'Bearer ' + tok }
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (spin) spin.style.display = 'none';
+        if (!d.ok || !Array.isArray(d.records) || !d.records.length) return;
+        // Find exact match: recordId === query (case-insensitive / trimmed)
+        var match = d.records.find(function(r) {
+          return String(r.qbRecordId || '').trim() === q ||
+                 String(r.qbRecordId || '').trim().toLowerCase() === q.toLowerCase();
+        }) || d.records[0];
+        if (!match || !match.fields || !match.columnMap) return;
+        // Extract case status value from fields
+        var statusFid = Object.keys(match.columnMap).find(function(id) {
+          return (match.columnMap[id] || '').toLowerCase().includes('case status') ||
+                 (match.columnMap[id] || '').toLowerCase() === 'status';
+        });
+        if (!statusFid) return;
+        var statusVal = match.fields[statusFid];
+        var statusText = (statusVal && statusVal.value != null) ? String(statusVal.value) : String(statusVal || '');
+        if (!statusText) return;
+        if (badge) {
+          badge.textContent = statusText;
+          badge.style.display = '';
+          _ciStyleStatusBadge(badge, statusText);
+        }
+      })
+      .catch(function() { if (spin) spin.style.display = 'none'; });
+    }, 700);
+  };
+
   /* ── Sidebar mini-list ───────────────────────────────── */
   function renderRecentNotes() {
     var list = document.getElementById('ci-recent-list');
@@ -6741,101 +6875,172 @@
       var dt = new Date(n.savedAt || Date.now());
       var timeStr = dt.toLocaleDateString('en-PH',{month:'short',day:'numeric'}) + ' ' +
                     dt.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'});
-      var statusColor = {Open:'#58a6ff','In Progress':'#d29922',Escalated:'#f85149',Resolved:'#3fb950','Follow-up Required':'#a25ddc'}[n.status] || 'var(--ss-muted)';
-      var statusDot = n.status ? '<span style="width:6px;height:6px;border-radius:50%;background:' + statusColor + ';display:inline-block;margin-right:5px;flex-shrink:0;"></span>' : '';
       var durBadge = n.callDuration ? '<span style="margin-left:auto;font-size:8px;font-weight:800;color:#f85149;font-family:var(--ss-font);background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.2);border-radius:4px;padding:2px 6px;flex-shrink:0;display:inline-flex;align-items:center;gap:3px;"><i class="fas fa-phone-volume" style="font-size:7px;"></i>' + n.callDuration + '</span>' : '';
+      var statusDot = n.caseStatus ? '<span style="font-size:8px;font-weight:700;color:#58a6ff;margin-left:4px;">' + escHtml(n.caseStatus) + '</span>' : '';
       return '<div class="ci-note-card" data-idx="' + i + '" onclick="window._ciLoadNote(' + i + ')" style="cursor:pointer;">' +
-        '<div class="ci-note-time" style="display:flex;align-items:center;gap:4px;">' + timeStr + (n.status ? ' · ' + statusDot + '<span style="color:' + statusColor + ';font-weight:700;">' + n.status + '</span>' : '') + durBadge + '</div>' +
-        '<div class="ci-note-caller">' + (n.callerName || '(no name)') + (n.ticket ? ' &nbsp;·&nbsp; ' + n.ticket : '') + '</div>' +
-        '<div style="font-size:9px;color:var(--ss-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (n.issue || n.notes || '—') + '</div>' +
+        '<div class="ci-note-time" style="display:flex;align-items:center;gap:4px;">' + timeStr + statusDot + durBadge + '</div>' +
+        '<div class="ci-note-caller">' + escHtml(n.callerName || '(no name)') + (n.caseNum ? ' &nbsp;·&nbsp; #' + escHtml(n.caseNum) : '') + '</div>' +
+        '<div style="font-size:9px;color:var(--ss-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escHtml(n.shortDesc || n.endUser || '—') + '</div>' +
         '</div>';
     }).join('');
   }
 
+  // ── BUG FIX 1: _ciLoadNote — NO timer start when editing a saved note ─────
   window._ciLoadNote = function(idx) {
     var notes = loadCallNotes();
     var n = notes[idx];
     if (!n) return;
-    var el = function(id) { return document.getElementById(id); };
-    if (el('ci-caller-name')) el('ci-caller-name').value = n.callerName || '';
-    if (el('ci-ticket'))      el('ci-ticket').value      = n.ticket     || '';
-    if (el('ci-issue'))       el('ci-issue').value       = n.issue      || '';
-    if (el('ci-product'))     el('ci-product').value     = n.product    || '';
-    if (el('ci-notes'))       el('ci-notes').value       = n.notes      || '';
-    if (el('ci-status'))      el('ci-status').value      = n.status     || '';
-    // Re-open Call Information so user can edit and re-save
+    _ciEditingIdx = idx; // track which note we're editing
+    _ciPopulateFields(n);
+    // Show "EDITING" badge
+    var eb = document.getElementById('ci-edit-badge');
+    if (eb) eb.style.display = '';
+    // Re-open Call Information — but DO NOT start the timer (fix for timer bug)
     _cwShowCallInfo();
-    if (!_cwCallStartTime) _cwStartTimer();
+    // _cwStartTimer() is intentionally NOT called here — timer only runs for live calls
   };
 
-  /* ── Save & Clear ───────────────────────────────────── */
+  /* ── BUG FIX 2 + 3: Save — updates existing note when editing, required fields ── */
   window._ciSaveNote = function() {
-    var el = function(id) { return document.getElementById(id); };
-    // Capture duration BEFORE stopping the timer
+    var fields = _ciReadFields();
+    // Required field validation
+    var required = [
+      { key: 'callerName',    label: 'Caller Name' },
+      { key: 'contactNumber', label: 'Contact Number' },
+      { key: 'endUser',       label: 'End User' },
+      { key: 'shortDesc',     label: 'Short Description' },
+      { key: 'detailDesc',    label: 'Detailed Description' },
+      { key: 'actionTaken',   label: 'Action Taken' },
+    ];
+    var missing = required.filter(function(r) { return !fields[r.key]; });
+    var reqMsg = document.getElementById('ci-req-msg');
+    if (missing.length) {
+      if (reqMsg) {
+        reqMsg.textContent = '✗ Required: ' + missing.map(function(r){return r.label;}).join(', ');
+        reqMsg.style.opacity = '1';
+        clearTimeout(reqMsg._t);
+        reqMsg._t = setTimeout(function() { reqMsg.style.opacity = '0'; }, 4000);
+      }
+      return;
+    }
+    if (reqMsg) reqMsg.style.opacity = '0';
+
+    // Capture duration BEFORE stopping (only meaningful for live new calls)
     var durSecs  = _cwCallStartTime ? Math.floor((Date.now() - _cwCallStartTime) / 1000) : 0;
     var durLabel = durSecs > 0 ? _cwFmtTime(durSecs) : null;
 
     var note = {
-      callerName:   el('ci-caller-name') ? el('ci-caller-name').value.trim() : '',
-      ticket:       el('ci-ticket')      ? el('ci-ticket').value.trim()      : '',
-      issue:        el('ci-issue')       ? el('ci-issue').value.trim()       : '',
-      product:      el('ci-product')     ? el('ci-product').value.trim()     : '',
-      notes:        el('ci-notes')       ? el('ci-notes').value.trim()       : '',
-      status:       el('ci-status')      ? el('ci-status').value             : '',
-      callDuration: durLabel,   // e.g. "4:32" — null if no active call
-      savedAt:      new Date().toISOString(),
+      callerName:    fields.callerName,
+      company:       fields.company,
+      contactNumber: fields.contactNumber,
+      endUser:       fields.endUser,
+      caseNum:       fields.caseNum,
+      caseStatus:    fields.caseStatus,
+      shortDesc:     fields.shortDesc,
+      detailDesc:    fields.detailDesc,
+      actionTaken:   fields.actionTaken,
+      callDuration:  _ciEditingIdx >= 0
+                       ? (loadCallNotes()[_ciEditingIdx] || {}).callDuration || null
+                       : durLabel,   // preserve original duration when editing
+      savedAt:       new Date().toISOString(),
     };
+
     var all = loadCallNotes();
-    all.unshift(note);
+    if (_ciEditingIdx >= 0 && _ciEditingIdx < all.length) {
+      // ── BUG FIX 2: UPDATE existing note in-place instead of unshift ──
+      all[_ciEditingIdx] = note;
+    } else {
+      // ── New note: prepend ──
+      all.unshift(note);
+      // Only stop the live call timer for new notes, not edits
+      if (_cwCallStartTime) _cwStopTimer();
+    }
+    _ciEditingIdx = -1; // reset edit state
+
     saveCallNotes(all);
     renderRecentNotes();
 
-    // Stop timer + hide Call Information section after saving
-    if (_cwCallStartTime) _cwStopTimer();
-    // Small delay so user sees "Note saved!" before panel closes
-    setTimeout(function() { _cwHideCallInfo(); }, 900);
+    // Hide EDITING badge
+    var eb = document.getElementById('ci-edit-badge');
+    if (eb) eb.style.display = 'none';
 
     // Show success message
-    var ciMsg = el('ci-save-msg');
+    var ciMsg = document.getElementById('ci-save-msg');
     if (ciMsg) {
-      var durationTxt = durLabel ? ' (' + durLabel + ')' : '';
+      var durationTxt = note.callDuration ? ' (' + note.callDuration + ')' : '';
       ciMsg.textContent = '✓ Note saved!' + durationTxt;
       ciMsg.style.cssText = 'font-size:10px;color:#3fb950;text-align:center;margin-top:4px;opacity:1;transition:opacity .4s;';
       clearTimeout(ciMsg._t);
       ciMsg._t = setTimeout(function() { ciMsg.style.opacity = '0'; }, 2500);
     }
+
+    // Close panel after short delay
+    setTimeout(function() { _cwHideCallInfo(); }, 900);
   };
 
   window._ciClearForm = function() {
-    ['ci-caller-name','ci-ticket','ci-issue','ci-product','ci-notes'].forEach(function(id) {
+    ['ci-caller-name','ci-company','ci-contact-number','ci-end-user',
+     'ci-case-num','ci-short-desc','ci-detail-desc','ci-action-taken'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.value = '';
     });
-    var s = document.getElementById('ci-status');
-    if (s) s.value = '';
+    var badge = document.getElementById('ci-case-status-badge');
+    if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
+    var eb = document.getElementById('ci-edit-badge');
+    if (eb) eb.style.display = 'none';
+    _ciEditingIdx = -1;
   };
 
   /* ── Premium Notes Panel ────────────────────────────── */
-  var STATUS_COLORS = {
-    'Open':              '#58a6ff',
-    'In Progress':       '#d29922',
-    'Escalated':         '#f85149',
-    'Resolved':          '#3fb950',
-    'Follow-up Required':'#a25ddc'
-  };
-
   function buildNpCard(n, idx) {
     var dt      = new Date(n.savedAt || Date.now());
     var dateStr = dt.toLocaleDateString('en-PH',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
     var timeStr = dt.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'});
-    var sc      = STATUS_COLORS[n.status] || 'var(--ss-muted)';
-    var hasCaller = n.callerName || n.ticket;
+    var sc      = '#58a6ff';
+    if (n.caseStatus) {
+      var sl = n.caseStatus.toLowerCase();
+      if (sl.includes('invest')) sc = '#58a6ff';
+      else if (sl.includes('init'))   sc = '#d29922';
+      else if (sl.includes('wait'))   sc = '#a25ddc';
+      else if (sl.includes('resolv')) sc = '#3fb950';
+      else if (sl.includes('close') || sl.includes('soft')) sc = '#7d8590';
+    }
+    var hasCaller = n.callerName || n.caseNum;
     var fields = [
-      ['Issue',          n.issue],
-      ['Product',        n.product],
-      ['Notes',          n.notes],
-      ['Call Duration',  n.callDuration],
+      ['Company',      n.company],
+      ['Contact #',    n.contactNumber],
+      ['End User',     n.endUser],
+      ['Case #',       n.caseNum ? (n.caseNum + (n.caseStatus ? '  ·  ' + n.caseStatus : '')) : ''],
+      ['Short Desc',   n.shortDesc],
+      ['Details',      n.detailDesc],
+      ['Action Taken', n.actionTaken],
+      ['Duration',     n.callDuration],
     ].filter(function(f){ return f[1]; });
+
+    return '<div class="ci-np-card" style="background:rgba(13,17,23,.9);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px 20px;transition:border-color .18s;cursor:default;" ' +
+      'data-npidx="' + idx + '">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;">' +
+        '<div>' +
+          (hasCaller ? '<div style="font-size:14px;font-weight:800;color:#e6edf3;">' + escHtml(n.callerName || '(no name)') + (n.caseNum ? '<span style="font-size:11px;font-weight:600;color:var(--ss-muted);margin-left:8px;">#' + escHtml(n.caseNum) + '</span>' : '') + '</div>' : '') +
+          '<div style="font-size:10px;color:var(--ss-muted);margin-top:2px;">' + escHtml(dateStr) + ' &nbsp;·&nbsp; ' + escHtml(timeStr) + '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
+          (n.callDuration ? '<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:5px;border:1px solid rgba(248,81,73,.25);background:rgba(248,81,73,.1);color:#f85149;font-family:var(--ss-mono,monospace);display:inline-flex;align-items:center;gap:4px;"><i class=\'fas fa-clock\' style=\'font-size:8px;\'></i>' + escHtml(n.callDuration) + '</span>' : '') +
+          (n.caseStatus ? '<span style="font-size:9px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid ' + sc + '30;background:' + sc + '18;color:' + sc + ';">' + escHtml(n.caseStatus) + '</span>' : '') +
+          '<button onclick="window._ciLoadNoteAndClose(' + idx + ')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:6px;color:#58a6ff;font-size:10px;font-weight:700;padding:4px 10px;cursor:pointer;font-family:var(--ss-font);white-space:nowrap;">Load</button>' +
+          '<button onclick="window._ciDeleteNote(' + idx + ')" style="background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:6px;color:#f85149;font-size:10px;font-weight:700;padding:4px 8px;cursor:pointer;font-family:var(--ss-font);" title="Delete note"><i class="fas fa-trash-alt"></i></button>' +
+        '</div>' +
+      '</div>' +
+      (fields.length ? '<div style="display:flex;flex-direction:column;gap:8px;">' +
+        fields.map(function(f) {
+          return '<div style="display:flex;gap:8px;">' +
+            '<span style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--ss-muted);padding-top:2px;flex-shrink:0;width:66px;">' + escHtml(f[0]) + '</span>' +
+            '<span style="font-size:11px;color:var(--ss-text);line-height:1.5;word-break:break-word;">' + escHtml(f[1]) + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>' : '<div style="font-size:11px;color:var(--ss-muted);opacity:.4;">No additional details</div>') +
+      '</div>';
+  }
 
     return '<div class="ci-np-card" style="background:rgba(13,17,23,.9);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px 20px;transition:border-color .18s;cursor:default;" ' +
       'data-npidx="' + idx + '">' +
@@ -6868,14 +7073,14 @@
 
   function buildNpStats(notes) {
     var total  = notes.length;
-    var open   = notes.filter(function(n){return n.status==='Open';}).length;
-    var esc    = notes.filter(function(n){return n.status==='Escalated';}).length;
-    var res    = notes.filter(function(n){return n.status==='Resolved';}).length;
+    var invest = notes.filter(function(n){return (n.caseStatus||'').toLowerCase().includes('invest');}).length;
+    var wait   = notes.filter(function(n){return (n.caseStatus||'').toLowerCase().includes('wait');}).length;
+    var res    = notes.filter(function(n){return (n.caseStatus||'').toLowerCase().includes('resolv') || (n.caseStatus||'').toLowerCase().includes('close');}).length;
     var stats  = [
-      {label:'Total', val:total,  color:'#58a6ff'},
-      {label:'Open',  val:open,   color:'#58a6ff'},
-      {label:'Escalated', val:esc, color:'#f85149'},
-      {label:'Resolved',  val:res, color:'#3fb950'},
+      {label:'Total',        val:total,  color:'#58a6ff'},
+      {label:'Investigating',val:invest, color:'#58a6ff'},
+      {label:'Waiting',      val:wait,   color:'#a25ddc'},
+      {label:'Resolved',     val:res,    color:'#3fb950'},
     ];
     return stats.map(function(s) {
       return '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 18px;display:flex;flex-direction:column;gap:2px;">' +
@@ -6889,12 +7094,15 @@
     var notes   = loadCallNotes();
     var q       = (filter||'').toLowerCase().trim();
     var filtered = q ? notes.filter(function(n) {
-      return (n.callerName||'').toLowerCase().includes(q) ||
-             (n.ticket||'').toLowerCase().includes(q)     ||
-             (n.issue||'').toLowerCase().includes(q)      ||
-             (n.notes||'').toLowerCase().includes(q)      ||
-             (n.product||'').toLowerCase().includes(q)    ||
-             (n.status||'').toLowerCase().includes(q);
+      return (n.callerName    ||'').toLowerCase().includes(q) ||
+             (n.company       ||'').toLowerCase().includes(q) ||
+             (n.contactNumber ||'').toLowerCase().includes(q) ||
+             (n.endUser       ||'').toLowerCase().includes(q) ||
+             (n.caseNum       ||'').toLowerCase().includes(q) ||
+             (n.caseStatus    ||'').toLowerCase().includes(q) ||
+             (n.shortDesc     ||'').toLowerCase().includes(q) ||
+             (n.detailDesc    ||'').toLowerCase().includes(q) ||
+             (n.actionTaken   ||'').toLowerCase().includes(q);
     }) : notes;
 
     var grid    = document.getElementById('ci-np-grid');
