@@ -7042,31 +7042,6 @@
       '</div>';
   }
 
-    return '<div class="ci-np-card" style="background:rgba(13,17,23,.9);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px 20px;transition:border-color .18s;cursor:default;" ' +
-      'data-npidx="' + idx + '">' +
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;">' +
-        '<div>' +
-          (hasCaller ? '<div style="font-size:14px;font-weight:800;color:#e6edf3;">' + escHtml(n.callerName || '(no name)') + (n.ticket ? '<span style="font-size:11px;font-weight:600;color:var(--ss-muted);margin-left:8px;">#' + escHtml(n.ticket) + '</span>' : '') + '</div>' : '') +
-          '<div style="font-size:10px;color:var(--ss-muted);margin-top:2px;">' + escHtml(dateStr) + ' &nbsp;·&nbsp; ' + escHtml(timeStr) + '</div>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
-          (n.callDuration ? '<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:5px;border:1px solid rgba(248,81,73,.25);background:rgba(248,81,73,.1);color:#f85149;font-family:var(--ss-mono,monospace);display:inline-flex;align-items:center;gap:4px;"><i class=\'fas fa-clock\' style=\'font-size:8px;\'></i>' + escHtml(n.callDuration) + '</span>' : '') +
-          (n.status ? '<span style="font-size:9px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid ' + sc + '30;background:' + sc + '18;color:' + sc + ';">' + escHtml(n.status) + '</span>' : '') +
-          '<button onclick="window._ciLoadNoteAndClose(' + idx + ')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:6px;color:#58a6ff;font-size:10px;font-weight:700;padding:4px 10px;cursor:pointer;font-family:var(--ss-font);white-space:nowrap;">Load</button>' +
-          '<button onclick="window._ciDeleteNote(' + idx + ')" style="background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:6px;color:#f85149;font-size:10px;font-weight:700;padding:4px 8px;cursor:pointer;font-family:var(--ss-font);" title="Delete note"><i class="fas fa-trash-alt"></i></button>' +
-        '</div>' +
-      '</div>' +
-      (fields.length ? '<div style="display:flex;flex-direction:column;gap:8px;">' +
-        fields.map(function(f) {
-          return '<div style="display:flex;gap:8px;">' +
-            '<span style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--ss-muted);padding-top:2px;flex-shrink:0;width:52px;">' + escHtml(f[0]) + '</span>' +
-            '<span style="font-size:11px;color:var(--ss-text);line-height:1.5;word-break:break-word;">' + escHtml(f[1]) + '</span>' +
-          '</div>';
-        }).join('') +
-      '</div>' : '<div style="font-size:11px;color:var(--ss-muted);opacity:.4;">No additional details</div>') +
-      '</div>';
-  }
-
   function escHtml(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
