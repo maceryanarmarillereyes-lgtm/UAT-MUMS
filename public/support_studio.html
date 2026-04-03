@@ -11778,6 +11778,7 @@
   var _perPage     = 100;
   var _initialized = false;
   var _loading     = false;
+  var _ctiSidebarCat = '';
 
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function el(id)  { return document.getElementById(id); }
@@ -12003,6 +12004,26 @@
     } else {
       badge.style.display = 'none';
     }
+  }
+
+  function _updateSidebarStats() {
+    var totalEl = el('cti-stats-total');
+    var endUsersEl = el('cti-stats-cats');
+    if (totalEl) totalEl.textContent = (_filtered || []).length.toLocaleString();
+    if (!endUsersEl) return;
+
+    var catCol = el('cti-cat-filter') ? el('cti-cat-filter')._catCol : null;
+    if (!catCol) {
+      endUsersEl.textContent = '—';
+      return;
+    }
+
+    var unique = Object.create(null);
+    (_filtered || []).forEach(function(row) {
+      var key = String(row[catCol] || '').trim();
+      if (key) unique[key] = true;
+    });
+    endUsersEl.textContent = Object.keys(unique).length.toLocaleString();
   }
 
   /* ── Build dynamic table header ─────────────────────────────── */
