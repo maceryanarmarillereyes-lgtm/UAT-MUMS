@@ -48,18 +48,35 @@ async function fetchQBPage({ realm, token, tableId, reportId, skip, top }) {
   const normRealm = normalizeRealm(realm);
   const url = `https://api.quickbase.com/v1/reports/${encodeURIComponent(reportId)}/run` +
     `?tableId=${encodeURIComponent(tableId)}&skip=${skip}&top=${top}`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'QB-Realm-Hostname': normRealm,
-      Authorization: `QB-USER-TOKEN ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({}),
-  });
+
+  // 25-second hard timeout per page — prevents Cloudflare 524/502 on slow QB responses
+  const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch(_) {} }, 25000) : null;
+
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'QB-Realm-Hostname': normRealm,
+        Authorization: `QB-USER-TOKEN ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+      signal: ctrl ? ctrl.signal : undefined,
+    });
+  } catch (fetchErr) {
+    if (timer) clearTimeout(timer);
+    const msg = String(fetchErr && fetchErr.name || '') === 'AbortError'
+      ? 'QB API request timed out after 25s (skip=' + skip + ')'
+      : String(fetchErr && fetchErr.message || fetchErr);
+    throw new Error(msg);
+  }
+  if (timer) clearTimeout(timer);
+
   if (!resp.ok) {
     const txt = await resp.text().catch(() => '');
-    throw new Error('QB API ' + resp.status + ': ' + txt.slice(0, 200));
+    throw new Error('QB API ' + resp.status + ': ' + txt.slice(0, 300));
   }
   const json = await resp.json();
   return {

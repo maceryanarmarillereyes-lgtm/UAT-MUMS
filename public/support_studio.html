@@ -8490,14 +8490,15 @@
   })();
 
 
-  // Calls /api/studio/qb_export which paginates through all QB records
-  // server-side and returns a full CSV or XLS file.
+  // Calls /api/studio/qb_export which paginates through all QB records.
+  // v2: retry-with-backoff per page — handles QB API 502/504 transient errors.
+  // PAGE_SIZE reduced to 500 to stay safely under QB API timeout limits.
   // No record limit — fetches all 22,000+ cases.
   window._qbsExportAll = function(format) {
-    var statusEl = document.getElementById('qbs-export-status');
-    var csvBtn   = document.getElementById('qbs-export-csv-btn');
-    var xlsBtn   = document.getElementById('qbs-export-xls-btn');
-    var isCsv    = format === 'csv';
+    var statusEl  = document.getElementById('qbs-export-status');
+    var csvBtn    = document.getElementById('qbs-export-csv-btn');
+    var xlsBtn    = document.getElementById('qbs-export-xls-btn');
+    var isCsv     = format === 'csv';
     var startTime = Date.now();
 
     function _setStatus(html, color) { if (statusEl) { statusEl.innerHTML = html; statusEl.style.color = color || '#58a6ff'; } }
@@ -8512,6 +8513,62 @@
       } catch(_) {} return '';
     }
 
+    // Delay helper for exponential backoff
+    function _wait(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+    // Fetch one page with up to 4 retries on 502/504/network errors
+    function _fetchPage(skip, pageSize, hdrs, attempt) {
+      attempt = attempt || 1;
+      var MAX_RETRIES = 4;
+      return fetch('/api/studio/qb_export?skip=' + skip + '&top=' + pageSize, { headers: hdrs })
+        .then(function(r) {
+          // Always read as text first — body may not be JSON on gateway errors
+          return r.text().then(function(txt) {
+            var d = null;
+            try { d = JSON.parse(txt); } catch(_) {}
+
+            // 502/504/429 = transient error — retry with exponential backoff
+            if ((r.status === 502 || r.status === 504 || r.status === 429 || r.status === 503) && attempt <= MAX_RETRIES) {
+              var waitSec = Math.pow(2, attempt); // 2s, 4s, 8s, 16s
+              _setStatus(
+                '<i class="fas fa-sync fa-spin" style="margin-right:5px;"></i>' +
+                'QB API timeout on page at record ' + (skip+1) +
+                ' (attempt ' + attempt + '/' + MAX_RETRIES + ') — retrying in ' + waitSec + 's…',
+                '#f59e0b'
+              );
+              return _wait(waitSec * 1000).then(function() {
+                return _fetchPage(skip, pageSize, hdrs, attempt + 1);
+              });
+            }
+
+            // Parse error message from response body if available
+            if (!d || !d.ok) {
+              var errDetail = (d && (d.message || d.error || d.detail)) || txt.slice(0, 200);
+              throw new Error('QB API' + r.status + ': ' + errDetail);
+            }
+            return d;
+          });
+        })
+        .catch(function(err) {
+          // Network-level failure (no response at all) — also retry
+          var isNet = String(err && err.name || '').indexOf('TypeError') >= 0 ||
+                      String(err && err.message || '').toLowerCase().indexOf('fetch') >= 0;
+          if (isNet && attempt <= MAX_RETRIES) {
+            var waitSec = Math.pow(2, attempt);
+            _setStatus(
+              '<i class="fas fa-sync fa-spin" style="margin-right:5px;"></i>' +
+              'Network error at record ' + (skip+1) +
+              ' (attempt ' + attempt + '/' + MAX_RETRIES + ') — retrying in ' + waitSec + 's…',
+              '#f59e0b'
+            );
+            return _wait(waitSec * 1000).then(function() {
+              return _fetchPage(skip, pageSize, hdrs, attempt + 1);
+            });
+          }
+          throw err;
+        });
+    }
+
     _setDisabled(true);
     _setStatus('<i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i>Starting export — fetching QB settings…');
 
@@ -8519,38 +8576,44 @@
     var tok = _tok();
     if (tok) headers['Authorization'] = 'Bearer ' + tok;
 
-    // Step 1: get QB settings
+    // Step 1: get QB settings — read body safely regardless of HTTP status
     fetch('/api/studio/qb_settings_global', { headers: headers })
-      .then(function(r) { return r.ok ? r.json() : r.json().then(function(e) { throw new Error(e.message || 'Settings fetch failed'); }); })
+      .then(function(r) {
+        return r.text().then(function(txt) {
+          var d = null; try { d = JSON.parse(txt); } catch(_) {}
+          if (!r.ok || !d || !d.ok) throw new Error((d && (d.message || d.error)) || 'Settings fetch failed (HTTP ' + r.status + ')');
+          return d;
+        });
+      })
       .then(function(resp) {
-        // Server returns { ok: true, settings: { realm, tableId, qid, qbToken, ... } }
-        // BUG FIX: was reading cfg.realm (undefined) instead of cfg.settings.realm
         var cfg     = (resp && resp.settings) ? resp.settings : resp;
         var realm   = cfg.realm   || '';
         var tableId = cfg.tableId || '';
         var qid     = cfg.qid     || '';
-        var qbToken = cfg.qbToken || '';
-        // qb_export endpoint validates server-side — only check realm+tableId+qid here
-        // (token is stored in DB; client never needs it for the export call)
         if (!realm || !tableId || !qid) throw new Error('Studio QB not configured. Go to General Settings → Studio Quickbase Settings first.');
 
-        // Step 2: client-side paginated fetch through our proxy endpoint
-        var allRecords = []; var fields = [];
-        var PAGE_SIZE = 1000; var skip = 0; var done = false;
+        // Step 2: paginated fetch — 500 records/page (safe under QB API 30s timeout)
+        var allRecords = [];
+        var fields     = [];
+        var PAGE_SIZE  = 500;
+        var skip       = 0;
 
         function fetchNext() {
           _setStatus(
-            '<i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i>Fetching records ' +
-            (skip + 1) + '–' + (skip + PAGE_SIZE) + ' (' + allRecords.length.toLocaleString() + ' loaded)…'
+            '<i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i>' +
+            'Fetching records ' + (skip + 1) + '–' + (skip + PAGE_SIZE) +
+            ' (' + allRecords.length.toLocaleString() + ' loaded so far)…'
           );
-          return fetch('/api/studio/qb_export?skip=' + skip + '&top=' + PAGE_SIZE, { headers: headers })
-            .then(function(r) { return r.json(); })
+          return _fetchPage(skip, PAGE_SIZE, headers, 1)
             .then(function(d) {
-              if (!d.ok) throw new Error(d.message || 'QB page fetch failed');
               if (!fields.length && d.fields) fields = d.fields;
               var batch = d.records || [];
               allRecords = allRecords.concat(batch);
-              if (batch.length >= PAGE_SIZE && skip < 50000) { skip += PAGE_SIZE; return fetchNext(); }
+              // Continue if we got a full page and haven't exceeded 100K safety cap
+              if (batch.length >= PAGE_SIZE && skip < 100000) {
+                skip += PAGE_SIZE;
+                return fetchNext();
+              }
             });
         }
 
@@ -8589,18 +8652,28 @@
           filename = 'quickbase_all_cases_' + new Date().toISOString().slice(0,10) + '.xls';
           mime = 'application/vnd.ms-excel';
         }
+
         var a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = filename;
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         setTimeout(function() { URL.revokeObjectURL(a.href); }, 5000);
 
-        var elapsed = ((Date.now() - startTime)/1000).toFixed(1);
-        _setStatus('<i class="fas fa-check-circle" style="margin-right:5px;"></i>' + recs.length.toLocaleString() + ' records exported — ' + filename + ' (' + elapsed + 's)', '#3fb950');
-        setTimeout(function() { if (statusEl) statusEl.innerHTML = ''; }, 10000);
+        var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        _setStatus(
+          '<i class="fas fa-check-circle" style="margin-right:5px;"></i>' +
+          recs.length.toLocaleString() + ' records exported — ' + filename + ' (' + elapsed + 's)',
+          '#3fb950'
+        );
+        setTimeout(function() { if (statusEl) statusEl.innerHTML = ''; }, 12000);
       })
       .catch(function(e) {
-        _setStatus('<i class="fas fa-times-circle" style="margin-right:5px;"></i>Export failed: ' + (e && e.message || 'Unknown error'), '#f85149');
+        _setStatus(
+          '<i class="fas fa-times-circle" style="margin-right:5px;"></i>' +
+          'Export failed: ' + (e && e.message || 'Unknown error'),
+          '#f85149'
+        );
+        console.error('[qbsExport] failed:', e);
       })
       .finally(function() { _setDisabled(false); });
   };
