@@ -12064,6 +12064,21 @@
       return true;
     });
 
+    // De-duplicate exact search hits:
+    // If user search term is an exact match for a field value and multiple rows are 100% identical,
+    // show only one copy of the same row to prevent duplicate clutter.
+    if (q) {
+      var colsForSearch = (searchCols && searchCols.length) ? searchCols : _columns;
+      var exactHitKeys = Object.create(null);
+      _filtered = _filtered.filter(function(row) {
+        if (!_ctiRowHasExactMatch(row, q, colsForSearch)) return true;
+        var sig = _ctiRenderSignature(row);
+        if (exactHitKeys[sig]) return false;
+        exactHitKeys[sig] = true;
+        return true;
+      });
+    }
+
     // Sort
     if (_sortKey) {
       var sk = _sortKey, sd = _sortDir;
@@ -12076,6 +12091,29 @@
 
     _page = 1;
     _render();
+  }
+
+  function _ctiNormalize(val) {
+    return String(val || '')
+      .toLowerCase()
+      // Keep only alphanumerics so phone formats like
+      // "+52 (818) 186–5323" and "52(818)186-5323" compare equal.
+      .replace(/[^a-z0-9]/g, '');
+  }
+
+  function _ctiRowHasExactMatch(row, query, cols) {
+    var nq = _ctiNormalize(query);
+    if (!nq) return false;
+    return (cols || []).some(function(col) {
+      return _ctiNormalize(row[col]) === nq;
+    });
+  }
+
+  function _ctiRenderSignature(row) {
+    var cols = (_displayCols && _displayCols.length) ? _displayCols : (_columns || []).slice(0, 8);
+    return cols.map(function(col) {
+      return String(row[col] || '').trim();
+    }).join('\u241F');
   }
 
   /* ── Render table ───────────────────────────────────────────── */
