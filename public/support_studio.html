@@ -335,6 +335,8 @@
     }
     body:has(#canvas-home.active) #ss-left-sidebar { display: none !important; }
     body:has(#canvas-home.active) #ss-center-canvas { flex: 1 !important; }
+    body:has(#canvas-search_engine_2.active) #ss-left-sidebar { display: none !important; }
+    body:has(#canvas-search_engine_2.active) #ss-center-canvas { flex: 1 !important; }
 
     /* Home canvas — Split Panel layout */
     #canvas-home { background: var(--ss-bg); overflow: hidden; }
@@ -2739,6 +2741,14 @@
         </div>
       </div>
 
+      <!-- Search Engine 2 left panel (kept for tab isolation; hidden when tab is active) -->
+      <div id="left-panel-search_engine_2" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
+        <div class="ss-panel" style="flex-shrink:0;">
+          <div class="ss-panel-title"><i class="fas fa-search"></i> Search Engine 2</div>
+          <div style="font-size:10px;color:var(--ss-muted);margin-top:-6px;">Global Search experience</div>
+        </div>
+      </div>
+
       <!-- ═══════ SUPPORT RECORDS — Left Sidebar (Redesigned) ═══════ -->
       <div id="left-panel-support_records" style="display:none;flex:1;flex-direction:column;min-height:0;overflow:hidden;">
 
@@ -4471,6 +4481,17 @@
         </div>
 
       </div><!-- /canvas-support_records -->
+
+      <!-- Search Engine 2 canvas -->
+      <div id="canvas-search_engine_2" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;">
+        <iframe
+          id="search-engine-2-frame"
+          title="Search Engine 2"
+          data-src="/search_engine_2.html"
+          src="about:blank"
+          style="width:100%;height:100%;border:none;background:var(--ss-bg);"
+          loading="lazy"></iframe>
+      </div><!-- /canvas-search_engine_2 -->
 
       <style>
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -6753,7 +6774,7 @@
   'use strict';
 
   // ── Tab switching — single persistent layout ────────────────────
-  const LEFT_PANELS = ['home','catalog','config','qbs','connectplus','parts_number','contact_information','knowledge_base','support_records'];
+  const LEFT_PANELS = ['home','catalog','config','qbs','connectplus','parts_number','contact_information','knowledge_base','support_records','search_engine_2'];
 
   function activateTab(target) {
     const contentTarget = (target === 'search_engine_2') ? 'support_records' : target;
@@ -6806,6 +6827,12 @@
     }
     if (contentTarget === 'support_records') {
       if (typeof window._srInit === 'function') window._srInit();
+    }
+    if (target === 'search_engine_2') {
+      const frame = document.getElementById('search-engine-2-frame');
+      if (frame && (!frame.src || frame.src === 'about:blank')) {
+        frame.src = frame.dataset.src || '/search_engine_2.html';
+      }
     }
   }
 
