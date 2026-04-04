@@ -15366,7 +15366,11 @@
     if (!terms || !terms.length) return s;
     terms.forEach(function(t) {
       if (!t || t.length < 2) return;
-      s = s.replace(new RegExp('(' + t.replace(/[.*+?^${}()|[\]\]/g,'\$&') + ')', 'gi'), '<mark>$1</mark>');
+      try {
+        // Safe regex escape — handles all special regex chars
+        var escaped = t.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+        s = s.replace(new RegExp('(' + escaped + ')', 'gi'), '<mark>$1</mark>');
+      } catch(_) {}
     });
     return s;
   }
@@ -15566,7 +15570,14 @@
     var clearBtn = el('se2-clear');
     if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
 
-    if (!_state.loaded) return;
+    if (!_state.loaded) {
+      // Data still loading — show spinner, don't bail silently
+      var bodyEl = el('se2-body');
+      if (bodyEl && q && !bodyEl.querySelector('.se2-spin')) {
+        bodyEl.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:#7d8590;font-size:12px;"><div class="se2-spin"></div><span>Loading data sources… results will appear automatically.</span></div>';
+      }
+      return;
+    }
     if (!q) {
       var allCounts = _countsByCat();
       _renderCats(allCounts);
@@ -15596,7 +15607,9 @@
   }
 
   // ── Data loading — multi-source ────────────────────────────────────────────
-  function _loadData() {
+  // FIX: accepts optional pendingQuery — runs search immediately after load
+  // so user doesn't get stuck on empty state if they typed before data arrived
+  function _loadData(pendingQuery) {
     if (_state.loading) return;
     _state.loading = true;
     var body = el('se2-body');
@@ -15608,7 +15621,23 @@
       .then(function(j) {
         if (!j) return [];
         var flat = Array.isArray(j.flat) ? j.flat : (Array.isArray(j) ? j : []);
-        return flat.map(function(r) { return Object.assign({}, r, { _id: r.id, _src: CAT_MAP[r.id] || 'sr' }); });
+        return flat.map(function(r) {
+          // Determine source from category text (more reliable than ID-based CAT_MAP)
+          var catLow = (r.cat || '').toLowerCase();
+          var src = 'sr'; // default: Support Records
+          if (catLow.includes('e2') || catLow.includes('e3') || catLow.includes('gateway') ||
+              catLow.includes('alarm') || catLow.includes('floor') || catLow.includes('remapping') ||
+              catLow.includes('firmware') || catLow.includes('refrigerat') || catLow.includes('haccp') ||
+              catLow.includes('temperature') || catLow.includes('site supervisor') ||
+              catLow.includes('data') || catLow.includes('report')) {
+            src = 'sr'; // Keep as Support Records — all KB entries are case-based
+          }
+          if (catLow.includes('connect') || catLow.includes('network') || catLow.includes('vpn')) src = 'net';
+          if (catLow.includes('part') || catLow.includes('xr') || catLow.includes('xm679') || catLow.includes('cc200') || catLow.includes('license key')) src = 'parts';
+          if (catLow.includes('controller') || catLow.includes('hardware') || catLow.includes('programming')) src = 'ctrl';
+          if (catLow.includes('password') || catLow.includes('credential')) src = 'sr';
+          return Object.assign({}, r, { _id: r.id, _src: src });
+        });
       }).catch(function() { return []; });
 
     // ── Source 2: Connect+ sites (if loaded in window state) ─────────────
@@ -15680,7 +15709,14 @@
           '<div class="se2-chips" id="se2-chip-row"></div></div>';
         _renderChips();
       }
-      if (qEl) { qEl.focus(); if (qEl.value) _run(); }
+      // FIX: run search immediately if user already typed something
+      var currentQuery = (qEl && qEl.value) ? qEl.value : (pendingQuery || '');
+      if (qEl) { qEl.focus(); }
+      if (currentQuery) {
+        _state.query = currentQuery;
+        if (qEl && !qEl.value) qEl.value = currentQuery;
+        _run();
+      }
     }).catch(function(err) {
       _state.loading = false;
       var body3 = el('se2-body');
@@ -15942,11 +15978,11 @@
 
   function _se2Init() {
     if (_se2Inited) {
-      // Re-load fresh QB records on re-open (they may have updated)
+      // FIX: On re-visit, refresh QB records (may have loaded since first visit)
+      // and immediately re-run search if there's already a query
       var qbRecs = window.__studioQbRecords || [];
-      if (qbRecs.length) {
-        // Rebuild without re-fetching KB
-        var nonQb = _state.allRecords.filter(function(r) { return r._src !== 'qb'; });
+      var nonQb = _state.allRecords.filter(function(r) { return r._src !== 'qb'; });
+      if (qbRecs.length > 0 && nonQb.length > 0) {
         var qbMapped = qbRecs.map(function(r) {
           function fv(keys) {
             var cols = window.__studioQbColumns || [];
@@ -15960,20 +15996,33 @@
         }).filter(function(r) { return r.title||r.case; });
         _state.allRecords = nonQb.concat(qbMapped);
       }
+      var qEl2 = el('se2-q');
+      if (qEl2) { qEl2.focus(); }
       _run();
       return;
     }
     _se2Inited = true;
     var qEl = el('se2-q');
+    var _se2Debounce = null;
     if (qEl) {
-      qEl.addEventListener('input', function() { _state.query = qEl.value; _run(); });
+      // FIX: debounce input — prevents _run() firing before _state.loaded=true
+      qEl.addEventListener('input', function() {
+        clearTimeout(_se2Debounce);
+        var val = qEl.value;
+        _se2Debounce = setTimeout(function() {
+          _state.query = val;
+          _run();
+        }, 220);
+      });
       setTimeout(function() { qEl.focus(); }, 100);
     }
     _renderChips();
-    _loadData();
+    // FIX: capture input value at load time so _loadData.then() can run it
+    var _se2PendingQuery = (qEl && qEl.value) ? qEl.value : '';
+    _loadData(_se2PendingQuery);
   }
 
-  // Hook into tab activation
+  // Hook into tab activation — fires _se2Init when SE2 tab is clicked
   var _origActivateTab = window.activateTab;
   window.activateTab = function(target) {
     if (_origActivateTab) _origActivateTab(target);
@@ -15986,6 +16035,25 @@
     setTimeout(_se2Init, 80);
     return false;
   };
+
+  // FIX: Boot SE2 if it's already the active tab at page load
+  // (handles bookmarked/deep-linked SE2 tab scenarios)
+  (function() {
+    var se2Canvas = document.getElementById('canvas-search_engine_2');
+    if (se2Canvas && (se2Canvas.classList.contains('active') || 
+        document.body.getAttribute('data-active-tab') === 'search_engine_2')) {
+      setTimeout(_se2Init, 300);
+    }
+    // Also auto-init after DOMContentLoaded as failsafe
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+          var c = document.getElementById('canvas-search_engine_2');
+          if (c && c.classList.contains('active')) _se2Init();
+        }, 400);
+      });
+    }
+  })();
 
   // Re-expose Connect+ and Parts data for SE2 cross-source search
   // These are populated when the respective tabs are visited
