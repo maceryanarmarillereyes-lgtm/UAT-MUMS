@@ -1,7 +1,7 @@
 import React from "react";
-import { Database, BookOpen, Phone, Cpu, Server, FileText, LayoutGrid } from "lucide-react";
+import { Database, BookOpen, Phone, Cpu, FileText, Server, LayoutGrid } from "lucide-react";
 
-const TABS =[
+const TABS = [
   { id: "all", label: "All Sources", icon: LayoutGrid },
   { id: "quickbase", label: "QuickBase_S", icon: Database },
   { id: "knowledge_base", label: "Knowledge Base", icon: BookOpen },
@@ -13,33 +13,29 @@ const TABS =[
 
 export default function SearchFilters({ activeTab, onTabChange, counts }) {
   return (
-    <div className="w-full max-w-5xl mx-auto">
-      {/* Container with custom bottom scrollbar space matching reference */}
-      <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+    <div className="w-full max-w-4xl mx-auto">
+      <div className="flex gap-1 overflow-x-auto pb-1">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const count = counts?.[tab.id] || 0;
           const isActive = activeTab === tab.id;
-          
           return (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-medium whitespace-nowrap transition-all duration-200 border ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-200 ${
                 isActive
-                  ? 'bg-blue-500 border-blue-500 text-white shadow-lg shadow-blue-500/20'
-                  : 'bg-card/30 border-border/50 text-muted-foreground hover:bg-card hover:text-foreground hover:border-border'
+                  ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20'
+                  : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground'
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="w-3.5 h-3.5" />
               <span>{tab.label}</span>
-              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                isActive 
-                  ? 'bg-white/20 text-white' 
-                  : 'bg-secondary/80 text-muted-foreground border border-border/50'
-              }`}>
-                {count}
-              </span>
+              {count > 0 && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}

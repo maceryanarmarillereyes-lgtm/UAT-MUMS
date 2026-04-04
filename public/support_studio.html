@@ -15263,23 +15263,14 @@
 
 <script>
 /* ══════════════════════════════════════════════════════════════════════════
-   SEARCH ENGINE 2 — Advanced Enterprise Search v2.0 (PERMANENT BUG FIX)
+   SEARCH ENGINE 2 — Advanced Enterprise Search v1.0
    ══════════════════════════════════════════════════════════════════════════
-   BUGFIX LOG:
-   BUG 1 FIXED: '' (empty string concat) in onclick HTML strings → was generating
-     onclick="window._se2FilterCat(qb)" (bare variable, not string) → ReferenceError.
-     Fixed to use \\' (escaped single quote) for proper JS strings in HTML attrs.
-     Same fix applied to _renderChips and _se2OpenInQbs.
-   BUG 2 FIXED: QB records never reached SE2 — window.__studioQbRecords only
-     populates AFTER QBS tab is visited. Added multi-path QB source discovery:
-     reads from qbs-root._qbRowSnaps (set by my_quickbase on data load) AND
-     window.__studioQbRecords/Columns with proper field extraction.
-   BUG 3 FIXED: _run() bailed when _state.loaded=false with no retry callback.
-     _loadData now stores a "pending query" slot and always fires search on complete.
-   BUG 4 FIXED: Pre-load race — second 12MB fetch triggered when preload in-flight.
-     Shared __se2KbPromise sentinel prevents duplicate fetches.
-   BUG 5 FIXED: Inline onclick with bare variable names replaced with data-src
-     delegated event listeners on the cats container — no inline JS strings.
+   Architecture:
+   • Multi-source: KB (support_records_kb.json) + Connect+ + Parts + QB
+   • Smart query engine: tokenise → expand synonyms → fuzzy score → rank
+   • Dynamic source discovery: reads active tabs from LEFT_PANELS array
+   • Full detail drawer with QB deep-fetch for live case data
+   • No iframe — directly integrated into support_studio.html scope
    ══════════════════════════════════════════════════════════════════════════ */
 (function() {
   'use strict';
@@ -15291,17 +15282,18 @@
     'offline delay','Modbus','probe failure','Woolworths','remote access'
   ];
 
-  // Source definitions
+  // Source definitions — auto-extended from window.__se2Sources at runtime
   var SOURCES = {
-    qb:    { label:'QuickBase Cases',    color:'#58a6ff', icon:'fa-link'         },
-    kb:    { label:'Knowledge Base',     color:'#10b981', icon:'fa-book'         },
-    parts: { label:'Parts',              color:'#f59e0b', icon:'fa-barcode'      },
-    ctrl:  { label:'Controllers',        color:'#a78bfa', icon:'fa-microchip'    },
-    net:   { label:'Connect+ / Net',     color:'#22d3ee', icon:'fa-plug'         },
-    ci:    { label:'Contact Info',       color:'#14b8a6', icon:'fa-address-book' },
-    sr:    { label:'Support Records',    color:'#f43f5e', icon:'fa-book-open'    }
+    qb:    { label:'QuickBase Cases',    color:'#58a6ff', icon:'fa-link',          ids:[] },
+    kb:    { label:'Knowledge Base',     color:'#10b981', icon:'fa-book',          ids:[] },
+    parts: { label:'Parts',              color:'#f59e0b', icon:'fa-barcode',       ids:[] },
+    ctrl:  { label:'Controllers',        color:'#a78bfa', icon:'fa-microchip',     ids:[] },
+    net:   { label:'Connect+ / Net',     color:'#22d3ee', icon:'fa-plug',          ids:[] },
+    ci:    { label:'Contact Info',       color:'#14b8a6', icon:'fa-address-book',  ids:[] },
+    sr:    { label:'Support Records',    color:'#f43f5e', icon:'fa-book-open',     ids:[] }
   };
 
+  // Category → source mapping from KB record ids
   var CAT_MAP = {
     e2e3_gateway:'qb', alarms:'qb', floorplan_screens:'qb', firmware:'qb',
     refrigeration:'qb', password_credentials:'qb', data_reports:'qb',
@@ -15313,28 +15305,38 @@
     parts_walmart_jobs:'parts', parts_part_number_inquiry:'parts', parts_products:'parts'
   };
 
-  // ── Synonym / NLP expansion ────────────────────────────────────────────────
+  // ── Synonym / expansion dictionary for NLP-style query understanding ────────
   var SYNONYMS = {
-    'temp':'temperature','temperatures':'temperature','cold':'refrigeration',
-    'cooling':'refrigeration','freezing':'refrigeration','warm':'temperature',
-    'alert':'alarm','alerts':'alarm','notification':'alarm',
-    'offline':'connect','network':'connect','vpn':'connect','connection':'connect',
-    'wifi':'connect','internet':'connect','disconnect':'connect',
-    'fw':'firmware','update':'firmware','upgrade':'firmware','version':'firmware',
-    'controller':'ctrl','e2':'gateway','e3':'gateway','e300':'gateway',
-    'rack':'refrigeration','compressor':'refrigeration',
-    'map':'floor','floorplan':'floor','remapping':'floor','custom screen':'floor',
-    'part':'parts','xr':'xr75','xr-75':'xr75','serial':'license',
-    'license key':'license','key':'license','activation':'license',
-    'food safety':'haccp','probe':'haccp','sensor':'haccp',
-    'problem':'error','issue':'error','broken':'error','fail':'error',
-    'not working':'error','down':'offline','dead':'error',
-    'password':'credentials','login':'credentials','access':'credentials',
-    'report':'data','export':'data','log':'data','audit':'data',
-    'walmart':'woolworths','supermarket':'woolworths',
-    'configure':'programming','configuration':'programming','setup':'programming'
+    // temperature
+    'temp':'temperature', 'temperatures':'temperature', 'cold':'refrigeration',
+    'cooling':'refrigeration', 'freezing':'refrigeration', 'warm':'temperature',
+    // alarms
+    'alert':'alarm', 'alerts':'alarm', 'notification':'alarm',
+    // network
+    'offline':'connect', 'network':'connect', 'vpn':'connect', 'connection':'connect',
+    'wifi':'connect', 'internet':'connect', 'disconnect':'connect',
+    // firmware
+    'fw':'firmware', 'update':'firmware', 'upgrade':'firmware', 'version':'firmware',
+    // controllers
+    'controller':'ctrl', 'e2':'gateway', 'e3':'gateway', 'e300':'gateway',
+    'rack':'refrigeration', 'compressor':'refrigeration',
+    // floor plan
+    'map':'floor', 'floorplan':'floor', 'remapping':'floor', 'custom screen':'floor',
+    // parts
+    'part':'parts', 'xr':'xr75', 'xr-75':'xr75', 'serial':'license',
+    'license key':'license', 'key':'license', 'activation':'license',
+    // haccp
+    'food safety':'haccp', 'probe':'haccp', 'sensor':'haccp',
+    // general
+    'problem':'error', 'issue':'error', 'broken':'error', 'fail':'error',
+    'not working':'error', 'down':'offline', 'dead':'error',
+    'password':'credentials', 'login':'credentials', 'access':'credentials',
+    'report':'data', 'export':'data', 'log':'data', 'audit':'data',
+    'walmart':'woolworths', 'supermarket':'woolworths',
+    'configure':'programming', 'configuration':'programming', 'setup':'programming'
   };
 
+  // Question phrase strippers — remove filler so we search the content words
   var Q_STRIP = [
     /^(how (do|can|to)|what (is|are)|where (is|can)|why (is|does)|when (do|does)|who (is|has)|is there|can i|should i)\s+/i,
     /\s*(please|help|need|want|looking for|trying to|how to)\s*/gi,
@@ -15343,17 +15345,15 @@
 
   // ── State ──────────────────────────────────────────────────────────────────
   var _state = {
-    allRecords: [],
-    results:    [],
+    allRecords: [],       // merged from all sources
+    results:    [],       // current filtered/ranked results
     query:      '',
     activeCat:  null,
     loaded:     false,
     loading:    false,
     detailIdx:  -1,
-    deepData:   null,
+    deepData:   null,     // QB deep-fetch result
     deepLoading:false,
-    // FIX BUG 3: pending query slot — runs search the moment data is ready
-    pendingQuery: ''
   };
 
   // ── DOM helpers ────────────────────────────────────────────────────────────
@@ -15367,6 +15367,7 @@
     terms.forEach(function(t) {
       if (!t || t.length < 2) return;
       try {
+        // Safe regex escape — handles all special regex chars
         var escaped = t.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
         s = s.replace(new RegExp('(' + escaped + ')', 'gi'), '<mark>$1</mark>');
       } catch(_) {}
@@ -15374,11 +15375,12 @@
     return s;
   }
 
-  // ── Source helpers ─────────────────────────────────────────────────────────
+  // ── Source discovery — reads which data is loaded in each tab ──────────────
   function _getSource(record) {
     var g = CAT_MAP[record._id || record.id];
     if (g) return g;
     if (record._src) return record._src;
+    // Heuristic from category text
     var cat = (record.cat || '').toLowerCase();
     if (cat.includes('knowledge') || cat.includes('guide') || cat.includes('manual')) return 'kb';
     if (cat.includes('part') || cat.includes('controller')) return 'parts';
@@ -15386,18 +15388,20 @@
     return 'sr';
   }
 
-  // ── Query engine ───────────────────────────────────────────────────────────
+  // ── Advanced query engine ──────────────────────────────────────────────────
   function _normaliseQuery(raw) {
     var q = String(raw || '').trim();
+    // Strip question phrasing
     Q_STRIP.forEach(function(rx) { q = q.replace(rx, ' '); });
     q = q.trim();
+    // Expand synonyms
     var words = q.toLowerCase().split(/\s+/);
     var expanded = [];
     words.forEach(function(w) {
       expanded.push(w);
       if (SYNONYMS[w]) expanded.push(SYNONYMS[w]);
     });
-    return { original: q, tokens: Array.from(new Set(expanded.filter(Boolean))), isNumeric: /^\d{4,}$/.test(q.trim()) };
+    return { original: q, tokens: [...new Set(expanded.filter(Boolean))], isNumeric: /^\d{4,}$/.test(q.trim()) };
   }
 
   function _scoreRecord(r, parsed) {
@@ -15410,10 +15414,12 @@
       r.partNo || '', r.desc || '', r.brand || ''
     ].join(' ').toLowerCase();
 
+    // Case number exact match → very high score
     if (parsed.isNumeric && (r.case === parsed.original || r.id === parsed.original)) return 10000;
 
     var score = 0;
     var titleHay = (r.title || '').toLowerCase();
+    // Exact phrase in title → big boost
     if (titleHay.includes(original)) score += 500;
     else if (haystack.includes(original)) score += 200;
 
@@ -15421,6 +15427,7 @@
       if (t.length < 2) return;
       if (titleHay.includes(t)) score += 80;
       else if (haystack.includes(t)) score += 20;
+      // Prefix match boost
       if (titleHay.startsWith(t)) score += 40;
     });
 
@@ -15430,16 +15437,18 @@
   function _search(query) {
     var parsed = _normaliseQuery(query);
     if (!parsed.tokens.length && !parsed.original) return [];
+
     var results = [];
     _state.allRecords.forEach(function(r) {
       var score = _scoreRecord(r, parsed);
       if (score > 0) results.push({ r: r, score: score });
     });
+
     results.sort(function(a, b) { return b.score - a.score; });
     return results.map(function(x) { return x.r; });
   }
 
-  // ── Counts ─────────────────────────────────────────────────────────────────
+  // ── Counts per category ────────────────────────────────────────────────────
   function _countsByCat(records) {
     var c = {};
     Object.keys(SOURCES).forEach(function(k) { c[k] = 0; });
@@ -15447,9 +15456,7 @@
     return c;
   }
 
-  // ── Render category strip ──────────────────────────────────────────────────
-  // FIX BUG 1+5: No more inline onclick with unquoted variables.
-  // Use data-src attributes + delegated listener on container.
+  // ── Render category strip (dynamic — reads from data) ─────────────────────
   function _renderCats(counts) {
     var container = el('se2-cats');
     if (!container) return;
@@ -15457,35 +15464,26 @@
       var src = SOURCES[key];
       var n = counts ? (counts[key]||0) : 0;
       if (!_state.loaded) n = '—';
-      var isActive = _state.activeCat === key;
-      return '<div class="se2-cat' + (isActive ? ' active' : '') + '" data-src="' + esc(key) + '" ' +
-        'style="color:' + src.color + ';cursor:pointer;">' +
+      return '<div class="se2-cat" data-src="' + key + '" onclick="window._se2FilterCat('' + key + '')" ' +
+        'style="color:' + src.color + ';">' +
         '<i class="fas ' + src.icon + ' se2-cat-icon"></i>' +
         '<div class="se2-cat-num">' + (typeof n === 'number' ? n.toLocaleString() : n) + '</div>' +
         '<div class="se2-cat-lbl">' + esc(src.label) + '</div>' +
         '</div>';
     }).join('');
-
-    // FIX: Delegated listener instead of inline onclick — no unquoted variable risk
-    container.onclick = function(e) {
-      var cat = e.target.closest('.se2-cat');
-      if (cat) window._se2FilterCat(cat.getAttribute('data-src'));
-    };
+    // Re-apply active state
+    if (_state.activeCat) {
+      var activeEl = container.querySelector('[data-src="' + _state.activeCat + '"]');
+      if (activeEl) activeEl.classList.add('active');
+    }
   }
 
   // ── Render suggestion chips ────────────────────────────────────────────────
-  // FIX BUG 1: Use data-q attribute + delegated listener
   function _renderChips() {
     var row = el('se2-chip-row');
-    if (!row) return;
-    row.innerHTML = SE2_CHIPS.map(function(c) {
-      return '<div class="se2-chip" data-q="' + esc(c) + '">' + esc(c) + '</div>';
+    if (row) row.innerHTML = SE2_CHIPS.map(function(c) {
+      return '<div class="se2-chip" onclick="window._se2SetQ('' + esc(c) + '')">' + esc(c) + '</div>';
     }).join('');
-    // FIX: delegated listener, no inline onclick
-    row.onclick = function(e) {
-      var chip = e.target.closest('.se2-chip');
-      if (chip) window._se2SetQ(chip.getAttribute('data-q'));
-    };
   }
 
   // ── Render results ─────────────────────────────────────────────────────────
@@ -15496,9 +15494,7 @@
       body.innerHTML = '<div style="padding:48px 20px;text-align:center;color:#7d8590;">' +
         '<div style="font-size:32px;opacity:.25;margin-bottom:12px;">🔎</div>' +
         '<div style="font-size:15px;font-weight:700;color:#c9d1d9;margin-bottom:6px;">No results found</div>' +
-        '<div style="font-size:12px;margin-top:6px;">Try a different keyword, case number, or partial word.</div>' +
-        (_state.allRecords.length === 0 ? '<div style="margin-top:8px;font-size:11px;color:#f85149;">Data source not loaded — check network or try refreshing.</div>' : '') +
-        '</div>';
+        '<div style="font-size:12px;margin-top:6px;">Try a different keyword, case number, or partial word.</div></div>';
       return;
     }
 
@@ -15518,7 +15514,7 @@
         esc(src.label) + ' <span class="se2-group-count">' + rows.length.toLocaleString() + '</span>' +
         (rows.length > LIMIT_PER_GROUP ? '<span style="font-size:9px;opacity:.5;margin-left:4px;">showing ' + LIMIT_PER_GROUP + '</span>' : '') +
         '</div>';
-      limited.forEach(function(r) {
+      limited.forEach(function(r, i) {
         var globalIdx = results.indexOf(r);
         var titleHl = hl(r.title || r.site || r.partNo || '(no title)', tokens);
         var bodyText = (r.res || r.desc || r.notes || r.directory || '').slice(0, 300);
@@ -15526,7 +15522,6 @@
         var caseNum = r.case || r.caseNum || '';
         var endUser = r.eu || r.endUser || r.directory || '';
         var age = r.age || '';
-        // FIX BUG 1: use data-se2-idx instead of onclick with unquoted variable
         html += '<div class="se2-card" data-se2-idx="' + globalIdx + '">' +
           '<div class="se2-card-meta">' +
           '<span class="se2-badge" style="color:' + src.color + ';background:' + src.color + '18;border:1px solid ' + src.color + '35;">' + esc(src.label) + '</span>' +
@@ -15536,42 +15531,34 @@
           '</div>' +
           '<div class="se2-card-title">' + titleHl + '</div>' +
           (bodyText ? '<div class="se2-card-body">' + bodyHl + '</div>' : '') +
-          '<button class="se2-view-btn" data-se2-view="' + globalIdx + '">View Details →</button>' +
+          '<button class="se2-view-btn" onclick="event.stopPropagation();window._se2OpenDetail(' + globalIdx + ')">View Details →</button>' +
           '</div>';
       });
     });
     body.innerHTML = html;
 
-    // FIX: Delegated card click + view-btn click — no inline onclick
-    body.onclick = function(e) {
-      var viewBtn = e.target.closest('[data-se2-view]');
-      if (viewBtn) {
-        e.stopPropagation();
-        window._se2OpenDetail(parseInt(viewBtn.getAttribute('data-se2-view'), 10));
-        return;
-      }
-      var card = e.target.closest('.se2-card');
-      if (card) {
-        window._se2OpenDetail(parseInt(card.getAttribute('data-se2-idx'), 10));
-      }
-    };
+    // Bind card clicks
+    body.querySelectorAll('.se2-card').forEach(function(card) {
+      card.addEventListener('click', function() {
+        var idx = parseInt(card.getAttribute('data-se2-idx'), 10);
+        window._se2OpenDetail(idx);
+      });
+    });
   }
 
-  // ── Summary bar ────────────────────────────────────────────────────────────
+  // ── Summary bar update ─────────────────────────────────────────────────────
   function _renderSummary(results, query) {
     var s = el('se2-summary');
     if (!s) return;
     if (!query) {
-      var totalStr = _state.allRecords.length > 0
-        ? 'Total indexed: <strong>' + _state.allRecords.length.toLocaleString() + '</strong> records &nbsp;·&nbsp; Ready to search'
-        : (_state.loading ? '<span style="color:#58a6ff;">Loading data sources…</span>' : 'Ready — type to search across all sources');
-      s.innerHTML = totalStr;
+      s.innerHTML = 'Total indexed: <strong>' + _state.allRecords.length.toLocaleString() + '</strong> records &nbsp;·&nbsp; Ready';
     } else {
       var parsed = _normaliseQuery(query);
       var aiOn = parsed.tokens.length > parsed.original.split(' ').length;
       s.innerHTML = 'Showing <strong>' + results.length.toLocaleString() + '</strong> of <strong>' +
         _state.allRecords.length.toLocaleString() + '</strong> records &nbsp;·&nbsp; Query: <em style="color:#c9d1d9;">"' + esc(parsed.original) + '"</em>' +
         (aiOn ? '&nbsp;<span class="se2-mode-chip" style="background:rgba(162,93,220,.12);color:#c084fc;border:1px solid rgba(162,93,220,.25);">Smart Expanded</span>' : '');
+      // AI chip on input
       var chip = el('se2-ai-chip');
       if (chip) chip.classList.toggle('on', aiOn);
     }
@@ -15584,230 +15571,156 @@
     if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
 
     if (!_state.loaded) {
-      // FIX BUG 3: store pending query so _loadData.then() will run it
-      if (q) _state.pendingQuery = q;
+      // Data still loading — show spinner, don't bail silently
       var bodyEl = el('se2-body');
-      if (bodyEl && !bodyEl.querySelector('.se2-spin')) {
-        bodyEl.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:#7d8590;font-size:12px;"><div class="se2-spin"></div><span>Loading data sources…</span></div>';
+      if (bodyEl && q && !bodyEl.querySelector('.se2-spin')) {
+        bodyEl.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:#7d8590;font-size:12px;"><div class="se2-spin"></div><span>Loading data sources… results will appear automatically.</span></div>';
       }
-      _renderSummary([], '');
       return;
     }
-
     if (!q) {
       var allCounts = _countsByCat();
       _renderCats(allCounts);
       _renderSummary([], '');
       var body = el('se2-body');
-      if (body) {
-        body.innerHTML = '<div id="se2-empty">' +
-          '<div class="se2-empty-icon">🔍</div>' +
-          '<div class="se2-empty-title">Search Engine 2</div>' +
-          '<div class="se2-empty-sub">Total indexed: <strong>' + _state.allRecords.length.toLocaleString() + ' records</strong> — type anything above.</div>' +
-          '<div class="se2-chips" id="se2-chip-row"></div></div>';
-        _renderChips();
-      }
-      if (_state.activeCat) _state.activeCat = null;
+      if (body) body.innerHTML = document.getElementById('se2-empty') ?
+        el('se2-empty').outerHTML :
+        '<div id="se2-empty"><div class="se2-empty-icon">🔍</div>' +
+        '<div class="se2-empty-title">Search Engine 2</div>' +
+        '<div class="se2-empty-sub">Type anything above — case numbers, keywords, error descriptions, questions.</div>' +
+        '<div class="se2-chips" id="se2-chip-row"></div></div>';
+      _renderChips();
+      if (_state.activeCat) { _state.activeCat = null; }
       document.querySelectorAll('.se2-cat').forEach(function(c) { c.classList.remove('active'); });
       return;
     }
 
     var results = _search(q);
     if (_state.activeCat) results = results.filter(function(r) { return _getSource(r) === _state.activeCat; });
-    _state.results = results;
+
     var counts = _countsByCat(results);
     _renderCats(counts);
     _renderSummary(results, q);
-    _renderResults(results, _normaliseQuery(q).tokens);
+    _state.results = results;
+    var tokens = _normaliseQuery(q).tokens;
+    _renderResults(results, tokens);
   }
 
-  // ── QB record extraction helper ────────────────────────────────────────────
-  // FIX BUG 2: Multi-path QB data discovery
-  function _extractQbRecords() {
-    // Path 1: QBS root snap array (most reliable — set by my_quickbase.js on data load)
-    var qbRoot = document.getElementById('qbs-root');
-    var snaps = (qbRoot && Array.isArray(qbRoot._qbRowSnaps) && qbRoot._qbRowSnaps.length > 0)
-      ? qbRoot._qbRowSnaps : [];
-
-    // Path 2: window.__studioQbRecords + columns (set by fetch-patch at page top)
-    if (!snaps.length && window.__studioQbRecords && Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0) {
-      var rawRecs = window.__studioQbRecords;
-      var rawCols = window.__studioQbColumns || [];
-      var colMap = {};
-      rawCols.forEach(function(c) { colMap[String(c.id)] = c.label || ''; });
-      snaps = rawRecs.map(function(r, i) {
-        return { rowNum: i+1, recordId: String(r.qbRecordId || i), fields: r.fields || r, columnMap: colMap };
-      });
-    }
-
-    if (!snaps.length) return [];
-
-    return snaps.map(function(snap) {
-      function fv(keys) {
-        if (!snap.columnMap) return '';
-        var fid = Object.keys(snap.columnMap).find(function(id) {
-          return keys.some(function(k) { return (snap.columnMap[id]||'').toLowerCase().includes(k); });
-        });
-        if (!fid) return '';
-        var f = (snap.fields||{})[fid];
-        return f && f.value != null ? String(f.value) : '';
-      }
-      var caseNum = snap.recordId || fv(['case #','case number','record id']);
-      var title   = fv(['short description','description','subject','concern','title']);
-      var endUser = fv(['end user','client','account','customer']);
-      var status  = fv(['case status','status']);
-      var notes   = fv(['case notes','notes','latest update']);
-      var type    = fv(['type','category']);
-      return {
-        _src: 'qb',
-        title: title || ('QB Case #' + caseNum),
-        eu: endUser,
-        res: notes.slice(0, 400),
-        cat: type || 'QB Case',
-        case: caseNum,
-        status: status,
-        _snap: snap
-      };
-    }).filter(function(r) { return r.title || r.case; });
-  }
-
-  // ── Data loading ───────────────────────────────────────────────────────────
-  // FIX BUG 4: Shared promise sentinel prevents duplicate 12MB fetches
-  function _loadData() {
+  // ── Data loading — multi-source ────────────────────────────────────────────
+  // FIX: accepts optional pendingQuery — runs search immediately after load
+  // so user doesn't get stuck on empty state if they typed before data arrived
+  function _loadData(pendingQuery) {
     if (_state.loading) return;
     _state.loading = true;
-    _renderSummary([], ''); // show "Loading data sources…"
-
     var body = el('se2-body');
-    if (body && !body.querySelector('.se2-spin')) {
-      body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:#7d8590;font-size:12px;">' +
-        '<div class="se2-spin"></div><span>Loading all data sources…</span></div>';
-    }
+    if (body) body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:#7d8590;font-size:12px;"><div class="se2-spin"></div><span>Loading all data sources…</span></div>';
 
-    // ── KB JSON — use shared promise to prevent duplicate fetches (FIX BUG 4)
-    var kbPromise;
-    if (window.__se2KbLoaded && Array.isArray(window.__se2KbCache) && window.__se2KbCache.length > 0) {
-      kbPromise = Promise.resolve(window.__se2KbCache);
-    } else if (window.__se2KbPromise) {
-      // Pre-load already in-flight — reuse it instead of re-fetching
-      kbPromise = window.__se2KbPromise;
-    } else {
-      kbPromise = _fetchKbJson();
-    }
+    // ── Source 1: KB JSON — use pre-loaded cache if available ───────────
+    // window.__se2KbCache is populated by the background pre-loader at page startup.
+    // If cache is ready, use it instantly (no network request needed).
+    // If not yet ready, fetch and wait.
+    var kbPromise = (window.__se2KbLoaded && Array.isArray(window.__se2KbCache) && window.__se2KbCache.length > 0)
+      ? Promise.resolve(window.__se2KbCache)
+      : fetch('/support_records_kb.json')
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(j) {
+            if (!j) return [];
+            var flat = Array.isArray(j.flat) ? j.flat : (Array.isArray(j) ? j : []);
+            var mapped = flat.map(function(r) {
+              var catLow = (r.cat || '').toLowerCase();
+              var src = 'sr';
+              if (catLow.includes('connect') || catLow.includes('network') || catLow.includes('vpn')) src = 'net';
+              if (catLow.includes('part') || catLow.includes('xr') || catLow.includes('cc200') || catLow.includes('license key')) src = 'parts';
+              if (catLow.includes('controller') || catLow.includes('programming')) src = 'ctrl';
+              return Object.assign({}, r, { _id: r.id, _src: src });
+            });
+            window.__se2KbCache  = mapped;
+            window.__se2KbLoaded = true;
+            return mapped;
+          }).catch(function() { return []; });
 
-    // ── Connect+ sites
+    // ── Source 2: Connect+ sites (if loaded in window state) ─────────────
     var cpPromise = Promise.resolve().then(function() {
-      var cpData = window.__se2ConnectData || window.__studioCpRecords || [];
+      // Read from Connect+ tab's in-memory state via window.__studioQbRecords fallback
+      var cpData = window.__se2ConnectData || [];
+      // Try reading from global _state set by Connect+ tab (exposed via window)
+      if (!cpData.length && window.__studioCpRecords && Array.isArray(window.__studioCpRecords)) {
+        cpData = window.__studioCpRecords;
+      }
       return cpData.map(function(r) {
-        return { _src:'net', title:r.site||r.name||'', eu:r.endUser||r.directory||'',
-          res:[r.directory,r.city,r.state,r.country].filter(Boolean).join(' · '),
-          cat:'Connect+ Site', site:r.site, directory:r.directory, endUser:r.endUser, url:r.url };
+        return { _src:'net', title: r.site||r.name||'', eu: r.endUser||r.directory||'', res: [r.directory,r.city,r.state,r.country].filter(Boolean).join(' · '), cat:'Connect+ Site', site:r.site, directory:r.directory, endUser:r.endUser, url:r.url };
       });
     });
 
-    // ── Parts Number
+    // ── Source 3: Parts Number (if loaded) ───────────────────────────────
     var pnPromise = Promise.resolve().then(function() {
-      var pnData = window.__se2PartsData || window.__studioPnRecords || [];
+      var pnData = window.__se2PartsData || [];
+      if (!pnData.length && window.__studioPnRecords && Array.isArray(window.__studioPnRecords)) {
+        pnData = window.__studioPnRecords;
+      }
       return pnData.map(function(r) {
-        return { _src:'parts', title:r.partNo||r.name||r.part_number||'',
-          res:r.desc||r.description||'', cat:'Parts',
-          partNo:r.partNo||r.part_number, desc:r.desc||r.description, brand:r.brand||r.manufacturer };
+        return { _src:'parts', title: (r.partNo||r.name||r.part_number||''), res: r.desc||r.description||'', cat:'Parts', partNo:r.partNo||r.part_number, desc:r.desc||r.description, brand:r.brand||r.manufacturer };
       });
     });
 
-    // ── QB records — FIX BUG 2: multi-path discovery
-    var qbPromise = Promise.resolve(_extractQbRecords());
-
-    Promise.all([kbPromise, cpPromise, pnPromise, qbPromise])
-      .then(function(sources) {
-        var merged = [];
-        sources.forEach(function(s) { if (Array.isArray(s)) merged = merged.concat(s); });
-        _state.allRecords = merged;
-        _state.loaded     = true;
-        _state.loading    = false;
-
-        var counts = _countsByCat();
-        _renderCats(counts);
-
-        // Restore empty welcome state with record count
-        var body2 = el('se2-body');
-        if (body2) {
-          body2.innerHTML = '<div id="se2-empty">' +
-            '<div class="se2-empty-icon">🔍</div>' +
-            '<div class="se2-empty-title">Search Engine 2</div>' +
-            '<div class="se2-empty-sub">Advanced search across <strong>' + merged.length.toLocaleString() + ' records</strong> — QuickBase cases, Knowledge Base, Parts, Connect+ sites, Controllers, Support Records.</div>' +
-            '<div class="se2-chips" id="se2-chip-row"></div></div>';
-          _renderChips();
+    // ── Source 4: QB records (already in window from QBS tab) ────────────
+    var qbPromise = Promise.resolve().then(function() {
+      var qbRecs = window.__studioQbRecords || [];
+      var qbCols = window.__studioQbColumns || [];
+      if (!qbRecs.length) return [];
+      var colMap = {};
+      qbCols.forEach(function(c) { colMap[String(c.id)] = c.label; });
+      return qbRecs.map(function(r) {
+        function fv(keys) {
+          var fid = Object.keys(colMap).find(function(id) {
+            return keys.some(function(k) { return (colMap[id]||'').toLowerCase().includes(k); });
+          });
+          if (!fid) return '';
+          var f = (r.fields||r)[fid];
+          return f && f.value != null ? String(f.value) : '';
         }
+        var caseNum = r.qbRecordId || fv(['case #','case number']);
+        var title   = fv(['short description','description','subject','concern']);
+        var endUser = fv(['end user','client','account']);
+        var status  = fv(['case status','status']);
+        var notes   = fv(['case notes','notes']);
+        var type    = fv(['type','category']);
+        return { _src:'qb', title:title||('QB Case #'+caseNum), eu:endUser, res:notes.slice(0,400), cat:type||'QB Case', case:caseNum, status:status, _snap: r };
+      }).filter(function(r) { return r.title || r.case; });
+    });
 
-        // FIX BUG 3: Always run search if there's a pending or current query
-        var qEl = el('se2-q');
-        var pendingQ = _state.pendingQuery || (qEl && qEl.value ? qEl.value.trim() : '');
-        _state.pendingQuery = '';
-        _renderSummary([], '');
-
-        if (qEl) qEl.focus();
-
-        if (pendingQ) {
-          _state.query = pendingQ;
-          if (qEl && !qEl.value) qEl.value = pendingQ;
-          _run();
-        }
-
-        // Schedule a QB refresh 3 seconds later — QB tab may not have loaded yet
-        setTimeout(function() {
-          var freshQb = _extractQbRecords();
-          if (freshQb.length > 0) {
-            var nonQb = _state.allRecords.filter(function(r) { return r._src !== 'qb'; });
-            _state.allRecords = nonQb.concat(freshQb);
-            if (_state.query) _run();
-            else {
-              var s = el('se2-summary');
-              if (s) s.innerHTML = 'Total indexed: <strong>' + _state.allRecords.length.toLocaleString() + '</strong> records &nbsp;·&nbsp; Ready to search';
-            }
-          }
-        }, 3000);
-      })
-      .catch(function(err) {
-        _state.loading = false;
-        var body3 = el('se2-body');
-        if (body3) body3.innerHTML = '<div style="padding:40px;text-align:center;">' +
-          '<div style="font-size:32px;margin-bottom:12px;">⚠️</div>' +
-          '<div style="color:#f85149;font-weight:700;margin-bottom:6px;">Failed to load data sources</div>' +
-          '<div style="font-size:11px;color:#7d8590;margin-bottom:14px;">' + esc(String(err&&err.message||err)) + '</div>' +
-          '<button onclick="window._se2Reload()" style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;padding:8px 18px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">↻ Retry</button>' +
-          '</div>';
-      });
-  }
-
-  // ── KB JSON fetch (shared, deduped) ───────────────────────────────────────
-  function _fetchKbJson() {
-    var p = fetch('/support_records_kb.json')
-      .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
-      .then(function(j) {
-        var flat = Array.isArray(j.flat) ? j.flat : (Array.isArray(j) ? j : []);
-        var mapped = flat.map(function(r) {
-          var catLow = (r.cat || '').toLowerCase();
-          var src = 'sr';
-          if (catLow.includes('connect') || catLow.includes('network') || catLow.includes('vpn')) src = 'net';
-          if (catLow.includes('part') || catLow.includes('xr') || catLow.includes('cc200') || catLow.includes('license key')) src = 'parts';
-          if (catLow.includes('controller') || catLow.includes('programming')) src = 'ctrl';
-          return Object.assign({}, r, { _id: r.id, _src: src });
-        });
-        window.__se2KbCache  = mapped;
-        window.__se2KbLoaded = true;
-        window.__se2KbPromise = null;
-        return mapped;
-      })
-      .catch(function(err) {
-        console.warn('[SE2] KB JSON load failed:', err.message);
-        window.__se2KbCache  = [];
-        window.__se2KbLoaded = false;
-        window.__se2KbPromise = null;
-        return [];
-      });
-    window.__se2KbPromise = p; // FIX BUG 4: store promise so parallel calls reuse it
-    return p;
+    Promise.all([kbPromise, cpPromise, pnPromise, qbPromise]).then(function(sources) {
+      var merged = [];
+      sources.forEach(function(s) { merged = merged.concat(s || []); });
+      _state.allRecords = merged;
+      _state.loaded = true;
+      _state.loading = false;
+      var counts = _countsByCat();
+      _renderCats(counts);
+      _renderSummary([], '');
+      var qEl = el('se2-q');
+      var body2 = el('se2-body');
+      if (body2) {
+        body2.innerHTML = '<div id="se2-empty">' +
+          '<div class="se2-empty-icon">🔍</div>' +
+          '<div class="se2-empty-title">Search Engine 2</div>' +
+          '<div class="se2-empty-sub">Advanced search across <strong>' + merged.length.toLocaleString() + ' records</strong> — QuickBase cases, Knowledge Base, Parts, Connect+ sites, Product Controllers, Contact Info, Support Records. Supports natural language, error codes, case numbers, and questions.</div>' +
+          '<div class="se2-chips" id="se2-chip-row"></div></div>';
+        _renderChips();
+      }
+      // FIX: run search immediately if user already typed something
+      var currentQuery = (qEl && qEl.value) ? qEl.value : (pendingQuery || '');
+      if (qEl) { qEl.focus(); }
+      if (currentQuery) {
+        _state.query = currentQuery;
+        if (qEl && !qEl.value) qEl.value = currentQuery;
+        _run();
+      }
+    }).catch(function(err) {
+      _state.loading = false;
+      var body3 = el('se2-body');
+      if (body3) body3.innerHTML = '<div style="padding:40px;text-align:center;color:#f85149;">⚠️ Failed to load data: ' + esc(String(err.message||err)) + '</div>';
+    });
   }
 
   // ── Detail Drawer ──────────────────────────────────────────────────────────
@@ -15815,7 +15728,7 @@
     var r = _state.results[idx];
     if (!r) return;
     _state.detailIdx = idx;
-    _state.deepData  = null;
+    _state.deepData = null;
 
     var drawer = el('se2-detail');
     if (drawer) drawer.classList.add('open');
@@ -15823,6 +15736,7 @@
     var src = SOURCES[_getSource(r)] || { label:'Record', color:'#58a6ff' };
     var caseNum = r.case || r.caseNum || '';
 
+    // Header
     var titleEl = el('se2-dh-title');
     if (titleEl) titleEl.textContent = r.title || r.site || r.partNo || '(untitled)';
 
@@ -15835,44 +15749,56 @@
         (r.status ? '<span class="se2-age-chip">' + esc(r.status) + '</span>' : '');
     }
 
+    // Nav
     var total = _state.results.length;
     var posEl = el('se2-dh-pos');
     if (posEl) posEl.textContent = (idx + 1) + ' of ' + total.toLocaleString();
     var prevBtn = el('se2-dh-prev'); if (prevBtn) prevBtn.disabled = idx <= 0;
     var nextBtn = el('se2-dh-next'); if (nextBtn) nextBtn.disabled = idx >= total - 1;
 
+    // Body
     var bodyEl = el('se2-drawer-body');
-    if (!bodyEl) return;
+    if (bodyEl) {
+      var html = '';
+      // Location / info section
+      html += '<div class="se2-sec-title" style="color:' + src.color + ';"><i class="fas fa-info-circle" style="margin-right:5px;"></i>' + esc(src.label) + ' Details</div>';
+      html += '<div class="se2-kv-grid">';
+      if (caseNum)  html += '<div class="se2-kv"><div class="se2-kv-label">Case #</div><div class="se2-kv-value" style="color:#58a6ff;font-family:var(--ss-mono,monospace);">' + esc(caseNum) + '</div></div>';
+      if (r.eu)     html += '<div class="se2-kv"><div class="se2-kv-label">End User</div><div class="se2-kv-value" style="color:#c084fc;">' + esc(r.eu) + '</div></div>';
+      if (r.status) html += '<div class="se2-kv"><div class="se2-kv-label">Status</div><div class="se2-kv-value">' + esc(r.status) + '</div></div>';
+      if (r.cat)    html += '<div class="se2-kv"><div class="se2-kv-label">Category</div><div class="se2-kv-value">' + esc(r.cat) + '</div></div>';
+      if (r.site)   html += '<div class="se2-kv"><div class="se2-kv-label">Site</div><div class="se2-kv-value">' + esc(r.site) + '</div></div>';
+      if (r.directory) html += '<div class="se2-kv"><div class="se2-kv-label">Directory</div><div class="se2-kv-value">' + esc(r.directory) + '</div></div>';
+      if (r.partNo) html += '<div class="se2-kv"><div class="se2-kv-label">Part #</div><div class="se2-kv-value" style="font-family:var(--ss-mono,monospace);color:#f59e0b;">' + esc(r.partNo) + '</div></div>';
+      if (r.brand)  html += '<div class="se2-kv"><div class="se2-kv-label">Brand</div><div class="se2-kv-value">' + esc(r.brand) + '</div></div>';
+      html += '</div>';
 
-    var html = '';
+      // Description / notes
+      if (r.title && r.title !== (r.site || r.partNo)) {
+        html += '<div class="se2-sec-title" style="color:#7d8590;"><i class="fas fa-file-alt" style="margin-right:5px;"></i>Description</div>';
+        html += '<div class="se2-notes-box" style="color:#c9d1d9;">' + esc(r.title) + '</div>';
+      }
+      if (r.res || r.desc) {
+        html += '<div class="se2-sec-title" style="color:#7d8590;"><i class="fas fa-comment-alt" style="margin-right:5px;"></i>Details / Resolution</div>';
+        html += '<div class="se2-notes-box">' + esc((r.res || r.desc || '')) + '</div>';
+      }
 
-    // Resolution / notes
-    if (r.res || r.notes) {
-      html += '<div class="se2-sec-title" style="color:#58a6ff;"><i class="fas fa-comment-alt" style="margin-right:6px;"></i>Resolution / Notes</div>';
-      html += '<div class="se2-notes-box">' + esc(r.res || r.notes || '') + '</div>';
+      // Connect+ URL
+      if (r.url) {
+        html += '<div class="se2-sec-title" style="color:#22d3ee;"><i class="fas fa-link" style="margin-right:5px;"></i>Link</div>';
+        html += '<div style="margin-bottom:18px;"><a href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer" style="color:#22d3ee;font-size:11px;word-break:break-all;">' + esc(r.url) + '</a></div>';
+      }
+
+      bodyEl.innerHTML = html;
     }
 
-    // Key-value grid
-    html += '<div class="se2-sec-title" style="color:#7d8590;"><i class="fas fa-tag" style="margin-right:6px;"></i>Details</div>';
-    html += '<div class="se2-kv-grid">';
-    if (caseNum) html += '<div class="se2-kv"><div class="se2-kv-label">Case #</div><div class="se2-kv-value" style="font-family:monospace;color:#58a6ff;">' + esc(caseNum) + '</div></div>';
-    if (r.eu) html += '<div class="se2-kv"><div class="se2-kv-label">End User</div><div class="se2-kv-value">' + esc(r.eu) + '</div></div>';
-    if (r.cat) html += '<div class="se2-kv"><div class="se2-kv-label">Category</div><div class="se2-kv-value">' + esc(r.cat) + '</div></div>';
-    if (r.status) html += '<div class="se2-kv"><div class="se2-kv-label">Status</div><div class="se2-kv-value">' + esc(r.status) + '</div></div>';
-    if (r.partNo) html += '<div class="se2-kv"><div class="se2-kv-label">Part #</div><div class="se2-kv-value" style="font-family:monospace;">' + esc(r.partNo) + '</div></div>';
-    if (r.brand) html += '<div class="se2-kv"><div class="se2-kv-label">Brand</div><div class="se2-kv-value">' + esc(r.brand) + '</div></div>';
-    if (r.site) html += '<div class="se2-kv se2-kv-full"><div class="se2-kv-label">Site</div><div class="se2-kv-value">' + esc(r.site) + '</div></div>';
-    if (r.desc && r.desc !== r.res) html += '<div class="se2-kv se2-kv-full"><div class="se2-kv-label">Description</div><div class="se2-kv-value">' + esc(r.desc) + '</div></div>';
-    if (r.url) html += '<div class="se2-kv se2-kv-full"><div class="se2-kv-label">Link</div><div class="se2-kv-value"><a href="' + esc(r.url) + '" target="_blank" style="color:#22d3ee;text-decoration:none;">' + esc(r.url) + '</a></div></div>';
-    html += '<div class="se2-kv"><div class="se2-kv-label">Source</div><div class="se2-kv-value" style="color:' + src.color + ';">' + esc(src.label) + '</div></div>';
-    html += '</div>';
-
-    bodyEl.innerHTML = html;
-
-    // Footer — show QB deep-fetch only for QB records
+    // Footer: show QB deep-fetch button only for QB records with a case number
     var footer = el('se2-drawer-footer');
     if (footer) {
-      footer.style.display = (_getSource(r) === 'qb' && caseNum) ? 'flex' : 'none';
+      var showFooter = (caseNum && (_getSource(r) === 'qb' || _getSource(r) === 'sr'));
+      footer.style.display = showFooter ? 'flex' : 'none';
+      var deepBtn = el('se2-deep-btn');
+      if (deepBtn) { deepBtn.disabled = false; deepBtn.innerHTML = '<i class="fas fa-database"></i> Load Full QB Details'; }
     }
   };
 
@@ -15885,168 +15811,312 @@
   window._se2CloseDetail = function() {
     var d = el('se2-detail');
     if (d) d.classList.remove('open');
+    _state.detailIdx = -1;
+    _state.deepData = null;
   };
 
+  // ── QB Deep Fetch — loads full case data for any case # ───────────────────
   window._se2DeepFetch = function() {
     var r = _state.results[_state.detailIdx];
-    if (!r || !r.case) return;
-    var caseNum = r.case;
+    if (!r) return;
+    var caseNum = r.case || r.caseNum || '';
+    if (!caseNum) return;
+
+    var deepBtn = el('se2-deep-btn');
+    if (deepBtn) { deepBtn.disabled = true; deepBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading…'; }
+
+    var tok = '';
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) { var p = JSON.parse(raw); tok = p && (p.access_token || (p.session && p.session.access_token)) || ''; }
+      if (!tok && window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') tok = window.CloudAuth.accessToken() || '';
+    } catch(_) {}
+
+    var headers = { 'Content-Type':'application/json' };
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
+
+    fetch('/api/studio/qb_data?recordId=' + encodeURIComponent(caseNum), { headers: headers })
+      .then(function(res) { return res.json(); })
+      .then(function(d) {
+        if (deepBtn) { deepBtn.disabled = false; deepBtn.innerHTML = '<i class="fas fa-database"></i> Load Full QB Details'; }
+        if (!d || !d.ok || !d.fields) {
+          var bodyEl2 = el('se2-drawer-body');
+          if (bodyEl2) bodyEl2.innerHTML += '<div style="margin-top:12px;padding:12px;border-radius:8px;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);color:#f85149;font-size:11px;">⚠ ' + esc(d && d.message || 'Case not found in QB') + '</div>';
+          return;
+        }
+        // Populate detail drawer with full QB data
+        _se2ShowFullCase(caseNum, d.fields, d.columnMap);
+      })
+      .catch(function(err) {
+        if (deepBtn) { deepBtn.disabled = false; deepBtn.innerHTML = '<i class="fas fa-database"></i> Load Full QB Details'; }
+        var bodyEl3 = el('se2-drawer-body');
+        if (bodyEl3) bodyEl3.innerHTML += '<div style="margin-top:12px;padding:12px;border-radius:8px;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);color:#f85149;font-size:11px;">⚠ Network error: ' + esc(String(err.message||err)) + '</div>';
+      });
+  };
+
+  function _se2ShowFullCase(caseNum, fields, columnMap) {
+    function fv(keys) {
+      var fid = Object.keys(columnMap||{}).find(function(id) {
+        var lbl = (columnMap[id]||'').toLowerCase();
+        return keys.some(function(k) { return lbl.includes(k); });
+      });
+      if (!fid) return '';
+      var f = fields[fid];
+      return f && f.value != null ? String(f.value) : '';
+    }
+    var title   = fv(['short description','description','subject','concern']) || ('Case #'+caseNum);
+    var endUser = fv(['end user','client','account','customer']);
+    var status  = fv(['case status','status']);
+    var type    = fv(['type','category']);
+    var assign  = fv(['assigned to','assigned','agent']);
+    var contact = fv(['contact','full name','customer name']);
+    var notes   = fv(['case notes','notes','resolution','details']);
+    var latest  = fv(['latest update on the case','latest update','last update','last comment']);
+    var age     = fv(['age','case age']);
+    var lastUpd = fv(['last update days']);
+
     var bodyEl = el('se2-drawer-body');
     if (!bodyEl) return;
-    bodyEl.innerHTML = '<div class="se2-loading-overlay"><div class="se2-spin"></div><span>Fetching QB case #' + esc(caseNum) + '…</span></div>';
 
-    if (typeof window._qbsDeepSearch === 'function') {
-      window._qbsDeepSearch(caseNum, 0);
-      window._se2CloseDetail();
-      if (typeof window.activateTab === 'function') {
-        // Navigate to QBS tab and trigger search
-        setTimeout(function() { window.activateTab('qbs'); }, 100);
-      }
-    } else {
-      bodyEl.innerHTML = '<div style="padding:20px;text-align:center;color:#7d8590;font-size:12px;">Open the QuickBase_S tab and search for case #' + esc(caseNum) + ' to see full details.</div>';
+    var titleEl = el('se2-dh-title');
+    if (titleEl) titleEl.textContent = title;
+
+    var html = '<div style="margin-bottom:16px;padding:10px 12px;border-radius:8px;background:rgba(63,185,80,.06);border:1px solid rgba(63,185,80,.2);color:#56d364;font-size:11px;font-weight:700;"><i class="fas fa-check-circle" style="margin-right:6px;"></i>Full QB data loaded for Case #' + esc(caseNum) + '</div>';
+
+    // Status bar
+    if (status) {
+      var statusColors = {resolv:'#3fb950',invest:'#58a6ff',initial:'#f59e0b',triag:'#a78bfa',close:'#8b949e',wait:'#f97316'};
+      var sc = '#8b949e';
+      for (var k in statusColors) { if (status.toLowerCase().includes(k)) { sc = statusColors[k]; break; } }
+      html += '<div style="margin-bottom:14px;"><span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;background:' + sc + '18;color:' + sc + ';border:1px solid ' + sc + '40;">' + esc(status) + '</span></div>';
     }
-  };
 
-  // FIX BUG 1: _se2OpenInQbs no longer uses broken onclick string
+    // KV grid
+    html += '<div class="se2-sec-title" style="color:#58a6ff;"><i class="fas fa-clipboard-list" style="margin-right:5px;"></i>Case Details</div>';
+    html += '<div class="se2-kv-grid">';
+    html += '<div class="se2-kv"><div class="se2-kv-label">Case #</div><div class="se2-kv-value" style="color:#58a6ff;font-family:var(--ss-mono,monospace);">' + esc(caseNum) + '</div></div>';
+    if (endUser) html += '<div class="se2-kv"><div class="se2-kv-label">End User</div><div class="se2-kv-value" style="color:#c084fc;">' + esc(endUser) + '</div></div>';
+    if (assign)  html += '<div class="se2-kv"><div class="se2-kv-label">Assigned To</div><div class="se2-kv-value" style="color:#58a6ff;">' + esc(assign) + '</div></div>';
+    if (contact) html += '<div class="se2-kv"><div class="se2-kv-label">Contact</div><div class="se2-kv-value">' + esc(contact) + '</div></div>';
+    if (type)    html += '<div class="se2-kv"><div class="se2-kv-label">Type</div><div class="se2-kv-value">' + esc(type) + '</div></div>';
+    if (age)     html += '<div class="se2-kv"><div class="se2-kv-label">Age</div><div class="se2-kv-value">' + esc(age) + ' days</div></div>';
+    if (lastUpd) html += '<div class="se2-kv"><div class="se2-kv-label">Last Updated</div><div class="se2-kv-value">' + esc(lastUpd) + ' days ago</div></div>';
+    html += '</div>';
+
+    if (title) {
+      html += '<div class="se2-sec-title" style="color:#7d8590;"><i class="fas fa-file-alt" style="margin-right:5px;"></i>Description</div>';
+      html += '<div class="se2-notes-box" style="color:#c9d1d9;">' + esc(title) + '</div>';
+    }
+    if (latest) {
+      html += '<div class="se2-sec-title" style="color:#22d3ee;"><i class="fas fa-clock" style="margin-right:5px;"></i>Latest Update</div>';
+      html += '<div class="se2-notes-box">' + esc(latest) + '</div>';
+    }
+    if (notes) {
+      html += '<div class="se2-sec-title" style="color:#7d8590;"><i class="fas fa-comment-dots" style="margin-right:5px;"></i>Case Notes</div>';
+      html += '<div class="se2-notes-box">' + esc(notes.slice(0, 2000)) + '</div>';
+    }
+
+    // Deep link to QBS tab
+    html += '<div class="se2-sec-title" style="color:#7d8590;"><i class="fas fa-external-link-alt" style="margin-right:5px;"></i>Actions</div>';
+    html += '<button onclick="window._se2OpenInQbs('' + esc(caseNum) + '')" style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:8px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--ss-font,inherit);"><i class="fas fa-database"></i> Open in QuickBase_S Deep Search</button>';
+
+    bodyEl.innerHTML = html;
+  }
+
+  // ── Open case in QBS deep search ───────────────────────────────────────────
   window._se2OpenInQbs = function(caseNum) {
     window._se2CloseDetail();
-    if (typeof window.activateTab === 'function') {
-      window.activateTab('qbs');
-      setTimeout(function() {
-        if (typeof window._qbsDeepSearch === 'function') {
-          window._qbsDeepSearch(String(caseNum), 0);
-        }
-      }, 600);
-    }
+    // Switch to QBS tab and trigger deep search
+    var qbsBtn = document.querySelector('[data-tab="qbs"]');
+    if (qbsBtn) qbsBtn.click();
+    setTimeout(function() {
+      var deepInput = document.getElementById('qbs-search-input');
+      var deepBtn   = document.getElementById('qbs-deep-search-btn');
+      if (deepInput) { deepInput.value = caseNum; deepInput.dispatchEvent(new Event('input')); }
+      if (deepBtn)   { deepBtn.click(); }
+    }, 400);
   };
 
+  // ── Category filter ────────────────────────────────────────────────────────
   window._se2FilterCat = function(cat) {
-    _state.activeCat = (_state.activeCat === cat) ? null : cat;
+    if (_state.activeCat === cat) { _state.activeCat = null; }
+    else { _state.activeCat = cat; }
+    document.querySelectorAll('.se2-cat').forEach(function(c) {
+      c.classList.toggle('active', c.getAttribute('data-src') === _state.activeCat);
+    });
     _run();
   };
 
   window._se2SetQ = function(val) {
     var qEl = el('se2-q');
-    if (qEl) { qEl.value = val; qEl.focus(); }
-    _state.query = String(val || '');
-    _run();
+    if (qEl) { qEl.value = val; _state.query = val; _run(); qEl.focus(); }
   };
 
   window._se2Clear = function() {
     var qEl = el('se2-q');
-    if (qEl) { qEl.value = ''; qEl.focus(); }
-    _state.query = '';
-    _state.activeCat = null;
+    if (qEl) qEl.value = '';
+    _state.query = ''; _state.activeCat = null;
+    document.querySelectorAll('.se2-cat').forEach(function(c) { c.classList.remove('active'); });
+    var chip = el('se2-ai-chip'); if (chip) chip.classList.remove('on');
     _run();
+    if (qEl) qEl.focus();
   };
 
-  window._se2Reload = function() {
-    _state.loaded = false;
-    _state.loading = false;
-    _state.allRecords = [];
-    window.__se2KbLoaded = false;
-    window.__se2KbPromise = null;
-    _loadData();
-  };
-
-  // Keyboard nav
+  // ── Keyboard ────────────────────────────────────────────────────────────────
   document.addEventListener('keydown', function(e) {
-    var d = el('se2-detail');
-    if (!d || !d.classList.contains('open')) return;
-    if (e.key === 'Escape')     { window._se2CloseDetail(); return; }
-    if (e.key === 'ArrowLeft')  window._se2Nav(-1);
-    if (e.key === 'ArrowRight') window._se2Nav(1);
+    if (e.key === 'Escape') {
+      var d = el('se2-detail');
+      if (d && d.classList.contains('open')) { window._se2CloseDetail(); return; }
+    }
+    if (e.key === 'ArrowLeft' && el('se2-detail') && el('se2-detail').classList.contains('open')) window._se2Nav(-1);
+    if (e.key === 'ArrowRight' && el('se2-detail') && el('se2-detail').classList.contains('open')) window._se2Nav(1);
   });
 
-  // ── Main init ──────────────────────────────────────────────────────────────
+  // ── Init on Search Engine 2 tab activation ────────────────────────────────
   var _se2Inited = false;
 
   function _se2Init() {
     if (_se2Inited) {
-      // Re-visit: refresh QB data and re-run current search
-      var freshQb = _extractQbRecords();
-      if (freshQb.length > 0) {
-        var nonQb = _state.allRecords.filter(function(r) { return r._src !== 'qb'; });
-        if (nonQb.length > 0 && freshQb.length !== (_state.allRecords.length - nonQb.length)) {
-          _state.allRecords = nonQb.concat(freshQb);
-        }
+      // FIX: On re-visit, refresh QB records (may have loaded since first visit)
+      // and immediately re-run search if there's already a query
+      var qbRecs = window.__studioQbRecords || [];
+      var nonQb = _state.allRecords.filter(function(r) { return r._src !== 'qb'; });
+      if (qbRecs.length > 0 && nonQb.length > 0) {
+        var qbMapped = qbRecs.map(function(r) {
+          function fv(keys) {
+            var cols = window.__studioQbColumns || [];
+            var colMap = {};
+            cols.forEach(function(c) { colMap[String(c.id)] = c.label; });
+            var fid = Object.keys(colMap).find(function(id) { return keys.some(function(k) { return (colMap[id]||'').toLowerCase().includes(k); }); });
+            if (!fid) return '';
+            var f = (r.fields||r)[fid]; return f && f.value != null ? String(f.value) : '';
+          }
+          return { _src:'qb', title:fv(['short description','description','subject','concern']), eu:fv(['end user','client']), res:fv(['case notes','notes']).slice(0,400), cat:fv(['type','category'])||'QB Case', case:r.qbRecordId||fv(['case #']), status:fv(['case status','status']), _snap:r };
+        }).filter(function(r) { return r.title||r.case; });
+        _state.allRecords = nonQb.concat(qbMapped);
       }
       var qEl2 = el('se2-q');
-      if (qEl2) qEl2.focus();
-      if (_state.loaded) _run();
+      if (qEl2) { qEl2.focus(); }
+      _run();
       return;
     }
     _se2Inited = true;
-
     var qEl = el('se2-q');
     var _se2Debounce = null;
     if (qEl) {
+      // FIX: debounce input — prevents _run() firing before _state.loaded=true
       qEl.addEventListener('input', function() {
         clearTimeout(_se2Debounce);
         var val = qEl.value;
         _se2Debounce = setTimeout(function() {
           _state.query = val;
           _run();
-        }, 200);
-      });
-      qEl.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') window._se2Clear();
+        }, 220);
       });
       setTimeout(function() { qEl.focus(); }, 100);
     }
-
     _renderChips();
-    _loadData();
+    // FIX: capture input value at load time so _loadData.then() can run it
+    var _se2PendingQuery = (qEl && qEl.value) ? qEl.value : '';
+    _loadData(_se2PendingQuery);
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // ACTIVATION — 4-layer strategy
-  // Layer 1: Background pre-load KB JSON at page startup
-  // Layer 2: Direct click listener on SE2 tab button
-  // Layer 3: MutationObserver on canvas active class
-  // Layer 4: activateTab wrapper + _openSearchEngine2 hook
+  // PERMANENT SE2 ACTIVATION — 4-layer strategy (belt+suspenders+velcro)
+  // Layer 1: Pre-load KB data silently at page startup (background fetch)
+  //          → data is READY before user ever clicks the SE2 tab
+  // Layer 2: Direct click listener on SE2 tab button via querySelector
+  //          → bypasses all activateTab hook chains completely
+  // Layer 3: MutationObserver on canvas active class changes
+  //          → catches ANY method that activates the canvas
+  // Layer 4: activateTab + _openSearchEngine2 hook chain (legacy fallback)
   // ═══════════════════════════════════════════════════════════════════
 
-  // Layer 1: Pre-load KB JSON in background
+  // ── Layer 1: Pre-load KB JSON in background at page startup ────────
+  // This means data is ALWAYS ready when the tab is first clicked.
   (function _se2PreLoad() {
-    if (window.__se2KbLoaded || window.__se2KbPromise) return; // already started
-    window.__se2KbPromise = _fetchKbJson();
+    // Start background fetch immediately — don't wait for tab click
+    fetch('/support_records_kb.json')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(j) {
+        if (!j) return;
+        var flat = Array.isArray(j.flat) ? j.flat : (Array.isArray(j) ? j : []);
+        window.__se2KbCache = flat.map(function(r) {
+          var catLow = (r.cat || '').toLowerCase();
+          var src = 'sr';
+          if (catLow.includes('connect') || catLow.includes('network') || catLow.includes('vpn')) src = 'net';
+          if (catLow.includes('part') || catLow.includes('xr') || catLow.includes('cc200') || catLow.includes('license key')) src = 'parts';
+          if (catLow.includes('controller') || catLow.includes('programming')) src = 'ctrl';
+          return Object.assign({}, r, { _id: r.id, _src: src });
+        });
+        window.__se2KbLoaded = true;
+        // If SE2 tab is already active, trigger search
+        var c = document.getElementById('canvas-search_engine_2');
+        if (c && c.classList.contains('active') && _se2Inited) {
+          _state.loaded = false;
+          _loadData('');
+        }
+        console.log('[SE2] KB pre-load complete:', window.__se2KbCache.length, 'records');
+      })
+      .catch(function(err) {
+        console.warn('[SE2] KB pre-load failed:', err.message);
+        window.__se2KbCache = [];
+        window.__se2KbLoaded = false;
+      });
   })();
 
-  // Layer 2: Direct click listener
+  // ── Layer 2: Direct click listener — most reliable ──────────────────
   function _se2AttachClickListener() {
-    var btn = document.getElementById('ss-tab-search_engine_2');
-    if (!btn) { setTimeout(_se2AttachClickListener, 200); return; }
-    btn.addEventListener('click', function() { setTimeout(_se2Init, 80); }, false);
+    var se2TabBtn = document.getElementById('ss-tab-search_engine_2');
+    if (!se2TabBtn) {
+      // Retry until DOM is ready
+      setTimeout(_se2AttachClickListener, 200);
+      return;
+    }
+    se2TabBtn.addEventListener('click', function() {
+      setTimeout(_se2Init, 100);
+    }, false);
+    console.log('[SE2] Direct click listener attached to tab button.');
   }
 
-  // Layer 3: MutationObserver
+  // ── Layer 3: MutationObserver — watches canvas for active class ─────
   function _se2AttachObserver() {
-    var canvas = document.getElementById('canvas-search_engine_2');
-    if (!canvas) { setTimeout(_se2AttachObserver, 300); return; }
+    var se2Canvas = document.getElementById('canvas-search_engine_2');
+    if (!se2Canvas) {
+      setTimeout(_se2AttachObserver, 300);
+      return;
+    }
     var obs = new MutationObserver(function(mutations) {
       mutations.forEach(function(m) {
         if (m.type === 'attributes' && m.attributeName === 'class') {
-          if (canvas.classList.contains('active')) setTimeout(_se2Init, 80);
+          if (se2Canvas.classList.contains('active')) {
+            setTimeout(_se2Init, 80);
+          }
         }
       });
     });
-    obs.observe(canvas, { attributes: true, attributeFilter: ['class'] });
-    if (canvas.classList.contains('active')) setTimeout(_se2Init, 80);
+    obs.observe(se2Canvas, { attributes: true, attributeFilter: ['class'] });
+    // Also check if already active right now
+    if (se2Canvas.classList.contains('active')) {
+      setTimeout(_se2Init, 80);
+    }
+    console.log('[SE2] MutationObserver active on canvas.');
   }
 
-  // Layer 4: activateTab + _openSearchEngine2 hooks
+  // ── Layer 4: activateTab + _openSearchEngine2 hook (legacy fallback) ─
   var _origActivateTab = window.activateTab;
   window.activateTab = function(target) {
-    if (typeof _origActivateTab === 'function') _origActivateTab(target);
+    if (_origActivateTab) _origActivateTab(target);
     if (target === 'search_engine_2') setTimeout(_se2Init, 80);
   };
-  window._openSearchEngine2 = function() {
-    if (typeof window.activateTab === 'function') window.activateTab('search_engine_2');
+  var _origOpenSE2 = window._openSearchEngine2;
+  window._openSearchEngine2 = function(e) {
+    if (_origOpenSE2) _origOpenSE2(e);
+    setTimeout(_se2Init, 80);
     return false;
   };
 
-  // Boot
+  // ── Boot all layers ──────────────────────────────────────────────────
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
       _se2AttachClickListener();
@@ -16061,7 +16131,6 @@
 </script>
 
 </body>
-
 
 
 <style>

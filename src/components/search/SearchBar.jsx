@@ -15,7 +15,7 @@ export default function SearchBar({ query, onQueryChange, onSearch, isSearching,
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  },[]);
+  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -23,14 +23,14 @@ export default function SearchBar({ query, onQueryChange, onSearch, isSearching,
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto">
+    <div className="w-full max-w-4xl mx-auto">
       <form onSubmit={handleSubmit} className="relative">
-        <div className={`relative flex items-center rounded-2xl border transition-all duration-300 ${
+        <div className={`relative flex items-center rounded-2xl border-2 transition-all duration-300 ${
           isFocused
-            ? 'border-primary/50 bg-secondary/30 shadow-lg shadow-primary/5'
-            : 'border-border/60 bg-card/40 hover:border-border hover:bg-card/60'
+            ? 'border-primary bg-secondary shadow-lg shadow-primary/10'
+            : 'border-border bg-card hover:border-muted-foreground/30'
         }`}>
-          <div className="pl-6 flex items-center">
+          <div className="pl-5 flex items-center">
             {isSearching ? (
               <Loader2 className="w-5 h-5 text-primary animate-spin" />
             ) : (
@@ -45,15 +45,15 @@ export default function SearchBar({ query, onQueryChange, onSearch, isSearching,
             onFocus={() => setIsFocused(true)}
             onBlur={() => setTimeout(() => setIsFocused(false), 200)}
             placeholder="Search support records, cases, parts, knowledge base..."
-            className="flex-1 bg-transparent border-none outline-none px-4 py-4 md:py-5 text-foreground placeholder:text-muted-foreground text-sm md:text-base font-inter w-full"
+            className="flex-1 bg-transparent border-none outline-none px-4 py-4 text-foreground placeholder:text-muted-foreground text-base font-inter"
           />
-          <div className="flex items-center gap-2 pr-4 md:pr-6">
+          <div className="flex items-center gap-2 pr-4">
             {query && (
-              <button type="button" onClick={() => { onQueryChange(''); inputRef.current?.focus(); }} className="p-1.5 rounded-full hover:bg-secondary transition-colors">
-                <X className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+              <button type="button" onClick={() => onQueryChange('')} className="p-1 rounded-full hover:bg-muted transition-colors">
+                <X className="w-4 h-4 text-muted-foreground" />
               </button>
             )}
-            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary/80 border border-border text-muted-foreground text-[11px] font-mono font-medium tracking-wide">
+            <div className="hidden md:flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-muted-foreground text-xs">
               <Command className="w-3 h-3" /><span>K</span>
             </div>
           </div>
@@ -65,20 +65,18 @@ export default function SearchBar({ query, onQueryChange, onSearch, isSearching,
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="absolute z-50 w-full mt-2 rounded-xl border border-border/60 bg-card shadow-2xl overflow-hidden"
+            className="absolute z-50 w-full max-w-4xl mt-2 rounded-xl border border-border bg-card shadow-xl overflow-hidden"
           >
-            <div className="flex items-center justify-between px-5 py-3 border-b border-border/50 bg-secondary/20">
-              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Recent Searches</span>
-              <button onClick={onClearRecent} className="text-[11px] font-medium text-primary hover:text-primary/80 transition-colors">Clear all</button>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent Searches</span>
+              <button onClick={onClearRecent} className="text-xs text-primary hover:text-primary/80 transition-colors">Clear all</button>
             </div>
-            <div className="py-1">
-              {recentSearches.slice(0, 5).map((term, i) => (
-                <button key={i} onClick={() => { onQueryChange(term); onSearch(term); }} className="flex items-center gap-3 w-full px-5 py-3 hover:bg-secondary/50 transition-colors text-left group">
-                  <Search className="w-4 h-4 text-muted-foreground group-hover:text-primary/70 transition-colors" />
-                  <span className="text-sm text-foreground/90 group-hover:text-foreground transition-colors">{term}</span>
-                </button>
-              ))}
-            </div>
+            {recentSearches.slice(0, 5).map((term, i) => (
+              <button key={i} onClick={() => { onQueryChange(term); onSearch(term); }} className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-muted transition-colors text-left">
+                <Search className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-sm text-foreground">{term}</span>
+              </button>
+            ))}
           </motion.div>
         )}
       </AnimatePresence>

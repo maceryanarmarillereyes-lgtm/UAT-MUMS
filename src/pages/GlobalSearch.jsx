@@ -6,51 +6,37 @@ import SearchBar from "../components/search/SearchBar";
 import SearchFilters from "../components/search/SearchFilters";
 import SearchResults from "../components/search/SearchResults";
 import SearchStats from "../components/search/SearchStats";
-import { countBySource } from "../lib/searchEngine";
+import { searchRecords, countBySource, countTotalBySource } from "../lib/searchEngine";
 
 const PAGE_SIZE = 50;
 
 export default function GlobalSearch() {
   const [query, setQuery] = useState('');
-  const[activeQuery, setActiveQuery] = useState('');
+  const [activeQuery, setActiveQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [sortOrder, setSortOrder] = useState('newest');
-  const[visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [recentSearches, setRecentSearches] = useState(() => {
     const saved = localStorage.getItem('mums_recent_searches');
-    return saved ? JSON.parse(saved) :[];
+    return saved ? JSON.parse(saved) : [];
   });
 
-  // Hardcoded real-time counts mula sa sinabi mo
-  const totalCounts = useMemo(() => ({
-    quickbase: 22314,
-    product_controllers: 36251, // Connect+
-    parts_number: 4948,
-    contact_info: 23100,
-    knowledge_base: 2957,
-    support_records: 13925
-  }),[]);
-
-  const totalIndexed = Object.values(totalCounts).reduce((a, b) => a + b, 0);
-
-  // SERVER-SIDE SEARCH SA IISANG ENTITY (SupportRecord)
-  const { data: allRecords =[], isLoading: isSearchingData } = useQuery({
-    queryKey: ['global_search', activeQuery],
-    enabled: !!activeQuery && activeQuery.length >= 2, // Maghahanap lang pag may tinype na
+  const { data: allRecords = [], isLoading } = useQuery({
+    queryKey: ['support_records_all'],
     queryFn: async () => {
-      try {
-        // Papahanap natin sa server ang query (max 100 results para mabilis)
-        const results = await base44.entities.SupportRecord.list({
-          search: activeQuery,
-          limit: 100
-        });
-        return results ||[];
-      } catch (error) {
-        console.error("Error performing server-side search:", error);
-        return[];
+      let all = [];
+      let skip = 0;
+      const limit = 200;
+      let hasMore = true;
+      while (hasMore) {
+        const batch = await base44.entities.SupportRecord.list('-created_date', limit, skip);
+        all = all.concat(batch);
+        if (batch.length < limit) hasMore = false;
+        else skip += limit;
       }
+      return all;
     },
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000,
   });
 
   useEffect(() => {
@@ -61,37 +47,37 @@ export default function GlobalSearch() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Tab Filtering at Sorting
-  const filteredResults = useMemo(() => {
-    if (!allRecords.length) return[];
-    
-    let results = activeTab === 'all' 
-      ? allRecords 
-      : allRecords.filter(r => r.source_tab === activeTab);
+  const searchResults = useMemo(() => {
+    if (!activeQuery) return [];
+    return searchRecords(allRecords, activeQuery);
+  }, [allRecords, activeQuery]);
 
+  const filteredResults = useMemo(() => {
+    let results = activeTab === 'all'
+      ? searchResults
+      : searchResults.filter(r => r.source_tab === activeTab);
     results = [...results].sort((a, b) => {
-      const dateA = new Date(a.created_date || 0).getTime();
-      const dateB = new Date(b.created_date || 0).getTime();
+      const dateA = new Date(a.created_date).getTime();
+      const dateB = new Date(b.created_date).getTime();
       return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
     });
-
     return results;
-  }, [allRecords, activeTab, sortOrder]);
+  }, [searchResults, activeTab, sortOrder]);
 
-  const tabCounts = useMemo(() => countBySource(allRecords), [allRecords]);
+  const tabCounts = useMemo(() => countBySource(searchResults), [searchResults]);
+  const totalCounts = useMemo(() => countTotalBySource(allRecords), [allRecords]);
   const visibleResults = filteredResults.slice(0, visibleCount);
-  const isLoading = isSearchingData;
 
   const handleSearch = useCallback((term) => {
     if (!term.trim()) return;
     setActiveQuery(term);
     setVisibleCount(PAGE_SIZE);
     setRecentSearches(prev => {
-      const updated =[term, ...prev.filter(s => s !== term)].slice(0, 10);
+      const updated = [term, ...prev.filter(s => s !== term)].slice(0, 10);
       localStorage.setItem('mums_recent_searches', JSON.stringify(updated));
       return updated;
     });
-  },[]);
+  }, []);
 
   const handleClearRecent = () => {
     setRecentSearches([]);
@@ -108,7 +94,7 @@ export default function GlobalSearch() {
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  },[visibleCount, filteredResults.length]);
+  }, [visibleCount, filteredResults.length]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -125,12 +111,11 @@ export default function GlobalSearch() {
               </div>
             </div>
             {!isLoading && (
-              <span className="ml-auto text-xs text-muted-foreground font-medium">
-                {totalIndexed.toLocaleString()} records ready to search
+              <span className="ml-auto text-xs text-muted-foreground">
+                {allRecords.length.toLocaleString()} records indexed
               </span>
             )}
           </div>
-          
           <SearchBar
             query={query}
             onQueryChange={setQuery}
@@ -140,7 +125,6 @@ export default function GlobalSearch() {
             recentSearches={recentSearches}
             onClearRecent={handleClearRecent}
           />
-          
           {activeQuery && (
             <div className="mt-3">
               <SearchFilters activeTab={activeTab} onTabChange={setActiveTab} counts={tabCounts} />
@@ -148,14 +132,12 @@ export default function GlobalSearch() {
           )}
         </div>
       </div>
-
       <div className="max-w-6xl mx-auto px-4 py-6">
         {!activeQuery && !isLoading && (
           <div className="mb-8">
             <SearchStats counts={totalCounts} />
           </div>
         )}
-        
         <SearchResults
           results={visibleResults}
           query={activeQuery}
@@ -164,7 +146,6 @@ export default function GlobalSearch() {
           sortOrder={sortOrder}
           onSortChange={() => setSortOrder(prev => prev === 'newest' ? 'oldest' : 'newest')}
         />
-        
         {visibleCount < filteredResults.length && (
           <div className="flex justify-center mt-6">
             <span className="text-xs text-muted-foreground">
