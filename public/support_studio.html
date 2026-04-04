@@ -4735,6 +4735,7 @@
               srFlat  = data.flat;
               srCats  = data.cats;
               srLoaded = true;
+              window.__studioSrRecords = Array.isArray(srFlat) ? srFlat.slice() : [];
               _srBuildSidebar(srCats);
               _srShowWelcome(srCats);
               _srRender();
@@ -15363,7 +15364,8 @@
     deepData:   null,
     deepLoading:false,
     pendingQuery: '',
-    sortOrder:  'score'
+    sortOrder:  'score',
+    monitor:    { sources:{}, total:0, warnings:[] }
   };
 
   window._se2ToggleSort = function() {
@@ -15401,6 +15403,83 @@
     if (cat.includes('part') || cat.includes('controller')) return 'parts';
     if (cat.includes('connect') || cat.includes('network')) return 'net';
     return 'sr';
+  }
+
+  function _toArray(maybe) {
+    return Array.isArray(maybe) ? maybe : [];
+  }
+
+  function _extractBundleData(row) {
+    if (!row) return [];
+    if (Array.isArray(row)) return row;
+    if (Array.isArray(row.data)) return row.data;
+    if (Array.isArray(row.records)) return row.records;
+    return [];
+  }
+
+  function _sessionToken() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (!raw) return '';
+      var parsed = JSON.parse(raw);
+      return parsed && parsed.access_token ? String(parsed.access_token) : '';
+    } catch(_) { return ''; }
+  }
+
+  function _fetchBundleApi(bundleId) {
+    var token = _sessionToken();
+    var headers = token ? { Authorization:'Bearer ' + token } : {};
+    return fetch('/api/studio/cache_bundle?bundle=' + encodeURIComponent(bundleId), { headers: headers })
+      .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('bundle_http_' + r.status)); })
+      .then(function(j) { return (j && j.ok) ? _extractBundleData(j.records || j.data || []) : []; })
+      .catch(function() { return []; });
+  }
+
+  function _loadBundleRecords(bundleId, seedRecords) {
+    var seeded = _toArray(seedRecords);
+    if (seeded.length) return Promise.resolve(seeded);
+    if (window.StudioCache && typeof window.StudioCache.getBundle === 'function') {
+      return window.StudioCache.getBundle(bundleId)
+        .then(function(row) {
+          var fromCache = _extractBundleData(row);
+          if (fromCache.length) return fromCache;
+          return _fetchBundleApi(bundleId);
+        })
+        .catch(function() { return _fetchBundleApi(bundleId); });
+    }
+    return _fetchBundleApi(bundleId);
+  }
+
+  function _mapGenericRecords(records, src, cat) {
+    return _toArray(records).map(function(r) {
+      var keys = Object.keys(r || {});
+      var title = String(r.title || r.name || r.site || r.partNo || r.part_number || r.email || r.phone || r.id || '(record)');
+      var text = keys.map(function(k) { return r[k]; }).join(' · ');
+      return { _src: src || 'sr', title: title, res: text.slice(0, 480), cat: cat || 'Support Records', _raw: r };
+    });
+  }
+
+  function _mapSupportRecords(records) {
+    return _toArray(records).map(function(r) {
+      return Object.assign({}, r, { _id: r.id, _src: _getSource(Object.assign({}, r, { _src:'sr' })) || 'sr' });
+    });
+  }
+
+  function _collectFutureTabRecords() {
+    var out = [];
+    var known = {
+      __studioCpRecords:1, __studioPnRecords:1, __studioCiRecords:1,
+      __studioQbRecords:1, __se2ConnectData:1, __se2PartsData:1
+    };
+    Object.keys(window).forEach(function(k) {
+      if (known[k]) return;
+      if (!/^__studio.*Records$/i.test(k)) return;
+      var arr = window[k];
+      if (!Array.isArray(arr) || !arr.length) return;
+      var cat = k.replace(/^__studio/i, '').replace(/Records$/i, '').replace(/_/g, ' ').trim() || 'Support Records';
+      out = out.concat(_mapGenericRecords(arr, 'sr', cat));
+    });
+    return out;
   }
 
   // ── Query engine ───────────────────────────────────────────────────────────
@@ -15604,6 +15683,10 @@
       s.innerHTML = _state.allRecords.length > 0
         ? 'Total indexed: <strong>' + _state.allRecords.length.toLocaleString() + '</strong> records &nbsp;&middot;&nbsp; Ready to search'
         : (_state.loading ? '<span style="color:#58a6ff;">Loading data sources&hellip;</span>' : 'Ready &mdash; type to search across all sources');
+      var mon = _state.monitor || {};
+      if (mon.total && mon.total > 0) {
+        s.innerHTML += ' &nbsp;&middot;&nbsp; <span style="font-size:10px;color:#7d8590;">Monitor: ' + mon.total.toLocaleString() + ' loaded</span>';
+      }
     } else {
       var parsed = _normaliseQuery(query);
       var aiOn = parsed.tokens.length > parsed.original.split(' ').length;
@@ -15743,6 +15826,8 @@
     var kbPromise;
     if (window.__se2KbLoaded && Array.isArray(window.__se2KbCache) && window.__se2KbCache.length > 0) {
       kbPromise = Promise.resolve(window.__se2KbCache);
+    } else if (Array.isArray(window.__studioSrRecords) && window.__studioSrRecords.length > 0) {
+      kbPromise = Promise.resolve(_mapSupportRecords(window.__studioSrRecords));
     } else if (window.__se2KbPromise) {
       // Pre-load already in-flight — reuse it instead of re-fetching
       kbPromise = window.__se2KbPromise;
@@ -15750,36 +15835,75 @@
       kbPromise = _fetchKbJson();
     }
 
-    // ── Connect+ sites
-    var cpPromise = Promise.resolve().then(function() {
-      var cpData = window.__se2ConnectData || window.__studioCpRecords || [];
-      return cpData.map(function(r) {
+    // ── Connect+ sites (full bundle aware)
+    var cpPromise = _loadBundleRecords('connect_plus', window.__se2ConnectData || window.__studioCpRecords)
+      .then(function(cpData) {
+      return _toArray(cpData).map(function(r) {
         return { _src:'net', title:r.site||r.name||'', eu:r.endUser||r.directory||'',
           res:[r.directory,r.city,r.state,r.country].filter(Boolean).join(' · '),
           cat:'Connect+ Site', site:r.site, directory:r.directory, endUser:r.endUser, url:r.url };
       });
     });
 
-    // ── Parts Number
-    var pnPromise = Promise.resolve().then(function() {
-      var pnData = window.__se2PartsData || window.__studioPnRecords || [];
-      return pnData.map(function(r) {
+    // ── Parts Number (full bundle aware)
+    var pnPromise = _loadBundleRecords('parts_number', window.__se2PartsData || window.__studioPnRecords)
+      .then(function(pnData) {
+      return _toArray(pnData).map(function(r) {
         return { _src:'parts', title:r.partNo||r.name||r.part_number||'',
           res:r.desc||r.description||'', cat:'Parts',
           partNo:r.partNo||r.part_number, desc:r.desc||r.description, brand:r.brand||r.manufacturer };
       });
     });
 
+    // ── Contact Information
+    var ciPromise = _loadBundleRecords('contact_information', window.__studioCiRecords || [])
+      .then(function(ciData) {
+        return _toArray(ciData).map(function(r) {
+          var row = r && typeof r === 'object' ? r : {};
+          var keys = Object.keys(row);
+          function pickByRx(rx) {
+            var k = keys.find(function(name) { return rx.test(String(name || '')); });
+            return k ? String(row[k] || '').trim() : '';
+          }
+          var fullName = row.name || row.full_name || pickByRx(/full\s*name|contact.*name|name/i) || [row.first_name, row.last_name].filter(Boolean).join(' ');
+          var email = row.email || pickByRx(/e[\s\-_]*mail|email/i);
+          var phone = row.phone || row.mobile || pickByRx(/mobile|phone|contact number/i);
+          var company = row.company || row.organization || pickByRx(/company|account|organi[sz]ation|end\s*user/i);
+          var dept = row.department || pickByRx(/department|team|group/i);
+          var title = fullName || email || phone || company || 'Contact';
+          var resText = keys.map(function(k) { return row[k]; }).filter(function(v) { return v != null && String(v).trim() !== ''; }).join(' · ');
+          return {
+            _src:'ci',
+            title: String(title),
+            res: String(resText || [email, phone, dept, company].filter(Boolean).join(' · ')),
+            cat: 'Contact Information',
+            eu: String(company || ''),
+            email: String(email || ''),
+            phone: String(phone || '')
+          };
+        });
+      });
+
     // ── QB records — FIX BUG 2: multi-path discovery
     var qbPromise = Promise.resolve(_extractQbRecords());
+    var futurePromise = Promise.resolve(_collectFutureTabRecords());
 
-    Promise.all([kbPromise, cpPromise, pnPromise, qbPromise])
+    Promise.all([kbPromise, cpPromise, pnPromise, ciPromise, qbPromise, futurePromise])
       .then(function(sources) {
         var merged = [];
         sources.forEach(function(s) { if (Array.isArray(s)) merged = merged.concat(s); });
         _state.allRecords = merged;
         _state.loaded     = true;
         _state.loading    = false;
+        _state.monitor = {
+          sources: {
+            kb: sources[0].length, cp: sources[1].length, pn: sources[2].length,
+            ci: sources[3].length, qb: sources[4].length, future: sources[5].length
+          },
+          total: merged.length,
+          warnings: []
+        };
+        console.info('[SE2 monitor] loaded counts', _state.monitor.sources, 'total=', _state.monitor.total);
 
         var counts = _countsByCat();
         _renderCats(counts);
@@ -15849,6 +15973,7 @@
           if (catLow.includes('controller') || catLow.includes('programming')) src = 'ctrl';
           return Object.assign({}, r, { _id: r.id, _src: src });
         });
+        window.__studioSrRecords = flat;
         window.__se2KbCache  = mapped;
         window.__se2KbLoaded = true;
         window.__se2KbPromise = null;
@@ -15856,10 +15981,11 @@
       })
       .catch(function(err) {
         console.warn('[SE2] KB JSON load failed:', err.message);
-        window.__se2KbCache  = [];
+        var fallback = _mapSupportRecords(window.__studioSrRecords || []);
+        window.__se2KbCache  = fallback;
         window.__se2KbLoaded = false;
         window.__se2KbPromise = null;
-        return [];
+        return fallback;
       });
     window.__se2KbPromise = p; // FIX BUG 4: store promise so parallel calls reuse it
     return p;
