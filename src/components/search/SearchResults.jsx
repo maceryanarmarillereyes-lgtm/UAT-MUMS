@@ -21,14 +21,18 @@ export default function SearchResults({ results, query, totalResults, isSearchin
   if (!query) {
     return (
       <div className="w-full max-w-4xl mx-auto mt-16 flex flex-col items-center text-center">
-        <div className="w-20 h-20 rounded-2xl bg-secondary flex items-center justify-center mb-6">
+        <div className="w-20 h-20 rounded-3xl bg-secondary/50 flex items-center justify-center mb-6 shadow-sm border border-border/50">
           <Search className="w-10 h-10 text-muted-foreground" />
         </div>
-        <h3 className="text-xl font-semibold text-foreground mb-2">Search Support Studio</h3>
-        <p className="text-sm text-muted-foreground max-w-md">Search across all tabs — QuickBase cases, Knowledge Base, Parts, Product Controllers, Contact Info, and Support Records.</p>
-        <div className="flex flex-wrap gap-2 mt-6 justify-center">
+        <h3 className="text-xl font-bold text-foreground mb-3">Search Support Studio</h3>
+        <p className="text-sm text-muted-foreground max-w-xl leading-relaxed">
+          Search across all tabs — QuickBase cases, Knowledge Base, Parts, Product Controllers, Contact Info, and Support Records. Supports partial words, question format, and exact matching.
+        </p>
+        <div className="flex flex-wrap gap-3 mt-8 justify-center">
           {['E3 offline', 'Walmart', 'RX-300', 'E2 firmware', 'license key', 'Modbus'].map((term) => (
-            <span key={term} className="px-3 py-1.5 rounded-lg bg-secondary text-xs text-muted-foreground border border-border">{term}</span>
+            <span key={term} className="px-5 py-2.5 rounded-full bg-secondary/40 text-[13px] font-medium text-muted-foreground border border-border/60 hover:bg-secondary hover:text-foreground hover:border-border cursor-pointer transition-all duration-200">
+              {term}
+            </span>
           ))}
         </div>
       </div>
@@ -38,7 +42,7 @@ export default function SearchResults({ results, query, totalResults, isSearchin
   if (results.length === 0) {
     return (
       <div className="w-full max-w-4xl mx-auto mt-16 flex flex-col items-center text-center">
-        <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center mb-4">
+        <div className="w-16 h-16 rounded-2xl bg-secondary/50 flex items-center justify-center mb-4 border border-border/50">
           <Inbox className="w-8 h-8 text-muted-foreground" />
         </div>
         <h3 className="text-lg font-semibold text-foreground mb-1">No results found</h3>
@@ -54,12 +58,12 @@ export default function SearchResults({ results, query, totalResults, isSearchin
           <span className="text-sm text-muted-foreground">Found <span className="font-semibold text-foreground">{totalResults}</span> result{totalResults !== 1 ? 's' : ''}</span>
           <span className="text-xs text-muted-foreground">for "{query}"</span>
         </div>
-        <button onClick={onSortChange} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-xs text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={onSortChange} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary/50 text-xs text-muted-foreground hover:text-foreground border border-border/50 transition-colors">
           <ArrowUpDown className="w-3 h-3" />
           {sortOrder === 'newest' ? 'Newest first' : 'Oldest first'}
         </button>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {results.map((record, i) => <ResultCard key={record.id} record={record} query={query} index={i} />)}
       </div>
     </div>
