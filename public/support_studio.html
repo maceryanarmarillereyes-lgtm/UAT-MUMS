@@ -6829,15 +6829,10 @@
       if (typeof window._srInit === 'function') window._srInit();
     }
     if (target === 'search_engine_2') {
-      // Hide support_records — we used it as the contentTarget only for left-panel logic
       const srPanel = document.getElementById('left-panel-support_records');
       if (srPanel) srPanel.style.display = 'none';
       const srCanvas = document.getElementById('canvas-support_records');
       if (srCanvas) srCanvas.classList.remove('active');
-
-      // ── BUG FIX: activate the search_engine_2 canvas (was never set .active) ──
-      const se2Canvas = document.getElementById('canvas-search_engine_2');
-      if (se2Canvas) se2Canvas.classList.add('active');
 
       const frame = document.getElementById('search-engine-2-frame');
       if (frame && (!frame.src || frame.src === 'about:blank')) {
