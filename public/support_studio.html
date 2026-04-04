@@ -4735,6 +4735,7 @@
               srFlat  = data.flat;
               srCats  = data.cats;
               srLoaded = true;
+              window.__studioSrRecords = Array.isArray(srFlat) ? srFlat.slice() : [];
               _srBuildSidebar(srCats);
               _srShowWelcome(srCats);
               _srRender();
@@ -15458,6 +15459,12 @@
     });
   }
 
+  function _mapSupportRecords(records) {
+    return _toArray(records).map(function(r) {
+      return Object.assign({}, r, { _id: r.id, _src: _getSource(Object.assign({}, r, { _src:'sr' })) || 'sr' });
+    });
+  }
+
   function _collectFutureTabRecords() {
     var out = [];
     var known = {
@@ -15819,6 +15826,8 @@
     var kbPromise;
     if (window.__se2KbLoaded && Array.isArray(window.__se2KbCache) && window.__se2KbCache.length > 0) {
       kbPromise = Promise.resolve(window.__se2KbCache);
+    } else if (Array.isArray(window.__studioSrRecords) && window.__studioSrRecords.length > 0) {
+      kbPromise = Promise.resolve(_mapSupportRecords(window.__studioSrRecords));
     } else if (window.__se2KbPromise) {
       // Pre-load already in-flight — reuse it instead of re-fetching
       kbPromise = window.__se2KbPromise;
@@ -15964,6 +15973,7 @@
           if (catLow.includes('controller') || catLow.includes('programming')) src = 'ctrl';
           return Object.assign({}, r, { _id: r.id, _src: src });
         });
+        window.__studioSrRecords = flat;
         window.__se2KbCache  = mapped;
         window.__se2KbLoaded = true;
         window.__se2KbPromise = null;
@@ -15971,10 +15981,11 @@
       })
       .catch(function(err) {
         console.warn('[SE2] KB JSON load failed:', err.message);
-        window.__se2KbCache  = [];
+        var fallback = _mapSupportRecords(window.__studioSrRecords || []);
+        window.__se2KbCache  = fallback;
         window.__se2KbLoaded = false;
         window.__se2KbPromise = null;
-        return [];
+        return fallback;
       });
     window.__se2KbPromise = p; // FIX BUG 4: store promise so parallel calls reuse it
     return p;
