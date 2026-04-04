@@ -18,7 +18,7 @@ function highlightMatch(text, query) {
   return parts.map((part, i) => {
     if (part === '%%HLSTART%%') { inHighlight = true; return null; }
     if (part === '%%HLEND%%') { inHighlight = false; return null; }
-    if (inHighlight) return <mark key={i} className="bg-primary/30 text-primary-foreground font-medium rounded-sm px-0.5 bg-transparent text-blue-200 bg-blue-500/30">{part}</mark>;
+    if (inHighlight) return <mark key={i} className="bg-blue-500/30 text-white font-semibold rounded-sm px-1 py-0.5">{part}</mark>;
     return part;
   }).filter(Boolean);
 }
@@ -63,47 +63,47 @@ export default function ResultCard({ record, query, index }) {
       <div
         className={`group rounded-xl border transition-all duration-200 cursor-pointer ${
           isExpanded 
-            ? 'border-blue-500/80 bg-card/60 shadow-lg shadow-blue-500/10' 
-            : 'border-border/50 bg-card/40 hover:border-border hover:bg-card/80'
+            ? 'border-blue-500/80 bg-[#0f172a] shadow-lg' 
+            : 'border-border/60 bg-card/40 hover:border-border hover:bg-card/80'
         }`}
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="p-4 md:p-5">
           <div className="flex items-center gap-2.5 mb-3 flex-wrap">
-            <span className={`inline-flex items-center px-2.5 py-0.5 text-[11px] font-semibold rounded-full border ${sourceColor[record.source_tab] || 'bg-muted text-muted-foreground border-border'}`}>
+            <span className={`inline-flex items-center px-3 py-0.5 text-[12px] font-medium rounded-full border ${sourceColor[record.source_tab] || 'bg-muted text-muted-foreground border-border'}`}>
               {sourceLabel[record.source_tab] || record.source_tab}
             </span>
-            {record.case_number && <span className="text-[12px] font-medium text-muted-foreground"># {record.case_number}</span>}
-            {record.category_name && <span className="text-[12px] text-muted-foreground">• {record.category_name}</span>}
+            {record.case_number && <span className="text-[13px] font-medium text-muted-foreground"># {record.case_number}</span>}
+            {record.category_name && <span className="text-[13px] text-muted-foreground">• {record.category_name}</span>}
             {record.status && (
-              <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-medium bg-secondary/50 text-muted-foreground border border-border/50`}>
+              <span className="text-[12px] px-2.5 py-0.5 rounded-full font-medium bg-secondary/50 text-muted-foreground border border-border/50">
                 {record.status}
               </span>
             )}
-            <span className="ml-auto text-[12px] text-muted-foreground font-medium">
+            <span className="ml-auto text-[13px] text-muted-foreground">
               {record.created_date ? format(new Date(record.created_date), 'MMM d, yyyy') : ''}
             </span>
           </div>
           
-          <h3 className="text-[15px] font-bold text-foreground mb-1.5 leading-snug">
+          <h3 className="text-[16px] font-bold text-foreground mb-1.5 leading-snug">
             {highlightMatch(record.title, query)}
           </h3>
           
           {record.resolution && !isExpanded && (
-            <p className="text-[13px] text-muted-foreground/90 leading-relaxed line-clamp-2">
+            <p className="text-[14px] text-muted-foreground/90 leading-relaxed line-clamp-2">
               {highlightMatch(getSnippet(record.resolution, query), query)}
             </p>
           )}
 
           <div className="flex items-center gap-4 mt-3">
             {record.end_user && (
-              <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+              <span className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
                 <User className="w-3.5 h-3.5" />
                 {highlightMatch(record.end_user, query)}
               </span>
             )}
             {record.part_number && (
-              <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+              <span className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
                 <Cpu className="w-3.5 h-3.5" />
                 {highlightMatch(record.part_number, query)}
               </span>
@@ -118,55 +118,56 @@ export default function ResultCard({ record, query, index }) {
         <AnimatePresence>
           {isExpanded && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-              <div className="px-4 md:px-5 pb-5 border-t border-border/50 pt-4">
+              <div className="px-4 md:px-5 pb-5 border-t border-blue-500/20 pt-4">
                 
                 {record.resolution && (
                   <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-3">
                       <FileText className="w-4 h-4 text-blue-500" />
-                      <span className="text-[11px] font-bold text-blue-500 uppercase tracking-widest">Full Resolution</span>
+                      <span className="text-[12px] font-bold text-blue-500 uppercase tracking-widest">Full Resolution</span>
                     </div>
-                    <p className="text-[13px] text-foreground/80 leading-relaxed whitespace-pre-wrap">
+                    <p className="text-[14px] text-foreground/90 leading-relaxed whitespace-pre-wrap">
                       {highlightMatch(record.resolution, query)}
                     </p>
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-y-5 gap-x-4">
+                {/* Walang bg-muted/30 dito para seamless tulad ng sa image */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-y-6 gap-x-4 mt-2">
                   {record.case_number && (
                     <div>
-                      <span className="text-[11px] text-muted-foreground block mb-1">Case #</span>
-                      <span className="text-[13px] font-semibold text-foreground">{record.case_number}</span>
+                      <span className="text-[12px] text-muted-foreground block mb-1">Case #</span>
+                      <span className="text-[14px] font-bold text-foreground">{record.case_number}</span>
                     </div>
                   )}
                   {record.category_name && (
                     <div>
-                      <span className="text-[11px] text-muted-foreground block mb-1">Category</span>
-                      <span className="text-[13px] font-semibold text-foreground">{record.category_name}</span>
+                      <span className="text-[12px] text-muted-foreground block mb-1">Category</span>
+                      <span className="text-[14px] font-bold text-foreground">{record.category_name}</span>
                     </div>
                   )}
                   {record.end_user && (
                     <div>
-                      <span className="text-[11px] text-muted-foreground block mb-1">End User</span>
-                      <span className="text-[13px] font-semibold text-foreground">{record.end_user}</span>
+                      <span className="text-[12px] text-muted-foreground block mb-1">End User</span>
+                      <span className="text-[14px] font-bold text-foreground">{record.end_user}</span>
                     </div>
                   )}
                   {record.part_number && (
                     <div>
-                      <span className="text-[11px] text-muted-foreground block mb-1">Part Number</span>
-                      <span className="text-[13px] font-mono font-semibold text-foreground">{record.part_number}</span>
+                      <span className="text-[12px] text-muted-foreground block mb-1">Part Number</span>
+                      <span className="text-[14px] font-mono font-bold text-foreground">{record.part_number}</span>
                     </div>
                   )}
                   {record.source_tab && (
                     <div>
-                      <span className="text-[11px] text-muted-foreground block mb-1">Source</span>
-                      <span className="text-[13px] font-semibold text-foreground">{sourceLabel[record.source_tab] || record.source_tab}</span>
+                      <span className="text-[12px] text-muted-foreground block mb-1">Source</span>
+                      <span className="text-[14px] font-bold text-foreground">{sourceLabel[record.source_tab] || record.source_tab}</span>
                     </div>
                   )}
                   {record.created_date && (
                     <div>
-                      <span className="text-[11px] text-muted-foreground block mb-1">Record Date</span>
-                      <span className="text-[13px] font-semibold text-foreground">{format(new Date(record.created_date), 'MMM d, yyyy h:mm a')}</span>
+                      <span className="text-[12px] text-muted-foreground block mb-1">Record Date</span>
+                      <span className="text-[14px] font-bold text-foreground">{format(new Date(record.created_date), 'MMM d, yyyy h:mm a')}</span>
                     </div>
                   )}
                 </div>
