@@ -1,4 +1,4 @@
-# MUMS (Realtime Green Mandatory) — Static Webapp + Vercel API + Supabase
+#  MUMS (Realtime Green Mandatory) — Static Webapp + Vercel API + Supabase
 
 This project is a **static HTML/JS webapp** deployed on **Vercel** with **Serverless API Routes** under `/api/*`, backed by **Supabase** for Auth, Realtime, and storage tables.
 

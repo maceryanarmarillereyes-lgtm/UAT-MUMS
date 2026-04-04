@@ -5,6 +5,7 @@
    DO NOT modify any existing logic, layout, or structure in this file without
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
+
 (window.Pages = window.Pages || {}, window.Pages.my_schedule = function (root) {
   // ---------------------------------------------------------------------------
   // My Schedule — Enterprise Calendar (13126-09)

@@ -1,3 +1,11 @@
+/* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
+   Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
+   Database/API Adapters · Tab Isolation · Virtual Column State ·
+   QuickBase Settings Persistence · Auth Flow.
+   DO NOT modify any existing logic, layout, or structure in this file without
+   first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
+   Violations will cause regressions. When in doubt — STOP and REPORT. */
+
 const { getUserFromJwt, serviceSelect, serviceUpsert } = require('../../lib/supabase');
 
 function sendJson(res, code, body) {
@@ -15,11 +23,16 @@ module.exports = async (req, res) => {
     if (!user) return sendJson(res, 401, { ok: false, error: 'unauthorized' });
 
     const type = req.query.type;
-    if (type !== 'connect_plus' && type !== 'parts_number') {
+    if (type !== 'connect_plus' && type !== 'parts_number' && type !== 'contact_information') {
       return sendJson(res, 400, { ok: false, error: 'invalid_type' });
     }
 
-    const docKey = type === 'connect_plus' ? 'ss_connectplus_settings' : 'ss_parts_number_settings';
+    const docKey =
+      type === 'connect_plus'
+        ? 'ss_connectplus_settings'
+        : type === 'contact_information'
+          ? 'ss_contact_information_settings'
+          : 'ss_parts_number_settings';
 
     // ── GET: return stored settings ───────────────────────────────────
     if (req.method === 'GET') {

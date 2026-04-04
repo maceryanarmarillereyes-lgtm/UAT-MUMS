@@ -5,6 +5,7 @@
    DO NOT modify any existing logic, layout, or structure in this file without
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
+
 function getEnv(name) {
   try {
     if (globalThis && globalThis.__MUMS_ENV && Object.prototype.hasOwnProperty.call(globalThis.__MUMS_ENV, name)) {
