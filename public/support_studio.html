@@ -15615,30 +15615,29 @@
     var body = el('se2-body');
     if (body) body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:#7d8590;font-size:12px;"><div class="se2-spin"></div><span>Loading all data sources…</span></div>';
 
-    // ── Source 1: KB JSON (always available) ──────────────────────────────
-    var kbPromise = fetch('/support_records_kb.json')
-      .then(function(r) { return r.ok ? r.json() : null; })
-      .then(function(j) {
-        if (!j) return [];
-        var flat = Array.isArray(j.flat) ? j.flat : (Array.isArray(j) ? j : []);
-        return flat.map(function(r) {
-          // Determine source from category text (more reliable than ID-based CAT_MAP)
-          var catLow = (r.cat || '').toLowerCase();
-          var src = 'sr'; // default: Support Records
-          if (catLow.includes('e2') || catLow.includes('e3') || catLow.includes('gateway') ||
-              catLow.includes('alarm') || catLow.includes('floor') || catLow.includes('remapping') ||
-              catLow.includes('firmware') || catLow.includes('refrigerat') || catLow.includes('haccp') ||
-              catLow.includes('temperature') || catLow.includes('site supervisor') ||
-              catLow.includes('data') || catLow.includes('report')) {
-            src = 'sr'; // Keep as Support Records — all KB entries are case-based
-          }
-          if (catLow.includes('connect') || catLow.includes('network') || catLow.includes('vpn')) src = 'net';
-          if (catLow.includes('part') || catLow.includes('xr') || catLow.includes('xm679') || catLow.includes('cc200') || catLow.includes('license key')) src = 'parts';
-          if (catLow.includes('controller') || catLow.includes('hardware') || catLow.includes('programming')) src = 'ctrl';
-          if (catLow.includes('password') || catLow.includes('credential')) src = 'sr';
-          return Object.assign({}, r, { _id: r.id, _src: src });
-        });
-      }).catch(function() { return []; });
+    // ── Source 1: KB JSON — use pre-loaded cache if available ───────────
+    // window.__se2KbCache is populated by the background pre-loader at page startup.
+    // If cache is ready, use it instantly (no network request needed).
+    // If not yet ready, fetch and wait.
+    var kbPromise = (window.__se2KbLoaded && Array.isArray(window.__se2KbCache) && window.__se2KbCache.length > 0)
+      ? Promise.resolve(window.__se2KbCache)
+      : fetch('/support_records_kb.json')
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(j) {
+            if (!j) return [];
+            var flat = Array.isArray(j.flat) ? j.flat : (Array.isArray(j) ? j : []);
+            var mapped = flat.map(function(r) {
+              var catLow = (r.cat || '').toLowerCase();
+              var src = 'sr';
+              if (catLow.includes('connect') || catLow.includes('network') || catLow.includes('vpn')) src = 'net';
+              if (catLow.includes('part') || catLow.includes('xr') || catLow.includes('cc200') || catLow.includes('license key')) src = 'parts';
+              if (catLow.includes('controller') || catLow.includes('programming')) src = 'ctrl';
+              return Object.assign({}, r, { _id: r.id, _src: src });
+            });
+            window.__se2KbCache  = mapped;
+            window.__se2KbLoaded = true;
+            return mapped;
+          }).catch(function() { return []; });
 
     // ── Source 2: Connect+ sites (if loaded in window state) ─────────────
     var cpPromise = Promise.resolve().then(function() {
@@ -16022,13 +16021,94 @@
     _loadData(_se2PendingQuery);
   }
 
-  // Hook into tab activation — fires _se2Init when SE2 tab is clicked
+  // ═══════════════════════════════════════════════════════════════════
+  // PERMANENT SE2 ACTIVATION — 4-layer strategy (belt+suspenders+velcro)
+  // Layer 1: Pre-load KB data silently at page startup (background fetch)
+  //          → data is READY before user ever clicks the SE2 tab
+  // Layer 2: Direct click listener on SE2 tab button via querySelector
+  //          → bypasses all activateTab hook chains completely
+  // Layer 3: MutationObserver on canvas active class changes
+  //          → catches ANY method that activates the canvas
+  // Layer 4: activateTab + _openSearchEngine2 hook chain (legacy fallback)
+  // ═══════════════════════════════════════════════════════════════════
+
+  // ── Layer 1: Pre-load KB JSON in background at page startup ────────
+  // This means data is ALWAYS ready when the tab is first clicked.
+  (function _se2PreLoad() {
+    // Start background fetch immediately — don't wait for tab click
+    fetch('/support_records_kb.json')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(j) {
+        if (!j) return;
+        var flat = Array.isArray(j.flat) ? j.flat : (Array.isArray(j) ? j : []);
+        window.__se2KbCache = flat.map(function(r) {
+          var catLow = (r.cat || '').toLowerCase();
+          var src = 'sr';
+          if (catLow.includes('connect') || catLow.includes('network') || catLow.includes('vpn')) src = 'net';
+          if (catLow.includes('part') || catLow.includes('xr') || catLow.includes('cc200') || catLow.includes('license key')) src = 'parts';
+          if (catLow.includes('controller') || catLow.includes('programming')) src = 'ctrl';
+          return Object.assign({}, r, { _id: r.id, _src: src });
+        });
+        window.__se2KbLoaded = true;
+        // If SE2 tab is already active, trigger search
+        var c = document.getElementById('canvas-search_engine_2');
+        if (c && c.classList.contains('active') && _se2Inited) {
+          _state.loaded = false;
+          _loadData('');
+        }
+        console.log('[SE2] KB pre-load complete:', window.__se2KbCache.length, 'records');
+      })
+      .catch(function(err) {
+        console.warn('[SE2] KB pre-load failed:', err.message);
+        window.__se2KbCache = [];
+        window.__se2KbLoaded = false;
+      });
+  })();
+
+  // ── Layer 2: Direct click listener — most reliable ──────────────────
+  function _se2AttachClickListener() {
+    var se2TabBtn = document.getElementById('ss-tab-search_engine_2');
+    if (!se2TabBtn) {
+      // Retry until DOM is ready
+      setTimeout(_se2AttachClickListener, 200);
+      return;
+    }
+    se2TabBtn.addEventListener('click', function() {
+      setTimeout(_se2Init, 100);
+    }, false);
+    console.log('[SE2] Direct click listener attached to tab button.');
+  }
+
+  // ── Layer 3: MutationObserver — watches canvas for active class ─────
+  function _se2AttachObserver() {
+    var se2Canvas = document.getElementById('canvas-search_engine_2');
+    if (!se2Canvas) {
+      setTimeout(_se2AttachObserver, 300);
+      return;
+    }
+    var obs = new MutationObserver(function(mutations) {
+      mutations.forEach(function(m) {
+        if (m.type === 'attributes' && m.attributeName === 'class') {
+          if (se2Canvas.classList.contains('active')) {
+            setTimeout(_se2Init, 80);
+          }
+        }
+      });
+    });
+    obs.observe(se2Canvas, { attributes: true, attributeFilter: ['class'] });
+    // Also check if already active right now
+    if (se2Canvas.classList.contains('active')) {
+      setTimeout(_se2Init, 80);
+    }
+    console.log('[SE2] MutationObserver active on canvas.');
+  }
+
+  // ── Layer 4: activateTab + _openSearchEngine2 hook (legacy fallback) ─
   var _origActivateTab = window.activateTab;
   window.activateTab = function(target) {
     if (_origActivateTab) _origActivateTab(target);
     if (target === 'search_engine_2') setTimeout(_se2Init, 80);
   };
-  // Also hook the custom button path
   var _origOpenSE2 = window._openSearchEngine2;
   window._openSearchEngine2 = function(e) {
     if (_origOpenSE2) _origOpenSE2(e);
@@ -16036,40 +16116,16 @@
     return false;
   };
 
-  // FIX: Boot SE2 if it's already the active tab at page load
-  // (handles bookmarked/deep-linked SE2 tab scenarios)
-  (function() {
-    var se2Canvas = document.getElementById('canvas-search_engine_2');
-    if (se2Canvas && (se2Canvas.classList.contains('active') || 
-        document.body.getAttribute('data-active-tab') === 'search_engine_2')) {
-      setTimeout(_se2Init, 300);
-    }
-    // Also auto-init after DOMContentLoaded as failsafe
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(function() {
-          var c = document.getElementById('canvas-search_engine_2');
-          if (c && c.classList.contains('active')) _se2Init();
-        }, 400);
-      });
-    }
-  })();
-
-  // Re-expose Connect+ and Parts data for SE2 cross-source search
-  // These are populated when the respective tabs are visited
-  document.addEventListener('click', function(e) {
-    var tab = e.target.closest('[data-tab]');
-    if (!tab) return;
-    var t = tab.getAttribute('data-tab');
-    // After Connect+ loads, stash its data
-    if (t === 'connectplus') {
-      setTimeout(function() {
-        if (window.__studioCpRecords === undefined && window.__studioQbRecords) {
-          // Snapshot current records for SE2 use
-        }
-      }, 2000);
-    }
-  });
+  // ── Boot all layers ──────────────────────────────────────────────────
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      _se2AttachClickListener();
+      _se2AttachObserver();
+    });
+  } else {
+    _se2AttachClickListener();
+    _se2AttachObserver();
+  }
 
 })();
 </script>
