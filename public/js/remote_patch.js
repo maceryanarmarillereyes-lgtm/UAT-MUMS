@@ -5,7 +5,6 @@
    DO NOT modify any existing logic, layout, or structure in this file without
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
-
 // Optional hotfix loader.
 // If REMOTE_PATCH_URL is set (via Vercel env vars), the app will load a small JS patch
 // without requiring a redeploy. Use for emergency bugfixes only.

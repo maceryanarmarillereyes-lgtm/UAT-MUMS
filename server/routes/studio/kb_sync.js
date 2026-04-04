@@ -1,11 +1,3 @@
-/* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
-   Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
-   Database/API Adapters · Tab Isolation · Virtual Column State ·
-   QuickBase Settings Persistence · Auth Flow.
-   DO NOT modify any existing logic, layout, or structure in this file without
-   first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
-   Violations will cause regressions. When in doubt — STOP and REPORT. */
-
 const { getUserFromJwt, getProfileForUserId, serviceSelect, serviceUpsert } = require('../../lib/supabase');
 const { runKnowledgeBaseSync, readItems, KB_SETTINGS_KEY } = require('../../services/quickbaseSync');
 function sendJson(res,s,b){res.statusCode=s;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(b));}

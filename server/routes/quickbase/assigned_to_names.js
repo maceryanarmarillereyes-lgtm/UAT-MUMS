@@ -5,7 +5,6 @@
    DO NOT modify any existing logic, layout, or structure in this file without
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
-
 // server/routes/quickbase/assigned_to_names.js
 // GET /api/quickbase/assigned_to_names
 // Returns unique "Assigned To" (#13) names from the global QB report.

@@ -5,7 +5,6 @@
    DO NOT modify any existing logic, layout, or structure in this file without
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
-
 (window.Pages=window.Pages||{}, window.Pages.my_reminders = function(root){
   // Cleanup from prior renders (prevents duplicate listeners / memory leaks)
   try{ if(root && typeof root._cleanup === 'function') root._cleanup(); }catch(_){}

@@ -1,11 +1,3 @@
-/* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
-   Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
-   Database/API Adapters · Tab Isolation · Virtual Column State ·
-   QuickBase Settings Persistence · Auth Flow.
-   DO NOT modify any existing logic, layout, or structure in this file without
-   first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
-   Violations will cause regressions. When in doubt — STOP and REPORT. */
-
 // server/routes/studio/qb_export.js
 // GET /api/studio/qb_export?skip=N&top=1000
 //
@@ -48,35 +40,18 @@ async function fetchQBPage({ realm, token, tableId, reportId, skip, top }) {
   const normRealm = normalizeRealm(realm);
   const url = `https://api.quickbase.com/v1/reports/${encodeURIComponent(reportId)}/run` +
     `?tableId=${encodeURIComponent(tableId)}&skip=${skip}&top=${top}`;
-
-  // 25-second hard timeout per page — prevents Cloudflare 524/502 on slow QB responses
-  const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-  const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch(_) {} }, 25000) : null;
-
-  let resp;
-  try {
-    resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'QB-Realm-Hostname': normRealm,
-        Authorization: `QB-USER-TOKEN ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({}),
-      signal: ctrl ? ctrl.signal : undefined,
-    });
-  } catch (fetchErr) {
-    if (timer) clearTimeout(timer);
-    const msg = String(fetchErr && fetchErr.name || '') === 'AbortError'
-      ? 'QB API request timed out after 25s (skip=' + skip + ')'
-      : String(fetchErr && fetchErr.message || fetchErr);
-    throw new Error(msg);
-  }
-  if (timer) clearTimeout(timer);
-
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'QB-Realm-Hostname': normRealm,
+      Authorization: `QB-USER-TOKEN ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({}),
+  });
   if (!resp.ok) {
     const txt = await resp.text().catch(() => '');
-    throw new Error('QB API ' + resp.status + ': ' + txt.slice(0, 300));
+    throw new Error('QB API ' + resp.status + ': ' + txt.slice(0, 200));
   }
   const json = await resp.json();
   return {

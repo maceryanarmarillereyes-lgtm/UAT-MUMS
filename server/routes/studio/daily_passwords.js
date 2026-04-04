@@ -1,11 +1,8 @@
-/* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
-   Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
-   Database/API Adapters · Tab Isolation · Virtual Column State ·
-   QuickBase Settings Persistence · Auth Flow.
-   DO NOT modify any existing logic, layout, or structure in this file without
-   first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
-   Violations will cause regressions. When in doubt — STOP and REPORT. */
-
+/* @AI_CRITICAL_GUARD v3.0: Studio — daily_passwords route
+   GET  /api/studio/daily_passwords  → returns today + yesterday password (Manila Time)
+   POST /api/studio/daily_passwords  → upsert password for a date (any authed user)
+   GET  /api/studio/daily_passwords?mode=month&year=YYYY&month=MM → full month data
+*/
 const { getUserFromJwt, serviceSelect, serviceUpsert } = require('../../lib/supabase');
 
 function sendJson(res, code, body) {

@@ -5,7 +5,6 @@
    DO NOT modify any existing logic, layout, or structure in this file without
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
-
 const { sendJson, requireAuthedUser, serviceFetch, serviceSelect, serviceInsert, serviceUpsert } = require('./_common');
 
 const OWNER_COLUMNS = ['created_by', 'created_by_user_id', 'owner_id', 'user_id'];
