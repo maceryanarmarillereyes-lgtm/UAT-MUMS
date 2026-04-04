@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Search Engine 2 — MUMS Support Studio</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:#070d1a;--surface:#0d1630;--surface2:#101b3a;
+      --border:rgba(116,151,212,.18);--border2:rgba(116,151,212,.28);
+      --text:#c8d8f0;--white:#e8f4ff;--muted:#4a6080;--muted2:#7a94b8;
+      --accent:#39a0ff;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;overflow:hidden}
+    body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+    /* SEARCH */
+    .se2-header{padding:20px 28px 0;flex-shrink:0}
+    .search-wrap{background:var(--surface);border:1.5px solid var(--border2);border-radius:16px;display:flex;align-items:center;gap:12px;padding:14px 18px;transition:border-color .2s,box-shadow .2s;box-shadow:0 4px 24px rgba(0,0,0,.35)}
+    .search-wrap:focus-within{border-color:rgba(57,160,255,.45);box-shadow:0 4px 32px rgba(57,160,255,.12)}
+    .search-icon{opacity:.5;flex-shrink:0;font-size:18px;color:var(--muted2)}
+    .search-input{flex:1;background:transparent;border:none;outline:none;color:var(--white);font-size:18px;font-family:inherit;font-weight:500}
+    .search-input::placeholder{color:var(--muted)}
+    .search-kbd{font-size:11px;font-weight:700;color:var(--muted);background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:6px;padding:3px 8px;flex-shrink:0;font-family:monospace;letter-spacing:.04em;white-space:nowrap}
+    .search-clear{background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:13px;cursor:pointer;padding:4px 9px;display:none;transition:all .15s;font-family:inherit}
+    .search-clear:hover{background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.3);color:#f85149}
+    /* CATS */
+    .cats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;padding:16px 28px 0;flex-shrink:0}
+    .cat-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:13px 10px;text-align:center;cursor:pointer;transition:all .18s}
+    .cat-card:hover{transform:translateY(-2px);border-color:var(--border2)}
+    .cat-card.active{transform:none}
+    .cat-icon{font-size:22px;margin-bottom:6px;display:block;line-height:1}
+    .cat-num{font-size:24px;font-weight:900;line-height:1;margin-bottom:3px}
+    .cat-lbl{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.03em}
+    /* active states */
+    .cat-card.active.cat-blue  {border-color:rgba(88,166,255,.5);box-shadow:0 0 0 2px rgba(88,166,255,.12)}
+    .cat-card.active.cat-green {border-color:rgba(16,185,129,.5);box-shadow:0 0 0 2px rgba(16,185,129,.12)}
+    .cat-card.active.cat-amber {border-color:rgba(245,158,11,.5);box-shadow:0 0 0 2px rgba(245,158,11,.12)}
+    .cat-card.active.cat-violet{border-color:rgba(167,139,250,.5);box-shadow:0 0 0 2px rgba(167,139,250,.12)}
+    .cat-card.active.cat-cyan  {border-color:rgba(34,211,238,.5);box-shadow:0 0 0 2px rgba(34,211,238,.12)}
+    .cat-card.active.cat-rose  {border-color:rgba(244,63,94,.5);box-shadow:0 0 0 2px rgba(244,63,94,.12)}
+    .c-blue{color:#58a6ff}.c-green{color:#10b981}.c-amber{color:#f59e0b}.c-violet{color:#a78bfa}.c-cyan{color:#22d3ee}.c-rose{color:#f43f5e}
+    /* TOTAL */
+    .total-row{padding:8px 28px 0;flex-shrink:0;font-size:12px;color:var(--muted);text-align:center}
+    .total-row strong{color:var(--accent)}
+    /* BODY */
+    .se2-body{flex:1;overflow-y:auto;padding:12px 28px 28px;min-height:0}
+    .se2-body::-webkit-scrollbar{width:4px}
+    .se2-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:99px}
+    /* EMPTY */
+    .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:14px;text-align:center;padding:20px}
+    .empty-icon{width:80px;height:80px;border-radius:22px;background:var(--surface2);border:1px solid var(--border);display:grid;place-items:center;font-size:34px;margin-bottom:4px}
+    .empty-title{font-size:20px;font-weight:800;color:var(--white)}
+    .empty-sub{font-size:13px;color:var(--muted);max-width:480px;line-height:1.65}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:6px}
+    .chip{padding:6px 14px;border-radius:99px;background:var(--surface);border:1px solid var(--border);font-size:12px;color:var(--muted2);cursor:pointer;transition:all .15s}
+    .chip:hover{border-color:rgba(57,160,255,.4);color:var(--accent);background:rgba(57,160,255,.06)}
+    /* RESULTS */
+    .results-header{display:flex;align-items:center;justify-content:space-between;padding:4px 0 12px;border-bottom:1px solid var(--border);margin-bottom:12px}
+    .results-count{font-size:12px;color:var(--muted)}
+    .results-count strong{color:var(--white)}
+    .group-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:7px;margin:16px 0 8px}
+    .group-label::after{content:'';flex:1;height:1px;background:var(--border)}
+    .result-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 16px;margin-bottom:8px;cursor:pointer;transition:all .15s}
+    .result-card:hover{border-color:rgba(57,160,255,.35);background:rgba(57,160,255,.035);transform:translateX(2px)}
+    .result-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
+    .result-cat-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;letter-spacing:.04em}
+    .result-case{font-size:10px;font-weight:700;color:var(--accent);font-family:monospace;background:rgba(57,160,255,.1);border:1px solid rgba(57,160,255,.2);padding:2px 7px;border-radius:5px}
+    .result-eu{font-size:10px;color:var(--muted)}
+    .result-title{font-size:13px;font-weight:700;color:var(--white);margin-bottom:5px;line-height:1.45}
+    .result-body{font-size:12px;color:var(--muted2);line-height:1.55;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    mark{background:rgba(57,160,255,.28);color:#fff;border-radius:3px;padding:0 2px}
+    /* NO RESULTS */
+    .no-results{padding:48px 10px;text-align:center;color:var(--muted)}
+    .no-results-icon{font-size:36px;opacity:.3;display:block;margin-bottom:12px}
+    .no-results-title{font-size:15px;font-weight:700;color:var(--muted2);margin-bottom:6px}
+    /* LOADING */
+    .loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:var(--muted);font-size:13px}
+    .spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,.08);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <div class="se2-header">
+    <div class="search-wrap">
+      <span class="search-icon">🔎</span>
+      <input id="q" class="search-input" type="text"
+        placeholder="Search support records, cases, parts, knowledge base..."
+        autocomplete="off" spellcheck="false"/>
+      <button class="search-clear" id="clear-btn" onclick="clearSearch()">✕</button>
+      <span class="search-kbd">⌘ K</span>
+    </div>
+  </div>
+
+  <div class="cats-row">
+    <div class="cat-card cat-blue"   data-g="qb"    onclick="filterGroup('qb')">
+      <span class="cat-icon">🔗</span><div class="cat-num c-blue"   id="cnt-qb">—</div><div class="cat-lbl">QuickBase Cases</div>
+    </div>
+    <div class="cat-card cat-green"  data-g="kb"    onclick="filterGroup('kb')">
+      <span class="cat-icon">📚</span><div class="cat-num c-green"  id="cnt-kb">—</div><div class="cat-lbl">Knowledge Base</div>
+    </div>
+    <div class="cat-card cat-amber"  data-g="parts" onclick="filterGroup('parts')">
+      <span class="cat-icon">🔩</span><div class="cat-num c-amber"  id="cnt-parts">—</div><div class="cat-lbl">Parts</div>
+    </div>
+    <div class="cat-card cat-violet" data-g="ctrl"  onclick="filterGroup('ctrl')">
+      <span class="cat-icon">🖥️</span><div class="cat-num c-violet" id="cnt-ctrl">—</div><div class="cat-lbl">Controllers</div>
+    </div>
+    <div class="cat-card cat-cyan"   data-g="net"   onclick="filterGroup('net')">
+      <span class="cat-icon">📡</span><div class="cat-num c-cyan"   id="cnt-net">—</div><div class="cat-lbl">Connect+ / Net</div>
+    </div>
+    <div class="cat-card cat-rose"   data-g="other" onclick="filterGroup('other')">
+      <span class="cat-icon">📋</span><div class="cat-num c-rose"   id="cnt-other">—</div><div class="cat-lbl">Support Records</div>
+    </div>
+  </div>
+
+  <div class="total-row" id="total-row">Loading…</div>
+  <div class="se2-body" id="body">
+    <div class="loading-state"><div class="spinner"></div><span>Loading indexed records…</span></div>
+  </div>
+
+<script>
+(function(){
+  var GROUPS = {
+    qb:    {ids:['e2e3_gateway','alarms','floorplan_screens','firmware','refrigeration','password_credentials','data_reports','temperature_haccp'],label:'QuickBase Cases',color:'#58a6ff'},
+    kb:    {ids:[],catRx:/knowledge|guide|manual|instruction|education|training/i,label:'Knowledge Base',color:'#10b981'},
+    parts: {ids:['parts_xr_controllers','parts_xm_controllers','parts_cc200','parts_license_keys','parts_rga_warranty','parts_probes_sensors','parts_sporlan_danfoss','parts_site_supervisor','parts_walmart_jobs','parts_part_number_inquiry','parts_products'],label:'Parts',color:'#f59e0b'},
+    ctrl:  {ids:['controller_hardware','site_supervisor','programming'],label:'Controllers',color:'#a78bfa'},
+    net:   {ids:['connect_plus'],label:'Connect+ / Net',color:'#22d3ee'},
+    other: {ids:[],label:'Support Records',color:'#f43f5e'}
+  };
+  var CHIPS=['E3 offline','Walmart','RX-300','E2 firmware','license key','Modbus','Connect+','floor plan','HACCP','temperature','XR75','remapping'];
+  var ID2G={};
+  ['qb','kb','parts','ctrl','net'].forEach(function(g){(GROUPS[g].ids||[]).forEach(function(id){ID2G[id]=g;});});
+  function getGroup(r){
+    var id=String(r.id||'');
+    if(ID2G[id]) return ID2G[id];
+    if(GROUPS.kb.catRx&&GROUPS.kb.catRx.test(r.cat||'')) return 'kb';
+    return 'other';
+  }
+  var state={all:[],query:'',activeGroup:null,loaded:false};
+  var qEl=document.getElementById('q');
+  var bodyEl=document.getElementById('body');
+  var clearBtn=document.getElementById('clear-btn');
+  var totalRow=document.getElementById('total-row');
+  function esc(s){return String(s||'').replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c;});}
+  function hl(text,q){
+    var s=String(text||'');
+    if(!q) return esc(s);
+    var safe=q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    return esc(s).replace(new RegExp('('+safe+')','ig'),'<mark>$1</mark>');
+  }
+  function doSearch(rows,term){
+    var t=term.trim().toLowerCase();
+    if(!t) return [];
+    return rows.filter(function(r){return [r.title,r.res,r.cat,r.case,r.eu,r.id].join(' ').toLowerCase().includes(t);});
+  }
+  function updateCounts(results){
+    var c={qb:0,kb:0,parts:0,ctrl:0,net:0,other:0};
+    (results||state.all).forEach(function(r){var g=getGroup(r);c[g]=(c[g]||0)+1;});
+    Object.keys(c).forEach(function(g){var el=document.getElementById('cnt-'+g);if(el)el.textContent=c[g].toLocaleString();});
+  }
+  function updateTotal(results){
+    var n=results?results.length:state.all.length;
+    var base=state.all.length;
+    if(results){
+      totalRow.innerHTML='Total indexed: <strong>'+base.toLocaleString()+'</strong> records &nbsp;·&nbsp; <strong>'+n.toLocaleString()+'</strong> matched';
+    } else {
+      totalRow.innerHTML='Total indexed: <strong>'+base.toLocaleString()+'</strong> records';
+    }
+  }
+  function renderEmpty(){
+    var chips=CHIPS.map(function(c){return '<div class="chip" onclick="setQuery(\''+esc(c)+'\')">'+esc(c)+'</div>';}).join('');
+    bodyEl.innerHTML='<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Search Support Studio</div><div class="empty-sub">Search across all tabs — QuickBase cases, Knowledge Base, Parts, Product Controllers, Contact Info, and Support Records. Supports partial words, question format, and exact matching.</div><div class="chips">'+chips+'</div></div>';
+  }
+  function renderResults(results,q){
+    if(!results.length){
+      bodyEl.innerHTML='<div class="no-results"><span class="no-results-icon">🔎</span><div class="no-results-title">No results for "'+esc(q)+'"</div><div style="font-size:12px;margin-top:6px;">Try a different keyword, partial word, or case number.</div></div>';
+      return;
+    }
+    var grouped={};
+    results.forEach(function(r){var g=getGroup(r);if(!grouped[g])grouped[g]=[];grouped[g].push(r);});
+    var html='<div class="results-header"><div class="results-count">Showing <strong>'+Math.min(results.length,300).toLocaleString()+'</strong> of <strong>'+results.length.toLocaleString()+'</strong> results for <strong>"'+esc(q)+'"</strong></div></div>';
+    ['qb','parts','ctrl','net','kb','other'].forEach(function(gKey){
+      var rows=grouped[gKey];
+      if(!rows||!rows.length) return;
+      var grp=GROUPS[gKey];
+      var limit=Math.min(rows.length,Math.max(8,Math.floor(300*rows.length/results.length)));
+      html+='<div class="group-label" style="color:'+grp.color+'"><span style="width:8px;height:8px;border-radius:50%;background:'+grp.color+';flex-shrink:0;display:inline-block;box-shadow:0 0 6px '+grp.color+'88;"></span>'+esc(grp.label)+' — '+rows.length.toLocaleString()+' result'+(rows.length!==1?'s':'')+'</div>';
+      rows.slice(0,limit).forEach(function(r){
+        html+='<div class="result-card"><div class="result-meta"><span class="result-cat-badge" style="color:'+grp.color+';background:'+grp.color+'18;border:1px solid '+grp.color+'35">'+hl(r.cat||grp.label,q)+'</span>'+(r.case?'<span class="result-case">#'+hl(r.case,q)+'</span>':'')+(r.eu?'<span class="result-eu">'+hl(r.eu,q)+'</span>':'')+'</div><div class="result-title">'+hl(r.title||'(no title)',q)+'</div><div class="result-body">'+hl((r.res||'').slice(0,400),q)+'</div></div>';
+      });
+    });
+    bodyEl.innerHTML=html;
+  }
+  function run(){
+    var q=state.query.trim();
+    clearBtn.style.display=q?'':'none';
+    if(!state.loaded) return;
+    if(!q){
+      updateCounts(null);updateTotal(null);renderEmpty();
+      document.querySelectorAll('.cat-card').forEach(function(c){c.classList.remove('active');});
+      state.activeGroup=null;return;
+    }
+    var results=doSearch(state.all,q);
+    if(state.activeGroup) results=results.filter(function(r){return getGroup(r)===state.activeGroup;});
+    updateCounts(results);updateTotal(results);renderResults(results,q);
+  }
+  window.filterGroup=function(g){
+    if(state.activeGroup===g){state.activeGroup=null;document.querySelectorAll('.cat-card').forEach(function(c){c.classList.remove('active');});}
+    else{state.activeGroup=g;document.querySelectorAll('.cat-card').forEach(function(c){c.classList.toggle('active',c.dataset.g===g);});}
+    run();
+  };
+  window.setQuery=function(val){qEl.value=val;state.query=val;run();qEl.focus();};
+  window.clearSearch=function(){qEl.value='';state.query='';state.activeGroup=null;document.querySelectorAll('.cat-card').forEach(function(c){c.classList.remove('active');});run();qEl.focus();};
+  document.addEventListener('keydown',function(e){
+    if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();qEl.focus();qEl.select();}
+    if(e.key==='Escape'&&document.activeElement===qEl) clearSearch();
+  });
+  qEl.addEventListener('input',function(){state.query=qEl.value;run();});
+  fetch('/support_records_kb.json')
+    .then(function(r){if(!r.ok) throw new Error('HTTP '+r.status);return r.json();})
+    .then(function(j){
+      state.all=Array.isArray(j.flat)?j.flat:[];
+      state.loaded=true;
+      updateCounts(null);updateTotal(null);renderEmpty();
+      qEl.focus();
+    })
+    .catch(function(err){
+      ['qb','kb','parts','ctrl','net','other'].forEach(function(g){var el=document.getElementById('cnt-'+g);if(el)el.textContent='—';});
+      totalRow.textContent='Failed to load data';
+      bodyEl.innerHTML='<div class="no-results"><span class="no-results-icon">⚠️</span><div class="no-results-title">Failed to load support_records_kb.json</div><div style="font-size:12px;margin-top:6px;color:#f85149;">'+esc(String(err.message))+'</div></div>';
+    });
+})();
+</script>
+</body>
+</html>
