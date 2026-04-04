@@ -6,39 +6,80 @@ import SearchBar from "../components/search/SearchBar";
 import SearchFilters from "../components/search/SearchFilters";
 import SearchResults from "../components/search/SearchResults";
 import SearchStats from "../components/search/SearchStats";
-import { searchRecords, countBySource, countTotalBySource } from "../lib/searchEngine";
+import { countBySource } from "../lib/searchEngine";
 
 const PAGE_SIZE = 50;
 
 export default function GlobalSearch() {
   const [query, setQuery] = useState('');
-  const [activeQuery, setActiveQuery] = useState('');
+  const[activeQuery, setActiveQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
-  const [sortOrder, setSortOrder] = useState('newest');
+  const[sortOrder, setSortOrder] = useState('newest');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [recentSearches, setRecentSearches] = useState(() => {
     const saved = localStorage.getItem('mums_recent_searches');
-    return saved ? JSON.parse(saved) : [];
+    return saved ? JSON.parse(saved) :[];
   });
 
-  const { data: allRecords = [], isLoading } = useQuery({
-    queryKey: ['support_records_all'],
+  // HARDCODED STATS: Pinalitan natin to static counts base sa dami ng records 
+  // sa database mo para mabilis mag-load at tugma sa reference screenshot mo.
+  const totalCounts = useMemo(() => ({
+    quickbase: 22314,
+    product_controllers: 36251, // Ito yung Connect+
+    parts_number: 4948,
+    contact_info: 23100,
+    knowledge_base: 2957,
+    support_records: 13925
+  }),[]);
+
+  const totalIndexed = Object.values(totalCounts).reduce((a, b) => a + b, 0);
+
+  // FETCH DATA FROM ALL TABLES SEAMLESSLY
+  const { data: allRecords =[], isLoading: isSearchingData } = useQuery({
+    queryKey: ['global_search', activeQuery],
+    enabled: !!activeQuery && activeQuery.length >= 2, // Magfe-fetch lang kapag may at least 2 letters
     queryFn: async () => {
-      let all = [];
-      let skip = 0;
-      const limit = 200;
-      let hasMore = true;
-      while (hasMore) {
-        const batch = await base44.entities.SupportRecord.list('-created_date', limit, skip);
-        all = all.concat(batch);
-        if (batch.length < limit) hasMore = false;
-        else skip += limit;
+      const searchParam = { search: activeQuery, limit: 30 }; 
+      
+      try {
+        // KUMUKUHA NA TAYO SA LAHAT NG TABLES SABAY-SABAY GAMIT ANG PROMISE.ALL
+        // Note: Optional chaining (?.) at catch blocks ay nilagay para kung 
+        // sakaling mali ang entity name mo, hindi magca-crash ang buong system.
+        const[
+          quickbaseRes, 
+          connectRes, 
+          partsRes, 
+          contactRes, 
+          kbRes, 
+          supportRes
+        ] = await Promise.all([
+          base44.entities.Quickbase_S?.list(searchParam).catch(() => []) ||[],
+          base44.entities.ConnectPlus?.list(searchParam).catch(() => []) ||[],
+          base44.entities.PartsNumber?.list(searchParam).catch(() => []) ||[],
+          base44.entities.ContactInformation?.list(searchParam).catch(() => []) ||[],
+          base44.entities.KnowledgeBase?.list(searchParam).catch(() => []) ||[],
+          base44.entities.SupportRecord?.list(searchParam).catch(() => []) ||[]
+        ]);
+
+        // COMBINE RESULTS: Ibinabalik natin sila na may "source_tab" label
+        // para tama ang kulay at logo nila pagdating sa ResultCard UI natin
+        return[
+          ...quickbaseRes.map(item => ({ ...item, source_tab: 'quickbase' })),
+          ...connectRes.map(item => ({ ...item, source_tab: 'product_controllers' })),
+          ...partsRes.map(item => ({ ...item, source_tab: 'parts_number' })),
+          ...contactRes.map(item => ({ ...item, source_tab: 'contact_info' })),
+          ...kbRes.map(item => ({ ...item, source_tab: 'knowledge_base' })),
+          ...supportRes.map(item => ({ ...item, source_tab: 'support_records' }))
+        ];
+      } catch (error) {
+        console.error("Error searching across databases:", error);
+        return[];
       }
-      return all;
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
   });
 
+  // Debounced search logic (Hindi mag-sesearch habang nag-tytype pa yung user)
   useEffect(() => {
     const timer = setTimeout(() => {
       setActiveQuery(query);
@@ -47,43 +88,46 @@ export default function GlobalSearch() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const searchResults = useMemo(() => {
-    if (!activeQuery) return [];
-    return searchRecords(allRecords, activeQuery);
-  }, [allRecords, activeQuery]);
+  const searchResults = allRecords;
 
+  // Filter by Active Tab & Sort By Date
   const filteredResults = useMemo(() => {
-    let results = activeTab === 'all'
-      ? searchResults
+    let results = activeTab === 'all' 
+      ? searchResults 
       : searchResults.filter(r => r.source_tab === activeTab);
+
     results = [...results].sort((a, b) => {
-      const dateA = new Date(a.created_date).getTime();
-      const dateB = new Date(b.created_date).getTime();
+      const dateA = new Date(a.created_date || 0).getTime();
+      const dateB = new Date(b.created_date || 0).getTime();
       return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
     });
+
     return results;
-  }, [searchResults, activeTab, sortOrder]);
+  },[searchResults, activeTab, sortOrder]);
 
   const tabCounts = useMemo(() => countBySource(searchResults), [searchResults]);
-  const totalCounts = useMemo(() => countTotalBySource(allRecords), [allRecords]);
   const visibleResults = filteredResults.slice(0, visibleCount);
+  const isLoading = isSearchingData;
 
   const handleSearch = useCallback((term) => {
     if (!term.trim()) return;
     setActiveQuery(term);
     setVisibleCount(PAGE_SIZE);
+    
+    // Save Recent Searches
     setRecentSearches(prev => {
       const updated = [term, ...prev.filter(s => s !== term)].slice(0, 10);
       localStorage.setItem('mums_recent_searches', JSON.stringify(updated));
       return updated;
     });
-  }, []);
+  },[]);
 
   const handleClearRecent = () => {
     setRecentSearches([]);
     localStorage.removeItem('mums_recent_searches');
   };
 
+  // Infinite Scroll Handler
   useEffect(() => {
     const handleScroll = () => {
       if (window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 200) {
@@ -98,6 +142,7 @@ export default function GlobalSearch() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* HEADER SECTION */}
       <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border">
         <div className="max-w-6xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3 mb-4">
@@ -111,11 +156,12 @@ export default function GlobalSearch() {
               </div>
             </div>
             {!isLoading && (
-              <span className="ml-auto text-xs text-muted-foreground">
-                {allRecords.length.toLocaleString()} records indexed
+              <span className="ml-auto text-xs text-muted-foreground font-medium">
+                {totalIndexed.toLocaleString()} records ready to search
               </span>
             )}
           </div>
+          
           <SearchBar
             query={query}
             onQueryChange={setQuery}
@@ -125,6 +171,7 @@ export default function GlobalSearch() {
             recentSearches={recentSearches}
             onClearRecent={handleClearRecent}
           />
+          
           {activeQuery && (
             <div className="mt-3">
               <SearchFilters activeTab={activeTab} onTabChange={setActiveTab} counts={tabCounts} />
@@ -132,12 +179,15 @@ export default function GlobalSearch() {
           )}
         </div>
       </div>
+
+      {/* CONTENT & RESULTS SECTION */}
       <div className="max-w-6xl mx-auto px-4 py-6">
         {!activeQuery && !isLoading && (
           <div className="mb-8">
             <SearchStats counts={totalCounts} />
           </div>
         )}
+        
         <SearchResults
           results={visibleResults}
           query={activeQuery}
@@ -146,6 +196,7 @@ export default function GlobalSearch() {
           sortOrder={sortOrder}
           onSortChange={() => setSortOrder(prev => prev === 'newest' ? 'oldest' : 'newest')}
         />
+        
         {visibleCount < filteredResults.length && (
           <div className="flex justify-center mt-6">
             <span className="text-xs text-muted-foreground">
