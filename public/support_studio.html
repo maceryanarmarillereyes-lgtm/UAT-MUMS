@@ -15460,7 +15460,7 @@
       var src = SOURCES[key];
       var n = counts ? (counts[key]||0) : 0;
       if (!_state.loaded) n = '—';
-      return '<div class="se2-cat" data-src="' + key + '" onclick="window._se2FilterCat('' + key + '')" ' +
+      return '<div class="se2-cat" data-src="' + key + '" onclick="window._se2FilterCat(\'' + key + '\')" ' +
         'style="color:' + src.color + ';">' +
         '<i class="fas ' + src.icon + ' se2-cat-icon"></i>' +
         '<div class="se2-cat-num">' + (typeof n === 'number' ? n.toLocaleString() : n) + '</div>' +
@@ -15478,7 +15478,7 @@
   function _renderChips() {
     var row = el('se2-chip-row');
     if (row) row.innerHTML = SE2_CHIPS.map(function(c) {
-      return '<div class="se2-chip" onclick="window._se2SetQ('' + esc(c) + '')">' + esc(c) + '</div>';
+      return '<div class="se2-chip" onclick="window._se2SetQ(\'' + esc(c).replace(/'/g, "\\'") + '\')">' + esc(c) + '</div>';
     }).join('');
   }
 
@@ -15883,7 +15883,7 @@
 
     // Deep link to QBS tab
     html += '<div class="se2-sec-title" style="color:#7d8590;"><i class="fas fa-external-link-alt" style="margin-right:5px;"></i>Actions</div>';
-    html += '<button onclick="window._se2OpenInQbs('' + esc(caseNum) + '')" style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:8px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--ss-font,inherit);"><i class="fas fa-database"></i> Open in QuickBase_S Deep Search</button>';
+    html += '<button onclick="window._se2OpenInQbs(\'' + esc(caseNum) + '\')" style="display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:8px;background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;font-size:11px;font-weight:700;cursor:pointer;font-family:var(--ss-font,inherit);"><i class="fas fa-database"></i> Open in QuickBase_S Deep Search</button>';
 
     bodyEl.innerHTML = html;
   }
