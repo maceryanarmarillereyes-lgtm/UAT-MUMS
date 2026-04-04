@@ -15850,14 +15850,27 @@
     var ciPromise = _loadBundleRecords('contact_information', window.__studioCiRecords || [])
       .then(function(ciData) {
         return _toArray(ciData).map(function(r) {
-          var fullName = r.name || r.full_name || [r.first_name, r.last_name].filter(Boolean).join(' ');
+          var row = r && typeof r === 'object' ? r : {};
+          var keys = Object.keys(row);
+          function pickByRx(rx) {
+            var k = keys.find(function(name) { return rx.test(String(name || '')); });
+            return k ? String(row[k] || '').trim() : '';
+          }
+          var fullName = row.name || row.full_name || pickByRx(/full\s*name|contact.*name|name/i) || [row.first_name, row.last_name].filter(Boolean).join(' ');
+          var email = row.email || pickByRx(/e[\s\-_]*mail|email/i);
+          var phone = row.phone || row.mobile || pickByRx(/mobile|phone|contact number/i);
+          var company = row.company || row.organization || pickByRx(/company|account|organi[sz]ation|end\s*user/i);
+          var dept = row.department || pickByRx(/department|team|group/i);
+          var title = fullName || email || phone || company || 'Contact';
+          var resText = keys.map(function(k) { return row[k]; }).filter(function(v) { return v != null && String(v).trim() !== ''; }).join(' · ');
           return {
             _src:'ci',
-            title: fullName || r.email || r.phone || 'Contact',
-            res: [r.email, r.phone, r.department, r.title, r.company].filter(Boolean).join(' · '),
+            title: String(title),
+            res: String(resText || [email, phone, dept, company].filter(Boolean).join(' · ')),
             cat: 'Contact Information',
-            email: r.email || '',
-            phone: r.phone || ''
+            eu: String(company || ''),
+            email: String(email || ''),
+            phone: String(phone || '')
           };
         });
       });
