@@ -70,6 +70,8 @@
   let sbChannel = null;
   let connectTimer = null;
   let reconnectTimer = null;
+  let _isStopping = false;        // FIX: prevents CLOSED from triggering reconnect on intentional stop
+  let _connectInFlight = false;   // FIX: prevents parallel connectCloudMandatory() calls
   let reconcileTimer = null;
   let offlinePullTimer = null;
   let reconnectBackoffMs = 1200;
@@ -487,9 +489,13 @@ function applyRemoteKey(key, value){
       if (reconcileTimer) { clearInterval(reconcileTimer); reconcileTimer = null; }
       if (offlinePullTimer) { clearInterval(offlinePullTimer); offlinePullTimer = null; }
     } catch (_) {}
+    // FIX: flag intentional stop so CLOSED callback does not trigger scheduleReconnect
+    _isStopping = true;
     try { if (sbChannel && sbChannel.unsubscribe) sbChannel.unsubscribe(); } catch (_) {}
     sbChannel = null;
     sbClient = null;
+    // Reset after a tick — CLOSED fires synchronously in some Supabase versions
+    setTimeout(function(){ _isStopping = false; }, 0);
   }
 
   function scheduleReconnect(reason){
@@ -523,18 +529,32 @@ function applyRemoteKey(key, value){
       const token = String(CloudAuth.accessToken() || '');
       if (!token) return false;
       lastAuthToken = token;
-      console.log('[Realtime Guard] Preparing realtime subscribe', { hasToken: !!token });
-      if (!window.__MUMS_SB_CLIENT) {
+      // FIX: demoted from console.log to debug-only to reduce console noise
+      try { (window.MUMS_DEBUG||{}).log && MUMS_DEBUG.log('realtime.preparing_subscribe', { hasToken: !!token }); } catch(_) {}
+      // FIX: Recreate the Supabase client when the token has changed.
+      // Reusing __MUMS_SB_CLIENT with a stale Authorization header causes
+      // RLS auth failures on Postgres Changes → CHANNEL_ERROR → reconnect loop.
+      const _existingClientToken = window.__MUMS_SB_CLIENT && window.__MUMS_SB_CLIENT._mumsToken;
+      if (!window.__MUMS_SB_CLIENT || _existingClientToken !== token) {
+        // Disconnect old client cleanly before replacing
+        try {
+          if (window.__MUMS_SB_CLIENT && window.__MUMS_SB_CLIENT.realtime &&
+              typeof window.__MUMS_SB_CLIENT.realtime.disconnect === 'function') {
+            window.__MUMS_SB_CLIENT.realtime.disconnect();
+          }
+        } catch (_) {}
         window.__MUMS_SB_CLIENT = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
           auth: { persistSession: false, autoRefreshToken: false, storage: SUPABASE_STORAGE },
           realtime: { params: { eventsPerSecond: 10 } },
           global: {
             headers: {
-              // Critical: provide user JWT so Realtime respects RLS (authenticated role)
+              // Always use the CURRENT token so RLS recognises authenticated role
               Authorization: 'Bearer ' + token
             }
           }
         });
+        // Tag client with token so we can detect future token rotations
+        try { window.__MUMS_SB_CLIENT._mumsToken = token; } catch (_) {}
       }
       sbClient = window.__MUMS_SB_CLIENT;
 
@@ -584,6 +604,7 @@ function applyRemoteKey(key, value){
           if (seq !== activeSeq) return;
           console.log('[Realtime Guard] Channel status', { status });
           if (status === 'SUBSCRIBED') {
+            _connectInFlight = false; // FIX: connection complete, release guard
             cloudOkAt = Date.now();
             reconnectBackoffMs = 1200;
             dispatchStatus('realtime', 'Supabase Realtime connected');
@@ -613,6 +634,7 @@ function applyRemoteKey(key, value){
               }, intervalMs);
             } catch (_) {}
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            _connectInFlight = false; // FIX: release guard on error so reconnect can proceed
             try {
               window.dispatchEvent(new CustomEvent('mums:syncstatus', {
                 detail: { mode: 'offline', syncMode: 'offline', error: status, detail: String(status || 'CHANNEL_ERROR') }
@@ -621,12 +643,15 @@ function applyRemoteKey(key, value){
             // Treat transient channel errors as reconnecting (yellow), not offline (red), to avoid UI flicker.
             scheduleReconnect(status);
           } else if (status === 'CLOSED') {
+            // FIX: If we issued the unsubscribe ourselves (_isStopping), ignore CLOSED.
+            // scheduleReconnect here would create an infinite loop:
+            // connectCloudMandatory → stopCloud → unsubscribe → CLOSED → scheduleReconnect → connectCloudMandatory
+            if (_isStopping) return;
             try {
               window.dispatchEvent(new CustomEvent('mums:syncstatus', {
                 detail: { mode: 'offline', syncMode: 'offline', error: 'CLOSED', detail: 'CLOSED' }
               }));
             } catch(_) {}
-            // CLOSED is commonly emitted when we intentionally unsubscribe during reconnect/token rotation.
             scheduleReconnect('closed');
           }
         });
@@ -656,6 +681,12 @@ function applyRemoteKey(key, value){
         dispatchStatus('offline', 'Logged out');
         return;
       }
+      // FIX: prevent parallel connection attempts — only one at a time
+      if (_connectInFlight) {
+        return;
+      }
+      _connectInFlight = true;
+      setTimeout(function(){ _connectInFlight = false; }, 8000); // safety valve
       // Invalidate any in-flight callbacks from a previous channel (unsubscribe emits CLOSED).
       activeSeq = ++connectSeq;
 
@@ -677,11 +708,13 @@ function applyRemoteKey(key, value){
       // Attempt Supabase Realtime (mandatory).
       const ok = trySupabaseRealtimeMandatory();
       if (!ok) {
-        console.log('[Realtime Guard] subscribe init failed (env/auth missing)');
+        _connectInFlight = false; // FIX: reset guard on failure path
         dispatchStatus('offline', 'Realtime init failed (env/auth missing)');
         scheduleReconnect('init-failed');
       }
+      // On ok=true, reset guard when SUBSCRIBED/ERROR/CLOSED fires (or timeout)
     } catch (e) {
+      _connectInFlight = false; // FIX: reset on exception
       dispatchStatus('offline', String(e && e.message ? e.message : e));
     }
   }
