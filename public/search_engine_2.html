@@ -5,233 +5,138 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Search Engine 2 — MUMS Support Studio</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/css/search_engine_v2.css"/>
   <style>
-    :root {
-      --bg:#070d1a;--surface:#0d1630;--surface2:#101b3a;
-      --border:rgba(116,151,212,.18);--border2:rgba(116,151,212,.28);
-      --text:#c8d8f0;--white:#e8f4ff;--muted:#4a6080;--muted2:#7a94b8;
-      --accent:#39a0ff;
-    }
-    *{box-sizing:border-box;margin:0;padding:0}
-    html,body{height:100%;overflow:hidden}
+    :root {--bg:#070d1a;--surface:#0d1630;--surface2:#101b3a;--border:rgba(116,151,212,.18);--border2:rgba(116,151,212,.28);--text:#c8d8f0;--white:#e8f4ff;--muted:#4a6080;--muted2:#7a94b8;--accent:#39a0ff}
+    *{box-sizing:border-box;margin:0;padding:0} html,body{height:100%;overflow:hidden}
     body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
-    /* SEARCH */
-    .se2-header{padding:20px 28px 0;flex-shrink:0}
-    .search-wrap{background:var(--surface);border:1.5px solid var(--border2);border-radius:16px;display:flex;align-items:center;gap:12px;padding:14px 18px;transition:border-color .2s,box-shadow .2s;box-shadow:0 4px 24px rgba(0,0,0,.35)}
-    .search-wrap:focus-within{border-color:rgba(57,160,255,.45);box-shadow:0 4px 32px rgba(57,160,255,.12)}
-    .search-icon{opacity:.5;flex-shrink:0;font-size:18px;color:var(--muted2)}
-    .search-input{flex:1;background:transparent;border:none;outline:none;color:var(--white);font-size:18px;font-family:inherit;font-weight:500}
-    .search-input::placeholder{color:var(--muted)}
+    .se2-header{padding:20px 28px 0;flex-shrink:0}.search-wrap{background:var(--surface);border:1.5px solid var(--border2);border-radius:16px;display:flex;align-items:center;gap:12px;padding:14px 18px;transition:border-color .2s,box-shadow .2s;box-shadow:0 4px 24px rgba(0,0,0,.35)}
+    .search-wrap:focus-within{border-color:rgba(57,160,255,.45);box-shadow:0 4px 32px rgba(57,160,255,.12)}.search-icon{opacity:.5;flex-shrink:0;font-size:18px;color:var(--muted2)}
+    .search-input{flex:1;background:transparent;border:none;outline:none;color:var(--white);font-size:18px;font-family:inherit;font-weight:500}.search-input::placeholder{color:var(--muted)}
     .search-kbd{font-size:11px;font-weight:700;color:var(--muted);background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:6px;padding:3px 8px;flex-shrink:0;font-family:monospace;letter-spacing:.04em;white-space:nowrap}
-    .search-clear{background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:13px;cursor:pointer;padding:4px 9px;display:none;transition:all .15s;font-family:inherit}
-    .search-clear:hover{background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.3);color:#f85149}
-    /* CATS */
-    .cats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;padding:16px 28px 0;flex-shrink:0}
-    .cat-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:13px 10px;text-align:center;cursor:pointer;transition:all .18s}
-    .cat-card:hover{transform:translateY(-2px);border-color:var(--border2)}
-    .cat-card.active{transform:none}
-    .cat-icon{font-size:22px;margin-bottom:6px;display:block;line-height:1}
-    .cat-num{font-size:24px;font-weight:900;line-height:1;margin-bottom:3px}
-    .cat-lbl{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.03em}
-    /* active states */
-    .cat-card.active.cat-blue  {border-color:rgba(88,166,255,.5);box-shadow:0 0 0 2px rgba(88,166,255,.12)}
-    .cat-card.active.cat-green {border-color:rgba(16,185,129,.5);box-shadow:0 0 0 2px rgba(16,185,129,.12)}
-    .cat-card.active.cat-amber {border-color:rgba(245,158,11,.5);box-shadow:0 0 0 2px rgba(245,158,11,.12)}
-    .cat-card.active.cat-violet{border-color:rgba(167,139,250,.5);box-shadow:0 0 0 2px rgba(167,139,250,.12)}
-    .cat-card.active.cat-cyan  {border-color:rgba(34,211,238,.5);box-shadow:0 0 0 2px rgba(34,211,238,.12)}
-    .cat-card.active.cat-rose  {border-color:rgba(244,63,94,.5);box-shadow:0 0 0 2px rgba(244,63,94,.12)}
+    .search-clear{background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:8px;color:var(--muted2);font-size:13px;cursor:pointer;padding:4px 9px;display:none}
+    .cats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;padding:16px 28px 0;flex-shrink:0}.cat-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:13px 10px;text-align:center;cursor:pointer}
+    .cat-card.active.cat-blue{border-color:rgba(88,166,255,.5)}.cat-card.active.cat-green{border-color:rgba(16,185,129,.5)}.cat-card.active.cat-amber{border-color:rgba(245,158,11,.5)}.cat-card.active.cat-violet{border-color:rgba(167,139,250,.5)}.cat-card.active.cat-cyan{border-color:rgba(34,211,238,.5)}.cat-card.active.cat-rose{border-color:rgba(244,63,94,.5)}
+    .cat-icon{font-size:22px;margin-bottom:6px;display:block;line-height:1}.cat-num{font-size:24px;font-weight:900;line-height:1;margin-bottom:3px}.cat-lbl{font-size:10px;font-weight:600;color:var(--muted)}
     .c-blue{color:#58a6ff}.c-green{color:#10b981}.c-amber{color:#f59e0b}.c-violet{color:#a78bfa}.c-cyan{color:#22d3ee}.c-rose{color:#f43f5e}
-    /* TOTAL */
-    .total-row{padding:8px 28px 0;flex-shrink:0;font-size:12px;color:var(--muted);text-align:center}
-    .total-row strong{color:var(--accent)}
-    /* BODY */
-    .se2-body{flex:1;overflow-y:auto;padding:12px 28px 28px;min-height:0}
-    .se2-body::-webkit-scrollbar{width:4px}
-    .se2-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:99px}
-    /* EMPTY */
-    .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:14px;text-align:center;padding:20px}
-    .empty-icon{width:80px;height:80px;border-radius:22px;background:var(--surface2);border:1px solid var(--border);display:grid;place-items:center;font-size:34px;margin-bottom:4px}
-    .empty-title{font-size:20px;font-weight:800;color:var(--white)}
-    .empty-sub{font-size:13px;color:var(--muted);max-width:480px;line-height:1.65}
-    .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:6px}
-    .chip{padding:6px 14px;border-radius:99px;background:var(--surface);border:1px solid var(--border);font-size:12px;color:var(--muted2);cursor:pointer;transition:all .15s}
-    .chip:hover{border-color:rgba(57,160,255,.4);color:var(--accent);background:rgba(57,160,255,.06)}
-    /* RESULTS */
-    .results-header{display:flex;align-items:center;justify-content:space-between;padding:4px 0 12px;border-bottom:1px solid var(--border);margin-bottom:12px}
-    .results-count{font-size:12px;color:var(--muted)}
-    .results-count strong{color:var(--white)}
-    .group-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:7px;margin:16px 0 8px}
-    .group-label::after{content:'';flex:1;height:1px;background:var(--border)}
-    .result-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 16px;margin-bottom:8px;cursor:pointer;transition:all .15s}
-    .result-card:hover{border-color:rgba(57,160,255,.35);background:rgba(57,160,255,.035);transform:translateX(2px)}
-    .result-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
-    .result-cat-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;letter-spacing:.04em}
-    .result-case{font-size:10px;font-weight:700;color:var(--accent);font-family:monospace;background:rgba(57,160,255,.1);border:1px solid rgba(57,160,255,.2);padding:2px 7px;border-radius:5px}
-    .result-eu{font-size:10px;color:var(--muted)}
-    .result-title{font-size:13px;font-weight:700;color:var(--white);margin-bottom:5px;line-height:1.45}
-    .result-body{font-size:12px;color:var(--muted2);line-height:1.55;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .total-row{padding:8px 28px 0;flex-shrink:0;font-size:12px;color:var(--muted);text-align:center}.total-row strong{color:var(--accent)}
+    .se2-body{flex:1;overflow-y:auto;padding:12px 28px 28px;min-height:0}.results-header{display:flex;align-items:center;justify-content:space-between;padding:4px 0 12px;border-bottom:1px solid var(--border);margin-bottom:12px}
+    .group-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:7px;margin:16px 0 8px}.group-label::after{content:'';flex:1;height:1px;background:var(--border)}
+    .result-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 16px;margin-bottom:8px}.result-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
+    .result-cat-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px}.result-case{font-size:10px;font-weight:700;color:var(--accent);font-family:monospace;background:rgba(57,160,255,.1);border:1px solid rgba(57,160,255,.2);padding:2px 7px;border-radius:5px}
+    .result-eu{font-size:10px;color:var(--muted)}.result-title{font-size:13px;font-weight:700;color:var(--white);margin-bottom:5px;line-height:1.45}.result-body{font-size:12px;color:var(--muted2);line-height:1.55}
+    .empty-state,.loading-state,.no-results{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px;text-align:center;color:var(--muted)}
+    .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:8px}.chip{padding:6px 14px;border-radius:99px;background:var(--surface);border:1px solid var(--border);font-size:12px;color:var(--muted2);cursor:pointer}
     mark{background:rgba(57,160,255,.28);color:#fff;border-radius:3px;padding:0 2px}
-    /* NO RESULTS */
-    .no-results{padding:48px 10px;text-align:center;color:var(--muted)}
-    .no-results-icon{font-size:36px;opacity:.3;display:block;margin-bottom:12px}
-    .no-results-title{font-size:15px;font-weight:700;color:var(--muted2);margin-bottom:6px}
-    /* LOADING */
-    .loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:var(--muted);font-size:13px}
-    .spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,.08);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
 <body>
-  <div class="se2-header">
+  <div class="se2-header autocomplete-anchor">
     <div class="search-wrap">
       <span class="search-icon">🔎</span>
-      <input id="q" class="search-input" type="text"
-        placeholder="Search support records, cases, parts, knowledge base..."
-        autocomplete="off" spellcheck="false"/>
-      <button class="search-clear" id="clear-btn" onclick="clearSearch()">✕</button>
+      <input id="q" class="search-input" type="text" placeholder="Search support records, cases, parts, knowledge base..." autocomplete="off" spellcheck="false"/>
+      <button class="search-clear" id="clear-btn">✕</button>
       <span class="search-kbd">⌘ K</span>
     </div>
+    <div id="autocomplete" class="autocomplete-dropdown" style="display:none;"></div>
   </div>
 
   <div class="cats-row">
-    <div class="cat-card cat-blue"   data-g="qb"    onclick="filterGroup('qb')">
-      <span class="cat-icon">🔗</span><div class="cat-num c-blue"   id="cnt-qb">—</div><div class="cat-lbl">QuickBase Cases</div>
-    </div>
-    <div class="cat-card cat-green"  data-g="kb"    onclick="filterGroup('kb')">
-      <span class="cat-icon">📚</span><div class="cat-num c-green"  id="cnt-kb">—</div><div class="cat-lbl">Knowledge Base</div>
-    </div>
-    <div class="cat-card cat-amber"  data-g="parts" onclick="filterGroup('parts')">
-      <span class="cat-icon">🔩</span><div class="cat-num c-amber"  id="cnt-parts">—</div><div class="cat-lbl">Parts</div>
-    </div>
-    <div class="cat-card cat-violet" data-g="ctrl"  onclick="filterGroup('ctrl')">
-      <span class="cat-icon">🖥️</span><div class="cat-num c-violet" id="cnt-ctrl">—</div><div class="cat-lbl">Controllers</div>
-    </div>
-    <div class="cat-card cat-cyan"   data-g="net"   onclick="filterGroup('net')">
-      <span class="cat-icon">📡</span><div class="cat-num c-cyan"   id="cnt-net">—</div><div class="cat-lbl">Connect+ / Net</div>
-    </div>
-    <div class="cat-card cat-rose"   data-g="other" onclick="filterGroup('other')">
-      <span class="cat-icon">📋</span><div class="cat-num c-rose"   id="cnt-other">—</div><div class="cat-lbl">Support Records</div>
-    </div>
+    <div class="cat-card cat-blue" data-g="qb"><span class="cat-icon">🔗</span><div class="cat-num c-blue" id="cnt-qb">—</div><div class="cat-lbl">QuickBase Cases</div></div>
+    <div class="cat-card cat-green" data-g="kb"><span class="cat-icon">📚</span><div class="cat-num c-green" id="cnt-kb">—</div><div class="cat-lbl">Knowledge Base</div></div>
+    <div class="cat-card cat-amber" data-g="parts"><span class="cat-icon">🔩</span><div class="cat-num c-amber" id="cnt-parts">—</div><div class="cat-lbl">Parts</div></div>
+    <div class="cat-card cat-violet" data-g="ctrl"><span class="cat-icon">🖥️</span><div class="cat-num c-violet" id="cnt-ctrl">—</div><div class="cat-lbl">Controllers</div></div>
+    <div class="cat-card cat-cyan" data-g="net"><span class="cat-icon">📡</span><div class="cat-num c-cyan" id="cnt-net">—</div><div class="cat-lbl">Connect+ / Net</div></div>
+    <div class="cat-card cat-rose" data-g="other"><span class="cat-icon">📋</span><div class="cat-num c-rose" id="cnt-other">—</div><div class="cat-lbl">Support Records</div></div>
+  </div>
+
+  <div id="ai-panel" class="ai-panel" style="display:none;">
+    <div class="ai-panel-header"><span class="ai-avatar">🤖</span><span class="ai-label">MUMS AI Assistant</span><button class="ai-copy-btn" id="ai-copy-btn" title="Copy response">📋</button><button class="ai-close-btn" id="ai-close-btn">✕</button></div>
+    <div class="ai-panel-body" id="ai-body"></div>
+    <div class="ai-panel-footer"><span class="ai-sources" id="ai-sources">Sources: analyzing...</span></div>
+  </div>
+
+  <div class="adv-filters" id="adv-filters" style="display:none;">
+    <select id="sort-by"><option value="relevance">Sort: Relevance</option><option value="newest">Sort: Newest First</option><option value="oldest">Sort: Oldest First</option><option value="case-asc">Sort: Case # Ascending</option></select>
+    <input type="text" id="filter-eu" placeholder="Filter by End User..."/>
+    <select id="filter-status"><option value="">All Statuses</option><option value="open">Open</option><option value="closed">Closed</option><option value="pending">Pending</option></select>
+    <button id="toggle-filters">🎚️ Filters</button>
   </div>
 
   <div class="total-row" id="total-row">Loading…</div>
-  <div class="se2-body" id="body">
-    <div class="loading-state"><div class="spinner"></div><span>Loading indexed records…</span></div>
-  </div>
+  <div id="history" class="history-section" style="display:none;"></div>
+  <div class="se2-body" id="body"><div class="loading-state"><div>Loading indexed records…</div></div></div>
 
-<script>
-(function(){
-  var GROUPS = {
-    qb:    {ids:['e2e3_gateway','alarms','floorplan_screens','firmware','refrigeration','password_credentials','data_reports','temperature_haccp'],label:'QuickBase Cases',color:'#58a6ff'},
-    kb:    {ids:[],catRx:/knowledge|guide|manual|instruction|education|training/i,label:'Knowledge Base',color:'#10b981'},
-    parts: {ids:['parts_xr_controllers','parts_xm_controllers','parts_cc200','parts_license_keys','parts_rga_warranty','parts_probes_sensors','parts_sporlan_danfoss','parts_site_supervisor','parts_walmart_jobs','parts_part_number_inquiry','parts_products'],label:'Parts',color:'#f59e0b'},
-    ctrl:  {ids:['controller_hardware','site_supervisor','programming'],label:'Controllers',color:'#a78bfa'},
-    net:   {ids:['connect_plus'],label:'Connect+ / Net',color:'#22d3ee'},
-    other: {ids:[],label:'Support Records',color:'#f43f5e'}
-  };
-  var CHIPS=['E3 offline','Walmart','RX-300','E2 firmware','license key','Modbus','Connect+','floor plan','HACCP','temperature','XR75','remapping'];
-  var ID2G={};
-  ['qb','kb','parts','ctrl','net'].forEach(function(g){(GROUPS[g].ids||[]).forEach(function(id){ID2G[id]=g;});});
-  function getGroup(r){
-    var id=String(r.id||'');
-    if(ID2G[id]) return ID2G[id];
-    if(GROUPS.kb.catRx&&GROUPS.kb.catRx.test(r.cat||'')) return 'kb';
-    return 'other';
-  }
-  var state={all:[],query:'',activeGroup:null,loaded:false};
-  var qEl=document.getElementById('q');
-  var bodyEl=document.getElementById('body');
-  var clearBtn=document.getElementById('clear-btn');
-  var totalRow=document.getElementById('total-row');
-  function esc(s){return String(s||'').replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c;});}
-  function hl(text,q){
-    var s=String(text||'');
-    if(!q) return esc(s);
-    var safe=q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    return esc(s).replace(new RegExp('('+safe+')','ig'),'<mark>$1</mark>');
-  }
-  function doSearch(rows,term){
-    var t=term.trim().toLowerCase();
-    if(!t) return [];
-    return rows.filter(function(r){return [r.title,r.res,r.cat,r.case,r.eu,r.id].join(' ').toLowerCase().includes(t);});
-  }
-  function updateCounts(results){
-    var c={qb:0,kb:0,parts:0,ctrl:0,net:0,other:0};
-    (results||state.all).forEach(function(r){var g=getGroup(r);c[g]=(c[g]||0)+1;});
-    Object.keys(c).forEach(function(g){var el=document.getElementById('cnt-'+g);if(el)el.textContent=c[g].toLocaleString();});
-  }
-  function updateTotal(results){
-    var n=results?results.length:state.all.length;
-    var base=state.all.length;
-    if(results){
-      totalRow.innerHTML='Total indexed: <strong>'+base.toLocaleString()+'</strong> records &nbsp;·&nbsp; <strong>'+n.toLocaleString()+'</strong> matched';
-    } else {
-      totalRow.innerHTML='Total indexed: <strong>'+base.toLocaleString()+'</strong> records';
-    }
-  }
-  function renderEmpty(){
-    var chips=CHIPS.map(function(c){return '<div class="chip" onclick="setQuery(\''+esc(c)+'\')">'+esc(c)+'</div>';}).join('');
-    bodyEl.innerHTML='<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Search Support Studio</div><div class="empty-sub">Search across all tabs — QuickBase cases, Knowledge Base, Parts, Product Controllers, Contact Info, and Support Records. Supports partial words, question format, and exact matching.</div><div class="chips">'+chips+'</div></div>';
-  }
-  function renderResults(results,q){
-    if(!results.length){
-      bodyEl.innerHTML='<div class="no-results"><span class="no-results-icon">🔎</span><div class="no-results-title">No results for "'+esc(q)+'"</div><div style="font-size:12px;margin-top:6px;">Try a different keyword, partial word, or case number.</div></div>';
-      return;
-    }
-    var grouped={};
-    results.forEach(function(r){var g=getGroup(r);if(!grouped[g])grouped[g]=[];grouped[g].push(r);});
-    var html='<div class="results-header"><div class="results-count">Showing <strong>'+Math.min(results.length,300).toLocaleString()+'</strong> of <strong>'+results.length.toLocaleString()+'</strong> results for <strong>"'+esc(q)+'"</strong></div></div>';
-    ['qb','parts','ctrl','net','kb','other'].forEach(function(gKey){
-      var rows=grouped[gKey];
-      if(!rows||!rows.length) return;
-      var grp=GROUPS[gKey];
-      var limit=Math.min(rows.length,Math.max(8,Math.floor(300*rows.length/results.length)));
-      html+='<div class="group-label" style="color:'+grp.color+'"><span style="width:8px;height:8px;border-radius:50%;background:'+grp.color+';flex-shrink:0;display:inline-block;box-shadow:0 0 6px '+grp.color+'88;"></span>'+esc(grp.label)+' — '+rows.length.toLocaleString()+' result'+(rows.length!==1?'s':'')+'</div>';
-      rows.slice(0,limit).forEach(function(r){
-        html+='<div class="result-card"><div class="result-meta"><span class="result-cat-badge" style="color:'+grp.color+';background:'+grp.color+'18;border:1px solid '+grp.color+'35">'+hl(r.cat||grp.label,q)+'</span>'+(r.case?'<span class="result-case">#'+hl(r.case,q)+'</span>':'')+(r.eu?'<span class="result-eu">'+hl(r.eu,q)+'</span>':'')+'</div><div class="result-title">'+hl(r.title||'(no title)',q)+'</div><div class="result-body">'+hl((r.res||'').slice(0,400),q)+'</div></div>';
+  <script src="/js/search_engine_v2.js"></script>
+  <script src="/js/search_ai_responder.js"></script>
+  <script>
+    (function(){
+      const GROUPS={qb:{ids:['e2e3_gateway','alarms','floorplan_screens','firmware','refrigeration','password_credentials','data_reports','temperature_haccp'],label:'QuickBase Cases',color:'#58a6ff'},kb:{ids:[],catRx:/knowledge|guide|manual|instruction|education|training/i,label:'Knowledge Base',color:'#10b981'},parts:{ids:['parts_xr_controllers','parts_xm_controllers','parts_cc200','parts_license_keys','parts_rga_warranty','parts_probes_sensors','parts_sporlan_danfoss','parts_site_supervisor','parts_walmart_jobs','parts_part_number_inquiry','parts_products'],label:'Parts',color:'#f59e0b'},ctrl:{ids:['controller_hardware','site_supervisor','programming'],label:'Controllers',color:'#a78bfa'},net:{ids:['connect_plus'],label:'Connect+ / Net',color:'#22d3ee'},other:{ids:[],label:'Support Records',color:'#f43f5e'}};
+      const CHIPS=['E3 offline','Walmart','#526754','E2 firmware','license key','Modbus','Connect+'];
+      const ID2G={};['qb','kb','parts','ctrl','net'].forEach(g=>(GROUPS[g].ids||[]).forEach(id=>ID2G[id]=g));
+      const el={q:document.getElementById('q'),body:document.getElementById('body'),clear:document.getElementById('clear-btn'),total:document.getElementById('total-row'),auto:document.getElementById('autocomplete'),panel:document.getElementById('ai-panel'),aiBody:document.getElementById('ai-body'),aiSources:document.getElementById('ai-sources'),history:document.getElementById('history'),sort:document.getElementById('sort-by'),eu:document.getElementById('filter-eu'),status:document.getElementById('filter-status')};
+      const state={all:[],engine:null,activeGroup:null,lastResults:[],history:JSON.parse(localStorage.getItem('se2_history')||'[]'),popular:JSON.parse(localStorage.getItem('se2_popular')||'{}'),autoIndex:-1,suggestions:[]};
+      const ai=new window.AIResponder(window.SE2SynonymMap||{});
+      const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+      const tokenize=s=>String(s||'').toLowerCase().split(/\s+/).filter(Boolean);
+      function getGroup(r){const id=String(r.id||'');if(ID2G[id])return ID2G[id];if(GROUPS.kb.catRx&&GROUPS.kb.catRx.test(r.cat||''))return'kb';return'other';}
+      function updateCounts(rows){const c={qb:0,kb:0,parts:0,ctrl:0,net:0,other:0};(rows||state.all).forEach(r=>c[getGroup(r)]+=1);Object.keys(c).forEach(g=>document.getElementById('cnt-'+g).textContent=c[g].toLocaleString());}
+      function scorePct(score,max){const pct=Math.max(1,Math.min(100,Math.round((score/(max||1))*100)));return pct;}
+      function badgeClass(p){return p>=70?'relevance-high':p>=40?'relevance-medium':'relevance-low';}
+      function highlight(text,query){let out=esc(text||'');tokenize(query).slice(0,6).forEach(t=>{if(!t)return;out=out.replace(new RegExp('('+t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig'),'<mark>$1</mark>');});return out;}
+      function snippet(text,query){const raw=String(text||'');if(!query)return raw.slice(0,150);const q=tokenize(query)[0]||'';const i=raw.toLowerCase().indexOf(q.toLowerCase());if(i<0)return raw.slice(0,150);const s=Math.max(0,i-50);return (s>0?'…':'')+raw.slice(s,s+150)+'…';}
+      function saveHistory(q){if(!q.trim())return;state.history=[q,...state.history.filter(x=>x!==q)].slice(0,20);state.popular[q]=(state.popular[q]||0)+1;localStorage.setItem('se2_history',JSON.stringify(state.history));localStorage.setItem('se2_popular',JSON.stringify(state.popular));renderHistory();}
+      function renderHistory(){if(state.lastResults.length||!state.history.length){el.history.style.display='none';return;} const pop=Object.entries(state.popular).sort((a,b)=>b[1]-a[1]).slice(0,6).map(x=>x[0]);
+        const chips=(arr)=>arr.map(x=>`<span class="history-chip" data-q="${esc(x)}">${esc(x)}</span>`).join('');
+        el.history.innerHTML=`<div class="history-label">Recent Searches</div><div class="history-chips">${chips(state.history.slice(0,8))}</div><div class="history-label" style="margin-top:8px;">Popular</div><div class="history-chips">${chips(pop)}</div>`;
+        el.history.style.display='block';
+      }
+      function applyFilters(rows){let out=[...rows];const eu=el.eu.value.trim().toLowerCase();const st=el.status.value.trim().toLowerCase();if(eu)out=out.filter(r=>String(r.eu||'').toLowerCase().includes(eu));if(st)out=out.filter(r=>String(r.status||r.res||'').toLowerCase().includes(st));
+        if(state.activeGroup) out=out.filter(r=>getGroup(r)===state.activeGroup);
+        if(el.sort.value==='case-asc') out.sort((a,b)=>String(a.case||'').localeCompare(String(b.case||''),undefined,{numeric:true}));
+        if(el.sort.value==='oldest') out.reverse();
+        return out;
+      }
+      function renderAI(query,results,fuzzyTerms){const resp=ai.generateResponse(query,results,fuzzyTerms);el.panel.style.display='block';ai.typewrite(el.aiBody,resp.html,8);el.aiSources.textContent=resp.sources;el.aiBody.dataset.raw=resp.html.replace(/<[^>]+>/g,'');}
+      function renderResults(rows,query){state.lastResults=rows;renderHistory();if(!query.trim()){el.body.innerHTML=`<div class="empty-state"><h3>Search Support Studio</h3><div class="chips">${CHIPS.map(c=>`<span class="chip" data-chip="${esc(c)}">${esc(c)}</span>`).join('')}</div></div>`;el.panel.style.display='none';return;}
+        if(!rows.length){el.body.innerHTML=`<div class="no-results"><h3>No results for "${esc(query)}"</h3></div>`;return;}
+        const grouped={};rows.forEach(r=>{const g=getGroup(r);(grouped[g]=grouped[g]||[]).push(r);});const max=rows[0]._score||1;
+        let html=`<div class="results-header"><div class="results-count">Showing <strong>${rows.length.toLocaleString()}</strong> results</div></div>`;
+        ['qb','parts','ctrl','net','kb','other'].forEach(g=>{const list=grouped[g];if(!list||!list.length)return;html+=`<div class="group-label" style="color:${GROUPS[g].color}">${GROUPS[g].label} — ${list.length}</div>`;
+          list.slice(0,300).forEach((r,idx)=>{const pct=scorePct(r._score||0,max);html+=`<div class="result-card" data-ri="${idx}"><div class="result-meta"><span class="result-cat-badge" style="color:${GROUPS[g].color};background:${GROUPS[g].color}18;border:1px solid ${GROUPS[g].color}35">${highlight(r.cat||GROUPS[g].label,query)}</span>${r.case?`<span class="result-case">#${esc(r.case)}</span><button class="result-expand-btn copy-case" data-case="${esc(r.case)}">Copy</button>`:''}${r.eu?`<span class="result-eu">${highlight(r.eu,query)}</span>`:''}<span class="relevance-badge ${badgeClass(pct)}">${pct}%</span></div><div class="result-title">${highlight(r.title||'(no title)',query)}</div><div class="result-body">${highlight(snippet(r.res,query),query)}</div><button class="result-expand-btn expand-btn">Expand</button><div class="result-full-res">${highlight(r.res||'N/A',query)}</div></div>`;});
+        });
+        el.body.innerHTML=html;
+      }
+      function runSearch(){if(!state.engine) return;const q=el.q.value;el.clear.style.display=q.trim()?'':'none';const out=state.engine.search(q);let rows=applyFilters(out.results);updateCounts(rows);el.total.innerHTML=`Total indexed: <strong>${state.all.length.toLocaleString()}</strong> · <strong>${rows.length.toLocaleString()}</strong> matched`;renderResults(rows,q);if(q.trim())renderAI(q,rows.slice(0,5),out.fuzzyTerms);if(q.trim())saveHistory(q.trim());}
+      const debounced=(fn,ms)=>{let t;return (...args)=>{clearTimeout(t);t=setTimeout(()=>fn(...args),ms);};};
+      const showSuggestions=debounced(()=>{if(!state.engine)return;const q=el.q.value.trim();const list=state.engine.suggester.suggest(q,8);state.suggestions=list;state.autoIndex=-1;if(!list.length){el.auto.style.display='none';return;}el.auto.innerHTML=list.map((s,i)=>`<div class="autocomplete-item" data-i="${i}"><span>🔎</span><span class="autocomplete-term">${esc(s.term)}</span><span class="autocomplete-meta">${s.overlap}</span></div>`).join('');el.auto.style.display='block';},150);
+      function closeAuto(){el.auto.style.display='none';state.autoIndex=-1;}
+      document.addEventListener('click',(e)=>{if(!e.target.closest('.autocomplete-anchor'))closeAuto();if(e.target.matches('[data-chip],[data-q]')){el.q.value=e.target.getAttribute('data-chip')||e.target.getAttribute('data-q');runSearch();} if(e.target.matches('.expand-btn')){const f=e.target.nextElementSibling;f.classList.toggle('open');e.target.textContent=f.classList.contains('open')?'Collapse':'Expand';}
+        if(e.target.matches('.copy-case'))navigator.clipboard.writeText('#'+e.target.dataset.case);
+        if(e.target.closest('.autocomplete-item')){const item=e.target.closest('.autocomplete-item');const i=Number(item.dataset.i);el.q.value=state.suggestions[i].term;closeAuto();runSearch();}
+        if(e.target.closest('.cat-card')){const card=e.target.closest('.cat-card');state.activeGroup=state.activeGroup===card.dataset.g?null:card.dataset.g;document.querySelectorAll('.cat-card').forEach(c=>c.classList.toggle('active',c.dataset.g===state.activeGroup));runSearch();}
       });
-    });
-    bodyEl.innerHTML=html;
-  }
-  function run(){
-    var q=state.query.trim();
-    clearBtn.style.display=q?'':'none';
-    if(!state.loaded) return;
-    if(!q){
-      updateCounts(null);updateTotal(null);renderEmpty();
-      document.querySelectorAll('.cat-card').forEach(function(c){c.classList.remove('active');});
-      state.activeGroup=null;return;
-    }
-    var results=doSearch(state.all,q);
-    if(state.activeGroup) results=results.filter(function(r){return getGroup(r)===state.activeGroup;});
-    updateCounts(results);updateTotal(results);renderResults(results,q);
-  }
-  window.filterGroup=function(g){
-    if(state.activeGroup===g){state.activeGroup=null;document.querySelectorAll('.cat-card').forEach(function(c){c.classList.remove('active');});}
-    else{state.activeGroup=g;document.querySelectorAll('.cat-card').forEach(function(c){c.classList.toggle('active',c.dataset.g===g);});}
-    run();
-  };
-  window.setQuery=function(val){qEl.value=val;state.query=val;run();qEl.focus();};
-  window.clearSearch=function(){qEl.value='';state.query='';state.activeGroup=null;document.querySelectorAll('.cat-card').forEach(function(c){c.classList.remove('active');});run();qEl.focus();};
-  document.addEventListener('keydown',function(e){
-    if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();qEl.focus();qEl.select();}
-    if(e.key==='Escape'&&document.activeElement===qEl) clearSearch();
-  });
-  qEl.addEventListener('input',function(){state.query=qEl.value;run();});
-  fetch('/support_records_kb.json')
-    .then(function(r){if(!r.ok) throw new Error('HTTP '+r.status);return r.json();})
-    .then(function(j){
-      state.all=Array.isArray(j.flat)?j.flat:[];
-      state.loaded=true;
-      updateCounts(null);updateTotal(null);renderEmpty();
-      qEl.focus();
-    })
-    .catch(function(err){
-      ['qb','kb','parts','ctrl','net','other'].forEach(function(g){var el=document.getElementById('cnt-'+g);if(el)el.textContent='—';});
-      totalRow.textContent='Failed to load data';
-      bodyEl.innerHTML='<div class="no-results"><span class="no-results-icon">⚠️</span><div class="no-results-title">Failed to load support_records_kb.json</div><div style="font-size:12px;margin-top:6px;color:#f85149;">'+esc(String(err.message))+'</div></div>';
-    });
-})();
-</script>
+      document.addEventListener('keydown',(e)=>{
+        if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();el.q.focus();el.q.select();}
+        if(e.key==='/'&&document.activeElement!==el.q){e.preventDefault();el.q.focus();}
+        if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='f'){e.preventDefault();const adv=document.getElementById('adv-filters');adv.style.display=adv.style.display==='none'?'flex':'none';}
+        if(e.key==='Escape'){if(el.auto.style.display!=='none'){closeAuto();return;}el.q.value='';runSearch();}
+        if(el.auto.style.display!=='none'&&(e.key==='ArrowDown'||e.key==='ArrowUp'||e.key==='Enter')){e.preventDefault();if(e.key==='ArrowDown')state.autoIndex=Math.min(state.suggestions.length-1,state.autoIndex+1);if(e.key==='ArrowUp')state.autoIndex=Math.max(0,state.autoIndex-1);if(e.key==='Enter'&&state.autoIndex>=0){el.q.value=state.suggestions[state.autoIndex].term;closeAuto();runSearch();}Array.from(el.auto.children).forEach((n,i)=>n.classList.toggle('active',i===state.autoIndex));}
+      });
+      el.q.addEventListener('input',()=>{showSuggestions();runSearch();}); el.clear.addEventListener('click',()=>{el.q.value='';runSearch();el.q.focus();});
+      document.getElementById('toggle-filters').addEventListener('click',()=>{const adv=document.getElementById('adv-filters');adv.style.display=adv.style.display==='none'?'flex':'none';});
+      [el.sort,el.eu,el.status].forEach(x=>x.addEventListener('input',runSearch));
+      document.getElementById('ai-close-btn').addEventListener('click',()=>el.panel.style.display='none');
+      document.getElementById('ai-copy-btn').addEventListener('click',()=>navigator.clipboard.writeText(el.aiBody.dataset.raw||''));
+
+      async function loadData(){
+        try{const res=await fetch('/support_records_kb.json');const json=await res.json();state.all=Array.isArray(json.flat)?json.flat:[];
+          if(window.Worker){const worker=new Worker('/js/search_worker.js');worker.postMessage({type:'build-index',records:state.all});worker.onmessage=()=>{state.engine=new window.SearchEngineV2(state.all);runSearch();};} else {state.engine=new window.SearchEngineV2(state.all);runSearch();}
+          updateCounts();el.total.innerHTML=`Total indexed: <strong>${state.all.length.toLocaleString()}</strong> records`;renderHistory();
+        }catch(err){el.body.innerHTML=`<div class="no-results"><h3>Failed to load support_records_kb.json</h3><div>${esc(err.message)}</div></div>`;}
+      }
+      loadData();
+    })();
+  </script>
 </body>
 </html>
