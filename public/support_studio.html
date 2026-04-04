@@ -4390,6 +4390,7 @@
               srFlat  = data.flat;
               srCats  = data.cats;
               srLoaded = true;
+              window.__studioSrRecords = Array.isArray(srFlat) ? srFlat.slice() : [];
               _srBuildSidebar(srCats);
               _srShowWelcome(srCats);
               _srRender();
@@ -8789,6 +8790,16 @@
       return cachePromise;
     }).then(function(cached) {
       if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
+        // Cache schema guard:
+        // older cached bundles (pre End User mapping) do not contain row.endUser.
+        // If missing, force a one-time network refresh so the new schema is applied.
+        var cacheHasEndUser = cached.data.some(function(row) {
+          return row && Object.prototype.hasOwnProperty.call(row, 'endUser');
+        });
+        if (!cacheHasEndUser) cached = null;
+      }
+
+      if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
         // ✅ Serve from cache — instant, no network
         _state.all     = cached.data;
         _state.loaded  = true;
@@ -8821,26 +8832,55 @@
       .then(function(text) {
         var rows = parseCSV(text);
         if (!rows.length) throw new Error('Empty CSV');
-        var header = rows[0];
-        // Column map by index (from screenshot):
-        // 0:Site 1:Directory 2:Address1 3:Country 4:City 5:State 6:Zip 7:TimeZone 8:Systems 9:URL
+        var header = rows[0] || [];
+        function _normHeader(v) {
+          return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        }
+        function _findHeaderIndex(aliases, fallbackIndex) {
+          var aliasSet = aliases.map(_normHeader);
+          for (var i = 0; i < header.length; i++) {
+            if (aliasSet.indexOf(_normHeader(header[i])) >= 0) return i;
+          }
+          return typeof fallbackIndex === 'number' ? fallbackIndex : -1;
+        }
+        // Header-based mapping (resilient to column order/label variations)
+        var colIdx = {
+          site:      _findHeaderIndex(['site'], 0),
+          directory: _findHeaderIndex(['directory'], 1),
+          address1:  _findHeaderIndex(['address 1','address1','address'], 2),
+          country:   _findHeaderIndex(['country'], 3),
+          city:      _findHeaderIndex(['city'], 4),
+          state:     _findHeaderIndex(['state/province/region','state province region','state','province','region'], 5),
+          zip:       _findHeaderIndex(['zip/postal code','zip postal code','zip','postal code','postal'], 6),
+          timezone:  _findHeaderIndex(['time zone','timezone'], 7),
+          systems:   _findHeaderIndex(['number of control systems','control systems','systems'], 8),
+          url:       _findHeaderIndex(['url connect+ link','url connect link','connect+ link','connect link','url'], 9),
+          endUser:   _findHeaderIndex(['end user','enduser','end user2','enduser2','client','account','customer'], 10)
+        };
+
         var data = [];
         for (var i = 1; i < rows.length; i++) {
           var r = rows[i];
-          if (!r || !r[0] || !String(r[0]).trim()) continue;
+          if (!r || !String(r[colIdx.site] || '').trim()) continue;
+          var endUser = String(r[colIdx.endUser] || '').trim();
           data.push({
-            site:      String(r[0]  || '').trim(),
-            directory: String(r[1]  || '').trim(),
-            address1:  String(r[2]  || '').trim(),
-            country:   String(r[3]  || '').trim(),
-            city:      String(r[4]  || '').trim(),
-            state:     String(r[5]  || '').trim(),
-            zip:       String(r[6]  || '').trim(),
-            timezone:  String(r[7]  || '').trim(),
-            systems:   String(r[8]  || '').trim(),
-            url:       String(r[9]  || '').trim(),
+            site:      String(r[colIdx.site]      || '').trim(),
+            directory: String(r[colIdx.directory] || '').trim(),
+            address1:  String(r[colIdx.address1]  || '').trim(),
+            country:   String(r[colIdx.country]   || '').trim(),
+            city:      String(r[colIdx.city]      || '').trim(),
+            state:     String(r[colIdx.state]     || '').trim(),
+            zip:       String(r[colIdx.zip]       || '').trim(),
+            timezone:  String(r[colIdx.timezone]  || '').trim(),
+            systems:   String(r[colIdx.systems]   || '').trim(),
+            url:       String(r[colIdx.url]       || '').trim(),
+            endUser:   endUser,
             // _search includes ALL text columns including URL — searches all 36k+ records by default
-            _search:   [r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[9]].join(' ').toLowerCase(),
+            _search:   [
+              r[colIdx.site], r[colIdx.directory], r[colIdx.address1], r[colIdx.country],
+              r[colIdx.city], r[colIdx.state], r[colIdx.zip], r[colIdx.timezone],
+              r[colIdx.systems], r[colIdx.url], endUser
+            ].join(' ').toLowerCase(),
           });
         }
         _state.all     = data;
@@ -13963,6 +14003,976 @@
 
 <!-- Legacy wrapper shim — keeps getElementById('ss-cache-banner') working in JS -->
 <div id="ss-cache-banner" style="display:none!important;"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   SEARCH ENGINE 2 — Advanced Enterprise Search v2.0 (PERMANENT BUG FIX)
+   ══════════════════════════════════════════════════════════════════════════
+   BUGFIX LOG:
+   BUG 1 FIXED: '' (empty string concat) in onclick HTML strings → was generating
+     onclick="window._se2FilterCat(qb)" (bare variable, not string) → ReferenceError.
+     Fixed to use \\' (escaped single quote) for proper JS strings in HTML attrs.
+     Same fix applied to _renderChips and _se2OpenInQbs.
+   BUG 2 FIXED: QB records never reached SE2 — window.__studioQbRecords only
+     populates AFTER QBS tab is visited. Added multi-path QB source discovery:
+     reads from qbs-root._qbRowSnaps (set by my_quickbase on data load) AND
+     window.__studioQbRecords/Columns with proper field extraction.
+   BUG 3 FIXED: _run() bailed when _state.loaded=false with no retry callback.
+     _loadData now stores a "pending query" slot and always fires search on complete.
+   BUG 4 FIXED: Pre-load race — second 12MB fetch triggered when preload in-flight.
+     Shared __se2KbPromise sentinel prevents duplicate fetches.
+   BUG 5 FIXED: Inline onclick with bare variable names replaced with data-src
+     delegated event listeners on the cats container — no inline JS strings.
+   ══════════════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  // ── Constants ──────────────────────────────────────────────────────────────
+  var SE2_CHIPS = [
+    'E3 offline','Walmart','license key','firmware update','floor plan','HACCP',
+    'temperature alarm','XR75','CS remapping','Connect+','E2 to E3','rack alarm',
+    'offline delay','Modbus','probe failure','Woolworths','remote access'
+  ];
+
+  // Source definitions
+  var SOURCES = {
+    qb:    { label:'QuickBase Cases',    shortLabel:'QuickBase',  color:'#58a6ff', icon:'fa-link'         },
+    kb:    { label:'Knowledge Base',     shortLabel:'Knowledge',  color:'#10b981', icon:'fa-book'         },
+    parts: { label:'Parts',              shortLabel:'Parts',      color:'#f59e0b', icon:'fa-barcode'      },
+    ctrl:  { label:'Controllers',        shortLabel:'Controllers',color:'#a78bfa', icon:'fa-microchip'    },
+    net:   { label:'Connect+ / Net',     shortLabel:'Connect+',   color:'#22d3ee', icon:'fa-plug'         },
+    ci:    { label:'Contact Info',       shortLabel:'Contacts',   color:'#14b8a6', icon:'fa-address-book' },
+    sr:    { label:'Support Records',    shortLabel:'Support',    color:'#f43f5e', icon:'fa-book-open'    }
+  };
+
+  var CAT_MAP = {
+    e2e3_gateway:'qb', alarms:'qb', floorplan_screens:'qb', firmware:'qb',
+    refrigeration:'qb', password_credentials:'qb', data_reports:'qb',
+    temperature_haccp:'qb', site_supervisor:'ctrl', programming:'ctrl',
+    controller_hardware:'ctrl', connect_plus:'net',
+    parts_xr_controllers:'parts', parts_xm_controllers:'parts', parts_cc200:'parts',
+    parts_license_keys:'parts', parts_rga_warranty:'parts', parts_probes_sensors:'parts',
+    parts_sporlan_danfoss:'parts', parts_site_supervisor:'parts',
+    parts_walmart_jobs:'parts', parts_part_number_inquiry:'parts', parts_products:'parts'
+  };
+
+  // ── Synonym / NLP expansion ────────────────────────────────────────────────
+  var SYNONYMS = {
+    'temp':'temperature','temperatures':'temperature','cold':'refrigeration',
+    'cooling':'refrigeration','freezing':'refrigeration','warm':'temperature',
+    'alert':'alarm','alerts':'alarm','notification':'alarm',
+    'offline':'connect','network':'connect','vpn':'connect','connection':'connect',
+    'wifi':'connect','internet':'connect','disconnect':'connect',
+    'fw':'firmware','update':'firmware','upgrade':'firmware','version':'firmware',
+    'controller':'ctrl','e2':'gateway','e3':'gateway','e300':'gateway',
+    'rack':'refrigeration','compressor':'refrigeration',
+    'map':'floor','floorplan':'floor','remapping':'floor','custom screen':'floor',
+    'part':'parts','xr':'xr75','xr-75':'xr75','serial':'license',
+    'license key':'license','key':'license','activation':'license',
+    'food safety':'haccp','probe':'haccp','sensor':'haccp',
+    'problem':'error','issue':'error','broken':'error','fail':'error',
+    'not working':'error','down':'offline','dead':'error',
+    'password':'credentials','login':'credentials','access':'credentials',
+    'report':'data','export':'data','log':'data','audit':'data',
+    'walmart':'woolworths','supermarket':'woolworths',
+    'configure':'programming','configuration':'programming','setup':'programming'
+  };
+
+  var Q_STRIP = [
+    /^(how (do|can|to)|what (is|are)|where (is|can)|why (is|does)|when (do|does)|who (is|has)|is there|can i|should i)\s+/i,
+    /\s*(please|help|need|want|looking for|trying to|how to)\s*/gi,
+    /\s*\?+\s*$/g
+  ];
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  var _state = {
+    allRecords: [],
+    results:    [],
+    query:      '',
+    activeCat:  null,
+    loaded:     false,
+    loading:    false,
+    detailIdx:  -1,
+    deepData:   null,
+    deepLoading:false,
+    pendingQuery: '',
+    sortOrder:  'score',
+    monitor:    { sources:{}, total:0, warnings:[] }
+  };
+
+  window._se2ToggleSort = function() {
+    _state.sortOrder = (_state.sortOrder === 'newest') ? 'oldest' : 'newest';
+    var lbl = el('se2-sort-label');
+    if (lbl) lbl.textContent = _state.sortOrder === 'newest' ? 'Newest first' : 'Oldest first';
+    _run();
+  };
+
+  // ── DOM helpers ────────────────────────────────────────────────────────────
+  function el(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function hl(text, terms) {
+    var s = esc(text);
+    if (!terms || !terms.length) return s;
+    terms.forEach(function(t) {
+      if (!t || t.length < 2) return;
+      try {
+        var escaped = t.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+        s = s.replace(new RegExp('(' + escaped + ')', 'gi'), '<mark>$1</mark>');
+      } catch(_) {}
+    });
+    return s;
+  }
+
+  // ── Source helpers ─────────────────────────────────────────────────────────
+  function _getSource(record) {
+    var g = CAT_MAP[record._id || record.id];
+    if (g) return g;
+    if (record._src) return record._src;
+    var cat = (record.cat || '').toLowerCase();
+    if (cat.includes('knowledge') || cat.includes('guide') || cat.includes('manual')) return 'kb';
+    if (cat.includes('part') || cat.includes('controller')) return 'parts';
+    if (cat.includes('connect') || cat.includes('network')) return 'net';
+    return 'sr';
+  }
+
+  function _toArray(maybe) {
+    return Array.isArray(maybe) ? maybe : [];
+  }
+
+  function _extractBundleData(row) {
+    if (!row) return [];
+    if (Array.isArray(row)) return row;
+    if (Array.isArray(row.data)) return row.data;
+    if (Array.isArray(row.records)) return row.records;
+    return [];
+  }
+
+  function _sessionToken() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (!raw) return '';
+      var parsed = JSON.parse(raw);
+      return parsed && parsed.access_token ? String(parsed.access_token) : '';
+    } catch(_) { return ''; }
+  }
+
+  function _fetchBundleApi(bundleId) {
+    var token = _sessionToken();
+    var headers = token ? { Authorization:'Bearer ' + token } : {};
+    return fetch('/api/studio/cache_bundle?bundle=' + encodeURIComponent(bundleId), { headers: headers })
+      .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('bundle_http_' + r.status)); })
+      .then(function(j) { return (j && j.ok) ? _extractBundleData(j.records || j.data || []) : []; })
+      .catch(function() { return []; });
+  }
+
+  function _loadBundleRecords(bundleId, seedRecords) {
+    var seeded = _toArray(seedRecords);
+    if (seeded.length) return Promise.resolve(seeded);
+    if (window.StudioCache && typeof window.StudioCache.getBundle === 'function') {
+      return window.StudioCache.getBundle(bundleId)
+        .then(function(row) {
+          var fromCache = _extractBundleData(row);
+          if (fromCache.length) return fromCache;
+          return _fetchBundleApi(bundleId);
+        })
+        .catch(function() { return _fetchBundleApi(bundleId); });
+    }
+    return _fetchBundleApi(bundleId);
+  }
+
+  function _mapGenericRecords(records, src, cat) {
+    return _toArray(records).map(function(r) {
+      var keys = Object.keys(r || {});
+      var title = String(r.title || r.name || r.site || r.partNo || r.part_number || r.email || r.phone || r.id || '(record)');
+      var text = keys.map(function(k) { return r[k]; }).join(' · ');
+      return { _src: src || 'sr', title: title, res: text.slice(0, 480), cat: cat || 'Support Records', _raw: r };
+    });
+  }
+
+  function _mapSupportRecords(records) {
+    return _toArray(records).map(function(r) {
+      return Object.assign({}, r, { _id: r.id, _src: _getSource(Object.assign({}, r, { _src:'sr' })) || 'sr' });
+    });
+  }
+
+  function _collectFutureTabRecords() {
+    var out = [];
+    var known = {
+      __studioCpRecords:1, __studioPnRecords:1, __studioCiRecords:1,
+      __studioQbRecords:1, __se2ConnectData:1, __se2PartsData:1
+    };
+    Object.keys(window).forEach(function(k) {
+      if (known[k]) return;
+      if (!/^__studio.*Records$/i.test(k)) return;
+      var arr = window[k];
+      if (!Array.isArray(arr) || !arr.length) return;
+      var cat = k.replace(/^__studio/i, '').replace(/Records$/i, '').replace(/_/g, ' ').trim() || 'Support Records';
+      out = out.concat(_mapGenericRecords(arr, 'sr', cat));
+    });
+    return out;
+  }
+
+  // ── Query engine ───────────────────────────────────────────────────────────
+  function _normaliseQuery(raw) {
+    var q = String(raw || '').trim();
+    Q_STRIP.forEach(function(rx) { q = q.replace(rx, ' '); });
+    q = q.trim();
+    var words = q.toLowerCase().split(/\s+/);
+    var expanded = [];
+    words.forEach(function(w) {
+      expanded.push(w);
+      if (SYNONYMS[w]) expanded.push(SYNONYMS[w]);
+    });
+    return { original: q, tokens: Array.from(new Set(expanded.filter(Boolean))), isNumeric: /^\d{4,}$/.test(q.trim()) };
+  }
+
+  function _scoreRecord(r, parsed) {
+    var tokens = parsed.tokens;
+    var original = parsed.original.toLowerCase();
+    var haystack = [
+      r.title || '', r.res || '', r.cat || '',
+      r.case || '', r.eu || '', r.id || '',
+      r.site || '', r.directory || '', r.endUser || '',
+      r.partNo || '', r.desc || '', r.brand || ''
+    ].join(' ').toLowerCase();
+
+    if (parsed.isNumeric && (r.case === parsed.original || r.id === parsed.original)) return 10000;
+
+    var score = 0;
+    var titleHay = (r.title || '').toLowerCase();
+    if (titleHay.includes(original)) score += 500;
+    else if (haystack.includes(original)) score += 200;
+
+    tokens.forEach(function(t) {
+      if (t.length < 2) return;
+      if (titleHay.includes(t)) score += 80;
+      else if (haystack.includes(t)) score += 20;
+      if (titleHay.startsWith(t)) score += 40;
+    });
+
+    return score;
+  }
+
+  function _search(query) {
+    var parsed = _normaliseQuery(query);
+    if (!parsed.tokens.length && !parsed.original) return [];
+    var results = [];
+    _state.allRecords.forEach(function(r) {
+      var score = _scoreRecord(r, parsed);
+      if (score > 0) results.push({ r: r, score: score });
+    });
+    results.sort(function(a, b) { return b.score - a.score; });
+    return results.map(function(x) { return x.r; });
+  }
+
+  // ── Counts ─────────────────────────────────────────────────────────────────
+  function _countsByCat(records) {
+    var c = {};
+    Object.keys(SOURCES).forEach(function(k) { c[k] = 0; });
+    (records || _state.allRecords).forEach(function(r) { var s = _getSource(r); c[s] = (c[s]||0) + 1; });
+    return c;
+  }
+
+  // ── Render category strip ──────────────────────────────────────────────────
+  // FIX BUG 1+5: No more inline onclick with unquoted variables.
+  // Use data-src attributes + delegated listener on container.
+  function _renderCats(counts) {
+    // Stats grid
+    var grid = el('se2-stats-grid');
+    if (grid) {
+      grid.innerHTML = Object.keys(SOURCES).map(function(key) {
+        var src = SOURCES[key];
+        var n = counts ? (counts[key]||0) : 0;
+        if (!_state.loaded) n = '—';
+        var isActive = _state.activeCat === key;
+        var displayN = (typeof n === 'number') ? n.toLocaleString() : n;
+        return '<div class="se2-stat-card' + (isActive ? ' active' : '') + '" data-src="' + esc(key) + '" style="color:' + src.color + ';">' +
+          '<i class="fas ' + src.icon + '" style="font-size:13px;margin-bottom:5px;opacity:.85;"></i>' +
+          '<div class="se2-stat-num">' + displayN + '</div>' +
+          '<div class="se2-stat-lbl">' + esc(src.shortLabel || src.label) + '</div>' +
+          '</div>';
+      }).join('');
+      grid.onclick = function(e) {
+        var card = e.target.closest('.se2-stat-card');
+        if (card) window._se2FilterCat(card.getAttribute('data-src'));
+      };
+      // Update indexed badge
+      if (_state.allRecords.length > 0) {
+        var badge = el('se2-indexed-badge');
+        var num = el('se2-indexed-num');
+        if (badge) badge.style.display = '';
+        if (num) num.textContent = _state.allRecords.length.toLocaleString();
+      }
+    }
+
+    // Filter tab row (visible during search)
+    var filterRow = el('se2-filter-row');
+    if (filterRow) {
+      var q = _state.query.trim();
+      if (q) {
+        filterRow.style.display = 'flex';
+        var totalN = counts ? Object.values(counts).reduce(function(a,b){return a+b;},0) : 0;
+        var allBtn = '<button class="se2-filter-btn ' + (!_state.activeCat ? 'active' : 'inactive') + '" data-se2-filter="all"' +
+          (!_state.activeCat ? ' style="background:rgba(88,166,255,.18);border-color:rgba(88,166,255,.35);color:#fff;"' : '') + '>' +
+          '<i class="fas fa-layer-group" style="font-size:10px;"></i> All' +
+          (totalN > 0 ? '<span class="se2-filter-count">' + totalN.toLocaleString() + '</span>' : '') + '</button>';
+        var tabBtns = Object.keys(SOURCES).map(function(key) {
+          var src = SOURCES[key]; var n = counts ? (counts[key]||0) : 0; if (!n) return '';
+          var isA = _state.activeCat === key;
+          return '<button class="se2-filter-btn ' + (isA ? 'active' : 'inactive') + '" data-se2-filter="' + esc(key) + '"' +
+            (isA ? ' style="background:' + src.color + '22;border-color:' + src.color + '55;color:' + src.color + ';"' : '') + '>' +
+            '<i class="fas ' + src.icon + '" style="font-size:10px;"></i> ' + esc(src.shortLabel || src.label) +
+            '<span class="se2-filter-count">' + n.toLocaleString() + '</span></button>';
+        }).filter(Boolean).join('');
+        filterRow.innerHTML = allBtn + tabBtns;
+        filterRow.onclick = function(e) {
+          var btn = e.target.closest('.se2-filter-btn');
+          if (!btn) return;
+          var f = btn.getAttribute('data-se2-filter');
+          window._se2FilterCat(f === 'all' ? null : f);
+        };
+      } else {
+        filterRow.style.display = 'none';
+      }
+    }
+  }
+
+  // ── Render suggestion chips ────────────────────────────────────────────────
+  // FIX BUG 1: Use data-q attribute + delegated listener
+  function _renderChips() {
+    var row = el('se2-chip-row');
+    if (!row) return;
+    row.innerHTML = SE2_CHIPS.map(function(c) {
+      return '<div class="se2-chip" data-q="' + esc(c) + '">' + esc(c) + '</div>';
+    }).join('');
+    // FIX: delegated listener, no inline onclick
+    row.onclick = function(e) {
+      var chip = e.target.closest('.se2-chip');
+      if (chip) window._se2SetQ(chip.getAttribute('data-q'));
+    };
+  }
+
+  // ── Render results ─────────────────────────────────────────────────────────
+  function _renderResults(results, tokens) {
+    var body = el('se2-body');
+    if (!body) return;
+    if (!results.length) {
+      body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:280px;gap:14px;text-align:center;padding:30px;">' +
+        '<div style="width:64px;height:64px;border-radius:18px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);display:grid;place-items:center;font-size:26px;margin-bottom:4px;">&#128269;</div>' +
+        '<div style="font-size:18px;font-weight:800;color:#e6edf3;">No results found</div>' +
+        '<div style="font-size:12px;color:#7d8590;max-width:360px;line-height:1.65;">Try different keywords, partial words, or a case number.</div>' +
+        (_state.allRecords.length === 0 ? '<div style="margin-top:6px;font-size:11px;color:#f85149;">Data not loaded &mdash; check network.</div>' : '') + '</div>';
+      return;
+    }
+    var grouped = {};
+    results.forEach(function(r) { var s2 = _getSource(r); if (!grouped[s2]) grouped[s2]=[]; grouped[s2].push(r); });
+    var LIMIT = 50;
+    var html = '';
+    ['qb','parts','ctrl','net','kb','ci','sr'].forEach(function(key) {
+      var rows = grouped[key]; if (!rows || !rows.length) return;
+      var src = SOURCES[key];
+      html += '<div class="se2-group" style="color:' + src.color + ';">' +
+        '<span class="se2-group-dot" style="background:' + src.color + ';box-shadow:0 0 6px ' + src.color + '66;"></span>' +
+        esc(src.label) + ' <span class="se2-group-count">' + rows.length.toLocaleString() + '</span>' +
+        (rows.length > LIMIT ? '<span style="font-size:9px;opacity:.45;margin-left:4px;">showing ' + LIMIT + '</span>' : '') + '</div>';
+      rows.slice(0, LIMIT).forEach(function(r) {
+        var gi = results.indexOf(r);
+        var titleHl = hl(r.title || r.site || r.partNo || '(no title)', tokens);
+        var bodyText = (r.res || r.desc || r.notes || r.directory || '').slice(0, 280);
+        var bodyHl = hl(bodyText, tokens);
+        var caseNum = r.case || r.caseNum || '';
+        var endUser = r.eu || r.endUser || r.directory || '';
+        var age = r.age || '';
+        html += '<div class="se2-card" data-se2-idx="' + gi + '" style="animation:se2CardIn .22s ease both;animation-delay:' + Math.min(gi*12,350) + 'ms;">' +
+          '<div class="se2-card-meta">' +
+            '<span class="se2-badge" style="color:' + src.color + ';background:' + src.color + '1a;border:1px solid ' + src.color + '33;">' +
+              '<i class="fas ' + src.icon + '" style="font-size:8px;margin-right:3px;"></i>' + esc(src.shortLabel || src.label) + '</span>' +
+            (caseNum ? '<span class="se2-case-num">#' + hl(caseNum, tokens) + '</span>' : '') +
+            (endUser ? '<span class="se2-eu-chip"><i class="fas fa-user" style="font-size:8px;margin-right:3px;"></i>' + hl(endUser, tokens) + '</span>' : '') +
+            (age ? '<span class="se2-age-chip" style="margin-left:auto;">' + esc(age) + '</span>' : '') +
+          '</div>' +
+          '<div class="se2-card-title">' + titleHl + '</div>' +
+          (bodyText ? '<div class="se2-card-body">' + bodyHl + '</div>' : '') +
+          '<button class="se2-view-btn" data-se2-view="' + gi + '">View Details &rarr;</button></div>';
+      });
+    });
+    body.innerHTML = html;
+    body.onclick = function(e) {
+      var vb = e.target.closest('[data-se2-view]');
+      if (vb) { e.stopPropagation(); window._se2OpenDetail(parseInt(vb.getAttribute('data-se2-view'),10)); return; }
+      var card = e.target.closest('.se2-card');
+      if (card) window._se2OpenDetail(parseInt(card.getAttribute('data-se2-idx'),10));
+    };
+  }
+
+  // ── Summary bar ────────────────────────────────────────────────────────────
+  function _renderSummary(results, query) {
+    var s = el('se2-summary-text') || el('se2-summary');
+    if (!s) return;
+    if (!query) {
+      s.innerHTML = _state.allRecords.length > 0
+        ? 'Total indexed: <strong>' + _state.allRecords.length.toLocaleString() + '</strong> records &nbsp;&middot;&nbsp; Ready to search'
+        : (_state.loading ? '<span style="color:#58a6ff;">Loading data sources&hellip;</span>' : 'Ready &mdash; type to search across all sources');
+      var mon = _state.monitor || {};
+      if (mon.total && mon.total > 0) {
+        s.innerHTML += ' &nbsp;&middot;&nbsp; <span style="font-size:10px;color:#7d8590;">Monitor: ' + mon.total.toLocaleString() + ' loaded</span>';
+      }
+    } else {
+      var parsed = _normaliseQuery(query);
+      var aiOn = parsed.tokens.length > parsed.original.split(' ').length;
+      s.innerHTML = 'Found <strong>' + results.length.toLocaleString() + '</strong> result' + (results.length !== 1 ? 's' : '') +
+        ' for <em style="color:#c9d1d9;">&quot;' + esc(parsed.original) + '&quot;</em>' +
+        (aiOn ? ' &nbsp;<span style="font-size:9px;padding:1px 7px;border-radius:5px;background:rgba(162,93,220,.12);color:#c084fc;border:1px solid rgba(162,93,220,.25);">Smart</span>' : '');
+      var chip = el('se2-ai-chip');
+      if (chip) chip.classList.toggle('on', aiOn);
+    }
+  }
+
+  // ── Main run ───────────────────────────────────────────────────────────────
+  function _run() {
+    var q = _state.query.trim();
+    var clearBtn = el('se2-clear');
+    if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
+
+    if (!_state.loaded) {
+      // FIX BUG 3: store pending query so _loadData.then() will run it
+      if (q) _state.pendingQuery = q;
+      var bodyEl = el('se2-body');
+      if (bodyEl && !bodyEl.querySelector('.se2-spin')) {
+        bodyEl.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:#7d8590;font-size:12px;"><div class="se2-spin"></div><span>Loading data sources…</span></div>';
+      }
+      _renderSummary([], '');
+      return;
+    }
+
+    if (!q) {
+      var allCounts = _countsByCat();
+      _renderCats(allCounts);
+      _renderSummary([], '');
+      var body = el('se2-body');
+      if (body) {
+        body.innerHTML = '<div id="se2-empty">' +
+          '<div class="se2-empty-icon">🔍</div>' +
+          '<div class="se2-empty-title">Search Support Studio</div>' +
+          '<div class="se2-empty-sub">Total indexed: <strong>' + _state.allRecords.length.toLocaleString() + ' records</strong> — type anything above.</div>' +
+          '<div class="se2-chips" id="se2-chip-row"></div></div>';
+        _renderChips();
+      }
+      if (_state.activeCat) _state.activeCat = null;
+      document.querySelectorAll('.se2-cat').forEach(function(c) { c.classList.remove('active'); });
+      return;
+    }
+
+    var results = _search(q);
+    if (_state.activeCat) results = results.filter(function(r) { return _getSource(r) === _state.activeCat; });
+    if (_state.sortOrder === 'newest' || _state.sortOrder === 'oldest') {
+      results = results.slice().sort(function(a, b) {
+        var da = new Date(a.date || 0).getTime() || 0;
+        var db = new Date(b.date || 0).getTime() || 0;
+        return _state.sortOrder === 'newest' ? db - da : da - db;
+      });
+    }
+    // Sort by date if requested
+    if (_state.sortOrder && _state.sortOrder !== 'score') {
+      results = results.slice().sort(function(a,b){
+        var da=new Date(a.date||0).getTime()||0;
+        var db=new Date(b.date||0).getTime()||0;
+        return _state.sortOrder==='newest'?db-da:da-db;
+      });
+    }
+    _state.results = results;
+    var counts = _countsByCat(results);
+    _renderCats(counts);
+    _renderSummary(results, q);
+    _renderResults(results, _normaliseQuery(q).tokens);
+    var sortBtn = el('se2-sort-btn');
+    if (sortBtn) sortBtn.style.display = results.length > 1 ? 'inline-flex' : 'none';
+  }
+
+  // ── QB record extraction helper ────────────────────────────────────────────
+  // FIX BUG 2: Multi-path QB data discovery
+  function _extractQbRecords() {
+    // Path 1: QBS root snap array (most reliable — set by my_quickbase.js on data load)
+    var qbRoot = document.getElementById('qbs-root');
+    var snaps = (qbRoot && Array.isArray(qbRoot._qbRowSnaps) && qbRoot._qbRowSnaps.length > 0)
+      ? qbRoot._qbRowSnaps : [];
+
+    // Path 2: window.__studioQbRecords + columns (set by fetch-patch at page top)
+    if (!snaps.length && window.__studioQbRecords && Array.isArray(window.__studioQbRecords) && window.__studioQbRecords.length > 0) {
+      var rawRecs = window.__studioQbRecords;
+      var rawCols = window.__studioQbColumns || [];
+      var colMap = {};
+      rawCols.forEach(function(c) { colMap[String(c.id)] = c.label || ''; });
+      snaps = rawRecs.map(function(r, i) {
+        return { rowNum: i+1, recordId: String(r.qbRecordId || i), fields: r.fields || r, columnMap: colMap };
+      });
+    }
+
+    if (!snaps.length) return [];
+
+    return snaps.map(function(snap) {
+      function fv(keys) {
+        if (!snap.columnMap) return '';
+        var fid = Object.keys(snap.columnMap).find(function(id) {
+          return keys.some(function(k) { return (snap.columnMap[id]||'').toLowerCase().includes(k); });
+        });
+        if (!fid) return '';
+        var f = (snap.fields||{})[fid];
+        return f && f.value != null ? String(f.value) : '';
+      }
+      var caseNum = snap.recordId || fv(['case #','case number','record id']);
+      var title   = fv(['short description','description','subject','concern','title']);
+      var endUser = fv(['end user','client','account','customer']);
+      var status  = fv(['case status','status']);
+      var notes   = fv(['case notes','notes','latest update']);
+      var type    = fv(['type','category']);
+      return {
+        _src: 'qb',
+        title: title || ('QB Case #' + caseNum),
+        eu: endUser,
+        res: notes.slice(0, 400),
+        cat: type || 'QB Case',
+        case: caseNum,
+        status: status,
+        _snap: snap
+      };
+    }).filter(function(r) { return r.title || r.case; });
+  }
+
+  // ── Data loading ───────────────────────────────────────────────────────────
+  // FIX BUG 4: Shared promise sentinel prevents duplicate 12MB fetches
+  function _loadData() {
+    if (_state.loading) return;
+    _state.loading = true;
+    _renderSummary([], ''); // show "Loading data sources…"
+
+    var body = el('se2-body');
+    if (body && !body.querySelector('.se2-spin')) {
+      body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:#7d8590;font-size:12px;">' +
+        '<div class="se2-spin"></div><span>Loading all data sources…</span></div>';
+    }
+
+    // ── KB JSON — use shared promise to prevent duplicate fetches (FIX BUG 4)
+    var kbPromise;
+    if (window.__se2KbLoaded && Array.isArray(window.__se2KbCache) && window.__se2KbCache.length > 0) {
+      kbPromise = Promise.resolve(window.__se2KbCache);
+    } else if (Array.isArray(window.__studioSrRecords) && window.__studioSrRecords.length > 0) {
+      kbPromise = Promise.resolve(_mapSupportRecords(window.__studioSrRecords));
+    } else if (window.__se2KbPromise) {
+      // Pre-load already in-flight — reuse it instead of re-fetching
+      kbPromise = window.__se2KbPromise;
+    } else {
+      kbPromise = _fetchKbJson();
+    }
+
+    // ── Connect+ sites (full bundle aware)
+    var cpPromise = _loadBundleRecords('connect_plus', window.__se2ConnectData || window.__studioCpRecords)
+      .then(function(cpData) {
+      return _toArray(cpData).map(function(r) {
+        return { _src:'net', title:r.site||r.name||'', eu:r.endUser||r.directory||'',
+          res:[r.directory,r.city,r.state,r.country].filter(Boolean).join(' · '),
+          cat:'Connect+ Site', site:r.site, directory:r.directory, endUser:r.endUser, url:r.url };
+      });
+    });
+
+    // ── Parts Number (full bundle aware)
+    var pnPromise = _loadBundleRecords('parts_number', window.__se2PartsData || window.__studioPnRecords)
+      .then(function(pnData) {
+      return _toArray(pnData).map(function(r) {
+        return { _src:'parts', title:r.partNo||r.name||r.part_number||'',
+          res:r.desc||r.description||'', cat:'Parts',
+          partNo:r.partNo||r.part_number, desc:r.desc||r.description, brand:r.brand||r.manufacturer };
+      });
+    });
+
+    // ── Contact Information
+    var ciPromise = _loadBundleRecords('contact_information', window.__studioCiRecords || [])
+      .then(function(ciData) {
+        return _toArray(ciData).map(function(r) {
+          var row = r && typeof r === 'object' ? r : {};
+          var keys = Object.keys(row);
+          function pickByRx(rx) {
+            var k = keys.find(function(name) { return rx.test(String(name || '')); });
+            return k ? String(row[k] || '').trim() : '';
+          }
+          var fullName = row.name || row.full_name || pickByRx(/full\s*name|contact.*name|name/i) || [row.first_name, row.last_name].filter(Boolean).join(' ');
+          var email = row.email || pickByRx(/e[\s\-_]*mail|email/i);
+          var phone = row.phone || row.mobile || pickByRx(/mobile|phone|contact number/i);
+          var company = row.company || row.organization || pickByRx(/company|account|organi[sz]ation|end\s*user/i);
+          var dept = row.department || pickByRx(/department|team|group/i);
+          var title = fullName || email || phone || company || 'Contact';
+          var resText = keys.map(function(k) { return row[k]; }).filter(function(v) { return v != null && String(v).trim() !== ''; }).join(' · ');
+          return {
+            _src:'ci',
+            title: String(title),
+            res: String(resText || [email, phone, dept, company].filter(Boolean).join(' · ')),
+            cat: 'Contact Information',
+            eu: String(company || ''),
+            email: String(email || ''),
+            phone: String(phone || '')
+          };
+        });
+      });
+
+    // ── QB records — FIX BUG 2: multi-path discovery
+    var qbPromise = Promise.resolve(_extractQbRecords());
+    var futurePromise = Promise.resolve(_collectFutureTabRecords());
+
+    Promise.all([kbPromise, cpPromise, pnPromise, ciPromise, qbPromise, futurePromise])
+      .then(function(sources) {
+        var merged = [];
+        sources.forEach(function(s) { if (Array.isArray(s)) merged = merged.concat(s); });
+        _state.allRecords = merged;
+        _state.loaded     = true;
+        _state.loading    = false;
+        _state.monitor = {
+          sources: {
+            kb: sources[0].length, cp: sources[1].length, pn: sources[2].length,
+            ci: sources[3].length, qb: sources[4].length, future: sources[5].length
+          },
+          total: merged.length,
+          warnings: []
+        };
+        console.info('[SE2 monitor] loaded counts', _state.monitor.sources, 'total=', _state.monitor.total);
+
+        var counts = _countsByCat();
+        _renderCats(counts);
+
+        // Restore empty welcome state with record count
+        var body2 = el('se2-body');
+        if (body2) {
+          body2.innerHTML = '<div id="se2-empty">' +
+            '<div class="se2-empty-icon">🔍</div>' +
+            '<div class="se2-empty-title">Search Engine 2</div>' +
+            '<div class="se2-empty-sub">Advanced search across <strong>' + merged.length.toLocaleString() + ' records</strong> — QuickBase cases, Knowledge Base, Parts, Connect+ sites, Controllers, Support Records.</div>' +
+            '<div class="se2-chips" id="se2-chip-row"></div></div>';
+          _renderChips();
+        }
+
+        // FIX BUG 3: Always run search if there's a pending or current query
+        var qEl = el('se2-q');
+        var pendingQ = _state.pendingQuery || (qEl && qEl.value ? qEl.value.trim() : '');
+        _state.pendingQuery = '';
+        _renderSummary([], '');
+
+        if (qEl) qEl.focus();
+
+        if (pendingQ) {
+          _state.query = pendingQ;
+          if (qEl && !qEl.value) qEl.value = pendingQ;
+          _run();
+        }
+
+        // Schedule a QB refresh 3 seconds later — QB tab may not have loaded yet
+        setTimeout(function() {
+          var freshQb = _extractQbRecords();
+          if (freshQb.length > 0) {
+            var nonQb = _state.allRecords.filter(function(r) { return r._src !== 'qb'; });
+            _state.allRecords = nonQb.concat(freshQb);
+            if (_state.query) _run();
+            else {
+              var s = el('se2-summary');
+              if (s) s.innerHTML = 'Total indexed: <strong>' + _state.allRecords.length.toLocaleString() + '</strong> records &nbsp;·&nbsp; Ready to search';
+            }
+          }
+        }, 3000);
+      })
+      .catch(function(err) {
+        _state.loading = false;
+        var body3 = el('se2-body');
+        if (body3) body3.innerHTML = '<div style="padding:40px;text-align:center;">' +
+          '<div style="font-size:32px;margin-bottom:12px;">⚠️</div>' +
+          '<div style="color:#f85149;font-weight:700;margin-bottom:6px;">Failed to load data sources</div>' +
+          '<div style="font-size:11px;color:#7d8590;margin-bottom:14px;">' + esc(String(err&&err.message||err)) + '</div>' +
+          '<button onclick="window._se2Reload()" style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.3);color:#58a6ff;padding:8px 18px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">↻ Retry</button>' +
+          '</div>';
+      });
+  }
+
+  // ── KB JSON fetch (shared, deduped) ───────────────────────────────────────
+  function _fetchKbJson() {
+    var p = fetch('/support_records_kb.json')
+      .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+      .then(function(j) {
+        var flat = Array.isArray(j.flat) ? j.flat : (Array.isArray(j) ? j : []);
+        var mapped = flat.map(function(r) {
+          var catLow = (r.cat || '').toLowerCase();
+          var src = 'sr';
+          if (catLow.includes('connect') || catLow.includes('network') || catLow.includes('vpn')) src = 'net';
+          if (catLow.includes('part') || catLow.includes('xr') || catLow.includes('cc200') || catLow.includes('license key')) src = 'parts';
+          if (catLow.includes('controller') || catLow.includes('programming')) src = 'ctrl';
+          return Object.assign({}, r, { _id: r.id, _src: src });
+        });
+        window.__studioSrRecords = flat;
+        window.__se2KbCache  = mapped;
+        window.__se2KbLoaded = true;
+        window.__se2KbPromise = null;
+        return mapped;
+      })
+      .catch(function(err) {
+        console.warn('[SE2] KB JSON load failed:', err.message);
+        var fallback = _mapSupportRecords(window.__studioSrRecords || []);
+        window.__se2KbCache  = fallback;
+        window.__se2KbLoaded = false;
+        window.__se2KbPromise = null;
+        return fallback;
+      });
+    window.__se2KbPromise = p; // FIX BUG 4: store promise so parallel calls reuse it
+    return p;
+  }
+
+  // ── Detail Drawer ──────────────────────────────────────────────────────────
+  window._se2OpenDetail = function(idx) {
+    var r = _state.results[idx];
+    if (!r) return;
+    _state.detailIdx = idx;
+    _state.deepData  = null;
+
+    var drawer = el('se2-detail');
+    if (drawer) drawer.classList.add('open');
+
+    var src = SOURCES[_getSource(r)] || { label:'Record', color:'#58a6ff' };
+    var caseNum = r.case || r.caseNum || '';
+
+    var titleEl = el('se2-dh-title');
+    if (titleEl) titleEl.textContent = r.title || r.site || r.partNo || '(untitled)';
+
+    var metaEl = el('se2-dh-meta');
+    if (metaEl) {
+      metaEl.innerHTML =
+        '<span class="se2-badge" style="color:' + src.color + ';background:' + src.color + '18;border:1px solid ' + src.color + '35;">' + esc(src.label) + '</span>' +
+        (caseNum ? '<span class="se2-case-num">#' + esc(caseNum) + '</span>' : '') +
+        (r.eu ? '<span class="se2-eu-chip">' + esc(r.eu) + '</span>' : '') +
+        (r.status ? '<span class="se2-age-chip">' + esc(r.status) + '</span>' : '');
+    }
+
+    var total = _state.results.length;
+    var posEl = el('se2-dh-pos');
+    if (posEl) posEl.textContent = (idx + 1) + ' of ' + total.toLocaleString();
+    var prevBtn = el('se2-dh-prev'); if (prevBtn) prevBtn.disabled = idx <= 0;
+    var nextBtn = el('se2-dh-next'); if (nextBtn) nextBtn.disabled = idx >= total - 1;
+
+    var bodyEl = el('se2-drawer-body');
+    if (!bodyEl) return;
+
+    var html = '';
+
+    // Resolution / notes
+    if (r.res || r.notes) {
+      html += '<div class="se2-sec-title" style="color:#58a6ff;"><i class="fas fa-comment-alt" style="margin-right:6px;"></i>Resolution / Notes</div>';
+      html += '<div class="se2-notes-box">' + esc(r.res || r.notes || '') + '</div>';
+    }
+
+    // Key-value grid
+    html += '<div class="se2-sec-title" style="color:#7d8590;"><i class="fas fa-tag" style="margin-right:6px;"></i>Details</div>';
+    html += '<div class="se2-kv-grid">';
+    if (caseNum) html += '<div class="se2-kv"><div class="se2-kv-label">Case #</div><div class="se2-kv-value" style="font-family:monospace;color:#58a6ff;">' + esc(caseNum) + '</div></div>';
+    if (r.eu) html += '<div class="se2-kv"><div class="se2-kv-label">End User</div><div class="se2-kv-value">' + esc(r.eu) + '</div></div>';
+    if (r.cat) html += '<div class="se2-kv"><div class="se2-kv-label">Category</div><div class="se2-kv-value">' + esc(r.cat) + '</div></div>';
+    if (r.status) html += '<div class="se2-kv"><div class="se2-kv-label">Status</div><div class="se2-kv-value">' + esc(r.status) + '</div></div>';
+    if (r.partNo) html += '<div class="se2-kv"><div class="se2-kv-label">Part #</div><div class="se2-kv-value" style="font-family:monospace;">' + esc(r.partNo) + '</div></div>';
+    if (r.brand) html += '<div class="se2-kv"><div class="se2-kv-label">Brand</div><div class="se2-kv-value">' + esc(r.brand) + '</div></div>';
+    if (r.site) html += '<div class="se2-kv se2-kv-full"><div class="se2-kv-label">Site</div><div class="se2-kv-value">' + esc(r.site) + '</div></div>';
+    if (r.desc && r.desc !== r.res) html += '<div class="se2-kv se2-kv-full"><div class="se2-kv-label">Description</div><div class="se2-kv-value">' + esc(r.desc) + '</div></div>';
+    if (r.url) html += '<div class="se2-kv se2-kv-full"><div class="se2-kv-label">Link</div><div class="se2-kv-value"><a href="' + esc(r.url) + '" target="_blank" style="color:#22d3ee;text-decoration:none;">' + esc(r.url) + '</a></div></div>';
+    html += '<div class="se2-kv"><div class="se2-kv-label">Source</div><div class="se2-kv-value" style="color:' + src.color + ';">' + esc(src.label) + '</div></div>';
+    html += '</div>';
+
+    bodyEl.innerHTML = html;
+
+    // Footer — show QB deep-fetch only for QB records
+    var footer = el('se2-drawer-footer');
+    if (footer) {
+      footer.style.display = (_getSource(r) === 'qb' && caseNum) ? 'flex' : 'none';
+    }
+  };
+
+  window._se2Nav = function(dir) {
+    var next = _state.detailIdx + dir;
+    if (next < 0 || next >= _state.results.length) return;
+    window._se2OpenDetail(next);
+  };
+
+  window._se2CloseDetail = function() {
+    var d = el('se2-detail');
+    if (d) d.classList.remove('open');
+  };
+
+  window._se2DeepFetch = function() {
+    var r = _state.results[_state.detailIdx];
+    if (!r || !r.case) return;
+    var caseNum = r.case;
+    var bodyEl = el('se2-drawer-body');
+    if (!bodyEl) return;
+    bodyEl.innerHTML = '<div class="se2-loading-overlay"><div class="se2-spin"></div><span>Fetching QB case #' + esc(caseNum) + '…</span></div>';
+
+    if (typeof window._qbsDeepSearch === 'function') {
+      window._qbsDeepSearch(caseNum, 0);
+      window._se2CloseDetail();
+      if (typeof window.activateTab === 'function') {
+        // Navigate to QBS tab and trigger search
+        setTimeout(function() { window.activateTab('qbs'); }, 100);
+      }
+    } else {
+      bodyEl.innerHTML = '<div style="padding:20px;text-align:center;color:#7d8590;font-size:12px;">Open the QuickBase_S tab and search for case #' + esc(caseNum) + ' to see full details.</div>';
+    }
+  };
+
+  // FIX BUG 1: _se2OpenInQbs no longer uses broken onclick string
+  window._se2OpenInQbs = function(caseNum) {
+    window._se2CloseDetail();
+    if (typeof window.activateTab === 'function') {
+      window.activateTab('qbs');
+      setTimeout(function() {
+        if (typeof window._qbsDeepSearch === 'function') {
+          window._qbsDeepSearch(String(caseNum), 0);
+        }
+      }, 600);
+    }
+  };
+
+  window._se2FilterCat = function(cat) {
+    if (cat === 'all') cat = null;
+    _state.activeCat = (_state.activeCat === cat) ? null : cat;
+    _run();
+  };
+
+  window._se2SetQ = function(val) {
+    var qEl = el('se2-q');
+    if (qEl) { qEl.value = val; qEl.focus(); }
+    _state.query = String(val || '');
+    _run();
+  };
+
+  window._se2Clear = function() {
+    var qEl = el('se2-q');
+    if (qEl) { qEl.value = ''; qEl.focus(); }
+    _state.query = '';
+    _state.activeCat = null;
+    _run();
+  };
+
+  window._se2Reload = function() {
+    _state.loaded = false;
+    _state.loading = false;
+    _state.allRecords = [];
+    window.__se2KbLoaded = false;
+    window.__se2KbPromise = null;
+    _loadData();
+  };
+
+  // Keyboard nav
+  document.addEventListener('keydown', function(e) {
+    var d = el('se2-detail');
+    if (!d || !d.classList.contains('open')) return;
+    if (e.key === 'Escape')     { window._se2CloseDetail(); return; }
+    if (e.key === 'ArrowLeft')  window._se2Nav(-1);
+    if (e.key === 'ArrowRight') window._se2Nav(1);
+  });
+
+  // ── Main init ──────────────────────────────────────────────────────────────
+  var _se2Inited = false;
+
+  function _se2Init() {
+    if (_se2Inited) {
+      // Re-visit: refresh QB data and re-run current search
+      var freshQb = _extractQbRecords();
+      if (freshQb.length > 0) {
+        var nonQb = _state.allRecords.filter(function(r) { return r._src !== 'qb'; });
+        if (nonQb.length > 0 && freshQb.length !== (_state.allRecords.length - nonQb.length)) {
+          _state.allRecords = nonQb.concat(freshQb);
+        }
+      }
+      var qEl2 = el('se2-q');
+      if (qEl2) qEl2.focus();
+      if (_state.loaded) _run();
+      return;
+    }
+    _se2Inited = true;
+
+    var qEl = el('se2-q');
+    var _se2Debounce = null;
+    if (qEl) {
+      qEl.addEventListener('input', function() {
+        clearTimeout(_se2Debounce);
+        var val = qEl.value;
+        _se2Debounce = setTimeout(function() {
+          _state.query = val;
+          _run();
+        }, 200);
+      });
+      qEl.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') window._se2Clear();
+      });
+      setTimeout(function() { qEl.focus(); }, 100);
+    }
+
+    _renderChips();
+    _loadData();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ACTIVATION — 4-layer strategy
+  // Layer 1: Background pre-load KB JSON at page startup
+  // Layer 2: Direct click listener on SE2 tab button
+  // Layer 3: MutationObserver on canvas active class
+  // Layer 4: activateTab wrapper + _openSearchEngine2 hook
+  // ═══════════════════════════════════════════════════════════════════
+
+  // Layer 1: Pre-load KB JSON in background
+  (function _se2PreLoad() {
+    if (window.__se2KbLoaded || window.__se2KbPromise) return; // already started
+    window.__se2KbPromise = _fetchKbJson();
+  })();
+
+  // Layer 2: Direct click listener
+  function _se2AttachClickListener() {
+    var btn = document.getElementById('ss-tab-search_engine_2');
+    if (!btn) { setTimeout(_se2AttachClickListener, 200); return; }
+    btn.addEventListener('click', function() { setTimeout(_se2Init, 80); }, false);
+  }
+
+  // Layer 3: MutationObserver
+  function _se2AttachObserver() {
+    var canvas = document.getElementById('canvas-search_engine_2');
+    if (!canvas) { setTimeout(_se2AttachObserver, 300); return; }
+    var obs = new MutationObserver(function(mutations) {
+      mutations.forEach(function(m) {
+        if (m.type === 'attributes' && m.attributeName === 'class') {
+          if (canvas.classList.contains('active')) setTimeout(_se2Init, 80);
+        }
+      });
+    });
+    obs.observe(canvas, { attributes: true, attributeFilter: ['class'] });
+    if (canvas.classList.contains('active')) setTimeout(_se2Init, 80);
+  }
+
+  // Layer 4: activateTab + _openSearchEngine2 hooks
+  var _origActivateTab = window.activateTab;
+  window.activateTab = function(target) {
+    if (typeof _origActivateTab === 'function') _origActivateTab(target);
+    if (target === 'search_engine_2') setTimeout(_se2Init, 80);
+  };
+  window._openSearchEngine2 = function() {
+    if (typeof window.activateTab === 'function') window.activateTab('search_engine_2');
+    return false;
+  };
+
+  // Boot
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      _se2AttachClickListener();
+      _se2AttachObserver();
+    });
+  } else {
+    _se2AttachClickListener();
+    _se2AttachObserver();
+  }
+
+})();
+</script>
 
 </body>
 </html>
