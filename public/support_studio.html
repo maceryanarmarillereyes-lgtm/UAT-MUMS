@@ -15403,6 +15403,11 @@
     deepData:   null,
     deepLoading:false,
     pendingQuery: '',
+    qbQuery: '',
+    qbQueryLoading: false,
+    qbQueryReady: false,
+    qbQuerySeq: 0,
+    qbQueryResults: [],
     sortOrder:  'score',
     monitor:    { sources:{}, total:0, warnings:[] }
   };
@@ -15566,11 +15571,20 @@
   function _search(query) {
     var parsed = _normaliseQuery(query);
     if (!parsed.tokens.length && !parsed.original) return [];
+    var qKey = String(query || '').trim().toLowerCase();
+    var hasLiveQb = qKey && _state.qbQuery === qKey && Array.isArray(_state.qbQueryResults);
     var results = [];
     _state.allRecords.forEach(function(r) {
+      if (hasLiveQb && _getSource(r) === 'qb') return;
       var score = _scoreRecord(r, parsed);
       if (score > 0) results.push({ r: r, score: score });
     });
+    if (hasLiveQb) {
+      _state.qbQueryResults.forEach(function(r) {
+        var score = _scoreRecord(r, parsed);
+        if (score > 0) results.push({ r: r, score: score + 5 });
+      });
+    }
     results.sort(function(a, b) { return b.score - a.score; });
     return results.map(function(x) { return x.r; });
   }
@@ -15756,6 +15770,10 @@
     }
 
     if (!q) {
+      _state.qbQuery = '';
+      _state.qbQueryLoading = false;
+      _state.qbQueryReady = false;
+      _state.qbQueryResults = [];
       var allCounts = _countsByCat();
       _renderCats(allCounts);
       _renderSummary([], '');
@@ -15773,6 +15791,7 @@
       return;
     }
 
+    _ensureQbLiveQuery(q);
     var results = _search(q);
     if (_state.activeCat) results = results.filter(function(r) { return _getSource(r) === _state.activeCat; });
     if (_state.sortOrder === 'newest' || _state.sortOrder === 'oldest') {
@@ -15856,6 +15875,49 @@
     }).filter(function(r) { return r.title || r.case; });
   }
 
+  function _mapQbRowsToSe2(rows, fallbackColumnMap) {
+    var safeRows = Array.isArray(rows) ? rows : [];
+    var globalColumnMap = (fallbackColumnMap && typeof fallbackColumnMap === 'object') ? fallbackColumnMap : {};
+    return safeRows.map(function(r) {
+      var fields = (r && r.fields && typeof r.fields === 'object') ? r.fields : {};
+      var colMap = (r && r.columnMap && typeof r.columnMap === 'object') ? r.columnMap : globalColumnMap;
+      function pickValue(labels) {
+        if (!colMap) return '';
+        var fid = Object.keys(colMap).find(function(id) {
+          var lbl = String(colMap[id] || '').toLowerCase();
+          return labels.some(function(k) { return lbl.indexOf(k) !== -1; });
+        });
+        if (!fid || !fields[fid]) return '';
+        var cell = fields[fid];
+        return (cell && cell.value != null) ? String(cell.value) : '';
+      }
+      var caseNum = String((r && r.qbRecordId) || pickValue(['case #', 'case number', 'record id']) || '');
+      var title = pickValue(['short description', 'description', 'subject', 'concern', 'title']);
+      var endUser = pickValue(['end user', 'client', 'account', 'customer']);
+      var assignedTo = pickValue(['assigned to', 'assignee', 'owner']);
+      var status = pickValue(['case status', 'status']);
+      var notes = pickValue(['case notes', 'notes', 'latest update']);
+      var type = pickValue(['type', 'category']);
+      var allFieldText = Object.keys(fields).map(function(fid) {
+        var cell = fields[fid];
+        return (cell && cell.value != null) ? String(cell.value) : '';
+      }).filter(Boolean).join(' · ');
+
+      return {
+        _src: 'qb',
+        title: title || ('QB Case #' + caseNum),
+        eu: endUser,
+        assignedTo: assignedTo,
+        res: (notes || allFieldText).slice(0, 1200),
+        searchBlob: allFieldText,
+        cat: type || 'QB Case',
+        case: caseNum,
+        status: status,
+        _snap: { recordId: caseNum, fields: fields, columnMap: colMap, rowNum: r && r.rowNum ? r.rowNum : 0 }
+      };
+    }).filter(function(row) { return row.title || row.case; });
+  }
+
   // ── QB deep search hydration (all records) ─────────────────────────────────
   // Permanent fix: Search Engine 2 now hydrates QB dataset from the same deep
   // search API used by QuickBase_S so data volume is not limited to visible snaps.
@@ -15879,44 +15941,7 @@
         window.__studioQbRecords = rows;
         window.__studioQbColumns = columns;
 
-        var mapped = rows.map(function(r) {
-          var fields = (r && r.fields && typeof r.fields === 'object') ? r.fields : {};
-          var colMap = (r && r.columnMap && typeof r.columnMap === 'object') ? r.columnMap : globalColumnMap;
-          function pickValue(labels) {
-            if (!colMap) return '';
-            var fid = Object.keys(colMap).find(function(id) {
-              var lbl = String(colMap[id] || '').toLowerCase();
-              return labels.some(function(k) { return lbl.indexOf(k) !== -1; });
-            });
-            if (!fid || !fields[fid]) return '';
-            var cell = fields[fid];
-            return (cell && cell.value != null) ? String(cell.value) : '';
-          }
-          var caseNum = String((r && r.qbRecordId) || pickValue(['case #', 'case number', 'record id']) || '');
-          var title = pickValue(['short description', 'description', 'subject', 'concern', 'title']);
-          var endUser = pickValue(['end user', 'client', 'account', 'customer']);
-          var assignedTo = pickValue(['assigned to', 'assignee', 'owner']);
-          var status = pickValue(['case status', 'status']);
-          var notes = pickValue(['case notes', 'notes', 'latest update']);
-          var type = pickValue(['type', 'category']);
-          var allFieldText = Object.keys(fields).map(function(fid) {
-            var cell = fields[fid];
-            return (cell && cell.value != null) ? String(cell.value) : '';
-          }).filter(Boolean).join(' · ');
-
-          return {
-            _src: 'qb',
-            title: title || ('QB Case #' + caseNum),
-            eu: endUser,
-            assignedTo: assignedTo,
-            res: (notes || allFieldText).slice(0, 1200),
-            searchBlob: allFieldText,
-            cat: type || 'QB Case',
-            case: caseNum,
-            status: status,
-            _snap: { recordId: caseNum, fields: fields, columnMap: colMap, rowNum: r && r.rowNum ? r.rowNum : 0 }
-          };
-        }).filter(function(row) { return row.title || row.case; });
+        var mapped = _mapQbRowsToSe2(rows, globalColumnMap);
 
         window.__se2QbCache = mapped;
         window.__se2QbPromise = null;
@@ -15930,6 +15955,39 @@
 
     window.__se2QbPromise = p;
     return p;
+  }
+
+  function _ensureQbLiveQuery(rawQuery) {
+    var q = String(rawQuery || '').trim();
+    var key = q.toLowerCase();
+    if (!q) return;
+    if (_state.qbQueryLoading && _state.qbQuery === key) return;
+    if (_state.qbQuery === key && _state.qbQueryReady) return;
+
+    _state.qbQueryLoading = true;
+    _state.qbQueryReady = false;
+    _state.qbQuery = key;
+    var seq = ++_state.qbQuerySeq;
+    var token = _sessionToken();
+    var headers = token ? { Authorization: 'Bearer ' + token } : {};
+
+    fetch('/api/studio/qb_search?q=' + encodeURIComponent(q) + '&skip=0&top=200', { headers: headers })
+      .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('qb_live_http_' + r.status)); })
+      .then(function(j) {
+        if (seq !== _state.qbQuerySeq) return;
+        _state.qbQueryResults = (j && j.ok) ? _mapQbRowsToSe2(j.records || [], j.columnMap || {}) : [];
+        _state.qbQueryReady = true;
+      })
+      .catch(function() {
+        if (seq !== _state.qbQuerySeq) return;
+        _state.qbQueryResults = [];
+        _state.qbQueryReady = true;
+      })
+      .finally(function() {
+        if (seq !== _state.qbQuerySeq) return;
+        _state.qbQueryLoading = false;
+        if (String(_state.query || '').trim().toLowerCase() === key) _run();
+      });
   }
 
   // ── Data loading ───────────────────────────────────────────────────────────
@@ -16249,6 +16307,10 @@
     _state.loaded = false;
     _state.loading = false;
     _state.allRecords = [];
+    _state.qbQuery = '';
+    _state.qbQueryLoading = false;
+    _state.qbQueryReady = false;
+    _state.qbQueryResults = [];
     window.__se2KbLoaded = false;
     window.__se2KbPromise = null;
     window.__se2QbCache = null;
