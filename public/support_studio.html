@@ -15848,6 +15848,75 @@
     }).filter(function(r) { return r.title || r.case; });
   }
 
+  // ── QB deep search hydration (all records) ─────────────────────────────────
+  // Permanent fix: Search Engine 2 now hydrates QB dataset from the same deep
+  // search API used by QuickBase_S so data volume is not limited to visible snaps.
+  function _fetchQbDeepRecords() {
+    if (Array.isArray(window.__se2QbCache) && window.__se2QbCache.length > 0) {
+      return Promise.resolve(window.__se2QbCache);
+    }
+    if (window.__se2QbPromise) return window.__se2QbPromise;
+
+    var token = _sessionToken();
+    var headers = token ? { Authorization: 'Bearer ' + token } : {};
+    var p = fetch('/api/studio/qb_search?skip=0&top=10000', { headers: headers })
+      .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('qb_search_http_' + r.status)); })
+      .then(function(j) {
+        if (!j || !j.ok) throw new Error((j && (j.error || j.message)) || 'qb_search_failed');
+        var rows = Array.isArray(j.records) ? j.records : [];
+        var columns = Array.isArray(j.columns) ? j.columns : [];
+        var globalColumnMap = j.columnMap && typeof j.columnMap === 'object' ? j.columnMap : {};
+
+        // Keep existing globals synced so other Search Studio flows can reuse them.
+        window.__studioQbRecords = rows;
+        window.__studioQbColumns = columns;
+
+        var mapped = rows.map(function(r) {
+          var fields = (r && r.fields && typeof r.fields === 'object') ? r.fields : {};
+          var colMap = (r && r.columnMap && typeof r.columnMap === 'object') ? r.columnMap : globalColumnMap;
+          function pickValue(labels) {
+            if (!colMap) return '';
+            var fid = Object.keys(colMap).find(function(id) {
+              var lbl = String(colMap[id] || '').toLowerCase();
+              return labels.some(function(k) { return lbl.indexOf(k) !== -1; });
+            });
+            if (!fid || !fields[fid]) return '';
+            var cell = fields[fid];
+            return (cell && cell.value != null) ? String(cell.value) : '';
+          }
+          var caseNum = String((r && r.qbRecordId) || pickValue(['case #', 'case number', 'record id']) || '');
+          var title = pickValue(['short description', 'description', 'subject', 'concern', 'title']);
+          var endUser = pickValue(['end user', 'client', 'account', 'customer']);
+          var status = pickValue(['case status', 'status']);
+          var notes = pickValue(['case notes', 'notes', 'latest update']);
+          var type = pickValue(['type', 'category']);
+
+          return {
+            _src: 'qb',
+            title: title || ('QB Case #' + caseNum),
+            eu: endUser,
+            res: notes.slice(0, 400),
+            cat: type || 'QB Case',
+            case: caseNum,
+            status: status,
+            _snap: { recordId: caseNum, fields: fields, columnMap: colMap, rowNum: r && r.rowNum ? r.rowNum : 0 }
+          };
+        }).filter(function(row) { return row.title || row.case; });
+
+        window.__se2QbCache = mapped;
+        window.__se2QbPromise = null;
+        return mapped;
+      })
+      .catch(function(err) {
+        window.__se2QbPromise = null;
+        console.warn('[SE2] QB deep search hydrate failed; using local snaps fallback:', err && err.message ? err.message : err);
+        return _extractQbRecords();
+      });
+
+    window.__se2QbPromise = p;
+    return p;
+  }
+
   // ── Data loading ───────────────────────────────────────────────────────────
   // FIX BUG 4: Shared promise sentinel prevents duplicate 12MB fetches
   function _loadData() {
@@ -15923,8 +15992,8 @@
         });
       });
 
-    // ── QB records — FIX BUG 2: multi-path discovery
-    var qbPromise = Promise.resolve(_extractQbRecords());
+    // ── QB records — permanent fix: hydrate from deep search API (22k+), then fallback
+    var qbPromise = _fetchQbDeepRecords();
     var futurePromise = Promise.resolve(_collectFutureTabRecords());
 
     Promise.all([kbPromise, cpPromise, pnPromise, ciPromise, qbPromise, futurePromise])
@@ -16167,6 +16236,8 @@
     _state.allRecords = [];
     window.__se2KbLoaded = false;
     window.__se2KbPromise = null;
+    window.__se2QbCache = null;
+    window.__se2QbPromise = null;
     _loadData();
   };
 
