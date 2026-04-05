@@ -9186,7 +9186,27 @@
 
     var body = document.getElementById('cp-table-body');
     function _loadSettingsIfNeeded() {
-      if (window._cpCsvUrl) return Promise.resolve();
+      // We need both CSV URL and detected column metadata.
+      // Having only _cpCsvUrl is not enough for cache schema validation.
+      if (window._cpCsvUrl && Array.isArray(window._cpDetectedCols)) return Promise.resolve();
+
+      // Fast path from local storage (no auth/network required)
+      try {
+        var localRaw = localStorage.getItem('ss_connectplus_settings');
+        if (localRaw) {
+          var localCfg = JSON.parse(localRaw);
+          if (!window._cpCsvUrl && localCfg && localCfg.csvUrl) window._cpCsvUrl = localCfg.csvUrl;
+          if (!Array.isArray(window._cpDetectedCols) && localCfg && Array.isArray(localCfg.detectedColumns)) {
+            window._cpDetectedCols = localCfg.detectedColumns;
+          }
+          if (!window._cpSearchCols && localCfg && Array.isArray(localCfg.searchColumns)) {
+            window._cpSearchCols = localCfg.searchColumns.length > 0 ? localCfg.searchColumns : null;
+          }
+        }
+      } catch(_) {}
+
+      if (window._cpCsvUrl && Array.isArray(window._cpDetectedCols)) return Promise.resolve();
+
       var tok = '';
       try {
         var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
