@@ -112,22 +112,61 @@ async function fetchConnectPlus() {
     if (!parsed.length) throw new Error('Empty CSV response');
 
     const header = parsed[0];
+    const normHeader = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const findHeaderIndex = (aliases, fallbackIndex = -1) => {
+      const aliasSet = aliases.map(normHeader);
+      for (let i = 0; i < header.length; i++) {
+        if (aliasSet.includes(normHeader(header[i]))) return i;
+      }
+      return fallbackIndex;
+    };
+
+    // Header-based map so Connect+ cache bundle stays aligned with
+    // Connect+ Settings detected columns (column order can change).
+    const colIdx = {
+      site:      findHeaderIndex(['site'], 0),
+      directory: findHeaderIndex(['directory'], 1),
+      address1:  findHeaderIndex(['address 1', 'address1', 'address'], 2),
+      country:   findHeaderIndex(['country'], 3),
+      city:      findHeaderIndex(['city'], 4),
+      state:     findHeaderIndex(['state/province/region', 'state province region', 'state', 'province', 'region'], 5),
+      zip:       findHeaderIndex(['zip/postal code', 'zip postal code', 'zip', 'postal code', 'postal'], 6),
+      timezone:  findHeaderIndex(['time zone', 'timezone'], 7),
+      systems:   findHeaderIndex(['number of control systems', 'control systems', 'systems'], 8),
+      url:       findHeaderIndex(['url connect+ link', 'url connect link', 'connect+ link', 'connect link', 'url'], 9),
+      endUser:   findHeaderIndex(['end user', 'enduser', 'client', 'account', 'customer'], 10),
+      endUser2:  findHeaderIndex(['end user2', 'enduser2', 'client 2', 'account 2', 'customer 2'], 11),
+    };
+
     const records = [];
     for (let i = 1; i < parsed.length; i++) {
       const r = parsed[i];
-      if (!r || !r[0] || !String(r[0]).trim()) continue;
+      if (!r || !String(r[colIdx.site] || '').trim()) continue;
+
+      let endUser = '';
+      [colIdx.endUser, colIdx.endUser2].forEach((euIdx) => {
+        if (endUser || typeof euIdx !== 'number' || euIdx < 0) return;
+        const euVal = String(r[euIdx] || '').trim();
+        if (euVal) endUser = euVal;
+      });
+
       records.push({
-        site:      String(r[0] || '').trim(),
-        directory: String(r[1] || '').trim(),
-        address1:  String(r[2] || '').trim(),
-        country:   String(r[3] || '').trim(),
-        city:      String(r[4] || '').trim(),
-        state:     String(r[5] || '').trim(),
-        zip:       String(r[6] || '').trim(),
-        timezone:  String(r[7] || '').trim(),
-        systems:   String(r[8] || '').trim(),
-        url:       String(r[9] || '').trim(),
-        _search:   [r[0],r[1],r[2],r[3],r[4],r[5],r[6],r[7],r[9]].join(' ').toLowerCase(),
+        site:      String(r[colIdx.site] || '').trim(),
+        directory: String(r[colIdx.directory] || '').trim(),
+        address1:  String(r[colIdx.address1] || '').trim(),
+        country:   String(r[colIdx.country] || '').trim(),
+        city:      String(r[colIdx.city] || '').trim(),
+        state:     String(r[colIdx.state] || '').trim(),
+        zip:       String(r[colIdx.zip] || '').trim(),
+        timezone:  String(r[colIdx.timezone] || '').trim(),
+        systems:   String(r[colIdx.systems] || '').trim(),
+        url:       String(r[colIdx.url] || '').trim(),
+        endUser:   endUser,
+        _search:   [
+          r[colIdx.site], r[colIdx.directory], r[colIdx.address1], r[colIdx.country],
+          r[colIdx.city], r[colIdx.state], r[colIdx.zip], r[colIdx.timezone],
+          r[colIdx.systems], r[colIdx.url], endUser
+        ].join(' ').toLowerCase(),
       });
     }
 
