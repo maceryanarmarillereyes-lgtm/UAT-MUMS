@@ -4203,7 +4203,7 @@
         <input type="text" id="cp-main-search" style="display:none;" aria-hidden="true">
 
         <!-- Table header -->
-        <div style="flex-shrink:0;overflow-x:auto;">
+        <div id="cp-table-head-wrap" style="flex-shrink:0;overflow-x:auto;">
           <table id="cp-table-head" class="prem-table cyan" style="min-width:1020px;">
             <thead>
               <tr>
@@ -9522,6 +9522,7 @@
     if (!total) {
       body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:10px;color:var(--ss-muted);"><i class="fas fa-search" style="font-size:28px;opacity:.2;"></i><div style="font-size:13px;opacity:.5;">No sites match your search.</div></div>';
       document.getElementById('cp-pagination').style.display = 'none';
+      _cpSyncHeadScrollbarGap();
       return;
     }
 
@@ -9554,8 +9555,17 @@
     });
     html += '</tbody></table>';
     body.innerHTML = html;
+    _cpSyncHeadScrollbarGap();
 
     _renderPagination(total, maxPage);
+  }
+
+  function _cpSyncHeadScrollbarGap() {
+    var bodyEl = document.getElementById('cp-table-body');
+    var headWrap = document.getElementById('cp-table-head-wrap');
+    if (!bodyEl || !headWrap) return;
+    var scrollbarW = Math.max(0, bodyEl.offsetWidth - bodyEl.clientWidth);
+    headWrap.style.paddingRight = scrollbarW ? (scrollbarW + 'px') : '';
   }
 
   function _renderPagination(total, maxPage) {
@@ -9597,6 +9607,10 @@
     var body2 = document.getElementById('cp-table-body');
     if (body2) body2.scrollTop = 0;
   };
+
+  window.addEventListener('resize', function() {
+    _cpSyncHeadScrollbarGap();
+  });
 
   // ── Detail Modal ────────────────────────────────────────────────────
   window._cpOpenDetail = function(idx) {
