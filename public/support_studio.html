@@ -4204,7 +4204,7 @@
 
         <!-- Table header -->
         <div style="flex-shrink:0;overflow-x:auto;">
-          <table id="cp-table-head" class="prem-table cyan" style="min-width:900px;">
+          <table id="cp-table-head" class="prem-table cyan" style="min-width:1020px;">
             <thead>
               <tr>
                 <th style="width:38px;">#</th>
@@ -4214,6 +4214,7 @@
                 <th onclick="window._cpSort('state')">State/Region <i class="fas fa-sort" id="cp-sort-state" style="opacity:.3;font-size:8px;"></i></th>
                 <th onclick="window._cpSort('country')">Country <i class="fas fa-sort" id="cp-sort-country" style="opacity:.3;font-size:8px;"></i></th>
                 <th onclick="window._cpSort('timezone')">Time Zone <i class="fas fa-sort" id="cp-sort-timezone" style="opacity:.3;font-size:8px;"></i></th>
+                <th onclick="window._cpSort('endUser')" style="min-width:130px;">End User <i class="fas fa-sort" id="cp-sort-endUser" style="opacity:.3;font-size:8px;"></i></th>
                 <th>Systems</th>
                 <th>Connect+ Link</th>
               </tr>
@@ -9204,6 +9205,7 @@
             window._cpCsvUrl = d.settings.csvUrl;
             window._cpSearchCols = (Array.isArray(d.settings.searchColumns) && d.settings.searchColumns.length > 0)
               ? d.settings.searchColumns : null;
+            window._cpDetectedCols = Array.isArray(d.settings.detectedColumns) ? d.settings.detectedColumns : null;
           }
         })
         .catch(function() {});
@@ -9221,12 +9223,27 @@
     }).then(function(cached) {
       if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
         // Cache schema guard:
-        // older cached bundles (pre End User mapping) do not contain row.endUser.
-        // If missing, force a one-time network refresh so the new schema is applied.
-        var cacheHasEndUser = cached.data.some(function(row) {
+        // older cached bundles may not include endUser key at all.
+        var cacheHasEndUserKey = cached.data.some(function(row) {
           return row && Object.prototype.hasOwnProperty.call(row, 'endUser');
         });
-        if (!cacheHasEndUser) cached = null;
+        if (!cacheHasEndUserKey) cached = null;
+
+        // If settings detected an End User column but cache has no non-empty
+        // values, treat cache as stale and force a network refresh.
+        if (cached) {
+          var detectedCols = Array.isArray(window._cpDetectedCols) ? window._cpDetectedCols : [];
+          var expectsEndUser = detectedCols.some(function(col) {
+            var k = String(col || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return k.indexOf('enduser') >= 0 || (k.indexOf('end') >= 0 && k.indexOf('user') >= 0);
+          });
+          if (expectsEndUser) {
+            var hasEndUserValue = cached.data.some(function(row) {
+              return row && String(row.endUser || '').trim().length > 0;
+            });
+            if (!hasEndUserValue) cached = null;
+          }
+        }
       }
 
       if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
@@ -9489,7 +9506,7 @@
     }
 
     // Build table — HD Premium rows
-    var html = '<table class="prem-table cyan" style="width:100%;min-width:900px;">';
+    var html = '<table class="prem-table cyan" style="width:100%;min-width:1020px;">';
     html += '<tbody>';
     rows.forEach(function(row, i) {
       var globalIdx = start + i;
@@ -9505,6 +9522,7 @@
       html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-muted);">' + esc(row.state) + '</td>';
       html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-text);">' + esc(row.country) + '</td>';
       html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-muted);font-size:10px;">' + esc(row.timezone) + '</td>';
+      html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);color:var(--ss-text);">' + esc(row.endUser || '—') + '</td>';
       html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);text-align:center;"><span class="cp-sys-badge">' + esc(row.systems || '—') + '</span></td>';
       html += '<td style="padding:6px 11px;border-bottom:1px solid rgba(255,255,255,.025);">';
       if (row.url) {
@@ -9642,9 +9660,9 @@
   window._cpExportCsv = function() {
     var rows = _state.filtered;
     if (!rows.length) { alert('No data to export.'); return; }
-    var header = ['Site','Directory','Address 1','Country','City','State/Province/Region','Zip/Postal Code','Time Zone','Number of Control Systems','URL CONNECT+ LINK'];
+    var header = ['Site','Directory','Address 1','Country','City','State/Province/Region','Zip/Postal Code','Time Zone','End User','Number of Control Systems','URL CONNECT+ LINK'];
     var csv = [header].concat(rows.map(function(r) {
-      return [r.site,r.directory,r.address1,r.country,r.city,r.state,r.zip,r.timezone,r.systems,r.url].map(function(v) {
+      return [r.site,r.directory,r.address1,r.country,r.city,r.state,r.zip,r.timezone,r.endUser,r.systems,r.url].map(function(v) {
         return '"' + String(v||'').replace(/"/g,'""') + '"';
       });
     })).map(function(r) { return r.join ? r.join(',') : r; }).join('\n');
@@ -9757,6 +9775,7 @@
       if (urlEl) urlEl.value = stored.csvUrl || '';
       window._cpCsvUrl = stored.csvUrl || '';
       window._cpSearchCols = (Array.isArray(stored.searchColumns) && stored.searchColumns.length > 0) ? stored.searchColumns : null;
+      window._cpDetectedCols = Array.isArray(stored.detectedColumns) ? stored.detectedColumns : null;
       if (stored.csvUrl && stored.detectedColumns && stored.detectedColumns.length) {
         _showColumnsPreview(stored.detectedColumns, stored.rowCount || null);
       }
@@ -9867,6 +9886,7 @@
         stored.csvUrl = url; // save normalized URL
         storeSettings(stored);
         window._cpCsvUrl = url;
+        window._cpDetectedCols = header;
 
         setUrlStatus(
           '<i class="fas fa-check-circle" style="margin-right:6px;"></i>' +
