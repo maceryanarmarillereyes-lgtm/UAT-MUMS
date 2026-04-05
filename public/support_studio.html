@@ -304,6 +304,73 @@
       border-color: rgba(88,166,255,.32);
     }
 
+    /* QuickBase grouped menu */
+    .ss-quickbase-menu {
+      position: relative;
+      flex-shrink: 0;
+    }
+    .ss-quickbase-trigger {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--ss-muted);
+      padding: 5px 11px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 11px;
+      font-family: var(--ss-font);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .ss-quickbase-trigger:hover {
+      color: var(--ss-text);
+      background: rgba(255,255,255,.05);
+    }
+    .ss-quickbase-menu.open .ss-quickbase-trigger,
+    .ss-quickbase-trigger.active {
+      background: rgba(88,166,255,.10);
+      color: var(--ss-accent);
+      border-color: rgba(88,166,255,.32);
+    }
+    .ss-quickbase-logo {
+      width: 13px;
+      height: 13px;
+      object-fit: contain;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .ss-quickbase-caret {
+      font-size: 9px;
+      opacity: .85;
+      margin-left: 1px;
+    }
+    .ss-quickbase-dropdown {
+      position: fixed;
+      top: 0;
+      left: 0;
+      min-width: 188px;
+      padding: 5px;
+      border-radius: 10px;
+      border: 1px solid rgba(88,166,255,.25);
+      background: rgba(13,17,23,.98);
+      box-shadow: 0 12px 28px rgba(0,0,0,.45);
+      display: none;
+      z-index: 9999;
+      backdrop-filter: blur(8px);
+    }
+    .ss-quickbase-menu.open .ss-quickbase-dropdown {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .ss-quickbase-dropdown .ss-tab {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
     /* Home icon tab */
     .ss-home-btn {
       width: 32px; height: 32px;
@@ -2426,9 +2493,24 @@
            General Settings always stays in ss-header-right (rightmost, separated).
       ═══════════════════════════════════════════════════════════════ -->
       <nav class="ss-tabs" id="ss-tabs">
-        <button class="ss-tab active" data-tab="qbs" id="ss-tab-qbs">
-          <i class="fas fa-database"></i> QuickBase_S
-        </button>
+        <div class="ss-quickbase-menu" id="ss-quickbase-menu">
+          <button class="ss-quickbase-trigger" id="ss-quickbase-trigger" type="button" aria-haspopup="menu" aria-expanded="false">
+            <img class="ss-quickbase-logo" src="/Widget%20Images/quickbase_logo.svg" alt="QuickBase logo">
+            <span>QUICKBASE</span>
+            <i class="fas fa-chevron-down ss-quickbase-caret"></i>
+          </button>
+          <div class="ss-quickbase-dropdown" id="ss-quickbase-dropdown" role="menu" aria-label="QuickBase tabs">
+            <button class="ss-tab active" data-tab="qbs" id="ss-tab-qbs" role="menuitem">
+              <i class="fas fa-database"></i> QuickBase_S
+            </button>
+            <button class="ss-tab" data-tab="knowledge_base" id="ss-tab-knowledge_base" role="menuitem">
+              <i class="fas fa-book"></i> Knowledge Base
+            </button>
+            <button class="ss-tab" data-tab="support_records" id="ss-tab-support_records" role="menuitem">
+              <i class="fas fa-book-open"></i> Support Records
+            </button>
+          </div>
+        </div>
         <button class="ss-tab" data-tab="connectplus" id="ss-tab-connectplus">
           <i class="fas fa-plug"></i> Connect+
         </button>
@@ -2438,14 +2520,8 @@
         <button class="ss-tab" data-tab="contact_information" id="ss-tab-contact_information">
           <i class="fas fa-address-book"></i> Contact Information
         </button>
-        <button class="ss-tab" data-tab="knowledge_base" id="ss-tab-knowledge_base">
-          <i class="fas fa-book"></i> Knowledge Base
-        </button>
         <button class="ss-tab" data-tab="catalog" id="ss-tab-catalog">
           <i class="fas fa-microchip"></i> Product Controllers
-        </button>
-        <button class="ss-tab" data-tab="support_records" id="ss-tab-support_records">
-          <i class="fas fa-book-open"></i> Support Records
         </button>
         <button class="ss-tab" data-tab="search_engine_2" id="ss-tab-search_engine_2" onclick="return window._openSearchEngine2 ? window._openSearchEngine2(event) : true;">
           <i class="fas fa-search"></i> Search Engine 2
@@ -6950,12 +7026,20 @@
 
   // ── Tab switching — single persistent layout ────────────────────
   const LEFT_PANELS = ['home','catalog','config','qbs','connectplus','parts_number','contact_information','knowledge_base','support_records','search_engine_2'];
+  const QUICKBASE_GROUPED_TABS = new Set(['qbs', 'knowledge_base', 'support_records']);
+
+  function syncQuickbaseMenuState(activeTab) {
+    const qbTrigger = document.getElementById('ss-quickbase-trigger');
+    if (!qbTrigger) return;
+    qbTrigger.classList.toggle('active', QUICKBASE_GROUPED_TABS.has(activeTab));
+  }
 
   function activateTab(target) {
     const contentTarget = (target === 'search_engine_2') ? 'support_records' : target;
 
     document.querySelectorAll('.ss-tab').forEach(t =>
       t.classList.toggle('active', t.dataset.tab === target));
+    syncQuickbaseMenuState(target);
     LEFT_PANELS.forEach(id => {
       const el = document.getElementById('left-panel-' + id);
       if (!el) return;
@@ -7026,6 +7110,51 @@
     activateTab('search_engine_2');
     return false;
   };
+
+  const qbMenu = document.getElementById('ss-quickbase-menu');
+  const qbTrigger = document.getElementById('ss-quickbase-trigger');
+  const qbDropdown = document.getElementById('ss-quickbase-dropdown');
+  function positionQuickbaseMenu() {
+    if (!qbTrigger || !qbDropdown) return;
+    const r = qbTrigger.getBoundingClientRect();
+    const menuWidth = Math.max(188, Math.round(r.width));
+    const top = Math.round(r.bottom + 6);
+    const maxLeft = Math.max(8, window.innerWidth - menuWidth - 8);
+    const left = Math.max(8, Math.min(Math.round(r.left), maxLeft));
+    qbDropdown.style.top = top + 'px';
+    qbDropdown.style.left = left + 'px';
+    qbDropdown.style.minWidth = menuWidth + 'px';
+  }
+  function closeQuickbaseMenu() {
+    if (!qbMenu || !qbTrigger) return;
+    qbMenu.classList.remove('open');
+    qbTrigger.setAttribute('aria-expanded', 'false');
+  }
+  if (qbMenu && qbTrigger) {
+    qbTrigger.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const willOpen = !qbMenu.classList.contains('open');
+      qbMenu.classList.toggle('open', willOpen);
+      qbTrigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (willOpen) positionQuickbaseMenu();
+    });
+    document.addEventListener('click', function(e) {
+      if (!qbMenu.contains(e.target)) closeQuickbaseMenu();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeQuickbaseMenu();
+    });
+    window.addEventListener('resize', function() {
+      if (qbMenu.classList.contains('open')) positionQuickbaseMenu();
+    });
+    window.addEventListener('scroll', function() {
+      if (qbMenu.classList.contains('open')) positionQuickbaseMenu();
+    }, true);
+    qbMenu.querySelectorAll('.ss-tab').forEach(function(tabBtn) {
+      tabBtn.addEventListener('click', function() { closeQuickbaseMenu(); });
+    });
+  }
 
   document.querySelectorAll('.ss-tab').forEach(tab => {
     tab.addEventListener('click', () => activateTab(tab.dataset.tab));
