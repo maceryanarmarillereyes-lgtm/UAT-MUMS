@@ -348,8 +348,8 @@
       margin-left: 1px;
     }
     .ss-quickbase-dropdown {
-      position: absolute;
-      top: calc(100% + 6px);
+      position: fixed;
+      top: 0;
       left: 0;
       min-width: 188px;
       padding: 5px;
@@ -358,7 +358,7 @@
       background: rgba(13,17,23,.98);
       box-shadow: 0 12px 28px rgba(0,0,0,.45);
       display: none;
-      z-index: 60;
+      z-index: 9999;
       backdrop-filter: blur(8px);
     }
     .ss-quickbase-menu.open .ss-quickbase-dropdown {
@@ -2495,7 +2495,7 @@
       <nav class="ss-tabs" id="ss-tabs">
         <div class="ss-quickbase-menu" id="ss-quickbase-menu">
           <button class="ss-quickbase-trigger" id="ss-quickbase-trigger" type="button" aria-haspopup="menu" aria-expanded="false">
-            <img class="ss-quickbase-logo" src="/Widget%20Images/quickbase_logo.png" alt="QuickBase logo">
+            <img class="ss-quickbase-logo" src="/Widget%20Images/quickbase_logo.svg" alt="QuickBase logo">
             <span>QUICKBASE</span>
             <i class="fas fa-chevron-down ss-quickbase-caret"></i>
           </button>
@@ -7113,6 +7113,18 @@
 
   const qbMenu = document.getElementById('ss-quickbase-menu');
   const qbTrigger = document.getElementById('ss-quickbase-trigger');
+  const qbDropdown = document.getElementById('ss-quickbase-dropdown');
+  function positionQuickbaseMenu() {
+    if (!qbTrigger || !qbDropdown) return;
+    const r = qbTrigger.getBoundingClientRect();
+    const menuWidth = Math.max(188, Math.round(r.width));
+    const top = Math.round(r.bottom + 6);
+    const maxLeft = Math.max(8, window.innerWidth - menuWidth - 8);
+    const left = Math.max(8, Math.min(Math.round(r.left), maxLeft));
+    qbDropdown.style.top = top + 'px';
+    qbDropdown.style.left = left + 'px';
+    qbDropdown.style.minWidth = menuWidth + 'px';
+  }
   function closeQuickbaseMenu() {
     if (!qbMenu || !qbTrigger) return;
     qbMenu.classList.remove('open');
@@ -7125,6 +7137,7 @@
       const willOpen = !qbMenu.classList.contains('open');
       qbMenu.classList.toggle('open', willOpen);
       qbTrigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (willOpen) positionQuickbaseMenu();
     });
     document.addEventListener('click', function(e) {
       if (!qbMenu.contains(e.target)) closeQuickbaseMenu();
@@ -7132,6 +7145,12 @@
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') closeQuickbaseMenu();
     });
+    window.addEventListener('resize', function() {
+      if (qbMenu.classList.contains('open')) positionQuickbaseMenu();
+    });
+    window.addEventListener('scroll', function() {
+      if (qbMenu.classList.contains('open')) positionQuickbaseMenu();
+    }, true);
     qbMenu.querySelectorAll('.ss-tab').forEach(function(tabBtn) {
       tabBtn.addEventListener('click', function() { closeQuickbaseMenu(); });
     });
