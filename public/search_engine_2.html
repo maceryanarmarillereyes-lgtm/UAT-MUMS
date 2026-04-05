@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Search Engine 2 — MUMS Support Studio</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/css/search_engine_2_enterprise.css"/>
   <style>
     :root{--bg:#070d1a;--surface:#0d1630;--surface2:#101b3a;--border:rgba(116,151,212,.18);--border2:rgba(116,151,212,.28);--text:#c8d8f0;--white:#e8f4ff;--muted:#4a6080;--muted2:#7a94b8;--accent:#39a0ff;--green:#10b981;--amber:#f59e0b;--rose:#f43f5e;}
     *{box-sizing:border-box;margin:0;padding:0}
@@ -144,6 +145,16 @@
 <body>
 
 <div class="se2-header">
+  <!-- Logo row -->
+  <div class="se2-logo-row">
+    <div class="se2-logo">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </div>
+    <span class="se2-app-name">Search Engine 2</span>
+    <div class="se2-header-meta">
+      <span class="se2-badge-count" id="se2-indexed-count">— records</span>
+    </div>
+  </div>
   <div class="search-wrap" id="search-wrap">
     <span class="search-icon">&#128270;</span>
     <input id="q" class="search-input" type="text"
@@ -158,22 +169,28 @@
 
 <div class="cats-row">
   <div class="cat-card cat-blue" data-g="qb" onclick="filterGroup('qb')">
-    <span class="cat-icon">&#128279;</span><div class="cat-num c-blue" id="cnt-qb">&#8212;</div><div class="cat-lbl">QuickBase Cases</div>
+    <div class="cat-icon-wrap"><span class="cat-icon">&#128279;</span></div>
+    <div class="cat-num c-blue" id="cnt-qb">&#8212;</div><div class="cat-lbl">QuickBase Cases</div>
   </div>
   <div class="cat-card cat-green" data-g="kb" onclick="filterGroup('kb')">
-    <span class="cat-icon">&#128218;</span><div class="cat-num c-green" id="cnt-kb">&#8212;</div><div class="cat-lbl">Knowledge Base</div>
+    <div class="cat-icon-wrap"><span class="cat-icon">&#128218;</span></div>
+    <div class="cat-num c-green" id="cnt-kb">&#8212;</div><div class="cat-lbl">Knowledge Base</div>
   </div>
   <div class="cat-card cat-amber" data-g="parts" onclick="filterGroup('parts')">
-    <span class="cat-icon">&#128297;</span><div class="cat-num c-amber" id="cnt-parts">&#8212;</div><div class="cat-lbl">Parts</div>
+    <div class="cat-icon-wrap"><span class="cat-icon">&#128297;</span></div>
+    <div class="cat-num c-amber" id="cnt-parts">&#8212;</div><div class="cat-lbl">Parts</div>
   </div>
   <div class="cat-card cat-violet" data-g="ctrl" onclick="filterGroup('ctrl')">
-    <span class="cat-icon">&#128187;</span><div class="cat-num c-violet" id="cnt-ctrl">&#8212;</div><div class="cat-lbl">Controllers</div>
+    <div class="cat-icon-wrap"><span class="cat-icon">&#128187;</span></div>
+    <div class="cat-num c-violet" id="cnt-ctrl">&#8212;</div><div class="cat-lbl">Controllers</div>
   </div>
   <div class="cat-card cat-cyan" data-g="net" onclick="filterGroup('net')">
-    <span class="cat-icon">&#128225;</span><div class="cat-num c-cyan" id="cnt-net">&#8212;</div><div class="cat-lbl">Connect+ / Net</div>
+    <div class="cat-icon-wrap"><span class="cat-icon">&#128225;</span></div>
+    <div class="cat-num c-cyan" id="cnt-net">&#8212;</div><div class="cat-lbl">Connect+ / Net</div>
   </div>
   <div class="cat-card cat-rose" data-g="other" onclick="filterGroup('other')">
-    <span class="cat-icon">&#128203;</span><div class="cat-num c-rose" id="cnt-other">&#8212;</div><div class="cat-lbl">Support Records</div>
+    <div class="cat-icon-wrap"><span class="cat-icon">&#128203;</span></div>
+    <div class="cat-num c-rose" id="cnt-other">&#8212;</div><div class="cat-lbl">Support Records</div>
   </div>
 </div>
 
@@ -442,7 +459,147 @@
       else if(e.key==='Enter'&&state.acIndex>=0){e.preventDefault();var sel=state.acItems[state.acIndex];if(sel)acSelect(sel);}
     }
   });
-  qEl.addEventListener('input',function(){state.query=qEl.value;showAutocomplete(state.query);run();});
+  /* ── ENTERPRISE: update indexed count badge in header ── */
+  var _origUpdateTotal = updateTotal;
+  // Sync the se2-indexed-count badge
+  function _updateIndexedBadge(){
+    var el=document.getElementById('se2-indexed-count');
+    if(el&&state.all.length)el.textContent=state.all.length.toLocaleString()+' records';
+  }
+
+  /* ── ENTERPRISE: Toolbar (view toggle + sort) injected before results ── */
+  var _se2CurrentSort = 'relevance';
+  var _se2CurrentView = 'grouped';
+  function _injectToolbar(q, total, shown){
+    var existing = document.querySelector('.se2-enterprise-toolbar');
+    if(existing) existing.remove();
+    var tb = document.createElement('div');
+    tb.className = 'results-header se2-enterprise-toolbar';
+    tb.innerHTML =
+      '<div class="results-count">Showing <strong>'+Math.min(shown,500).toLocaleString()+'</strong> results for <em>&ldquo;'+q.replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c;})+' &rdquo;</em></div>'+
+      '<div class="se2-toolbar-right">'+
+        '<button class="se2-view-btn active" id="se2-vbtn-grouped" title="Grouped view" onclick="window._se2SetView(\'grouped\')">'+
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="4" rx="1"/><rect x="3" y="10" width="7" height="4" rx="1"/><rect x="3" y="17" width="7" height="4" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>'+
+        '</button>'+
+        '<button class="se2-view-btn" id="se2-vbtn-list" title="List view" onclick="window._se2SetView(\'list\')">'+
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>'+
+        '</button>'+
+        '<div class="se2-vdivider"></div>'+
+        '<button class="se2-sort-btn" id="se2-sort-toggle" onclick="window._se2CycleSort()">'+
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/><polyline points="5 12 12 5 19 12"/></svg>'+
+          '<span id="se2-sort-label">Relevance</span>'+
+        '</button>'+
+      '</div>';
+    bodyEl.insertBefore(tb, bodyEl.firstChild);
+  }
+  window._se2SetView = function(v){
+    _se2CurrentView = v;
+    var gb=document.getElementById('se2-vbtn-grouped');
+    var lb=document.getElementById('se2-vbtn-list');
+    if(gb) gb.classList.toggle('active', v==='grouped');
+    if(lb) lb.classList.toggle('active', v==='list');
+    document.querySelectorAll('.group-label').forEach(function(el){
+      el.style.display = (v==='list') ? 'none' : '';
+    });
+  };
+  window._se2CycleSort = function(){
+    var sortEl=document.getElementById('sort-by');
+    var labelEl=document.getElementById('se2-sort-label');
+    if(!sortEl) return;
+    var opts=['relevance','newest','oldest'];
+    var labels=['Relevance','Case # ↑','Case # ↓'];
+    var cur=opts.indexOf(sortEl.value);
+    var next=(cur+1)%opts.length;
+    sortEl.value=opts[next];
+    if(labelEl) labelEl.textContent=labels[next];
+    applyFilters();
+  };
+
+  /* ── ENTERPRISE: Upgrade card appearance by post-processing rendered HTML ── */
+  var _se2GroupColors={qb:'#3b82f6',kb:'#10b981',parts:'#f59e0b',ctrl:'#a855f7',net:'#06b6d4',other:'#f43f5e'};
+  var _se2GroupIcons={qb:'🔗',kb:'📚',parts:'🔩',ctrl:'🖥️',net:'📡',other:'📋'};
+
+  function _se2EnhanceRenderedCards(){
+    // Wrap result-card content in se2-card-inner flex layout
+    document.querySelectorAll('.result-card').forEach(function(card){
+      if(card.querySelector('.se2-card-inner')) return; // already done
+      var inner = document.createElement('div');
+      inner.className = 'se2-card-inner';
+
+      // Detect accent from cat badge
+      var badge = card.querySelector('.result-cat-badge');
+      var color = badge ? (badge.style.color||'#64748b') : '#64748b';
+
+      // Source icon
+      var icon = document.createElement('div');
+      icon.className = 'se2-src-icon';
+      icon.style.background = color.replace('rgb','rgba').replace(')',',0.12)');
+      icon.style.color = color;
+      icon.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+
+      // Content wrapper
+      var content = document.createElement('div');
+      content.className = 'se2-card-content';
+
+      // Move existing content into content wrapper
+      while(card.firstChild){ content.appendChild(card.firstChild); }
+
+      // Chevron
+      var chev = document.createElement('div');
+      chev.className = 'se2-chevron';
+      chev.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>';
+
+      inner.appendChild(icon);
+      inner.appendChild(content);
+      inner.appendChild(chev);
+      card.appendChild(inner);
+
+      // Style the expand-row
+      var expRow = card.querySelector('.result-expand-row');
+      if(expRow) content.appendChild(expRow);
+
+      // Full resolution — move inside content
+      var fullRes = card.querySelector('.result-full-res');
+      if(fullRes) content.appendChild(fullRes);
+    });
+
+    // Enhance group-labels with icon
+    document.querySelectorAll('.group-label').forEach(function(gl){
+      if(gl.querySelector('.se2-group-icon')) return;
+      var color = gl.style.color || '#64748b';
+      var gKey = Object.keys(_se2GroupColors).find(function(k){ return _se2GroupColors[k]===color; }) || 'other';
+      // Extract count from last text
+      var text = gl.textContent;
+      var countMatch = text.match(/(\d[\d,]*)\s*$/) || ['',''];
+      var label = text.replace(/\s*\d[\d,]*\s*$/, '').replace(/—\s*/,'').trim();
+      gl.innerHTML =
+        '<div class="se2-group-icon" style="background:'+color.replace('rgb','rgba').replace(')',',0.12)')+';color:'+color+'">'+_se2GroupIcons[gKey]+'</div>'+
+        '<span style="color:'+color+';font-size:15px;font-weight:700;">'+label+'</span>'+
+        '<span class="se2-group-count">'+countMatch[0]+'</span>';
+    });
+  }
+
+  /* ── Hook into renderCurrentResults to inject toolbar + enhance cards ── */
+  var _origRenderResults = window.renderCurrentResults || function(){};
+  // We observe body mutations to enhance after render
+  if(typeof MutationObserver !== 'undefined'){
+    var _se2Observer = new MutationObserver(function(mutations){
+      var anyAdded = mutations.some(function(m){ return m.addedNodes.length>0; });
+      if(!anyAdded) return;
+      var q = state.query;
+      var results = state.lastResults;
+      if(q && results && results.length){
+        _se2EnhanceRenderedCards();
+        // Inject toolbar if not yet there
+        if(!document.querySelector('.se2-enterprise-toolbar')){
+          _injectToolbar(q, results.length, Math.min(results.length,500));
+        }
+      }
+      _updateIndexedBadge();
+    });
+    _se2Observer.observe(bodyEl, {childList:true, subtree:true});
+  }
+
   qEl.addEventListener('blur',function(){setTimeout(hideAutocomplete,180);});
   statusEl.style.display='inline';statusEl.textContent='Loading…';
   fetch('/support_records_kb.json')
