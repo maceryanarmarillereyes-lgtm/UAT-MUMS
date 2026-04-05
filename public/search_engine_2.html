@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Search Engine 2 — MUMS Support Studio</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-  <link href="/css/search_engine_2_enterprise.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="/css/search_engine_2_enterprise.css"/>
   <style>
     :root{--bg:#070d1a;--surface:#0d1630;--surface2:#101b3a;--border:rgba(116,151,212,.18);--border2:rgba(116,151,212,.28);--text:#c8d8f0;--white:#e8f4ff;--muted:#4a6080;--muted2:#7a94b8;--accent:#39a0ff;--green:#10b981;--amber:#f59e0b;--rose:#f43f5e;}
     *{box-sizing:border-box;margin:0;padding:0}
@@ -142,14 +142,20 @@
     @keyframes fadeSlideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
   </style>
 </head>
-<body class="se2-enterprise">
+<body>
 
-<div class="se2-header se-header">
-  <div class="se-header-top">
-    <div class="se-logo">&#128269;</div>
-    <div class="se-app-name">Search Engine 2.0</div>
+<div class="se2-header">
+  <!-- Logo row -->
+  <div class="se2-logo-row">
+    <div class="se2-logo">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </div>
+    <span class="se2-app-name">Search Engine 2</span>
+    <div class="se2-header-meta">
+      <span class="se2-badge-count" id="se2-indexed-count">— records</span>
+    </div>
   </div>
-  <div class="search-wrap se-search-wrapper" id="search-wrap">
+  <div class="search-wrap" id="search-wrap">
     <span class="search-icon">&#128270;</span>
     <input id="q" class="search-input" type="text"
       placeholder="Search support records, cases, parts, knowledge base&#x2026;"
@@ -161,28 +167,34 @@
   </div>
 </div>
 
-<div class="cats-row se-cats">
-  <div class="cat-card cat-blue se-cat se-cat-blue" data-g="qb" onclick="filterGroup('qb')">
-    <span class="cat-icon se-cat-icon">&#128279;</span><div class="cat-num c-blue se-cat-count" id="cnt-qb">&#8212;</div><div class="cat-lbl se-cat-label">QuickBase Cases</div>
+<div class="cats-row">
+  <div class="cat-card cat-blue" data-g="qb" onclick="filterGroup('qb')">
+    <div class="cat-icon-wrap"><span class="cat-icon">&#128279;</span></div>
+    <div class="cat-num c-blue" id="cnt-qb">&#8212;</div><div class="cat-lbl">QuickBase Cases</div>
   </div>
-  <div class="cat-card cat-green se-cat se-cat-green" data-g="kb" onclick="filterGroup('kb')">
-    <span class="cat-icon se-cat-icon">&#128218;</span><div class="cat-num c-green se-cat-count" id="cnt-kb">&#8212;</div><div class="cat-lbl se-cat-label">Knowledge Base</div>
+  <div class="cat-card cat-green" data-g="kb" onclick="filterGroup('kb')">
+    <div class="cat-icon-wrap"><span class="cat-icon">&#128218;</span></div>
+    <div class="cat-num c-green" id="cnt-kb">&#8212;</div><div class="cat-lbl">Knowledge Base</div>
   </div>
-  <div class="cat-card cat-amber se-cat se-cat-amber" data-g="parts" onclick="filterGroup('parts')">
-    <span class="cat-icon se-cat-icon">&#128297;</span><div class="cat-num c-amber se-cat-count" id="cnt-parts">&#8212;</div><div class="cat-lbl se-cat-label">Parts</div>
+  <div class="cat-card cat-amber" data-g="parts" onclick="filterGroup('parts')">
+    <div class="cat-icon-wrap"><span class="cat-icon">&#128297;</span></div>
+    <div class="cat-num c-amber" id="cnt-parts">&#8212;</div><div class="cat-lbl">Parts</div>
   </div>
-  <div class="cat-card cat-violet se-cat se-cat-violet" data-g="ctrl" onclick="filterGroup('ctrl')">
-    <span class="cat-icon se-cat-icon">&#128187;</span><div class="cat-num c-violet se-cat-count" id="cnt-ctrl">&#8212;</div><div class="cat-lbl se-cat-label">Controllers</div>
+  <div class="cat-card cat-violet" data-g="ctrl" onclick="filterGroup('ctrl')">
+    <div class="cat-icon-wrap"><span class="cat-icon">&#128187;</span></div>
+    <div class="cat-num c-violet" id="cnt-ctrl">&#8212;</div><div class="cat-lbl">Controllers</div>
   </div>
-  <div class="cat-card cat-cyan se-cat se-cat-cyan" data-g="net" onclick="filterGroup('net')">
-    <span class="cat-icon se-cat-icon">&#128225;</span><div class="cat-num c-cyan se-cat-count" id="cnt-net">&#8212;</div><div class="cat-lbl se-cat-label">Connect+ / Net</div>
+  <div class="cat-card cat-cyan" data-g="net" onclick="filterGroup('net')">
+    <div class="cat-icon-wrap"><span class="cat-icon">&#128225;</span></div>
+    <div class="cat-num c-cyan" id="cnt-net">&#8212;</div><div class="cat-lbl">Connect+ / Net</div>
   </div>
-  <div class="cat-card cat-rose se-cat se-cat-rose" data-g="other" onclick="filterGroup('other')">
-    <span class="cat-icon se-cat-icon">&#128203;</span><div class="cat-num c-rose se-cat-count" id="cnt-other">&#8212;</div><div class="cat-lbl se-cat-label">Support Records</div>
+  <div class="cat-card cat-rose" data-g="other" onclick="filterGroup('other')">
+    <div class="cat-icon-wrap"><span class="cat-icon">&#128203;</span></div>
+    <div class="cat-num c-rose" id="cnt-other">&#8212;</div><div class="cat-lbl">Support Records</div>
   </div>
 </div>
 
-<div class="total-row se-toolbar-row" id="total-row">Loading&#x2026;</div>
+<div class="total-row" id="total-row">Loading&#x2026;</div>
 
 <div class="ai-panel" id="ai-panel">
   <div class="ai-panel-header">
@@ -216,7 +228,7 @@
   <div class="history-chips" id="history-chips"></div>
 </div>
 
-<div class="se2-body se-main" id="body">
+<div class="se2-body" id="body">
   <div class="loading-state"><div class="spinner"></div><span>Loading indexed records&#x2026;</span></div>
 </div>
 
