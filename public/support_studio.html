@@ -15541,7 +15541,8 @@
     var haystack = [
       r.title || '', r.res || '', r.cat || '',
       r.case || '', r.eu || '', r.id || '',
-      r.site || '', r.directory || '', r.endUser || '',
+      r.site || '', r.directory || '', r.endUser || '', r.assignedTo || '',
+      r.searchBlob || '',
       r.partNo || '', r.desc || '', r.brand || ''
     ].join(' ').toLowerCase();
 
@@ -15832,14 +15833,21 @@
       var caseNum = snap.recordId || fv(['case #','case number','record id']);
       var title   = fv(['short description','description','subject','concern','title']);
       var endUser = fv(['end user','client','account','customer']);
+      var assignedTo = fv(['assigned to','assignee','owner']);
       var status  = fv(['case status','status']);
       var notes   = fv(['case notes','notes','latest update']);
       var type    = fv(['type','category']);
+      var allFieldText = Object.keys(snap.fields || {}).map(function(fid) {
+        var cell = snap.fields[fid];
+        return (cell && cell.value != null) ? String(cell.value) : '';
+      }).filter(Boolean).join(' · ');
       return {
         _src: 'qb',
         title: title || ('QB Case #' + caseNum),
         eu: endUser,
-        res: notes.slice(0, 400),
+        assignedTo: assignedTo,
+        res: (notes || allFieldText).slice(0, 1200),
+        searchBlob: allFieldText,
         cat: type || 'QB Case',
         case: caseNum,
         status: status,
@@ -15887,15 +15895,22 @@
           var caseNum = String((r && r.qbRecordId) || pickValue(['case #', 'case number', 'record id']) || '');
           var title = pickValue(['short description', 'description', 'subject', 'concern', 'title']);
           var endUser = pickValue(['end user', 'client', 'account', 'customer']);
+          var assignedTo = pickValue(['assigned to', 'assignee', 'owner']);
           var status = pickValue(['case status', 'status']);
           var notes = pickValue(['case notes', 'notes', 'latest update']);
           var type = pickValue(['type', 'category']);
+          var allFieldText = Object.keys(fields).map(function(fid) {
+            var cell = fields[fid];
+            return (cell && cell.value != null) ? String(cell.value) : '';
+          }).filter(Boolean).join(' · ');
 
           return {
             _src: 'qb',
             title: title || ('QB Case #' + caseNum),
             eu: endUser,
-            res: notes.slice(0, 400),
+            assignedTo: assignedTo,
+            res: (notes || allFieldText).slice(0, 1200),
+            searchBlob: allFieldText,
             cat: type || 'QB Case',
             case: caseNum,
             status: status,
