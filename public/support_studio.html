@@ -4516,7 +4516,7 @@
         .se2-filter-btn.active{color:#fff;box-shadow:0 3px 12px rgba(88,166,255,.18)}
         .se2-filter-count{font-size:9px;font-weight:800;padding:1px 6px;border-radius:99px;background:rgba(255,255,255,.18)}
         /* Stats grid */
-        #se2-stats-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;padding:14px 20px 6px;flex-shrink:0}
+        #se2-stats-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;padding:14px 20px 6px;flex-shrink:0}
         .se2-stat-card{display:flex;flex-direction:column;align-items:center;padding:10px 8px;border-radius:12px;background:rgba(13,17,23,.9);border:1px solid rgba(255,255,255,.07);cursor:pointer;transition:all .18s}
         .se2-stat-card:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.14);box-shadow:0 4px 16px rgba(0,0,0,.3)}
         .se2-stat-card.active{box-shadow:0 0 0 2px currentColor}
@@ -15408,6 +15408,7 @@
   // Source definitions
   var SOURCES = {
     qb:    { label:'QuickBase Cases',    shortLabel:'QuickBase',  color:'#58a6ff', icon:'fa-link'         },
+    qbd:   { label:'Deep Search QB',     shortLabel:'Deep Search QB', color:'#3b82f6', icon:'fa-search' },
     kb:    { label:'Knowledge Base',     shortLabel:'Knowledge',  color:'#10b981', icon:'fa-book'         },
     parts: { label:'Parts',              shortLabel:'Parts',      color:'#f59e0b', icon:'fa-barcode'      },
     ctrl:  { label:'Controllers',        shortLabel:'Controllers',color:'#a78bfa', icon:'fa-microchip'    },
@@ -15525,9 +15526,9 @@
 
   // ── Source helpers ─────────────────────────────────────────────────────────
   function _getSource(record) {
-    var g = CAT_MAP[record._id || record.id];
-    if (g) return g;
-    if (record._src) return record._src;
+    if (record && record._src && SOURCES[record._src]) return record._src;
+    var g = CAT_MAP[(record && (record._id || record.id)) || ''];
+    if (g && SOURCES[g]) return g;
     var cat = (record.cat || '').toLowerCase();
     if (cat.includes('knowledge') || cat.includes('guide') || cat.includes('manual')) return 'kb';
     if (cat.includes('part') || cat.includes('controller')) return 'parts';
@@ -15589,17 +15590,31 @@
     });
   }
 
-  function _mapSupportRecords(records) {
+  function _mapSupportRecords(records, forcedSrc) {
     return _toArray(records).map(function(r) {
-      return Object.assign({}, r, { _id: r.id, _src: _getSource(Object.assign({}, r, { _src:'sr' })) || 'sr' });
+      var resolved = forcedSrc || 'sr';
+      if (!SOURCES[resolved]) resolved = 'sr';
+      return Object.assign({}, r, { _id: r.id, _src: resolved });
     });
+  }
+
+  function _sourceFromStoreKey(key) {
+    var k = String(key || '').toLowerCase();
+    if (k.includes('qb')) return 'qb';
+    if (k.includes('cp') || k.includes('connect')) return 'net';
+    if (k.includes('part')) return 'parts';
+    if (k.includes('contact') || k.includes('ci')) return 'ci';
+    if (k.includes('controller') || k.includes('product')) return 'ctrl';
+    if (k.includes('knowledge') || k.includes('kb')) return 'kb';
+    if (k.includes('support') || k.includes('sr')) return 'sr';
+    return 'sr';
   }
 
   function _collectFutureTabRecords() {
     var out = [];
     var known = {
       __studioCpRecords:1, __studioPnRecords:1, __studioCiRecords:1,
-      __studioQbRecords:1, __se2ConnectData:1, __se2PartsData:1
+      __studioQbRecords:1, __studioSrRecords:1, __se2ConnectData:1, __se2PartsData:1
     };
     Object.keys(window).forEach(function(k) {
       if (known[k]) return;
@@ -15607,7 +15622,7 @@
       var arr = window[k];
       if (!Array.isArray(arr) || !arr.length) return;
       var cat = k.replace(/^__studio/i, '').replace(/Records$/i, '').replace(/_/g, ' ').trim() || 'Support Records';
-      out = out.concat(_mapGenericRecords(arr, 'sr', cat));
+      out = out.concat(_mapGenericRecords(arr, _sourceFromStoreKey(k), cat));
     });
     return out;
   }
@@ -15778,7 +15793,7 @@
     results.forEach(function(r) { var s2 = _getSource(r); if (!grouped[s2]) grouped[s2]=[]; grouped[s2].push(r); });
     var LIMIT = 50;
     var html = '';
-    ['qb','parts','ctrl','net','kb','ci','sr'].forEach(function(key) {
+    ['qb','qbd','parts','ctrl','net','kb','ci','sr'].forEach(function(key) {
       var rows = grouped[key]; if (!rows || !rows.length) return;
       var src = SOURCES[key];
       html += '<div class="se2-group" style="color:' + src.color + ';">' +
@@ -15964,9 +15979,10 @@
     }).filter(function(r) { return r.title || r.case; });
   }
 
-  function _mapQbRowsToSe2(rows, fallbackColumnMap) {
+  function _mapQbRowsToSe2(rows, fallbackColumnMap, sourceKey) {
     var safeRows = Array.isArray(rows) ? rows : [];
     var globalColumnMap = (fallbackColumnMap && typeof fallbackColumnMap === 'object') ? fallbackColumnMap : {};
+    var qbSource = SOURCES[sourceKey] ? sourceKey : 'qb';
     return safeRows.map(function(r) {
       var fields = (r && r.fields && typeof r.fields === 'object') ? r.fields : {};
       var colMap = (r && r.columnMap && typeof r.columnMap === 'object') ? r.columnMap : globalColumnMap;
@@ -15995,7 +16011,7 @@
       var parsedDate = _normalizeDateValue(dateVal) || _normalizeDateValue(notes) || _normalizeDateValue(allFieldText);
 
       return {
-        _src: 'qb',
+        _src: qbSource,
         title: title || ('QB Case #' + caseNum),
         eu: endUser,
         assignedTo: assignedTo,
@@ -16090,7 +16106,7 @@
     fetchPage(0, [])
       .then(function(out) {
         if (seq !== _state.qbQuerySeq) return;
-        var mapped = _mapQbRowsToSe2((out && out.rows) || [], (out && out.columnMap) || {});
+        var mapped = _mapQbRowsToSe2((out && out.rows) || [], (out && out.columnMap) || {}, 'qbd');
         _state.qbQueryResults = mapped;
         _state.qbQueryReady = true;
       })
@@ -16263,14 +16279,7 @@
       .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
       .then(function(j) {
         var flat = Array.isArray(j.flat) ? j.flat : (Array.isArray(j) ? j : []);
-        var mapped = flat.map(function(r) {
-          var catLow = (r.cat || '').toLowerCase();
-          var src = 'sr';
-          if (catLow.includes('connect') || catLow.includes('network') || catLow.includes('vpn')) src = 'net';
-          if (catLow.includes('part') || catLow.includes('xr') || catLow.includes('cc200') || catLow.includes('license key')) src = 'parts';
-          if (catLow.includes('controller') || catLow.includes('programming')) src = 'ctrl';
-          return Object.assign({}, r, { _id: r.id, _src: src });
-        });
+        var mapped = _mapSupportRecords(flat, 'kb');
         window.__studioSrRecords = flat;
         window.__se2KbCache  = mapped;
         window.__se2KbLoaded = true;
@@ -16279,7 +16288,7 @@
       })
       .catch(function(err) {
         console.warn('[SE2] KB JSON load failed:', err.message);
-        var fallback = _mapSupportRecords(window.__studioSrRecords || []);
+        var fallback = _mapSupportRecords(window.__studioSrRecords || [], 'kb');
         window.__se2KbCache  = fallback;
         window.__se2KbLoaded = false;
         window.__se2KbPromise = null;
