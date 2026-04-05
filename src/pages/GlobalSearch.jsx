@@ -5,7 +5,7 @@ import SearchBar from "../components/search/SearchBar";
 import SearchFilters from "../components/search/SearchFilters";
 import SearchResults from "../components/search/SearchResults";
 import SearchStats from "../components/search/SearchStats";
-import { searchRecords, countBySource, countTotalBySource } from "../lib/searchEngine";
+import { searchRecords, countBySource, countTotalBySource, matchesSourceTab } from "../lib/searchEngine";
 
 const PAGE_SIZE = 50;
 const BATCH_SIZE = 500;
@@ -122,7 +122,7 @@ export default function GlobalSearch() {
   const filteredResults = useMemo(() => {
     let results = activeTab === 'all'
       ? searchResults
-      : searchResults.filter(r => r.source_tab === activeTab);
+      : searchResults.filter(r => matchesSourceTab(r, activeTab));
 
     results = [...results].sort((a, b) => {
       const dateA = new Date(a.created_date).getTime();

@@ -42,11 +42,13 @@ function getSnippet(text, query, maxLen = 200) {
 
 export default function ResultCard({ record, query, index }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const showCaseNumber = record.source_tab !== 'connect_plus' && !!record.case_number;
 
   const sourceLabel = {
     quickbase: 'QuickBase_S', knowledge_base: 'Knowledge Base',
     contact_info: 'Contact Info', parts_number: 'Parts Number',
     product_controllers: 'Product Controllers', support_records: 'Support Records',
+    connect_plus: 'Connect+',
   };
 
   const sourceColor = {
@@ -56,6 +58,7 @@ export default function ResultCard({ record, query, index }) {
     parts_number: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
     product_controllers: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
     support_records: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    connect_plus: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
   };
 
   return (
@@ -69,7 +72,7 @@ export default function ResultCard({ record, query, index }) {
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md border ${sourceColor[record.source_tab] || 'bg-muted text-muted-foreground border-border'}`}>
               {sourceLabel[record.source_tab] || record.source_tab}
             </span>
-            {record.case_number && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Hash className="w-3 h-3" />{record.case_number}</span>}
+            {showCaseNumber && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Hash className="w-3 h-3" />{record.case_number}</span>}
             {record.category_name && <span className="text-xs text-muted-foreground">• {record.category_name}</span>}
             {record.status && (
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${record.status === 'open' ? 'bg-green-500/10 text-green-400' : record.status === 'closed' ? 'bg-muted text-muted-foreground' : record.status === 'pending' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
@@ -100,7 +103,7 @@ export default function ResultCard({ record, query, index }) {
                   </div>
                 )}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {record.case_number && <div className="bg-muted/30 rounded-lg p-2.5"><span className="text-xs text-muted-foreground block mb-0.5">Case #</span><span className="text-sm font-mono font-medium text-foreground">{record.case_number}</span></div>}
+                  {showCaseNumber && <div className="bg-muted/30 rounded-lg p-2.5"><span className="text-xs text-muted-foreground block mb-0.5">Case #</span><span className="text-sm font-mono font-medium text-foreground">{record.case_number}</span></div>}
                   {record.category_name && <div className="bg-muted/30 rounded-lg p-2.5"><span className="text-xs text-muted-foreground block mb-0.5">Category</span><span className="text-sm font-medium text-foreground">{record.category_name}</span></div>}
                   {record.end_user && <div className="bg-muted/30 rounded-lg p-2.5"><span className="text-xs text-muted-foreground block mb-0.5">End User</span><span className="text-sm font-medium text-foreground">{record.end_user}</span></div>}
                   {record.part_number && <div className="bg-muted/30 rounded-lg p-2.5"><span className="text-xs text-muted-foreground block mb-0.5">Part Number</span><span className="text-sm font-mono font-medium text-foreground">{record.part_number}</span></div>}

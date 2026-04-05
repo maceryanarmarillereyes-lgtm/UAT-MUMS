@@ -206,10 +206,27 @@ export function searchRecords(records, query) {
     .map(item => item.record);
 }
 
+export function isPureConnectPlusRecord(record) {
+  if (!record || record.source_tab !== 'connect_plus') return false;
+  const caseNumber = String(record.case_number || '').trim();
+  return caseNumber.length === 0;
+}
+
+export function matchesSourceTab(record, tabId) {
+  if (!record) return false;
+  if (tabId === 'connect_plus') return isPureConnectPlusRecord(record);
+  return record.source_tab === tabId;
+}
+
 export function countBySource(records) {
   const counts = { all: records.length };
   records.forEach(r => {
+    if (isPureConnectPlusRecord(r)) {
+      counts.connect_plus = (counts.connect_plus || 0) + 1;
+      return;
+    }
     const src = r.source_tab || 'unknown';
+    if (src === 'connect_plus') return;
     counts[src] = (counts[src] || 0) + 1;
   });
   return counts;
@@ -218,7 +235,12 @@ export function countBySource(records) {
 export function countTotalBySource(records) {
   const counts = {};
   records.forEach(r => {
+    if (isPureConnectPlusRecord(r)) {
+      counts.connect_plus = (counts.connect_plus || 0) + 1;
+      return;
+    }
     const src = r.source_tab || 'unknown';
+    if (src === 'connect_plus') return;
     counts[src] = (counts[src] || 0) + 1;
   });
   return counts;
