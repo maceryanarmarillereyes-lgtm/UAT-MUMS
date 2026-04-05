@@ -9285,14 +9285,22 @@
           timezone:  _findHeaderIndex(['time zone','timezone'], 7),
           systems:   _findHeaderIndex(['number of control systems','control systems','systems'], 8),
           url:       _findHeaderIndex(['url connect+ link','url connect link','connect+ link','connect link','url'], 9),
-          endUser:   _findHeaderIndex(['end user','enduser','end user2','enduser2','client','account','customer'], 10)
+          endUser:   _findHeaderIndex(['end user','enduser','client','account','customer'], 10),
+          endUser2:  _findHeaderIndex(['end user2','enduser2','client 2','account 2','customer 2'], 11)
         };
 
         var data = [];
         for (var i = 1; i < rows.length; i++) {
           var r = rows[i];
           if (!r || !String(r[colIdx.site] || '').trim()) continue;
-          var endUser = String(r[colIdx.endUser] || '').trim();
+          var endUser = '';
+          var endUserIdxOrder = [colIdx.endUser, colIdx.endUser2];
+          for (var e = 0; e < endUserIdxOrder.length; e++) {
+            var euIdx = endUserIdxOrder[e];
+            if (typeof euIdx !== 'number' || euIdx < 0) continue;
+            var euVal = String(r[euIdx] || '').trim();
+            if (euVal) { endUser = euVal; break; }
+          }
           data.push({
             site:      String(r[colIdx.site]      || '').trim(),
             directory: String(r[colIdx.directory] || '').trim(),
@@ -9388,7 +9396,7 @@
         var haystack;
         if (!activeCols) {
           // No column filter — search all indexed fields
-          haystack = r._search || [r.site,r.directory,r.address1,r.country,r.city,r.state,r.zip,r.timezone,r.url].join(' ').toLowerCase();
+          haystack = r._search || [r.site,r.directory,r.address1,r.country,r.city,r.state,r.zip,r.timezone,r.systems,r.url,r.endUser].join(' ').toLowerCase();
         } else {
           // Build haystack from only selected columns
           haystack = activeCols.map(function(col) {
@@ -9404,6 +9412,8 @@
             if (colKey.includes('time') || colKey.includes('zone'))      return r.timezone || '';
             if (colKey.includes('url') || colKey.includes('connect') || colKey.includes('link')) return r.url || '';
             if (colKey.includes('system') || colKey.includes('control')) return r.systems || '';
+            if (colKey.includes('enduser') || (colKey.includes('end') && colKey.includes('user')) ||
+                colKey.includes('client') || colKey.includes('account') || colKey.includes('customer')) return r.endUser || '';
             // Fallback: try index map
             var idx = colIndexMap[col];
             if (idx != null) {
