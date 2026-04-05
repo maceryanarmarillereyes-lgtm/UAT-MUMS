@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ChevronDown, ChevronUp, Hash, User, FileText, Cpu } from "lucide-react";
+import { ChevronDown, ChevronUp, Hash, User, FileText, Cpu, Clock3, Tag, Copy, ExternalLink, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 
@@ -18,7 +18,7 @@ function highlightMatch(text, query) {
   return parts.map((part, i) => {
     if (part === '%%HLSTART%%') { inHighlight = true; return null; }
     if (part === '%%HLEND%%') { inHighlight = false; return null; }
-    if (inHighlight) return <mark key={i} className="bg-primary/30 text-primary-foreground rounded px-0.5">{part}</mark>;
+    if (inHighlight) return <mark key={i} className="bg-yellow-400/30 text-yellow-300 rounded px-0.5">{part}</mark>;
     return part;
   }).filter(Boolean);
 }
@@ -50,63 +50,85 @@ export default function ResultCard({ record, query, index }) {
   };
 
   const sourceColor = {
-    quickbase: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    knowledge_base: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    contact_info: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    parts_number: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    product_controllers: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
-    support_records: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+    quickbase: 'text-blue-400 bg-blue-500/10 border-blue-500/25',
+    knowledge_base: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25',
+    contact_info: 'text-amber-400 bg-amber-500/10 border-amber-500/25',
+    parts_number: 'text-purple-400 bg-purple-500/10 border-purple-500/25',
+    product_controllers: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/25',
+    support_records: 'text-rose-400 bg-rose-500/10 border-rose-500/25',
   };
+
+  const statusColor = record.status === 'open'
+    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+    : record.status === 'pending'
+      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+      : record.status === 'resolved' || record.status === 'closed'
+        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+        : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03, duration: 0.25 }}>
       <div
-        className={`group rounded-xl border transition-all duration-200 cursor-pointer ${isExpanded ? 'border-primary/40 bg-secondary/80 shadow-lg shadow-primary/5' : 'border-border bg-card hover:border-muted-foreground/30 hover:bg-secondary/40'}`}
+        className={`group rounded-2xl border transition-all duration-300 cursor-pointer ${isExpanded ? 'border-white/15 bg-white/[0.05]' : 'border-white/5 bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04]'}`}
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div className="p-4">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md border ${sourceColor[record.source_tab] || 'bg-muted text-muted-foreground border-border'}`}>
-              {sourceLabel[record.source_tab] || record.source_tab}
-            </span>
-            {record.case_number && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Hash className="w-3 h-3" />{record.case_number}</span>}
-            {record.category_name && <span className="text-xs text-muted-foreground">• {record.category_name}</span>}
-            {record.status && (
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${record.status === 'open' ? 'bg-green-500/10 text-green-400' : record.status === 'closed' ? 'bg-muted text-muted-foreground' : record.status === 'pending' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
-                {record.status}
-              </span>
-            )}
-            <span className="ml-auto text-xs text-muted-foreground">{format(new Date(record.created_date), 'MMM d, yyyy')}</span>
-          </div>
-          <h3 className="text-sm font-semibold text-foreground mb-1 leading-snug">{highlightMatch(record.title, query)}</h3>
-          {record.resolution && <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{highlightMatch(getSnippet(record.resolution, query), query)}</p>}
-          <div className="flex items-center gap-4 mt-2">
-            {record.end_user && <span className="flex items-center gap-1 text-xs text-muted-foreground"><User className="w-3 h-3" />{highlightMatch(record.end_user, query)}</span>}
-            {record.part_number && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Cpu className="w-3 h-3" />{highlightMatch(record.part_number, query)}</span>}
-            <button className="ml-auto p-1">{isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}</button>
+        <div className="p-5">
+          <div className="flex items-start gap-4">
+            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${sourceColor[record.source_tab] || 'text-slate-300 bg-white/10 border-white/15'}`}>
+              <FileText className="w-4 h-4" />
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full border ${sourceColor[record.source_tab] || 'text-slate-300 bg-white/10 border-white/15'}`}>
+                  {sourceLabel[record.source_tab] || record.source_tab}
+                </span>
+                {record.case_number && <span className="inline-flex items-center gap-1 text-xs text-slate-500"><Hash className="w-3 h-3" />{record.case_number}</span>}
+                {record.status && <span className={`text-xs px-2 py-1 rounded-full border ${statusColor}`}>{record.status}</span>}
+                {record.category_name && <span className="inline-flex items-center gap-1 text-xs text-slate-500"><Tag className="w-3 h-3" />{record.category_name}</span>}
+              </div>
+
+              <h3 className="text-[15px] font-bold text-white mb-1 leading-snug">{highlightMatch(record.title, query)}</h3>
+              {record.resolution && <p className="text-sm text-slate-500 leading-relaxed line-clamp-2">{highlightMatch(getSnippet(record.resolution, query), query)}</p>}
+
+              <div className="flex items-center gap-4 mt-3 flex-wrap">
+                {record.end_user && <span className="flex items-center gap-1 text-xs text-slate-500"><User className="w-3 h-3" />{highlightMatch(record.end_user, query)}</span>}
+                {record.part_number && <span className="flex items-center gap-1 text-xs text-slate-500"><Cpu className="w-3 h-3" />{highlightMatch(record.part_number, query)}</span>}
+                <span className="flex items-center gap-1 text-xs text-slate-500"><Clock3 className="w-3 h-3" />{format(new Date(record.created_date), 'MMM d, yyyy')}</span>
+              </div>
+            </div>
+
+            <button className="p-1.5" type="button">
+              {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+            </button>
           </div>
         </div>
+
         <AnimatePresence>
           {isExpanded && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-              <div className="px-4 pb-4 border-t border-border/50 pt-3 space-y-3">
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25 }} className="overflow-hidden">
+              <div className="px-5 pb-5 border-t border-white/5 pt-4 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {record.case_number && <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3"><span className="text-[11px] uppercase tracking-wider text-slate-600 block mb-1">Case #</span><span className="text-sm font-semibold text-slate-200">{record.case_number}</span></div>}
+                  {record.category_name && <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3"><span className="text-[11px] uppercase tracking-wider text-slate-600 block mb-1">Category</span><span className="text-sm font-semibold text-slate-200">{record.category_name}</span></div>}
+                  {record.end_user && <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3"><span className="text-[11px] uppercase tracking-wider text-slate-600 block mb-1">End User</span><span className="text-sm font-semibold text-slate-200">{record.end_user}</span></div>}
+                  {record.part_number && <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3"><span className="text-[11px] uppercase tracking-wider text-slate-600 block mb-1">Part #</span><span className="text-sm font-semibold text-slate-200">{record.part_number}</span></div>}
+                  {record.status && <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3"><span className="text-[11px] uppercase tracking-wider text-slate-600 block mb-1">Status</span><span className="text-sm font-semibold text-slate-200">{record.status}</span></div>}
+                  {record.source_tab && <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3"><span className="text-[11px] uppercase tracking-wider text-slate-600 block mb-1">Source</span><span className="text-sm font-semibold text-slate-200">{sourceLabel[record.source_tab] || record.source_tab}</span></div>}
+                  <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3"><span className="text-[11px] uppercase tracking-wider text-slate-600 block mb-1">Date</span><span className="text-sm font-semibold text-slate-200">{format(new Date(record.created_date), 'MMM d, yyyy h:mm a')}</span></div>
+                </div>
+
                 {record.resolution && (
                   <div>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <FileText className="w-3.5 h-3.5 text-primary" />
-                      <span className="text-xs font-semibold text-primary uppercase tracking-wider">Full Resolution</span>
-                    </div>
-                    <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap bg-muted/50 rounded-lg p-3 max-h-64 overflow-y-auto">{highlightMatch(record.resolution, query)}</p>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-600 mb-2">Full Resolution / Details</div>
+                    <p className="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap bg-white/[0.03] border border-white/5 rounded-xl p-4 max-h-64 overflow-y-auto">{highlightMatch(record.resolution, query)}</p>
                   </div>
                 )}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {record.case_number && <div className="bg-muted/30 rounded-lg p-2.5"><span className="text-xs text-muted-foreground block mb-0.5">Case #</span><span className="text-sm font-mono font-medium text-foreground">{record.case_number}</span></div>}
-                  {record.category_name && <div className="bg-muted/30 rounded-lg p-2.5"><span className="text-xs text-muted-foreground block mb-0.5">Category</span><span className="text-sm font-medium text-foreground">{record.category_name}</span></div>}
-                  {record.end_user && <div className="bg-muted/30 rounded-lg p-2.5"><span className="text-xs text-muted-foreground block mb-0.5">End User</span><span className="text-sm font-medium text-foreground">{record.end_user}</span></div>}
-                  {record.part_number && <div className="bg-muted/30 rounded-lg p-2.5"><span className="text-xs text-muted-foreground block mb-0.5">Part Number</span><span className="text-sm font-mono font-medium text-foreground">{record.part_number}</span></div>}
-                  {record.description && <div className="bg-muted/30 rounded-lg p-2.5 col-span-2"><span className="text-xs text-muted-foreground block mb-0.5">Description</span><span className="text-sm font-medium text-foreground">{record.description}</span></div>}
-                  {record.source_tab && <div className="bg-muted/30 rounded-lg p-2.5"><span className="text-xs text-muted-foreground block mb-0.5">Source</span><span className="text-sm font-medium text-foreground">{sourceLabel[record.source_tab] || record.source_tab}</span></div>}
-                  <div className="bg-muted/30 rounded-lg p-2.5"><span className="text-xs text-muted-foreground block mb-0.5">Record Date</span><span className="text-sm font-medium text-foreground">{format(new Date(record.created_date), 'MMM d, yyyy h:mm a')}</span></div>
+
+                <div className="flex items-center gap-2">
+                  <button type="button" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-colors"><Copy className="w-3.5 h-3.5" />Copy Details</button>
+                  <button type="button" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-slate-300 hover:bg-white/10 hover:text-white transition-colors"><ExternalLink className="w-3.5 h-3.5" />Open Record</button>
+                  <span className="ml-auto hidden md:inline-flex items-center gap-1 text-xs text-slate-600"><CheckCircle2 className="w-3.5 h-3.5" />Expanded details ready</span>
                 </div>
               </div>
             </motion.div>
