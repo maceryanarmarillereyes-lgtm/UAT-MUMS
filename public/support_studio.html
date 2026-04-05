@@ -2160,6 +2160,27 @@
     .prem-table.cyan  tbody tr:hover td { background: rgba(34,211,238,.035) !important; }
     .prem-table.orange tbody tr:hover td { background: rgba(251,146,60,.03) !important; }
 
+    /* Global synced-table alignment guard (header/body split tables) */
+    .ss-table-head-wrap {
+      flex-shrink: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      background: var(--ss-surface3);
+    }
+    .ss-table-head-wrap::-webkit-scrollbar { display: none; }
+    .ss-table-body-wrap {
+      flex: 1;
+      overflow: auto;
+      min-height: 0;
+    }
+    .ss-table-head-wrap .prem-table,
+    .ss-table-body-wrap .prem-table {
+      table-layout: fixed;
+      width: max-content;
+      min-width: 100%;
+    }
+
     /* ── Right sidebar HD enhancements ─────────────────────────── */
     .ss-field-group { margin-bottom: 9px; }
     .ss-field-label {
@@ -4279,7 +4300,7 @@
         <input type="text" id="cp-main-search" style="display:none;" aria-hidden="true">
 
         <!-- Table header -->
-        <div id="cp-table-head-wrap" style="flex-shrink:0;overflow-x:auto;">
+        <div id="cp-table-head-wrap" class="ss-table-head-wrap">
           <table id="cp-table-head" class="prem-table cyan" style="min-width:1020px;">
             <thead>
               <tr>
@@ -4299,7 +4320,7 @@
         </div>
 
         <!-- Scrollable table body -->
-        <div id="cp-table-body" style="flex:1;overflow:auto;min-height:0;">
+        <div id="cp-table-body" class="ss-table-body-wrap">
           <div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--ss-muted);">
             <i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.35;"></i>
             <span style="font-size:12px;opacity:.45;">Loading Connect+ data…</span>
@@ -4339,7 +4360,7 @@
         <input type="text" id="pn-main-search" style="display:none;" aria-hidden="true">
 
         <!-- Dynamic table header -->
-        <div style="flex-shrink:0;overflow-x:auto;background:var(--ss-surface3);">
+        <div id="pn-table-head-wrap" class="ss-table-head-wrap">
           <table id="pn-table-head" class="prem-table orange" style="min-width:700px;">
             <thead id="pn-thead-row">
               <tr>
@@ -4351,7 +4372,7 @@
         </div>
 
         <!-- Scrollable table body -->
-        <div id="pn-table-body" style="flex:1;overflow:auto;min-height:0;">
+        <div id="pn-table-body" class="ss-table-body-wrap">
           <div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--ss-muted);">
             <i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.35;"></i>
             <span style="font-size:12px;opacity:.45;">Loading Parts Number data…</span>
@@ -4380,12 +4401,12 @@
           </div>
         </div>
         <input type="text" id="cti-main-search" style="display:none;" aria-hidden="true">
-        <div style="flex-shrink:0;overflow-x:auto;background:var(--ss-surface3);">
+        <div id="cti-table-head-wrap" class="ss-table-head-wrap">
           <table id="cti-table-head" class="prem-table cyan" style="min-width:700px;">
             <thead id="cti-thead-row"><tr><th style="width:38px;">#</th></tr></thead>
           </table>
         </div>
-        <div id="cti-table-body" style="flex:1;overflow:auto;min-height:0;">
+        <div id="cti-table-body" class="ss-table-body-wrap">
           <div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--ss-muted);"><i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.35;"></i><span style="font-size:12px;opacity:.45;">Loading Contact Information data…</span></div>
         </div>
         <div id="cti-pagination" class="prem-pagination">
@@ -4439,7 +4460,7 @@
         </div>
 
         <!-- ── Table header (fixed) ── -->
-        <div style="flex-shrink:0;overflow-x:auto;background:var(--ss-surface3);">
+        <div id="kb-table-head-wrap" class="ss-table-head-wrap">
           <table id="kb-table-head" class="prem-table" style="min-width:1060px;">
             <thead>
               <tr>
@@ -4458,7 +4479,7 @@
         </div>
 
         <!-- ── Table body (scrollable) ── -->
-        <div id="kb-table-body-wrap" style="flex:1;overflow:auto;min-height:0;">
+        <div id="kb-table-body-wrap" class="ss-table-body-wrap">
           <table class="prem-table" style="min-width:1060px;">
             <tbody id="kb-table-body">
               <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ss-muted);"><i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.35;display:block;margin-bottom:12px;"></i>Loading Knowledge Base…</td></tr>
@@ -6712,6 +6733,7 @@
     if(!rows.length){
       body.innerHTML='<tr><td colspan="9" style="text-align:center;padding:48px 20px;color:var(--ss-muted);"><i class="fas fa-search" style="display:block;font-size:24px;opacity:.2;margin-bottom:12px;"></i>No results found. Try a different filter or click Sync Now.</td></tr>';
       renderPagination();
+      _ssBindSyncedTable('knowledge_base', 'kb-table-head-wrap', 'kb-table-body-wrap');
       return;
     }
 
@@ -6756,6 +6778,7 @@
 
     renderPagination();
     updateSortIndicators();
+    _ssBindSyncedTable('knowledge_base', 'kb-table-head-wrap', 'kb-table-body-wrap');
   }
 
   function getTypeBadgeColor(type){
@@ -6989,7 +7012,7 @@
 
   /* ── Public API ─────────────────────────────────────────────── */
   window._kbLoad            = load;
-  window._kbInit            = function(){ if(!state.initialized){ state.initialized=true; load(); } };
+  window._kbInit            = function(){ _ssBindSyncedTable('knowledge_base', 'kb-table-head-wrap', 'kb-table-body-wrap'); if(!state.initialized){ state.initialized=true; load(); } };
   window._kbSyncNow         = syncNow;
   window._kbApplyFilters    = function(){ state.page=1; applyFilters(); };
   window._kbOnSearch        = function(v){ state.page=1; applyFilters(); };
@@ -9196,6 +9219,62 @@
       .finally(function() { _setDisabled(false); });
   };
 
+  // ── Global helper: keep split table headers aligned with body ──
+  var _ssSyncedTableRegistry = Object.create(null);
+
+  function _ssBindSyncedTable(key, headWrapId, bodyWrapId) {
+    var headWrap = document.getElementById(headWrapId);
+    var bodyWrap = document.getElementById(bodyWrapId);
+    if (!headWrap || !bodyWrap) return;
+
+    if (!_ssSyncedTableRegistry[key]) {
+      var lock = false;
+      var syncFromBody = function() {
+        if (lock) return;
+        lock = true;
+        headWrap.scrollLeft = bodyWrap.scrollLeft;
+        lock = false;
+      };
+      var syncFromHead = function() {
+        if (lock) return;
+        lock = true;
+        bodyWrap.scrollLeft = headWrap.scrollLeft;
+        lock = false;
+      };
+      bodyWrap.addEventListener('scroll', syncFromBody, { passive: true });
+      headWrap.addEventListener('scroll', syncFromHead, { passive: true });
+      _ssSyncedTableRegistry[key] = {
+        headWrapId: headWrapId,
+        bodyWrapId: bodyWrapId,
+        syncFromBody: syncFromBody,
+      };
+    }
+
+    _ssSyncSyncedTable(key);
+  }
+
+  function _ssSyncSyncedTable(key) {
+    var reg = _ssSyncedTableRegistry[key];
+    if (!reg) return;
+
+    var headWrap = document.getElementById(reg.headWrapId);
+    var bodyWrap = document.getElementById(reg.bodyWrapId);
+    if (!headWrap || !bodyWrap) return;
+
+    var bodyTable = bodyWrap.querySelector('table');
+    var headTable = headWrap.querySelector('table');
+
+    if (bodyTable && headTable) {
+      var targetWidth = Math.max(bodyTable.scrollWidth, bodyWrap.clientWidth);
+      headTable.style.minWidth = targetWidth + 'px';
+      bodyTable.style.minWidth = targetWidth + 'px';
+    }
+
+    var scrollbarW = Math.max(0, bodyWrap.offsetWidth - bodyWrap.clientWidth);
+    headWrap.style.paddingRight = scrollbarW ? (scrollbarW + 'px') : '';
+    reg.syncFromBody();
+  }
+
   // ── Connect+ tab state (BUG FIX: was missing — caused ReferenceError) ──
   var _state = {
     loaded:    false,
@@ -9690,11 +9769,7 @@
   }
 
   function _cpSyncHeadScrollbarGap() {
-    var bodyEl = document.getElementById('cp-table-body');
-    var headWrap = document.getElementById('cp-table-head-wrap');
-    if (!bodyEl || !headWrap) return;
-    var scrollbarW = Math.max(0, bodyEl.offsetWidth - bodyEl.clientWidth);
-    headWrap.style.paddingRight = scrollbarW ? (scrollbarW + 'px') : '';
+    _ssBindSyncedTable('connect_plus', 'cp-table-head-wrap', 'cp-table-body');
   }
 
   function _renderPagination(total, maxPage) {
@@ -9739,6 +9814,9 @@
 
   window.addEventListener('resize', function() {
     _cpSyncHeadScrollbarGap();
+    _ssSyncSyncedTable('parts_number');
+    _ssSyncSyncedTable('contact_information');
+    _ssSyncSyncedTable('knowledge_base');
   });
 
   // ── Detail Modal ────────────────────────────────────────────────────
@@ -11756,6 +11834,7 @@
 
   /* ── Init ──────────────────────────────────────────────────── */
   window._pnInit = function() {
+    _ssBindSyncedTable('parts_number', 'pn-table-head-wrap', 'pn-table-body');
     if (_initialized && _allData.length) {
       _render();
       return;
@@ -12029,6 +12108,7 @@
         '<i class="fas fa-barcode" style="font-size:26px;opacity:.2;"></i>' +
         '<div style="font-size:12px;opacity:.5;">No results found</div>' +
         '<div style="font-size:10px;opacity:.4;">' + (_query ? 'Try a different search term' : 'No data loaded') + '</div></div>';
+      _ssBindSyncedTable('parts_number', 'pn-table-head-wrap', 'pn-table-body');
     } else {
       var linkCol = _columns.find(function(c) { return /url|link|href/i.test(c); });
       var html = '<table class="prem-table orange" style="width:100%;min-width:700px;">';
@@ -12061,6 +12141,8 @@
       html += '</table>';
       body.innerHTML = html;
     }
+
+    _ssBindSyncedTable('parts_number', 'pn-table-head-wrap', 'pn-table-body');
 
     // Pagination HD
     if (pageInfo) pageInfo.textContent = 'Showing ' + (total ? (start+1).toLocaleString() : 0) + '–' + end.toLocaleString() + ' of ' + total.toLocaleString() + ' entries';
@@ -12239,6 +12321,7 @@
 
   /* ── Init ──────────────────────────────────────────────────── */
   window._ctiInit = function() {
+    _ssBindSyncedTable('contact_information', 'cti-table-head-wrap', 'cti-table-body');
     if (_initialized && _allData.length) {
       _render();
       return;
@@ -12607,6 +12690,7 @@
         '<i class="fas fa-barcode" style="font-size:26px;opacity:.2;"></i>' +
         '<div style="font-size:12px;opacity:.5;">No results found</div>' +
         '<div style="font-size:10px;opacity:.4;">' + (_query ? 'Try a different search term' : 'No data loaded') + '</div></div>';
+      _ssBindSyncedTable('contact_information', 'cti-table-head-wrap', 'cti-table-body');
     } else {
       var linkCol = _columns.find(function(c) { return /url|link|href/i.test(c); });
       var html = '<table class="prem-table cyan" style="width:100%;min-width:700px;">';
@@ -12639,6 +12723,8 @@
       html += '</table>';
       body.innerHTML = html;
     }
+
+    _ssBindSyncedTable('contact_information', 'cti-table-head-wrap', 'cti-table-body');
 
     // Pagination HD
     if (pageInfo) pageInfo.textContent = 'Showing ' + (total ? (start+1).toLocaleString() : 0) + '–' + end.toLocaleString() + ' of ' + total.toLocaleString() + ' entries';
