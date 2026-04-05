@@ -15971,15 +15971,40 @@
     var token = _sessionToken();
     var headers = token ? { Authorization: 'Bearer ' + token } : {};
 
-    fetch('/api/studio/qb_search?q=' + encodeURIComponent(q) + '&skip=0&top=200', { headers: headers })
-      .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('qb_live_http_' + r.status)); })
-      .then(function(j) {
+    var pageSize = 1000;
+    var maxRows = 10000;
+    var latestColumnMap = {};
+    function fetchPage(skip, acc) {
+      if (seq !== _state.qbQuerySeq) return Promise.reject(new Error('qb_live_stale'));
+      return fetch('/api/studio/qb_search?q=' + encodeURIComponent(q) + '&skip=' + skip + '&top=' + pageSize, { headers: headers })
+        .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('qb_live_http_' + r.status)); })
+        .then(function(j) {
+          if (seq !== _state.qbQuerySeq) throw new Error('qb_live_stale');
+          if (!j || !j.ok) throw new Error((j && (j.error || j.message)) || 'qb_live_failed');
+          var rows = Array.isArray(j.records) ? j.records : [];
+          latestColumnMap = (j.columnMap && typeof j.columnMap === 'object') ? j.columnMap : latestColumnMap;
+          var merged = acc.concat(rows);
+          if (merged.length > maxRows) merged = merged.slice(0, maxRows);
+          var total = Number(j.total || 0);
+          var hasMoreByPage = rows.length >= pageSize;
+          var hasMoreByTotal = total > 0 ? merged.length < Math.min(total, maxRows) : hasMoreByPage;
+          if (hasMoreByPage && hasMoreByTotal && merged.length < maxRows) {
+            return fetchPage(skip + rows.length, merged);
+          }
+          return { rows: merged, columnMap: latestColumnMap };
+        });
+    }
+
+    fetchPage(0, [])
+      .then(function(out) {
         if (seq !== _state.qbQuerySeq) return;
-        _state.qbQueryResults = (j && j.ok) ? _mapQbRowsToSe2(j.records || [], j.columnMap || {}) : [];
+        var mapped = _mapQbRowsToSe2((out && out.rows) || [], (out && out.columnMap) || {});
+        _state.qbQueryResults = mapped;
         _state.qbQueryReady = true;
       })
-      .catch(function() {
+      .catch(function(err) {
         if (seq !== _state.qbQuerySeq) return;
+        if (String(err && err.message || '') === 'qb_live_stale') return;
         _state.qbQueryResults = [];
         _state.qbQueryReady = true;
       })
