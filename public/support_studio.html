@@ -4669,12 +4669,13 @@
         #se2-center {
           flex:1; min-width:0; display:flex; flex-direction:column;
           overflow:hidden;
+          position:relative;
         }
 
         /* ── HERO SECTION (empty state) ── */
         #se2-hero {
           display:flex; flex-direction:column; align-items:center;
-          justify-content:center; padding:40px 32px 28px;
+          justify-content:center; padding:28px 32px 20px;
           text-align:center; flex-shrink:0;
         }
         #se2-hero-icon {
@@ -4702,8 +4703,9 @@
           border-radius:18px;
           padding:18px 22px;
           transition:border-color .28s, box-shadow .28s;
-          margin:24px 24px 0;
+          margin:20px 24px 0;
           flex-shrink:0;
+          z-index:2;
         }
         /* Guardrail: SE2 search must remain visible for all users/sessions. */
         #se2-center > #se2-search-wrap {
@@ -5235,16 +5237,6 @@
           ══════════════════════════════════════════════ -->
           <div id="se2-center">
 
-            <!-- Hero section (visible when no query) -->
-            <div id="se2-hero">
-              <div id="se2-hero-icon">🔍</div>
-              <div id="se2-hero-title">Search Support Studio</div>
-              <div id="se2-hero-sub">
-                Total indexed: <strong id="se2-hero-count">—</strong> records
-                &mdash; type anything above to search across all data sources
-              </div>
-            </div>
-
             <!-- Search bar (always visible) -->
             <div id="se2-search-wrap">
               <i class="fas fa-search" style="color:#06b6d4;font-size:18px;flex-shrink:0;"></i>
@@ -5255,6 +5247,16 @@
               </span>
               <button class="se2-clear" id="se2-clear" onclick="window._se2Clear()">&#10005;</button>
               <span id="se2-kbd">&#8984;K</span>
+            </div>
+
+            <!-- Hero section (visible when no query) -->
+            <div id="se2-hero">
+              <div id="se2-hero-icon">🔍</div>
+              <div id="se2-hero-title">Search Support Studio</div>
+              <div id="se2-hero-sub">
+                Total indexed: <strong id="se2-hero-count">—</strong> records
+                &mdash; type anything above to search across all data sources
+              </div>
             </div>
 
             <!-- Filter source tabs (shown during search) -->
