@@ -2478,7 +2478,7 @@
       <!-- Search bar -->
       <div class="ss-search-wrap" style="margin-left:8px;">
         <input class="ss-search-input" id="ss-search" type="text" placeholder="Search cases, users, tickets…" autocomplete="off" style="width:260px;">
-        <button class="ss-search-btn" onclick="document.getElementById('ss-search').focus()">
+        <button class="ss-search-btn" onclick="window._ssGlobalSearchGo && window._ssGlobalSearchGo()">
           <i class="fas fa-search"></i>
         </button>
       </div>
@@ -17532,323 +17532,58 @@
 
 
 
-<style>
-  /* Omni-Search Glassmorphism Dropdown */
-  #ss-omnibar-dropdown {
-    position: fixed;
-    z-index: 2147483647;
-    width: 600px;
-    max-height: 65vh;
-    background: rgba(13, 17, 23, 0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(88, 166, 255, 0.35);
-    border-radius: 12px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255,255,255,0.05) inset;
-    display: none;
-    flex-direction: column;
-    overflow: hidden;
-    transform-origin: top center;
-    animation: omniPop .2s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  @keyframes omniPop {
-    from { opacity: 0; transform: translateY(-10px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-  }
-  #ss-omnibar-results {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px 0;
-  }
-  #ss-omnibar-results::-webkit-scrollbar { width: 5px; }
-  #ss-omnibar-results::-webkit-scrollbar-thumb { background: rgba(88,166,255,0.3); border-radius: 99px; }
-  
-  .omni-group-title {
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--ss-muted);
-    padding: 10px 14px 4px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .omni-item {
-    padding: 10px 14px;
-    cursor: pointer;
-    border-left: 3px solid transparent;
-    transition: all 0.15s;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .omni-item:hover {
-    background: rgba(88, 166, 255, 0.08);
-    border-left-color: #58a6ff;
-  }
-  .omni-item-title {
-    font-size: 12px;
-    font-weight: 700;
-    color: #e6edf3;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .omni-item-sub {
-    font-size: 10px;
-    color: var(--ss-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .omni-badge {
-    font-size: 8px;
-    font-weight: 800;
-    padding: 2px 6px;
-    border-radius: 4px;
-    letter-spacing: 0.04em;
-  }
-  .omni-empty {
-    padding: 30px;
-    text-align: center;
-    color: var(--ss-muted);
-    font-size: 12px;
-  }
-  .omni-footer {
-    padding: 8px 14px;
-    background: rgba(255,255,255,0.02);
-    border-top: 1px solid rgba(255,255,255,0.06);
-    font-size: 9px;
-    color: var(--ss-muted);
-    display: flex;
-    justify-content: space-between;
-  }
-</style>
-
 <script>
 (function() {
   'use strict';
 
-  // State & DOM
-  let omnibarEl = null;
-  let resultsEl = null;
-  let searchInput = document.getElementById('ss-search');
-  let debounceTimer = null;
-  let kbMemoryCache = null; // Cache support records para hindi baha sa network
+  var searchInput = document.getElementById('ss-search');
 
-  function _getApiToken() {
-    try {
-      let raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
-      if (raw) { let p = JSON.parse(raw); if (p && p.access_token) return p.access_token; }
-      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') return window.CloudAuth.accessToken() || '';
-    } catch(_) {} return '';
+  function openSearchEngine2WithQuery(raw) {
+    var q = String(raw || '').trim();
+    if (!q) return false;
+
+    var se2Tab = document.querySelector('.ss-tab[data-tab="search_engine_2"]');
+    if (se2Tab) se2Tab.click();
+
+    function applyQuery(retries) {
+      if (typeof window._se2SetQ === 'function') {
+        window._se2SetQ(q);
+        return;
+      }
+      var input = document.getElementById('se2-q');
+      if (input) {
+        input.value = q;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
+        return;
+      }
+      if (retries > 0) setTimeout(function() { applyQuery(retries - 1); }, 120);
+    }
+
+    setTimeout(function() { applyQuery(20); }, 120);
+    return true;
   }
 
-  function initOmnibar() {
+  window._ssGlobalSearchGo = function() {
     if (!searchInput) return;
-
-    // Create Dropdown DOM
-    omnibarEl = document.createElement('div');
-    omnibarEl.id = 'ss-omnibar-dropdown';
-    omnibarEl.innerHTML = `
-      <div id="ss-omnibar-results"></div>
-      <div class="omni-footer">
-        <span><i class="fas fa-keyboard" style="opacity:0.5;margin-right:4px;"></i> Press Esc to close</span>
-        <span style="color:#58a6ff;font-weight:700;">Enterprise Omni-Search Engine</span>
-      </div>
-    `;
-    document.body.appendChild(omnibarEl);
-    resultsEl = document.getElementById('ss-omnibar-results');
-
-    // Attach Listeners to existing search bar
-    searchInput.addEventListener('input', (e) => {
-      clearTimeout(debounceTimer);
-      let val = e.target.value.trim();
-      if (!val) { closeOmnibar(); return; }
-      
-      openOmnibar();
-      resultsEl.innerHTML = `<div class="omni-empty"><i class="fas fa-circle-notch fa-spin" style="font-size:24px;color:#58a6ff;margin-bottom:10px;"></i><br>Searching Enterprise Data...</div>`;
-      
-      debounceTimer = setTimeout(() => executeSearch(val), 350);
-    });
-
-    searchInput.addEventListener('focus', (e) => {
-      if (e.target.value.trim()) openOmnibar();
-    });
-
-    // Close on outside click or ESC
-    document.addEventListener('click', (e) => {
-      if (!omnibarEl.contains(e.target) && e.target !== searchInput) closeOmnibar();
-    });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { closeOmnibar(); searchInput.blur(); }
-    });
-  }
-
-  function openOmnibar() {
-    let rect = searchInput.getBoundingClientRect();
-    omnibarEl.style.top = (rect.bottom + 8) + 'px';
-    // Center it relative to the input if possible, otherwise align left
-    omnibarEl.style.left = Math.max(16, rect.left) + 'px';
-    omnibarEl.style.display = 'flex';
-  }
-
-  function closeOmnibar() {
-    omnibarEl.style.display = 'none';
-  }
-
-  // THE SUPREME SEARCH LOGIC
-  async function executeSearch(query) {
-    let q = query.toLowerCase();
-    
-    // Promises Array
-    let tasks = {
-      qb: fetch('/api/studio/qb_search?q=' + encodeURIComponent(query) + '&skip=0&top=5', { 
-            headers: { 'Authorization': 'Bearer ' + _getApiToken() } 
-          }).then(r => r.json()).catch(() => null),
-      cp: window.StudioCache ? window.StudioCache.getBundle('connect_plus') : Promise.resolve(null),
-      pn: window.StudioCache ? window.StudioCache.getBundle('parts_number') : Promise.resolve(null),
-      cti: window.StudioCache ? window.StudioCache.getBundle('contact_information') : Promise.resolve(null),
-      cat: window.StudioCache ? window.StudioCache.getBundle('catalog') : Promise.resolve(null),
-      kb: getKBCache()
-    };
-
-    let results = await Promise.allSettled(Object.values(tasks));
-    let html = '';
-
-    // 1. QuickBase_S (Deep Search API)
-    let qbData = results[0].value;
-    if (qbData && qbData.ok && qbData.records && qbData.records.length > 0) {
-      html += `<div class="omni-group-title"><i class="fas fa-database" style="color:#58a6ff;"></i> QuickBase_S Records</div>`;
-      qbData.records.slice(0, 4).forEach(rec => {
-        let status = rec.fields && rec.fields['8'] ? String(rec.fields['8'].value) : 'Open';
-        html += `
-          <div class="omni-item" onclick="window._omniRoute('qbs', '${rec.qbRecordId}')">
-            <div class="omni-item-title">
-              <span style="color:#58a6ff;">#${rec.qbRecordId}</span> 
-              <span class="omni-badge" style="background:rgba(88,166,255,0.1);border:1px solid rgba(88,166,255,0.3);color:#58a6ff;">${status}</span>
-            </div>
-            <div class="omni-item-sub">Deep Search Match — Click to view full details in QuickBase_S.</div>
-          </div>
-        `;
-      });
-    }
-
-    // 2. Connect+ Sites
-    let cpData = results[1].value;
-    if (cpData && cpData.data) {
-      let cpMatches = cpData.data.filter(r => (r._search || Object.values(r).join(' ').toLowerCase()).includes(q)).slice(0, 3);
-      if (cpMatches.length) {
-        html += `<div class="omni-group-title"><i class="fas fa-plug" style="color:#22d3ee;"></i> Connect+</div>`;
-        cpMatches.forEach(r => {
-          html += `
-            <div class="omni-item" onclick="window._omniRoute('connectplus', '${r.site}')">
-              <div class="omni-item-title">${r.site} <span class="omni-badge" style="background:rgba(34,211,238,0.1);color:#22d3ee;">Site</span></div>
-              <div class="omni-item-sub">${r.city || ''}, ${r.country || ''} — ${r.directory || ''}</div>
-            </div>
-          `;
-        });
-      }
-    }
-
-    // 3. Parts Number
-    let pnData = results[2].value;
-    if (pnData && pnData.data) {
-      let pnMatches = pnData.data.filter(r => Object.values(r).join(' ').toLowerCase().includes(q)).slice(0, 3);
-      if (pnMatches.length) {
-        html += `<div class="omni-group-title"><i class="fas fa-barcode" style="color:#fb923c;"></i> Parts Number</div>`;
-        pnMatches.forEach(r => {
-          let vals = Object.values(r);
-          html += `
-            <div class="omni-item" onclick="window._omniRoute('parts_number', '${vals[2] || vals[0]}')">
-              <div class="omni-item-title" style="color:#fb923c;">${vals[2] || vals[0]}</div>
-              <div class="omni-item-sub">${vals[3] || vals[1] || 'Part Match'}</div>
-            </div>
-          `;
-        });
-      }
-    }
-
-    // 4. Catalog Items
-    let catData = results[4].value;
-    if (catData && catData.data) {
-      let catMatches = catData.data.filter(r => r.item_code.toLowerCase().includes(q) || r.name.toLowerCase().includes(q)).slice(0, 3);
-      if (catMatches.length) {
-        html += `<div class="omni-group-title"><i class="fas fa-microchip" style="color:#a25ddc;"></i> Product Controllers</div>`;
-        catMatches.forEach(r => {
-          html += `
-            <div class="omni-item" onclick="window._omniRoute('catalog', '${r.id}')">
-              <div class="omni-item-title">${r.item_code} <span class="omni-badge" style="background:rgba(162,93,220,0.1);color:#a25ddc;">${r.category || 'Controller'}</span></div>
-              <div class="omni-item-sub">${r.name} — ${r.brand || 'No Brand'}</div>
-            </div>
-          `;
-        });
-      }
-    }
-
-    // 5. Support Records (KB)
-    let kbData = results[5].value;
-    if (kbData && kbData.flat) {
-      let kbMatches = kbData.flat.filter(r => (r.title + ' ' + r.res + ' ' + r.case).toLowerCase().includes(q)).slice(0, 3);
-      if (kbMatches.length) {
-        html += `<div class="omni-group-title"><i class="fas fa-book-open" style="color:#3fb950;"></i> Knowledge Base</div>`;
-        kbMatches.forEach(r => {
-          html += `
-            <div class="omni-item" onclick="window._omniRoute('support_records', '${r.title}')">
-              <div class="omni-item-title">${r.title} <span class="omni-badge" style="background:rgba(63,185,80,0.1);color:#3fb950;">${r.cat}</span></div>
-              <div class="omni-item-sub">${r.res.substring(0, 80)}...</div>
-            </div>
-          `;
-        });
-      }
-    }
-
-    if (!html) {
-      html = `<div class="omni-empty"><i class="fas fa-search" style="font-size:24px;opacity:0.3;margin-bottom:10px;"></i><br>No matches found across any system.</div>`;
-    }
-
-    resultsEl.innerHTML = html;
-  }
-
-  async function getKBCache() {
-    if (kbMemoryCache) return kbMemoryCache;
-    try {
-      let res = await fetch('/support_records_kb.json');
-      kbMemoryCache = await res.json();
-      return kbMemoryCache;
-    } catch(e) { return null; }
-  }
-
-  // Routing Logic
-  window._omniRoute = function(tab, identifier) {
-    closeOmnibar();
-    if (window.activateTab) window.activateTab(tab);
-
-    setTimeout(() => {
-      if (tab === 'qbs' && window._qbsDeepSearch) {
-        window._qbsDeepSearch(identifier, 0); // Trigger deep search sa QBS tab
-      } else if (tab === 'connectplus' && window._cpOnSearch) {
-        window._cpOnSearch(identifier);
-      } else if (tab === 'parts_number' && window._pnOnSearch) {
-        window._pnOnSearch(identifier);
-      } else if (tab === 'catalog' && window._catSelectItem) {
-        window._catSelectItem(identifier); // Direct open via ID
-      } else if (tab === 'support_records' && window._srQuickSearch) {
-        window._srQuickSearch(identifier);
-      }
-      
-      // Clear main omnibar input para malinis
-      searchInput.value = '';
-    }, 150); // slight delay to allow tab render
+    var q = String(searchInput.value || '').trim();
+    if (!q) { searchInput.focus(); return; }
+    openSearchEngine2WithQuery(q);
   };
 
-  // Boot
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initOmnibar);
-  } else {
-    initOmnibar();
+  function boot() {
+    if (!searchInput) return;
+    var legacy = document.getElementById('ss-omnibar-dropdown');
+    if (legacy && legacy.parentNode) legacy.parentNode.removeChild(legacy);
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      window._ssGlobalSearchGo();
+    });
   }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 
 })();
 </script>
