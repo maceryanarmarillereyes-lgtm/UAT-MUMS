@@ -16466,6 +16466,10 @@
     return { original: q, tokens: Array.from(new Set(expanded.filter(Boolean))), isNumeric: /^\d{4,}$/.test(q.trim()) };
   }
 
+  function _normLoose(v) {
+    return String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  }
+
   function _scoreRecord(r, parsed) {
     var tokens = parsed.tokens;
     var original = parsed.original.toLowerCase();
@@ -16476,19 +16480,24 @@
       r.searchBlob || '',
       r.partNo || '', r.desc || '', r.brand || ''
     ].join(' ').toLowerCase();
+    var normHaystack = _normLoose(haystack);
+    var normOriginal = _normLoose(original);
 
     if (parsed.isNumeric && (r.case === parsed.original || r.id === parsed.original)) return 10000;
 
     var score = 0;
     var titleHay = (r.title || '').toLowerCase();
+    var normTitle = _normLoose(titleHay);
     if (titleHay.includes(original)) score += 500;
     else if (haystack.includes(original)) score += 200;
+    else if (normOriginal && (normTitle.includes(normOriginal) || normHaystack.includes(normOriginal))) score += 220;
 
     tokens.forEach(function(t) {
       if (t.length < 2) return;
-      if (titleHay.includes(t)) score += 80;
-      else if (haystack.includes(t)) score += 20;
-      if (titleHay.startsWith(t)) score += 40;
+      var normT = _normLoose(t);
+      if (titleHay.includes(t) || (normT && normTitle.includes(normT))) score += 80;
+      else if (haystack.includes(t) || (normT && normHaystack.includes(normT))) score += 20;
+      if (titleHay.startsWith(t) || (normT && normTitle.startsWith(normT))) score += 40;
     });
 
     return score;
