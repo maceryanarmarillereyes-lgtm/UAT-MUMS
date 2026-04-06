@@ -6144,9 +6144,12 @@
       <!-- ── CALL INFORMATION — hidden by default, toggle via widget ── -->
       <div id="ci-call-info-section" style="display:none;flex-direction:column;border-bottom:1px solid var(--ss-border2);overflow-y:auto;flex-shrink:0;">
         <div class="ss-panel" style="flex:1;">
-          <div class="ss-panel-title" style="display:flex;align-items:center;gap:7px;">
-            <i class="fas fa-phone-alt"></i> Call Information
-            <span id="ci-edit-badge" style="display:none;font-size:8px;font-weight:800;padding:2px 7px;border-radius:10px;background:rgba(210,153,34,.15);border:1px solid rgba(210,153,34,.3);color:#d29922;letter-spacing:.04em;margin-left:4px;">EDITING</span>
+          <div class="ss-panel-title" style="display:flex;align-items:center;justify-content:space-between;gap:7px;">
+            <span style="display:flex;align-items:center;gap:7px;">
+              <i class="fas fa-phone-alt"></i> Call Information
+              <span id="ci-edit-badge" style="display:none;font-size:8px;font-weight:800;padding:2px 7px;border-radius:10px;background:rgba(210,153,34,.15);border:1px solid rgba(210,153,34,.3);color:#d29922;letter-spacing:.04em;margin-left:4px;">EDITING</span>
+            </span>
+            <button id="ci-call-info-close" onclick="window._cwCloseCallInfoPanel()" title="Close Call Information" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);border-radius:6px;color:var(--ss-muted);width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;line-height:1;">✕</button>
           </div>
 
           <!-- Caller Name * -->
@@ -8296,6 +8299,7 @@
   window._ssOpenBookmarksPanel = function() {
     _ssNotesSidebarVisible = true;
     _ssRightSidebarMode = 'bookmarks';
+    if (typeof window._se2SetBookmarkFolderFilter === 'function') window._se2SetBookmarkFolderFilter('default');
     _ssSyncMiniRail();
     if (typeof window._se2EnsureBookmarksLoaded === 'function') window._se2EnsureBookmarksLoaded();
   };
@@ -8397,6 +8401,11 @@
 
   // ── End Call button: stop timer + hide Call Information ──────────────────
   window._cwEndCall = function() {
+    _cwStopTimer();
+    _cwHideCallInfo();
+  };
+
+  window._cwCloseCallInfoPanel = function() {
     _cwStopTimer();
     _cwHideCallInfo();
   };
@@ -16264,7 +16273,7 @@
   };
   var _se2Bookmarks = [];
   var _se2BookmarkFolders = [{ id: 'default', name: 'General', createdAt: new Date().toISOString() }];
-  var _se2BookmarkSelectedFolder = 'all';
+  var _se2BookmarkSelectedFolder = 'default';
   var _se2BookmarksLoaded = false;
   var _se2BookmarksSaving = false;
 
@@ -16312,7 +16321,7 @@
       brand: String(r.brand || ''),
       site: String(r.site || ''),
       desc: String(r.desc || ''),
-      folderId: _se2NormalizeFolderId(_se2BookmarkSelectedFolder === 'all' ? 'default' : _se2BookmarkSelectedFolder),
+      folderId: 'default',
       createdAt: new Date().toISOString()
     };
   }
@@ -16346,6 +16355,11 @@
     if (_se2BookmarkSelectedFolder === 'all') return _se2Bookmarks.slice();
     return _se2Bookmarks.filter(function(b) { return _se2NormalizeFolderId(b.folderId) === _se2BookmarkSelectedFolder; });
   }
+
+  window._se2SetBookmarkFolderFilter = function(folderId) {
+    _se2BookmarkSelectedFolder = _se2NormalizeFolderId(folderId || 'default');
+    _se2RenderBookmarksPanel();
+  };
 
   function _se2RenderFolderControls() {
     var host = document.getElementById('ci-bookmarks-folder-controls');
@@ -16575,14 +16589,24 @@
     var rec = filtered[idx];
     if (!rec) return;
     if (typeof window.activateTab === 'function') window.activateTab('search_engine_2');
-    var q = rec.case || rec.partNo || rec.title || '';
-    var qEl = el('se2-q');
-    if (qEl) qEl.value = q;
-    _state.query = q;
-    if (typeof _run === 'function') _run();
-    setTimeout(function() {
-      if (_state.results && _state.results.length) window._se2OpenDetail(0);
-    }, 80);
+    var mapped = {
+      title: rec.title || '(untitled)',
+      case: rec.case || '',
+      caseNum: rec.case || '',
+      cat: rec.cat || '',
+      status: rec.status || '',
+      eu: rec.eu || '',
+      res: rec.res || '',
+      notes: rec.res || '',
+      partNo: rec.partNo || '',
+      brand: rec.brand || '',
+      site: rec.site || '',
+      desc: rec.desc || '',
+      _src: rec.source || 'sr'
+    };
+    _state.results = [mapped];
+    _state.detailIdx = 0;
+    setTimeout(function() { window._se2OpenDetail(0); }, 50);
   };
 
   window._se2ToggleSort = function() {
