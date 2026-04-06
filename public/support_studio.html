@@ -6232,6 +6232,7 @@
           <div class="ss-panel-title" style="margin-bottom:0;"><i class="fas fa-bookmark"></i> Bookmarks</div>
           <span id="ci-bookmarks-count" style="font-size:9px;color:var(--ss-muted);">0 saved</span>
         </div>
+        <div id="ci-bookmarks-folder-controls" style="display:flex;gap:5px;align-items:center;margin-bottom:8px;flex-wrap:wrap;"></div>
         <div id="ci-bookmarks-list" style="display:flex;flex-direction:column;gap:6px;overflow-y:auto;flex:1;">
           <div class="ss-empty-note" style="padding:8px 0;font-size:10px;">No bookmarks yet.</div>
         </div>
@@ -16262,14 +16263,33 @@
     monitor:    { sources:{}, total:0, warnings:[] }
   };
   var _se2Bookmarks = [];
+  var _se2BookmarkFolders = [{ id: 'default', name: 'General', createdAt: new Date().toISOString() }];
+  var _se2BookmarkSelectedFolder = 'all';
   var _se2BookmarksLoaded = false;
   var _se2BookmarksSaving = false;
+
+  function _se2FolderName(folderId) {
+    var f = _se2BookmarkFolders.find(function(x) { return x && x.id === folderId; });
+    return f ? String(f.name || '') : 'General';
+  }
 
   function _se2BookmarkId(record) {
     var src = record ? _getSource(record) : 'sr';
     var anchor = String(record && (record.case || record.caseNum || record.partNo || record.email || record.phone || record.title || record.site || record.res || '') || '').trim();
     if (!anchor) anchor = JSON.stringify(record || {});
     return src + '::' + anchor.toLowerCase();
+  }
+
+  function _se2EnsureDefaultFolder() {
+    if (!_se2BookmarkFolders.some(function(f) { return f && f.id === 'default'; })) {
+      _se2BookmarkFolders.unshift({ id: 'default', name: 'General', createdAt: new Date().toISOString() });
+    }
+  }
+
+  function _se2NormalizeFolderId(folderId) {
+    var id = String(folderId || '').trim();
+    if (!id) return 'default';
+    return _se2BookmarkFolders.some(function(f) { return f && f.id === id; }) ? id : 'default';
   }
 
   function _se2IsBookmarked(record) {
@@ -16292,6 +16312,7 @@
       brand: String(r.brand || ''),
       site: String(r.site || ''),
       desc: String(r.desc || ''),
+      folderId: _se2NormalizeFolderId(_se2BookmarkSelectedFolder === 'all' ? 'default' : _se2BookmarkSelectedFolder),
       createdAt: new Date().toISOString()
     };
   }
@@ -16312,37 +16333,176 @@
     fetch('/api/studio/se2_bookmarks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ bookmarks: _se2Bookmarks.slice(0, 500) })
+      body: JSON.stringify({
+        folders: _se2BookmarkFolders.slice(0, 100),
+        bookmarks: _se2Bookmarks.slice(0, 500)
+      })
     })
       .catch(function(err) { console.warn('[SE2 bookmarks] save failed', err); })
       .finally(function() { _se2BookmarksSaving = false; });
   }
 
+  function _se2FilteredBookmarks() {
+    if (_se2BookmarkSelectedFolder === 'all') return _se2Bookmarks.slice();
+    return _se2Bookmarks.filter(function(b) { return _se2NormalizeFolderId(b.folderId) === _se2BookmarkSelectedFolder; });
+  }
+
+  function _se2RenderFolderControls() {
+    var host = document.getElementById('ci-bookmarks-folder-controls');
+    if (!host) return;
+    var options = ['<option value="all">All folders</option>'].concat(_se2BookmarkFolders.map(function(f) {
+      return '<option value="' + esc(f.id) + '"' + (_se2BookmarkSelectedFolder === f.id ? ' selected' : '') + '>' + esc(f.name) + '</option>';
+    }));
+
+    host.innerHTML =
+      '<select id="ci-bookmarks-folder-select" style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:6px;color:#e6edf3;font-size:10px;padding:4px 7px;">' + options.join('') + '</select>' +
+      '<button id="ci-bookmarks-folder-add" style="background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.28);border-radius:5px;color:#3fb950;font-size:10px;font-weight:700;padding:4px 7px;cursor:pointer;">+ Folder</button>' +
+      '<button id="ci-bookmarks-folder-rename" style="background:rgba(88,166,255,.12);border:1px solid rgba(88,166,255,.28);border-radius:5px;color:#58a6ff;font-size:10px;font-weight:700;padding:4px 7px;cursor:pointer;">Rename</button>' +
+      '<button id="ci-bookmarks-folder-delete" style="background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.22);border-radius:5px;color:#f85149;font-size:10px;font-weight:700;padding:4px 7px;cursor:pointer;">Delete</button>';
+
+    var sel = document.getElementById('ci-bookmarks-folder-select');
+    if (sel) {
+      sel.value = _se2BookmarkSelectedFolder;
+      sel.onchange = function() {
+        _se2BookmarkSelectedFolder = String(sel.value || 'all');
+        _se2RenderBookmarksPanel();
+      };
+    }
+
+    var addBtn = document.getElementById('ci-bookmarks-folder-add');
+    if (addBtn) addBtn.onclick = function() {
+      var name = prompt('Folder name');
+      if (!name) return;
+      name = String(name).trim();
+      if (!name) return;
+      var id = 'fld_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+      _se2BookmarkFolders.push({ id: id, name: name.slice(0, 60), createdAt: new Date().toISOString() });
+      _se2BookmarkSelectedFolder = id;
+      _se2RenderBookmarksPanel();
+      _se2PersistBookmarks();
+    };
+
+    var renameBtn = document.getElementById('ci-bookmarks-folder-rename');
+    if (renameBtn) renameBtn.onclick = function() {
+      if (_se2BookmarkSelectedFolder === 'all' || _se2BookmarkSelectedFolder === 'default') {
+        alert('Select a custom folder to rename.');
+        return;
+      }
+      var folder = _se2BookmarkFolders.find(function(f) { return f && f.id === _se2BookmarkSelectedFolder; });
+      if (!folder) return;
+      var name = prompt('Rename folder', folder.name || '');
+      if (!name) return;
+      folder.name = String(name).trim().slice(0, 60) || folder.name;
+      _se2RenderBookmarksPanel();
+      _se2PersistBookmarks();
+    };
+
+    var delBtn = document.getElementById('ci-bookmarks-folder-delete');
+    if (delBtn) delBtn.onclick = function() {
+      if (_se2BookmarkSelectedFolder === 'all' || _se2BookmarkSelectedFolder === 'default') {
+        alert('Select a custom folder to delete.');
+        return;
+      }
+      var folderId = _se2BookmarkSelectedFolder;
+      if (!confirm('Delete this folder? Bookmarks inside it will be moved to General.')) return;
+      _se2BookmarkFolders = _se2BookmarkFolders.filter(function(f) { return f && f.id !== folderId; });
+      _se2Bookmarks = _se2Bookmarks.map(function(b) {
+        if (b && b.folderId === folderId) return Object.assign({}, b, { folderId: 'default' });
+        return b;
+      });
+      _se2BookmarkSelectedFolder = 'all';
+      _se2RenderBookmarksPanel();
+      _se2PersistBookmarks();
+    };
+  }
+
+  function _se2CloseBookmarkMenu() {
+    var m = document.getElementById('ci-bookmark-item-menu');
+    if (m) m.style.display = 'none';
+  }
+
+  window._se2MoveBookmarkToFolder = function(bookmarkId, folderId) {
+    _se2Bookmarks = _se2Bookmarks.map(function(b) {
+      if (b && b.bookmarkId === bookmarkId) return Object.assign({}, b, { folderId: _se2NormalizeFolderId(folderId) });
+      return b;
+    });
+    _se2RenderBookmarksPanel();
+    _se2PersistBookmarks();
+    _se2CloseBookmarkMenu();
+  };
+
+  window._se2OpenBookmarkItemMenu = function(evt, idx) {
+    if (!evt) return;
+    evt.preventDefault();
+    var list = _se2FilteredBookmarks();
+    var item = list[idx];
+    if (!item) return;
+
+    var menu = document.getElementById('ci-bookmark-item-menu');
+    if (!menu) {
+      menu = document.createElement('div');
+      menu.id = 'ci-bookmark-item-menu';
+      menu.style.position = 'fixed';
+      menu.style.zIndex = '9800';
+      menu.style.minWidth = '190px';
+      menu.style.background = '#0d1117';
+      menu.style.border = '1px solid rgba(255,255,255,.14)';
+      menu.style.borderRadius = '8px';
+      menu.style.boxShadow = '0 12px 28px rgba(0,0,0,.45)';
+      menu.style.padding = '6px';
+      menu.style.display = 'none';
+      document.body.appendChild(menu);
+      document.addEventListener('click', _se2CloseBookmarkMenu, true);
+      window.addEventListener('resize', _se2CloseBookmarkMenu);
+      window.addEventListener('scroll', _se2CloseBookmarkMenu, true);
+    }
+
+    var buttons = _se2BookmarkFolders.map(function(f) {
+      var isActive = _se2NormalizeFolderId(item.folderId) === f.id;
+      var bid = encodeURIComponent(String(item.bookmarkId || ''));
+      var fid = encodeURIComponent(String(f.id || ''));
+      return '<button onclick="window._se2MoveBookmarkToFolder(decodeURIComponent(\\'' + bid + '\\'), decodeURIComponent(\\'' + fid + '\\'))" style="width:100%;text-align:left;background:' + (isActive ? 'rgba(88,166,255,.14)' : 'rgba(255,255,255,.03)') + ';border:1px solid ' + (isActive ? 'rgba(88,166,255,.35)' : 'rgba(255,255,255,.08)') + ';color:' + (isActive ? '#58a6ff' : '#c9d1d9') + ';font-size:11px;border-radius:6px;padding:6px 8px;cursor:pointer;margin-top:4px;">Move to: ' + esc(f.name) + '</button>';
+    }).join('');
+
+    menu.innerHTML =
+      '<div style="font-size:10px;color:#7d8590;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 4px;">Move to folder</div>' +
+      buttons;
+
+    menu.style.left = Math.max(8, Math.min(window.innerWidth - 220, evt.clientX + 4)) + 'px';
+    menu.style.top  = Math.max(8, Math.min(window.innerHeight - 240, evt.clientY + 4)) + 'px';
+    menu.style.display = 'block';
+  };
+
   function _se2RenderBookmarksPanel() {
+    _se2EnsureDefaultFolder();
     var list = document.getElementById('ci-bookmarks-list');
     var count = document.getElementById('ci-bookmarks-count');
+    var filtered = _se2FilteredBookmarks();
     if (count) count.textContent = _se2Bookmarks.length + ' saved';
+    _se2RenderFolderControls();
     if (!list) return;
-    if (!_se2Bookmarks.length) {
-      list.innerHTML = '<div class=\"ss-empty-note\" style=\"padding:8px 0;font-size:10px;\">No bookmarks yet.</div>';
+    if (!filtered.length) {
+      list.innerHTML = '<div class="ss-empty-note" style="padding:8px 0;font-size:10px;">No bookmarks in this folder.</div>';
       return;
     }
-    list.innerHTML = _se2Bookmarks.map(function(b, idx) {
+    list.innerHTML = filtered.map(function(b, idx) {
       var src = SOURCES[b.source] || { label: 'Record', color: '#58a6ff' };
       var top = [b.case ? ('#' + b.case) : '', b.eu, b.cat].filter(Boolean).join(' · ');
+      var folderName = _se2FolderName(_se2NormalizeFolderId(b.folderId));
       return '' +
-        '<div class=\"ci-note-card\" style=\"cursor:default;\">' +
-          '<div style=\"display:flex;align-items:flex-start;justify-content:space-between;gap:6px;\">' +
-            '<div style=\"min-width:0;flex:1;\">' +
-              '<div class=\"ci-note-time\" style=\"margin-bottom:4px;display:flex;align-items:center;gap:6px;\">' +
-                '<span style=\"color:' + src.color + ';font-weight:700;\">' + esc(src.label) + '</span>' +
+        '<div class="ci-note-card" style="cursor:default;" oncontextmenu="window._se2OpenBookmarkItemMenu(event,' + idx + ')">' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;">' +
+            '<div style="min-width:0;flex:1;">' +
+              '<div class="ci-note-time" style="margin-bottom:4px;display:flex;align-items:center;gap:6px;">' +
+                '<span style="color:' + src.color + ';font-weight:700;">' + esc(src.label) + '</span>' +
+                '<span style="font-size:9px;color:#7d8590;">📁 ' + esc(folderName) + '</span>' +
               '</div>' +
-              '<div class=\"ci-note-caller\" style=\"color:#e6edf3;\">' + esc(b.title || '(untitled)') + '</div>' +
-              (top ? ('<div style=\"font-size:10px;color:var(--ss-muted);margin-top:3px;line-height:1.4;\">' + esc(top) + '</div>') : '') +
+              '<div class="ci-note-caller" style="color:#e6edf3;">' + esc(b.title || '(untitled)') + '</div>' +
+              (top ? ('<div style="font-size:10px;color:var(--ss-muted);margin-top:3px;line-height:1.4;">' + esc(top) + '</div>') : '') +
             '</div>' +
-            '<div style=\"display:flex;gap:5px;\">' +
-              '<button onclick=\"window._se2OpenBookmark(' + idx + ')\" style=\"background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:5px;color:#58a6ff;font-size:10px;font-weight:700;padding:3px 7px;cursor:pointer;font-family:var(--ss-font);\">Open</button>' +
-              '<button onclick=\"window._se2RemoveBookmarkByIndex(' + idx + ')\" style=\"background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);border-radius:5px;color:#f85149;font-size:10px;font-weight:700;padding:3px 7px;cursor:pointer;font-family:var(--ss-font);\">Remove</button>' +
+            '<div style="display:flex;gap:5px;">' +
+              '<button onclick="window._se2OpenBookmark(' + idx + ')" style="background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:5px;color:#58a6ff;font-size:10px;font-weight:700;padding:3px 7px;cursor:pointer;font-family:var(--ss-font);">Open</button>' +
+              '<button onclick="window._se2RemoveBookmarkByIndex(' + idx + ')" style="background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);border-radius:5px;color:#f85149;font-size:10px;font-weight:700;padding:3px 7px;cursor:pointer;font-family:var(--ss-font);">Remove</button>' +
             '</div>' +
           '</div>' +
         '</div>';
@@ -16357,7 +16517,12 @@
     return fetch('/api/studio/se2_bookmarks', { headers: { Authorization: 'Bearer ' + token } })
       .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('bookmarks_http_' + r.status)); })
       .then(function(j) {
+        _se2BookmarkFolders = Array.isArray(j && j.folders) && j.folders.length ? j.folders : [{ id: 'default', name: 'General', createdAt: new Date().toISOString() }];
         _se2Bookmarks = Array.isArray(j && j.bookmarks) ? j.bookmarks : [];
+        _se2EnsureDefaultFolder();
+        _se2Bookmarks = _se2Bookmarks.map(function(b) {
+          return Object.assign({}, b, { folderId: _se2NormalizeFolderId(b.folderId) });
+        });
         _se2BookmarksLoaded = true;
         _se2RenderBookmarksPanel();
         _se2RenderBookmarkButton(_state.results[_state.detailIdx] || null);
@@ -16388,15 +16553,18 @@
   };
 
   window._se2RemoveBookmarkByIndex = function(idx) {
-    if (idx < 0 || idx >= _se2Bookmarks.length) return;
-    _se2Bookmarks.splice(idx, 1);
+    var filtered = _se2FilteredBookmarks();
+    var target = filtered[idx];
+    if (!target) return;
+    _se2Bookmarks = _se2Bookmarks.filter(function(b) { return !(b && b.bookmarkId === target.bookmarkId); });
     _se2RenderBookmarksPanel();
     _se2RenderBookmarkButton(_state.results[_state.detailIdx] || null);
     _se2PersistBookmarks();
   };
 
   window._se2OpenBookmark = function(idx) {
-    var rec = _se2Bookmarks[idx];
+    var filtered = _se2FilteredBookmarks();
+    var rec = filtered[idx];
     if (!rec) return;
     if (typeof window.activateTab === 'function') window.activateTab('search_engine_2');
     var q = rec.case || rec.partNo || rec.title || '';
