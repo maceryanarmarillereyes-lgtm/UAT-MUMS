@@ -16821,8 +16821,12 @@
     }
 
     _ensureQbLiveQuery(q);
-    var results = _search(q);
-    if (_state.activeCat) results = results.filter(function(r) { return _getSource(r) === _state.activeCat; });
+    var allResults = _search(q);
+    var visibilityCounts = _countsByCat(allResults);
+    var results = allResults.slice();
+    if (_state.activeCat) {
+      results = results.filter(function(r) { return _getSource(r) === _state.activeCat; });
+    }
     if (_state.sortOrder === 'newest' || _state.sortOrder === 'oldest') {
       results = results.slice().sort(function(a, b) {
         var da = new Date(a.date || 0).getTime() || 0;
@@ -16839,8 +16843,7 @@
       });
     }
     _state.results = results;
-    var counts = _countsByCat(results);
-    _renderCats(counts);
+    _renderCats(visibilityCounts);
     _renderSummary(results, q);
     _renderResults(results, _normaliseQuery(q).tokens);
     var sortBtn = el('se2-sort-btn');
