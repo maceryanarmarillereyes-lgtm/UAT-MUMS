@@ -16472,32 +16472,57 @@
   }
 
   function _toNewestRank(r) {
-    var d = new Date((r && r.date) || 0).getTime() || 0;
+    var idx = _ensureRecordIndex(r);
+    var d = idx.newestRank || 0;
+    if (d > 0) return d;
+    d = new Date((r && r.date) || 0).getTime() || 0;
     if (d > 0) return d;
     var n = Number((r && (r.case || r.id || (r._snap && r._snap.recordId))) || 0) || 0;
     return n;
   }
 
-  function _scoreRecord(r, parsed) {
-    var tokens = parsed.tokens;
-    var original = parsed.original.toLowerCase();
+  function _ensureRecordIndex(r) {
+    if (!r || typeof r !== 'object') {
+      return {
+        haystack: '', normHaystack: '', titleHay: '', normTitle: '',
+        phoneDigitHay: '', emailHay: '', newestRank: 0
+      };
+    }
+    if (r.__se2idx) return r.__se2idx;
+    var titleHay = String(r.title || '').toLowerCase();
     var haystack = [
       r.title || '', r.res || '', r.cat || '',
       r.case || '', r.eu || '', r.id || '',
       r.site || '', r.directory || '', r.endUser || '', r.assignedTo || '',
-      r.searchBlob || '',
-      r.partNo || '', r.desc || '', r.brand || ''
+      r.searchBlob || '', r.partNo || '', r.desc || '', r.brand || ''
     ].join(' ').toLowerCase();
-    var normHaystack = _normLoose(haystack);
+    var newestRank = new Date((r && r.date) || 0).getTime() || 0;
+    if (!newestRank) newestRank = Number((r && (r.case || r.id || (r._snap && r._snap.recordId))) || 0) || 0;
+    r.__se2idx = {
+      titleHay: titleHay,
+      normTitle: _normLoose(titleHay),
+      haystack: haystack,
+      normHaystack: _normLoose(haystack),
+      phoneDigitHay: String([r.phone || '', r.title || '', r.res || '', r.searchBlob || ''].join(' ')).replace(/\D+/g, ''),
+      emailHay: String([r.email || '', r.title || '', r.res || '', r.searchBlob || ''].join(' ')).toLowerCase().replace(/[^a-z0-9]+/g, ''),
+      newestRank: newestRank
+    };
+    return r.__se2idx;
+  }
+
+  function _scoreRecord(r, parsed) {
+    var tokens = parsed.tokens;
+    var original = parsed.original.toLowerCase();
+    var idx = _ensureRecordIndex(r);
+    var haystack = idx.haystack;
+    var normHaystack = idx.normHaystack;
     var normOriginal = _normLoose(original);
     var phoneDigits = String(original || '').replace(/\D+/g, '');
 
     // Structured phone query path (e.g., +1(954)553-5645):
     // require contiguous digit match to prevent broad fuzzy hits.
     if (!/[a-z]/i.test(original) && phoneDigits.length >= 7) {
-      var digitHay = String([
-        r.phone || '', r.title || '', r.res || '', r.searchBlob || ''
-      ].join(' ')).replace(/\D+/g, '');
+      var digitHay = idx.phoneDigitHay;
       var candidates = [phoneDigits];
       if (phoneDigits.length === 11 && phoneDigits.charAt(0) === '1') candidates.push(phoneDigits.slice(1));
       if (phoneDigits.length >= 10) candidates.push(phoneDigits.slice(-10));
@@ -16508,17 +16533,15 @@
     // Structured email query path: punctuation-insensitive exact containment.
     if (original.indexOf('@') !== -1) {
       var emailNeedle = String(original || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
-      var emailHay = String([
-        r.email || '', r.title || '', r.res || '', r.searchBlob || ''
-      ].join(' ')).toLowerCase().replace(/[^a-z0-9]+/g, '');
+      var emailHay = idx.emailHay;
       return (emailNeedle && emailHay.indexOf(emailNeedle) !== -1) ? 14000 : 0;
     }
 
     if (parsed.isNumeric && (r.case === parsed.original || r.id === parsed.original)) return 10000;
 
     var score = 0;
-    var titleHay = (r.title || '').toLowerCase();
-    var normTitle = _normLoose(titleHay);
+    var titleHay = idx.titleHay;
+    var normTitle = idx.normTitle;
     if (titleHay.includes(original)) score += 500;
     else if (haystack.includes(original)) score += 200;
     else if (normOriginal && (normTitle.includes(normOriginal) || normHaystack.includes(normOriginal))) score += 220;
@@ -16551,7 +16574,8 @@
         if (score > 0) results.push({ r: r, score: score + 5 });
       });
     }
-    results.sort(function(a, b) { return b.score - a.score; });
+    // Performance optimization: final ordering is enforced in _run()
+    // as newest → oldest, so skip intermediate score sort here.
     return results.map(function(x) { return x.r; });
   }
 
