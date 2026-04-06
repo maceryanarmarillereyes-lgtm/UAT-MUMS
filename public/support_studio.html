@@ -16158,9 +16158,10 @@
   };
 
   window._se2ToggleSort = function() {
-    _state.sortOrder = (_state.sortOrder === 'newest') ? 'oldest' : 'newest';
+    // Product decision: Search Engine 2 must always stay newest → oldest.
+    _state.sortOrder = 'newest';
     var lbl = el('se2-sort-label');
-    if (lbl) lbl.textContent = _state.sortOrder === 'newest' ? 'Newest first' : 'Oldest first';
+    if (lbl) lbl.textContent = 'Newest first';
     _run();
   };
 
@@ -16467,7 +16468,14 @@
   }
 
   function _normLoose(v) {
-    return String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    return String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+  }
+
+  function _toNewestRank(r) {
+    var d = new Date((r && r.date) || 0).getTime() || 0;
+    if (d > 0) return d;
+    var n = Number((r && (r.case || r.id || (r._snap && r._snap.recordId))) || 0) || 0;
+    return n;
   }
 
   function _scoreRecord(r, parsed) {
@@ -16836,21 +16844,9 @@
     if (_state.activeCat) {
       results = results.filter(function(r) { return _getSource(r) === _state.activeCat; });
     }
-    if (_state.sortOrder === 'newest' || _state.sortOrder === 'oldest') {
-      results = results.slice().sort(function(a, b) {
-        var da = new Date(a.date || 0).getTime() || 0;
-        var db = new Date(b.date || 0).getTime() || 0;
-        return _state.sortOrder === 'newest' ? db - da : da - db;
-      });
-    }
-    // Sort by date if requested
-    if (_state.sortOrder && _state.sortOrder !== 'score') {
-      results = results.slice().sort(function(a,b){
-        var da=new Date(a.date||0).getTime()||0;
-        var db=new Date(b.date||0).getTime()||0;
-        return _state.sortOrder==='newest'?db-da:da-db;
-      });
-    }
+    // Product decision: always keep Search Engine 2 sorted newest → oldest.
+    // Fallback when date is missing: use numeric case/id descending.
+    results = results.slice().sort(function(a, b) { return _toNewestRank(b) - _toNewestRank(a); });
     _state.results = results;
     _renderCats(visibilityCounts);
     _renderSummary(results, q);
