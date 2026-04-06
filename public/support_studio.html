@@ -15494,19 +15494,19 @@
     var html = '';
     if (step === 1) {
       html = '<div style="font-size:10px;font-weight:800;color:#79c0ff;letter-spacing:.06em;margin-bottom:6px;">1. Application Label Name <span style="color:#f85149;">(Required)</span></div>' +
-             '<input id="ha-step-input" class="odp-input" style="height:36px;" value="' + _haEsc(_haState.draft.label) + '" placeholder="Enter program label" />';
+             '<input id="ha-step-input" dir="ltr" class="odp-input" style="height:36px;text-align:left;direction:ltr;unicode-bidi:plaintext;" value="' + _haEsc(_haState.draft.label) + '" placeholder="Enter program label" />';
     } else if (step === 2) {
       html = '<div style="font-size:10px;font-weight:800;color:#79c0ff;letter-spacing:.06em;margin-bottom:6px;">2. Application Link <span style="color:#f85149;">(Required)</span></div>' +
-             '<input id="ha-step-input" class="odp-input" style="height:36px;" value="' + _haEsc(_haState.draft.link) + '" placeholder="https://..." />';
+             '<input id="ha-step-input" dir="ltr" class="odp-input" style="height:36px;text-align:left;direction:ltr;unicode-bidi:plaintext;" value="' + _haEsc(_haState.draft.link) + '" placeholder="https://..." />';
     } else if (step === 3) {
       html = '<div style="font-size:10px;font-weight:800;color:#79c0ff;letter-spacing:.06em;margin-bottom:6px;">3. Application Icon Link <span style="color:#f85149;">(Required)</span></div>' +
-             '<input id="ha-step-input" class="odp-input" style="height:36px;" value="' + _haEsc(_haState.draft.icon) + '" placeholder="https://..." />' +
+             '<input id="ha-step-input" dir="ltr" class="odp-input" style="height:36px;text-align:left;direction:ltr;unicode-bidi:plaintext;" value="' + _haEsc(_haState.draft.icon) + '" placeholder="https://..." />' +
              '<div style="margin-top:8px;font-size:10px;color:var(--ss-muted);">' +
              '<a href="' + _haEsc(ICON_UPLOAD_REPO_URL) + '" target="_blank" rel="noopener noreferrer" style="color:#79c0ff;font-weight:700;text-decoration:none;">Upload here the image and copy the link</a>' +
              '</div>';
     } else {
       html = '<div style="font-size:10px;font-weight:800;color:#79c0ff;letter-spacing:.06em;margin-bottom:6px;">4. Short Description <span style="color:#f85149;">(Required)</span></div>' +
-             '<textarea id="ha-step-input" class="odp-input" style="min-height:72px;padding-top:10px;resize:vertical;">' + _haEsc(_haState.draft.description) + '</textarea>';
+             '<textarea id="ha-step-input" dir="ltr" class="odp-input" style="min-height:72px;padding-top:10px;resize:vertical;text-align:left;direction:ltr;unicode-bidi:plaintext;">' + _haEsc(_haState.draft.description) + '</textarea>';
     }
 
     body.innerHTML = html;
