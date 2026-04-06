@@ -93,6 +93,7 @@ const ROUTES = {
   'studio/qb_data':     require('../server/routes/studio/qb_data'),
   'studio/yct_data':    require('../server/routes/studio/yct_data'),
   'studio/call_notes':  require('../server/routes/studio/call_notes'),
+  'studio/se2_bookmarks': require('../server/routes/studio/se2_bookmarks'),
   'studio/qb_settings_global': require('../server/routes/studio/qb_settings_global'),
   'studio/qb_monitoring':      require('../server/routes/studio/qb_monitoring'),
   'studio/qb_search':          require('../server/routes/studio/qb_search'),
