@@ -16593,6 +16593,33 @@
       chip.classList.toggle('active', !!isActive2);
     });
 
+    // Auto-sort Data Source chips when searching: highest counts first.
+    var srcWrap = el('se2-lp-sources');
+    if (srcWrap) {
+      var allChip = srcWrap.querySelector('.se2-src-chip[data-src2="all"]');
+      var chips = Array.from(srcWrap.querySelectorAll('.se2-src-chip')).filter(function(chip) {
+        return chip.getAttribute('data-src2') !== 'all';
+      });
+      var defaultOrder = ['qb','qbd','kb','parts','ctrl','net','ci','sr'];
+      chips.sort(function(a, b) {
+        var ak = a.getAttribute('data-src2') || '';
+        var bk = b.getAttribute('data-src2') || '';
+        if (hasQ) {
+          var ac = Number((counts && counts[ak]) || 0);
+          var bc = Number((counts && counts[bk]) || 0);
+          if (_state.activeCat && ak === _state.activeCat && bk !== _state.activeCat) return -1;
+          if (_state.activeCat && bk === _state.activeCat && ak !== _state.activeCat) return 1;
+          if (bc !== ac) return bc - ac;
+          var al = (SOURCES[ak] && (SOURCES[ak].shortLabel || SOURCES[ak].label)) || ak;
+          var bl = (SOURCES[bk] && (SOURCES[bk].shortLabel || SOURCES[bk].label)) || bk;
+          return String(al).localeCompare(String(bl));
+        }
+        return defaultOrder.indexOf(ak) - defaultOrder.indexOf(bk);
+      });
+      chips.forEach(function(chip) { srcWrap.appendChild(chip); });
+      if (allChip) srcWrap.insertBefore(allChip, srcWrap.firstChild);
+    }
+
     // ── Hero section: show/hide + update count ──
     var hero = el('se2-hero');
     if (hero) hero.style.display = hasQ ? 'none' : 'flex';
@@ -16734,6 +16761,28 @@
     }
   }
 
+  function _renderLoadingWidget(msg) {
+    var body = el('se2-body');
+    if (!body) return;
+    var label = esc(msg || 'Loading all data sources…');
+    body.innerHTML =
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:260px;gap:16px;text-align:center;">' +
+        '<div style="position:relative;width:76px;height:76px;border-radius:50%;border:1px solid rgba(6,182,212,.25);background:radial-gradient(circle at 30% 30%, rgba(6,182,212,.22), rgba(6,182,212,.04));display:grid;place-items:center;box-shadow:0 0 0 8px rgba(6,182,212,.05),0 0 40px rgba(59,130,246,.18);">' +
+          '<div class="se2-spin" style="width:24px;height:24px;border:2px solid rgba(6,182,212,.25);border-top-color:#22d3ee;border-radius:50%;"></div>' +
+        '</div>' +
+        '<div style="font-size:13px;font-weight:700;color:#7dd3fc;letter-spacing:.01em;">' + label + '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(4,minmax(90px,1fr));gap:8px;width:min(620px,92%);">' +
+          Object.keys(SOURCES).map(function(key) {
+            var src = SOURCES[key] || {};
+            return '<div style="padding:7px 8px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+              '<span style="font-size:10px;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(src.shortLabel || src.label || key) + '</span>' +
+              '<span style="width:7px;height:7px;border-radius:50%;background:' + esc(src.color || '#22d3ee') + ';box-shadow:0 0 0 4px rgba(34,211,238,.14);animation:se2pulse 1.4s ease-in-out infinite;"></span>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+  }
+
   // ── Main run ───────────────────────────────────────────────────────────────
   function _run() {
     _ensureSe2SearchVisible();
@@ -16746,9 +16795,7 @@
       // FIX BUG 3: store pending query so _loadData.then() will run it
       if (q) _state.pendingQuery = q;
       var bodyEl = el('se2-body');
-      if (bodyEl && !bodyEl.querySelector('.se2-spin')) {
-        bodyEl.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:#7d8590;font-size:12px;"><div class="se2-spin"></div><span>Loading data sources…</span></div>';
-      }
+      _renderLoadingWidget('Gathering source data…');
       _renderSummary([], '');
       return;
     }
@@ -17034,10 +17081,7 @@
     _renderSummary([], ''); // show "Loading data sources…"
 
     var body = el('se2-body');
-    if (body && !body.querySelector('.se2-spin')) {
-      body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:#7d8590;font-size:12px;">' +
-        '<div class="se2-spin"></div><span>Loading all data sources…</span></div>';
-    }
+    _renderLoadingWidget('Loading all data sources…');
 
     // ── KB JSON — use shared promise to prevent duplicate fetches (FIX BUG 4)
     var kbPromise;
