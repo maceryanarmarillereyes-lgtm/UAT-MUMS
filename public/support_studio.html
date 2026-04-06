@@ -16158,9 +16158,10 @@
   };
 
   window._se2ToggleSort = function() {
-    _state.sortOrder = (_state.sortOrder === 'newest') ? 'oldest' : 'newest';
+    // Product decision: Search Engine 2 must always stay newest → oldest.
+    _state.sortOrder = 'newest';
     var lbl = el('se2-sort-label');
-    if (lbl) lbl.textContent = _state.sortOrder === 'newest' ? 'Newest first' : 'Oldest first';
+    if (lbl) lbl.textContent = 'Newest first';
     _run();
   };
 
@@ -16466,6 +16467,17 @@
     return { original: q, tokens: Array.from(new Set(expanded.filter(Boolean))), isNumeric: /^\d{4,}$/.test(q.trim()) };
   }
 
+  function _normLoose(v) {
+    return String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+  }
+
+  function _toNewestRank(r) {
+    var d = new Date((r && r.date) || 0).getTime() || 0;
+    if (d > 0) return d;
+    var n = Number((r && (r.case || r.id || (r._snap && r._snap.recordId))) || 0) || 0;
+    return n;
+  }
+
   function _scoreRecord(r, parsed) {
     var tokens = parsed.tokens;
     var original = parsed.original.toLowerCase();
@@ -16476,19 +16488,47 @@
       r.searchBlob || '',
       r.partNo || '', r.desc || '', r.brand || ''
     ].join(' ').toLowerCase();
+    var normHaystack = _normLoose(haystack);
+    var normOriginal = _normLoose(original);
+    var phoneDigits = String(original || '').replace(/\D+/g, '');
+
+    // Structured phone query path (e.g., +1(954)553-5645):
+    // require contiguous digit match to prevent broad fuzzy hits.
+    if (!/[a-z]/i.test(original) && phoneDigits.length >= 7) {
+      var digitHay = String([
+        r.phone || '', r.title || '', r.res || '', r.searchBlob || ''
+      ].join(' ')).replace(/\D+/g, '');
+      var candidates = [phoneDigits];
+      if (phoneDigits.length === 11 && phoneDigits.charAt(0) === '1') candidates.push(phoneDigits.slice(1));
+      if (phoneDigits.length >= 10) candidates.push(phoneDigits.slice(-10));
+      var okPhone = candidates.some(function(c) { return c && digitHay.indexOf(c) !== -1; });
+      return okPhone ? 15000 : 0;
+    }
+
+    // Structured email query path: punctuation-insensitive exact containment.
+    if (original.indexOf('@') !== -1) {
+      var emailNeedle = String(original || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+      var emailHay = String([
+        r.email || '', r.title || '', r.res || '', r.searchBlob || ''
+      ].join(' ')).toLowerCase().replace(/[^a-z0-9]+/g, '');
+      return (emailNeedle && emailHay.indexOf(emailNeedle) !== -1) ? 14000 : 0;
+    }
 
     if (parsed.isNumeric && (r.case === parsed.original || r.id === parsed.original)) return 10000;
 
     var score = 0;
     var titleHay = (r.title || '').toLowerCase();
+    var normTitle = _normLoose(titleHay);
     if (titleHay.includes(original)) score += 500;
     else if (haystack.includes(original)) score += 200;
+    else if (normOriginal && (normTitle.includes(normOriginal) || normHaystack.includes(normOriginal))) score += 220;
 
     tokens.forEach(function(t) {
       if (t.length < 2) return;
-      if (titleHay.includes(t)) score += 80;
-      else if (haystack.includes(t)) score += 20;
-      if (titleHay.startsWith(t)) score += 40;
+      var normT = _normLoose(t);
+      if (titleHay.includes(t) || (normT && normTitle.includes(normT))) score += 80;
+      else if (haystack.includes(t) || (normT && normHaystack.includes(normT))) score += 20;
+      if (titleHay.startsWith(t) || (normT && normTitle.startsWith(normT))) score += 40;
     });
 
     return score;
@@ -16827,21 +16867,9 @@
     if (_state.activeCat) {
       results = results.filter(function(r) { return _getSource(r) === _state.activeCat; });
     }
-    if (_state.sortOrder === 'newest' || _state.sortOrder === 'oldest') {
-      results = results.slice().sort(function(a, b) {
-        var da = new Date(a.date || 0).getTime() || 0;
-        var db = new Date(b.date || 0).getTime() || 0;
-        return _state.sortOrder === 'newest' ? db - da : da - db;
-      });
-    }
-    // Sort by date if requested
-    if (_state.sortOrder && _state.sortOrder !== 'score') {
-      results = results.slice().sort(function(a,b){
-        var da=new Date(a.date||0).getTime()||0;
-        var db=new Date(b.date||0).getTime()||0;
-        return _state.sortOrder==='newest'?db-da:da-db;
-      });
-    }
+    // Product decision: always keep Search Engine 2 sorted newest → oldest.
+    // Fallback when date is missing: use numeric case/id descending.
+    results = results.slice().sort(function(a, b) { return _toNewestRank(b) - _toNewestRank(a); });
     _state.results = results;
     _renderCats(visibilityCounts);
     _renderSummary(results, q);

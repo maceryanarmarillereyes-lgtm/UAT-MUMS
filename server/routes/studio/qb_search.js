@@ -64,6 +64,7 @@ function parseQbUrl(url) {
 }
 
 function encLit(v) { return String(v ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+function normLabel(v) { return String(v || '').trim().toLowerCase(); }
 
 // QB text-compatible field types — CT operator works on these
 const TEXT_FIELD_TYPES = new Set([
@@ -72,6 +73,51 @@ const TEXT_FIELD_TYPES = new Set([
   // numeric IDs that QB uses in field metadata
   1, 2, 3, 5, 6, 8, 13, 14, 29, 35, 36
 ]);
+
+const PRIORITY_SEARCH_LABELS = [
+  // Requested permanent fix: ensure Deep Search includes Contact phone/name/email
+  'Contact - Phone',
+  'Contact - Full Name',
+  'Contact - E-mail Address',
+  // Safe aliases observed across QB tables
+  'Contact Phone',
+  'Contact Full Name',
+  'Contact Email',
+  'Contact E-mail',
+  'Email Address',
+  // Existing search-critical fields stay prioritized
+  'Case #',
+  'Case Status',
+  'Short Description',
+  'Short Description or New',
+  'Assigned to',
+  'End User',
+  'Type',
+  'Latest Update',
+  'Case Notes',
+  'Last Update Days',
+  'Age',
+];
+
+function resolvePriorityFieldIds(allFields, labelHints) {
+  const byLabel = Array.isArray(allFields) ? allFields : [];
+  const seen = new Set();
+  const out = [];
+  for (const hint of labelHints || []) {
+    const h = normLabel(hint);
+    if (!h) continue;
+    // Match exact first, then startsWith fallback for QB label variants
+    const exact = byLabel.find(f => normLabel(f.label) === h);
+    const fuzzy = byLabel.find(f => normLabel(f.label).startsWith(h));
+    const picked = exact || fuzzy;
+    const id = Number(picked && picked.id);
+    if (Number.isFinite(id) && !seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
 
 // ── Fetch all fields + their types ────────────────────────────────
 async function getTextFields({ realm, token, tableId }) {
@@ -158,11 +204,28 @@ async function queryAllRecords({ realm, token, tableId, where, select, skip, top
 // FIX v2.1: When term is purely numeric (e.g. '441056'), also add an
 // EX clause on field 3 (Record ID#). QB CT does NOT work on numeric fields
 // so a numeric-only search with CT returns 0 results — EX on field 3 fixes this.
-function buildSearchWhere(term, textFieldIds) {
+function buildSearchWhere(term, textFieldIds, opts = {}) {
   if (!term) return '';
 
   // Use at most 20 text field IDs to avoid QB WHERE clause length limits
   const fids = textFieldIds.slice(0, 20);
+  const phoneFieldIds = Array.isArray(opts.phoneFieldIds) ? opts.phoneFieldIds.filter(Number.isFinite) : [];
+
+  // Phone-focused path:
+  // If query is composed of symbols/digits only and has enough digits,
+  // search directly against phone fields using normalized digit token.
+  // This avoids QB CT broad matches for inputs like +1(954)553-5645.
+  const hasLetter = /[a-z]/i.test(term);
+  const digitOnly = String(term).replace(/\D+/g, '');
+  if (!hasLetter && digitOnly.length >= 7) {
+    const primaryPhoneToken = digitOnly.length >= 10 ? digitOnly.slice(-10) : digitOnly;
+    const targetIds = phoneFieldIds.length ? phoneFieldIds.slice(0, 8) : fids.slice(0, 8);
+    if (targetIds.length) {
+      const enc = encLit(primaryPhoneToken);
+      const phoneClauses = targetIds.map(id => `{${id}.CT.'${enc}'}`);
+      return phoneClauses.length === 1 ? phoneClauses[0] : `(${phoneClauses.join(' OR ')})`;
+    }
+  }
 
   // Split search term into individual tokens for broader matching
   const tokens = term.trim().split(/\s+/).filter(t => t.length >= 2);
@@ -238,23 +301,24 @@ module.exports = async (req, res) => {
     // ── Load all fields + identify text fields ─────────────────────
     const { all: allFields, text: textFields } = await getTextFields({ realm, token, tableId });
 
-    // If no fields loaded, fall back to querying with empty where
+    // If no fields loaded, fall back to querying with empty where.
+    // Permanent fix: bring requested Contact fields to the front of the searchable set
+    // so they are guaranteed to be included even with QB WHERE length limits.
     const textFieldIds = textFields.map(f => f.id);
+    const boostedSearchIds = [
+      ...resolvePriorityFieldIds(textFields, PRIORITY_SEARCH_LABELS),
+      ...textFieldIds
+    ];
+    const searchFieldIds = [...new Set(boostedSearchIds)].filter(Number.isFinite);
 
     // ── Build search WHERE clause ──────────────────────────────────
-    const where = q ? buildSearchWhere(q, textFieldIds) : '';
+    const phoneFieldIds = resolvePriorityFieldIds(allFields, ['Contact - Phone', 'Contact Phone', 'Phone']);
+    const where = q ? buildSearchWhere(q, searchFieldIds, { phoneFieldIds }) : '';
 
     // ── Select fields: use report fields (from QB report metadata) ──
     // For display: use the known text/key field IDs so we get useful data back
     // We'll use all text field IDs plus field 3 (Record ID#)
-    const priorityLabels = [
-      'Case #', 'Case Status', 'Short Description', 'Short Description or New',
-      'Assigned to', 'Contact - Full Name', 'End User', 'Type', 'Latest Update',
-      'Case Notes', 'Last Update Days', 'Age'
-    ];
-    const priorityIds = priorityLabels
-      .map(label => allFields.find(f => f.label.toLowerCase().startsWith(label.toLowerCase()))?.id)
-      .filter(Number.isFinite);
+    const priorityIds = resolvePriorityFieldIds(allFields, PRIORITY_SEARCH_LABELS);
 
     const selectIds = priorityIds.length >= 3
       ? [...new Set([3, ...priorityIds])].slice(0, 20)
