@@ -2160,27 +2160,6 @@
     .prem-table.cyan  tbody tr:hover td { background: rgba(34,211,238,.035) !important; }
     .prem-table.orange tbody tr:hover td { background: rgba(251,146,60,.03) !important; }
 
-    /* Global synced-table alignment guard (header/body split tables) */
-    .ss-table-head-wrap {
-      flex-shrink: 0;
-      overflow-x: auto;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-      background: var(--ss-surface3);
-    }
-    .ss-table-head-wrap::-webkit-scrollbar { display: none; }
-    .ss-table-body-wrap {
-      flex: 1;
-      overflow: auto;
-      min-height: 0;
-    }
-    .ss-table-head-wrap .prem-table,
-    .ss-table-body-wrap .prem-table {
-      table-layout: fixed;
-      width: max-content;
-      min-width: 100%;
-    }
-
     /* ── Right sidebar HD enhancements ─────────────────────────── */
     .ss-field-group { margin-bottom: 9px; }
     .ss-field-label {
@@ -4300,7 +4279,7 @@
         <input type="text" id="cp-main-search" style="display:none;" aria-hidden="true">
 
         <!-- Table header -->
-        <div id="cp-table-head-wrap" class="ss-table-head-wrap">
+        <div id="cp-table-head-wrap" style="flex-shrink:0;overflow-x:auto;">
           <table id="cp-table-head" class="prem-table cyan" style="min-width:1020px;">
             <thead>
               <tr>
@@ -4320,7 +4299,7 @@
         </div>
 
         <!-- Scrollable table body -->
-        <div id="cp-table-body" class="ss-table-body-wrap">
+        <div id="cp-table-body" style="flex:1;overflow:auto;min-height:0;">
           <div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--ss-muted);">
             <i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.35;"></i>
             <span style="font-size:12px;opacity:.45;">Loading Connect+ data…</span>
@@ -4360,7 +4339,7 @@
         <input type="text" id="pn-main-search" style="display:none;" aria-hidden="true">
 
         <!-- Dynamic table header -->
-        <div id="pn-table-head-wrap" class="ss-table-head-wrap">
+        <div style="flex-shrink:0;overflow-x:auto;background:var(--ss-surface3);">
           <table id="pn-table-head" class="prem-table orange" style="min-width:700px;">
             <thead id="pn-thead-row">
               <tr>
@@ -4372,7 +4351,7 @@
         </div>
 
         <!-- Scrollable table body -->
-        <div id="pn-table-body" class="ss-table-body-wrap">
+        <div id="pn-table-body" style="flex:1;overflow:auto;min-height:0;">
           <div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--ss-muted);">
             <i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.35;"></i>
             <span style="font-size:12px;opacity:.45;">Loading Parts Number data…</span>
@@ -4401,12 +4380,12 @@
           </div>
         </div>
         <input type="text" id="cti-main-search" style="display:none;" aria-hidden="true">
-        <div id="cti-table-head-wrap" class="ss-table-head-wrap">
+        <div style="flex-shrink:0;overflow-x:auto;background:var(--ss-surface3);">
           <table id="cti-table-head" class="prem-table cyan" style="min-width:700px;">
             <thead id="cti-thead-row"><tr><th style="width:38px;">#</th></tr></thead>
           </table>
         </div>
-        <div id="cti-table-body" class="ss-table-body-wrap">
+        <div id="cti-table-body" style="flex:1;overflow:auto;min-height:0;">
           <div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--ss-muted);"><i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.35;"></i><span style="font-size:12px;opacity:.45;">Loading Contact Information data…</span></div>
         </div>
         <div id="cti-pagination" class="prem-pagination">
@@ -4460,7 +4439,7 @@
         </div>
 
         <!-- ── Table header (fixed) ── -->
-        <div id="kb-table-head-wrap" class="ss-table-head-wrap">
+        <div style="flex-shrink:0;overflow-x:auto;background:var(--ss-surface3);">
           <table id="kb-table-head" class="prem-table" style="min-width:1060px;">
             <thead>
               <tr>
@@ -4479,7 +4458,7 @@
         </div>
 
         <!-- ── Table body (scrollable) ── -->
-        <div id="kb-table-body-wrap" class="ss-table-body-wrap">
+        <div id="kb-table-body-wrap" style="flex:1;overflow:auto;min-height:0;">
           <table class="prem-table" style="min-width:1060px;">
             <tbody id="kb-table-body">
               <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--ss-muted);"><i class="fas fa-spinner fa-spin" style="font-size:18px;opacity:.35;display:block;margin-bottom:12px;"></i>Loading Knowledge Base…</td></tr>
@@ -4581,162 +4560,763 @@
       </div><!-- /canvas-support_records -->
 
       <!-- Search Engine 2 — Reference Design v2 -->
-      <div id="canvas-search_engine_2" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;background:var(--ss-bg);">
+      <div id="canvas-search_engine_2" class="ss-canvas-inner" style="flex-direction:column;overflow:hidden;position:relative;">
 
         <style>
-        /* SE2 v2 ─── */
-        #se2-shell{display:flex;flex-direction:column;height:100%;overflow:hidden;font-family:var(--ss-font,system-ui)}
-        /* Brand + search topbar */
-        #se2-topbar{padding:14px 20px 0;flex-shrink:0;background:rgba(7,13,26,.92);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.08)}
-        #se2-brand{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-        #se2-brand-icon{width:32px;height:32px;border-radius:9px;background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-        #se2-brand-title{font-size:13px;font-weight:800;color:#e6edf3;line-height:1}
-        #se2-brand-sub{font-size:10px;color:#7d8590;line-height:1;margin-top:2px}
-        #se2-indexed-badge{margin-left:auto;font-size:11px;color:#7d8590}
-        #se2-indexed-badge strong{color:#c9d1d9}
-        /* Search bar */
-        #se2-search-wrap{display:flex;align-items:center;gap:10px;border-radius:16px;border:2px solid rgba(255,255,255,.1);background:rgba(13,17,23,.6);padding:10px 16px;transition:border-color .25s,box-shadow .25s;box-shadow:0 4px 24px rgba(0,0,0,.3)}
-        #se2-search-wrap:focus-within{border-color:rgba(88,166,255,.55);background:rgba(22,31,54,.7);box-shadow:0 0 0 4px rgba(88,166,255,.08),0 4px 24px rgba(0,0,0,.3)}
-        #se2-q{flex:1;background:transparent;border:none;outline:none;color:#e6edf3;font-size:16px;font-family:inherit;font-weight:500;padding:2px 0}
-        #se2-q::placeholder{color:rgba(255,255,255,.22)}
-        .se2-clear{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#7d8590;font-size:12px;cursor:pointer;padding:4px 9px;display:none;transition:all .15s;font-family:inherit}
-        .se2-clear:hover{background:rgba(248,81,73,.12);border-color:rgba(248,81,73,.3);color:#f85149}
-        #se2-kbd{font-size:10px;font-weight:700;color:#7d8590;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:3px 8px;font-family:monospace;white-space:nowrap;flex-shrink:0}
-        #se2-ai-chip{display:none;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;background:rgba(162,93,220,.12);border:1px solid rgba(162,93,220,.25);color:#c084fc;font-size:9px;font-weight:700;letter-spacing:.04em;white-space:nowrap}
-        #se2-ai-chip.on{display:inline-flex}
-        /* Filter tabs */
-        #se2-filter-row{display:none;gap:6px;overflow-x:auto;padding:10px 0 12px;scrollbar-width:none}
-        #se2-filter-row::-webkit-scrollbar{display:none}
-        .se2-filter-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 13px;border-radius:9px;font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer;transition:all .18s;border:1px solid transparent;font-family:inherit}
-        .se2-filter-btn.inactive{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.07);color:#7d8590}
-        .se2-filter-btn.inactive:hover{background:rgba(255,255,255,.07);color:#c9d1d9}
-        .se2-filter-btn.active{color:#fff;box-shadow:0 3px 12px rgba(88,166,255,.18)}
-        .se2-filter-count{font-size:9px;font-weight:800;padding:1px 6px;border-radius:99px;background:rgba(255,255,255,.18)}
-        /* Stats grid */
-        #se2-stats-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;padding:14px 20px 6px;flex-shrink:0}
-        .se2-stat-card{display:flex;flex-direction:column;align-items:center;padding:10px 8px;border-radius:12px;background:rgba(13,17,23,.9);border:1px solid rgba(255,255,255,.07);cursor:pointer;transition:all .18s}
-        .se2-stat-card:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.14);box-shadow:0 4px 16px rgba(0,0,0,.3)}
-        .se2-stat-card.active{box-shadow:0 0 0 2px currentColor}
-        .se2-stat-num{font-size:18px;font-weight:900;line-height:1;margin-bottom:3px;font-family:var(--ss-mono,monospace)}
-        .se2-stat-lbl{font-size:9px;font-weight:600;color:#7d8590;letter-spacing:.03em;text-align:center;line-height:1.3}
-        /* Summary */
-        #se2-summary{padding:4px 20px 8px;flex-shrink:0;font-size:11px;color:#7d8590;display:flex;align-items:center;justify-content:space-between;gap:8px}
-        #se2-summary strong{color:#c9d1d9}
-        .se2-sort-btn{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:7px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#7d8590;font-size:10px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
-        .se2-sort-btn:hover{background:rgba(255,255,255,.07);color:#c9d1d9}
-        /* Body */
-        #se2-body{flex:1;overflow-y:auto;min-height:0;padding:8px 16px 24px}
-        #se2-body::-webkit-scrollbar{width:4px}
-        #se2-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:99px}
-        /* Group label */
-        .se2-group{margin:14px 0 8px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:8px}
-        .se2-group-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-        .se2-group::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.07)}
-        .se2-group-count{font-size:9px;font-weight:700;padding:1px 7px;border-radius:99px;border:1px solid currentColor;opacity:.7}
-        /* Result cards */
-        @keyframes se2CardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-        .se2-card{background:rgba(13,17,23,.7);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px 16px;margin-bottom:8px;cursor:pointer;transition:border-color .18s,background .18s,transform .18s,box-shadow .18s;position:relative}
-        .se2-card:hover{border-color:rgba(88,166,255,.35);background:rgba(88,166,255,.04);transform:translateX(2px);box-shadow:0 4px 20px rgba(0,0,0,.3)}
-        .se2-card-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:8px}
-        .se2-badge{font-size:9px;font-weight:800;padding:2px 8px;border-radius:6px;letter-spacing:.04em;text-transform:uppercase}
-        .se2-case-num{font-size:10px;font-weight:800;color:#58a6ff;font-family:var(--ss-mono,monospace);background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2);padding:2px 7px;border-radius:5px}
-        .se2-eu-chip{font-size:9px;color:#c084fc;background:rgba(162,93,220,.1);border:1px solid rgba(162,93,220,.2);padding:2px 7px;border-radius:5px;font-weight:700}
-        .se2-age-chip{font-size:9px;color:#7d8590;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:2px 7px;border-radius:5px}
-        .se2-card-title{font-size:13px;font-weight:700;color:#e6edf3;margin-bottom:5px;line-height:1.4}
-        .se2-card-body{font-size:11px;color:#7d8590;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-        .se2-view-btn{position:absolute;right:13px;top:50%;transform:translateY(-50%);background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);border-radius:6px;color:#58a6ff;font-size:10px;font-weight:700;padding:4px 10px;opacity:0;transition:opacity .15s;cursor:pointer;font-family:inherit;white-space:nowrap}
-        .se2-card:hover .se2-view-btn{opacity:1}
-        mark{background:rgba(88,166,255,.28);color:#fff;border-radius:3px;padding:0 2px}
-        /* Empty */
-        #se2-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:14px;text-align:center;padding:30px}
-        .se2-empty-icon{width:72px;height:72px;border-radius:18px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);display:grid;place-items:center;font-size:30px;margin-bottom:4px}
-        .se2-empty-title{font-size:20px;font-weight:800;color:#e6edf3}
-        .se2-empty-sub{font-size:12px;color:#7d8590;max-width:480px;line-height:1.7}
-        .se2-chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:8px}
-        .se2-chip{padding:5px 13px;border-radius:99px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:11px;color:#7d8590;cursor:pointer;transition:all .15s}
-        .se2-chip:hover{border-color:rgba(88,166,255,.4);color:#58a6ff;background:rgba(88,166,255,.06)}
-        .se2-spin{width:28px;height:28px;border:3px solid rgba(255,255,255,.08);border-top-color:#58a6ff;border-radius:50%;animation:se2spin .7s linear infinite}
-        @keyframes se2spin{to{transform:rotate(360deg)}}
-        /* Detail drawer */
-        @keyframes se2-drawer-in{from{transform:translateX(100%);opacity:0}to{transform:none;opacity:1}}
-        #se2-detail{position:absolute;inset:0;z-index:200;display:none;align-items:stretch;justify-content:flex-end;background:rgba(1,4,9,.6);backdrop-filter:blur(4px)}
-        #se2-detail.open{display:flex}
-        #se2-drawer{width:580px;max-width:95%;background:#0d1117;border-left:1px solid rgba(88,166,255,.15);display:flex;flex-direction:column;animation:se2-drawer-in .22s cubic-bezier(.22,1,.36,1);overflow:hidden}
-        #se2-drawer-head{padding:18px 20px 14px;border-bottom:1px solid rgba(255,255,255,.07);background:linear-gradient(135deg,rgba(88,166,255,.05),transparent);flex-shrink:0}
-        .se2-dh-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
-        .se2-dh-title{font-size:16px;font-weight:900;color:#e6edf3;line-height:1.35;word-break:break-word}
-        .se2-dh-close{width:28px;height:28px;border-radius:7px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#7d8590;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;transition:all .15s;font-family:inherit}
-        .se2-dh-close:hover{background:rgba(248,81,73,.15);border-color:rgba(248,81,73,.3);color:#f85149}
-        .se2-dh-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-        .se2-dh-nav{display:flex;align-items:center;gap:8px;margin-top:10px}
-        .se2-dh-nav-pos{font-size:10px;color:#7d8590;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:5px;padding:2px 8px;margin-right:auto}
-        .se2-nav-btn{width:26px;height:26px;border-radius:6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:#7d8590;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;transition:all .15s;font-family:inherit}
-        .se2-nav-btn:not(:disabled):hover{background:rgba(88,166,255,.1);border-color:rgba(88,166,255,.3);color:#58a6ff}
-        .se2-nav-btn:disabled{opacity:.3;cursor:not-allowed}
-        #se2-drawer-body{flex:1;overflow-y:auto;padding:18px 20px}
-        #se2-drawer-body::-webkit-scrollbar{width:4px}
-        #se2-drawer-body::-webkit-scrollbar-thumb{background:rgba(88,166,255,.15);border-radius:2px}
-        .se2-sec-title{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px}
-        .se2-sec-title::after{content:'';flex:1;height:1px;background:currentColor;opacity:.15}
-        .se2-kv-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:18px}
-        .se2-kv{padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
-        .se2-kv-full{grid-column:1/-1}
-        .se2-kv-label{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7d8590;margin-bottom:4px}
-        .se2-kv-value{font-size:12px;font-weight:700;color:#e6edf3;word-break:break-word;line-height:1.5}
-        .se2-notes-box{padding:12px 14px;border-radius:9px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.06);font-size:11px;color:#7d8590;line-height:1.7;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto;margin-bottom:18px}
-        #se2-drawer-footer{padding:12px 20px;border-top:1px solid rgba(255,255,255,.07);display:flex;gap:8px;align-items:center;flex-shrink:0;background:rgba(255,255,255,.02)}
-        .se2-footer-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s}
-        .se2-footer-btn.primary{background:linear-gradient(135deg,rgba(88,166,255,.18),rgba(88,166,255,.1));border:1px solid rgba(88,166,255,.35);color:#58a6ff;flex:1;justify-content:center}
-        .se2-footer-btn.primary:hover{background:linear-gradient(135deg,rgba(88,166,255,.28),rgba(88,166,255,.18));box-shadow:0 4px 18px rgba(88,166,255,.2)}
-        .se2-footer-btn.ghost{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:#7d8590}
-        .se2-footer-btn.ghost:hover{background:rgba(255,255,255,.08);color:#e6edf3}
+        /* ═══════════════════════════════════════════════════════════
+           SE2 ENTERPRISE DESIGN v3.0 — Mockup Pixel-Perfect
+           All IDs/functional elements preserved for JS compatibility
+        ═══════════════════════════════════════════════════════════ */
+
+        /* ── Root variables ── */
+        #canvas-search_engine_2 {
+          --se-bg0:   #0a0f1a;
+          --se-bg1:   #111827;
+          --se-glass: rgba(17,24,39,.85);
+          --se-cyan:  #06b6d4;
+          --se-blue:  #3b82f6;
+          --se-purple:#8b5cf6;
+          --se-green: #10b981;
+          --se-amber: #f59e0b;
+          --se-rose:  #f43f5e;
+          --se-txt:   #f9fafb;
+          --se-muted: #9ca3af;
+          --se-border:rgba(255,255,255,.06);
+          font-family: 'Inter', 'Plus Jakarta Sans', system-ui, sans-serif;
+        }
+
+        /* ── Animated mesh background ── */
+        #se2-bg-mesh {
+          position:absolute;inset:0;pointer-events:none;z-index:0;
+          background:
+            radial-gradient(circle at 18% 50%, rgba(6,182,212,.13) 0%, transparent 50%),
+            radial-gradient(circle at 82% 18%, rgba(139,92,246,.09) 0%, transparent 50%),
+            radial-gradient(circle at 58% 82%, rgba(59,130,246,.09) 0%, transparent 50%),
+            linear-gradient(135deg, #0a0f1a 0%, #1a1f2e 50%, #0f172a 100%);
+        }
+
+        /* ── Shell: 3-column layout ── */
+        #se2-shell {
+          display:flex; flex-direction:row; height:100%; overflow:hidden;
+          position:relative; z-index:1;
+        }
+
+        /* ── LEFT PANEL: Advanced Filters ── */
+        #se2-left-panel {
+          width:264px; min-width:264px; flex-shrink:0;
+          background:var(--se-glass);
+          backdrop-filter:blur(20px);
+          border-right:1px solid var(--se-border);
+          display:flex; flex-direction:column;
+          overflow-y:auto; padding:20px 16px;
+          scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.08) transparent;
+        }
+        #se2-left-panel::-webkit-scrollbar { width:3px; }
+        #se2-left-panel::-webkit-scrollbar-thumb { background:rgba(255,255,255,.08); border-radius:99px; }
+
+        .se2-lp-header {
+          display:flex; align-items:center; justify-content:space-between;
+          margin-bottom:20px; flex-shrink:0;
+        }
+        .se2-lp-title {
+          font-size:11px; font-weight:700; text-transform:uppercase;
+          letter-spacing:.1em; color:var(--se-muted);
+          display:flex; align-items:center; gap:7px;
+        }
+        .se2-lp-reset {
+          font-size:11px; color:var(--se-cyan); cursor:pointer;
+          background:none; border:none; font-family:inherit; padding:0;
+          transition:opacity .15s;
+        }
+        .se2-lp-reset:hover { opacity:.7; }
+
+        .se2-filter-section { margin-bottom:22px; }
+        .se2-filter-section-label {
+          font-size:11px; font-weight:700; color:var(--se-cyan);
+          margin-bottom:10px; display:flex; align-items:center; gap:6px;
+          text-transform:uppercase; letter-spacing:.06em;
+        }
+        .se2-filter-chips { display:flex; flex-direction:column; gap:7px; }
+
+        /* Source filter chips — clicking calls _se2FilterCat via data-src2 */
+        .se2-src-chip {
+          padding:9px 12px; border-radius:10px;
+          background:rgba(255,255,255,.03); border:1px solid var(--se-border);
+          font-size:12px; display:flex; align-items:center;
+          justify-content:space-between; cursor:pointer; transition:all .2s;
+          color:var(--se-txt);
+        }
+        .se2-src-chip:hover {
+          background:rgba(6,182,212,.08); border-color:rgba(6,182,212,.25);
+        }
+        .se2-src-chip.active {
+          background:rgba(6,182,212,.12); border-color:var(--se-cyan);
+        }
+        .se2-src-chip-left { display:flex; align-items:center; gap:8px; }
+        .se2-src-chip-icon {
+          width:22px; height:22px; border-radius:6px;
+          display:flex; align-items:center; justify-content:center;
+          font-size:10px; flex-shrink:0;
+        }
+        .se2-src-chip-count {
+          font-size:10px; font-weight:700;
+          background:rgba(255,255,255,.1);
+          padding:2px 7px; border-radius:99px;
+          font-family:monospace;
+        }
+
+        /* ── CENTER PANEL ── */
+        #se2-center {
+          flex:1; min-width:0; display:flex; flex-direction:column;
+          overflow:hidden;
+        }
+
+        /* ── HERO SECTION (empty state) ── */
+        #se2-hero {
+          display:flex; flex-direction:column; align-items:center;
+          justify-content:center; padding:40px 32px 28px;
+          text-align:center; flex-shrink:0;
+        }
+        #se2-hero-icon {
+          width:80px; height:80px; border-radius:24px;
+          background:linear-gradient(135deg,rgba(6,182,212,.2),rgba(59,130,246,.1));
+          border:1px solid rgba(6,182,212,.35);
+          box-shadow:0 8px 32px rgba(6,182,212,.22);
+          display:flex; align-items:center; justify-content:center;
+          font-size:32px; margin-bottom:22px;
+        }
+        #se2-hero-title {
+          font-size:28px; font-weight:700; color:var(--se-txt);
+          letter-spacing:-.02em; margin-bottom:10px;
+        }
+        #se2-hero-sub {
+          font-size:14px; color:var(--se-muted); margin-bottom:0; line-height:1.6;
+        }
+        #se2-hero-sub strong { color:var(--se-txt); }
+
+        /* ── SEARCH WRAP (hero style) ── */
+        #se2-search-wrap {
+          display:flex; align-items:center; gap:14px;
+          background:rgba(0,0,0,.3);
+          border:2px solid rgba(6,182,212,.3);
+          border-radius:18px;
+          padding:18px 22px;
+          transition:border-color .28s, box-shadow .28s;
+          margin:24px 24px 0;
+          flex-shrink:0;
+        }
+        #se2-search-wrap:focus-within {
+          border-color:var(--se-cyan);
+          box-shadow:0 0 0 4px rgba(6,182,212,.12), 0 20px 60px rgba(6,182,212,.22);
+          background:rgba(0,0,0,.4);
+        }
+        #se2-q {
+          flex:1; background:transparent; border:none; outline:none;
+          color:var(--se-txt); font-size:16px;
+          font-family:inherit; font-weight:500;
+        }
+        #se2-q::placeholder { color:rgba(255,255,255,.28); }
+        #se2-ai-chip {
+          display:none; align-items:center; gap:5px; padding:4px 10px;
+          border-radius:99px; background:rgba(139,92,246,.15);
+          border:1px solid rgba(139,92,246,.3); color:#c084fc;
+          font-size:9px; font-weight:800; letter-spacing:.06em; white-space:nowrap;
+        }
+        #se2-ai-chip.on { display:inline-flex; }
+        .se2-clear {
+          background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.1);
+          border-radius:8px; color:var(--se-muted); font-size:12px;
+          cursor:pointer; padding:5px 10px; display:none; transition:all .15s;
+          font-family:inherit;
+        }
+        .se2-clear:hover { background:rgba(248,81,73,.12); border-color:rgba(248,81,73,.3); color:#f85149; }
+        #se2-kbd {
+          font-size:11px; font-weight:700; color:var(--se-muted);
+          background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12);
+          border-radius:6px; padding:4px 10px; font-family:monospace;
+          white-space:nowrap; flex-shrink:0;
+        }
+
+        /* ── QUICK CHIPS (empty state) ── */
+        .se2-chips {
+          display:flex; flex-wrap:wrap; gap:10px;
+          justify-content:center; margin-top:22px;
+        }
+        .se2-chip {
+          padding:8px 17px; border-radius:99px;
+          background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1);
+          font-size:13px; color:var(--se-muted); cursor:pointer; transition:all .2s;
+        }
+        .se2-chip:hover {
+          background:rgba(6,182,212,.15); border-color:var(--se-cyan);
+          color:var(--se-txt); transform:translateY(-2px);
+        }
+
+        /* ── FILTER ROW (during search) ── */
+        #se2-filter-row {
+          display:none; gap:6px; overflow-x:auto;
+          padding:12px 24px 0; scrollbar-width:none; flex-shrink:0;
+        }
+        #se2-filter-row::-webkit-scrollbar { display:none; }
+        .se2-filter-btn {
+          display:inline-flex; align-items:center; gap:5px;
+          padding:6px 14px; border-radius:9px; font-size:11px;
+          font-weight:700; white-space:nowrap; cursor:pointer;
+          transition:all .18s; border:1px solid transparent; font-family:inherit;
+        }
+        .se2-filter-btn.inactive {
+          background:rgba(255,255,255,.04); border-color:rgba(255,255,255,.07); color:var(--se-muted);
+        }
+        .se2-filter-btn.inactive:hover { background:rgba(255,255,255,.07); color:var(--se-txt); }
+        .se2-filter-btn.active { color:#fff; box-shadow:0 3px 12px rgba(6,182,212,.2); }
+        .se2-filter-count {
+          font-size:9px; font-weight:800; padding:1px 6px;
+          border-radius:99px; background:rgba(255,255,255,.18);
+        }
+
+        /* ── STATS GRID — 4 metric cards (empty state) / 8-col small (search) ── */
+        #se2-stats-grid {
+          display:grid;
+          grid-template-columns:repeat(4,1fr);
+          gap:14px; padding:20px 24px 0; flex-shrink:0;
+        }
+        #se2-stats-grid.se2-compact {
+          grid-template-columns:repeat(8,1fr);
+          gap:6px; padding:10px 24px 0;
+        }
+
+        /* Metric card — large (empty state) */
+        .se2-stat-card {
+          background:var(--se-glass);
+          backdrop-filter:blur(16px);
+          border-radius:16px;
+          border:1px solid var(--se-border);
+          padding:18px 18px 14px;
+          cursor:pointer; transition:all .22s;
+          position:relative; overflow:hidden;
+          display:flex; flex-direction:column; align-items:flex-start;
+        }
+        .se2-stat-card::before {
+          content:''; position:absolute; top:0; left:0; right:0; height:3px;
+          background:linear-gradient(90deg, var(--se-cyan), var(--se-blue));
+          opacity:0; transition:opacity .22s;
+        }
+        .se2-stat-card:hover { transform:translateY(-3px); box-shadow:0 8px 28px rgba(0,0,0,.4); }
+        .se2-stat-card:hover::before { opacity:1; }
+        .se2-stat-card.active::before { opacity:1; }
+        .se2-stat-card.active { box-shadow:0 0 0 2px currentColor; }
+
+        /* Color-coded top bar per source */
+        .se2-stat-card[data-src="qb"]::before    { background:linear-gradient(90deg,#58a6ff,#3b82f6); }
+        .se2-stat-card[data-src="kb"]::before    { background:linear-gradient(90deg,#10b981,#34d399); }
+        .se2-stat-card[data-src="parts"]::before { background:linear-gradient(90deg,#f59e0b,#fbbf24); }
+        .se2-stat-card[data-src="ctrl"]::before  { background:linear-gradient(90deg,#a78bfa,#c084fc); }
+        .se2-stat-card[data-src="net"]::before   { background:linear-gradient(90deg,#22d3ee,#06b6d4); }
+        .se2-stat-card[data-src="ci"]::before    { background:linear-gradient(90deg,#8b5cf6,#a78bfa); }
+        .se2-stat-card[data-src="sr"]::before    { background:linear-gradient(90deg,#f43f5e,#fb7185); }
+
+        .se2-metric-header {
+          display:flex; align-items:center; gap:10px; margin-bottom:14px;
+        }
+        .se2-metric-icon {
+          width:38px; height:38px; border-radius:10px;
+          display:flex; align-items:center; justify-content:center;
+          font-size:16px; flex-shrink:0;
+          background:rgba(6,182,212,.1);
+        }
+        .se2-stat-lbl {
+          font-size:11px; font-weight:600; color:var(--se-muted);
+          text-transform:uppercase; letter-spacing:.05em;
+        }
+        .se2-stat-num {
+          font-size:30px; font-weight:700; line-height:1;
+          margin-bottom:8px; font-family:monospace; color:var(--se-txt);
+        }
+        .se2-metric-change {
+          font-size:11px; color:var(--se-green);
+          display:flex; align-items:center; gap:3px;
+        }
+
+        /* Compact card (during search) */
+        #se2-stats-grid.se2-compact .se2-stat-card {
+          padding:8px 8px; border-radius:10px; align-items:center;
+        }
+        #se2-stats-grid.se2-compact .se2-metric-header { display:none; }
+        #se2-stats-grid.se2-compact .se2-stat-num {
+          font-size:16px; margin-bottom:2px; font-weight:900;
+        }
+        #se2-stats-grid.se2-compact .se2-stat-lbl { font-size:9px; }
+        #se2-stats-grid.se2-compact .se2-metric-change { display:none; }
+        #se2-stats-grid.se2-compact .se2-stat-card::before { height:2px; opacity:1; }
+
+        /* ── SUMMARY BAR ── */
+        #se2-summary {
+          padding:10px 24px 8px; flex-shrink:0;
+          font-size:11px; color:var(--se-muted);
+          display:flex; align-items:center; justify-content:space-between; gap:8px;
+        }
+        #se2-summary strong { color:var(--se-txt); }
+        .se2-sort-btn {
+          display:inline-flex; align-items:center; gap:5px;
+          padding:5px 11px; border-radius:7px;
+          background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
+          color:var(--se-muted); font-size:10px; font-weight:600;
+          cursor:pointer; transition:all .15s; font-family:inherit; white-space:nowrap;
+        }
+        .se2-sort-btn:hover { background:rgba(255,255,255,.07); color:var(--se-txt); }
+
+        /* ── BODY (results) ── */
+        #se2-body {
+          flex:1; overflow-y:auto; min-height:0; padding:10px 24px 24px;
+          scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.1) transparent;
+        }
+        #se2-body::-webkit-scrollbar { width:4px; }
+        #se2-body::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:99px; }
+
+        /* ── EMPTY STATE ── */
+        #se2-empty {
+          display:flex; flex-direction:column; align-items:center;
+          justify-content:center; min-height:60px; gap:14px;
+          text-align:center; padding:20px 30px;
+        }
+        .se2-empty-icon { display:none; }
+        .se2-empty-title { display:none; }
+        .se2-empty-sub { display:none; }
+
+        /* ── GROUP HEADER ── */
+        .se2-group {
+          margin:14px 0 8px; font-size:10px; font-weight:800;
+          text-transform:uppercase; letter-spacing:.1em;
+          display:flex; align-items:center; gap:8px;
+        }
+        .se2-group-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+        .se2-group::after { content:''; flex:1; height:1px; background:rgba(255,255,255,.07); }
+        .se2-group-count {
+          font-size:9px; font-weight:700; padding:1px 7px;
+          border-radius:99px; border:1px solid currentColor; opacity:.7;
+        }
+
+        /* ── RESULT CARDS ── */
+        @keyframes se2CardIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+        .se2-card {
+          background:rgba(17,24,39,.7); border:1px solid var(--se-border);
+          border-radius:12px; padding:14px 16px; margin-bottom:8px;
+          cursor:pointer; transition:border-color .18s,background .18s,transform .18s,box-shadow .18s;
+          position:relative;
+        }
+        .se2-card:hover {
+          border-color:rgba(6,182,212,.3); background:rgba(6,182,212,.04);
+          transform:translateX(2px); box-shadow:0 4px 20px rgba(0,0,0,.3);
+        }
+        .se2-card-meta { display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:8px; }
+        .se2-badge {
+          font-size:9px; font-weight:800; padding:2px 8px; border-radius:6px;
+          letter-spacing:.04em; text-transform:uppercase;
+        }
+        .se2-case-num {
+          font-size:10px; font-weight:800; color:#58a6ff;
+          font-family:monospace; background:rgba(88,166,255,.1);
+          border:1px solid rgba(88,166,255,.2); padding:2px 7px; border-radius:5px;
+        }
+        .se2-eu-chip {
+          font-size:9px; color:#c084fc; background:rgba(162,93,220,.1);
+          border:1px solid rgba(162,93,220,.2); padding:2px 7px; border-radius:5px; font-weight:700;
+        }
+        .se2-age-chip {
+          font-size:9px; color:var(--se-muted); background:rgba(255,255,255,.04);
+          border:1px solid rgba(255,255,255,.08); padding:2px 7px; border-radius:5px;
+        }
+        .se2-card-title { font-size:13px; font-weight:700; color:var(--se-txt); margin-bottom:5px; line-height:1.4; }
+        .se2-card-body {
+          font-size:11px; color:var(--se-muted); line-height:1.6;
+          display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+        }
+        .se2-view-btn {
+          position:absolute; right:13px; top:50%; transform:translateY(-50%);
+          background:rgba(6,182,212,.1); border:1px solid rgba(6,182,212,.25);
+          border-radius:6px; color:var(--se-cyan); font-size:10px; font-weight:700;
+          padding:4px 10px; opacity:0; transition:opacity .15s;
+          cursor:pointer; font-family:inherit; white-space:nowrap;
+        }
+        .se2-card:hover .se2-view-btn { opacity:1; }
+        mark { background:rgba(6,182,212,.25); color:#fff; border-radius:3px; padding:0 2px; }
+
+        /* ── LOADING SPINNER ── */
+        .se2-spin {
+          width:28px; height:28px; border:3px solid rgba(255,255,255,.08);
+          border-top-color:var(--se-cyan); border-radius:50%;
+          animation:se2spin .7s linear infinite;
+        }
+        @keyframes se2spin { to{transform:rotate(360deg)} }
+
+        /* ── RIGHT PANEL: Index Monitor ── */
+        #se2-right-panel {
+          width:268px; min-width:268px; flex-shrink:0;
+          background:var(--se-glass); backdrop-filter:blur(20px);
+          border-left:1px solid var(--se-border);
+          display:flex; flex-direction:column;
+          overflow-y:auto; padding:20px 16px;
+          scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.08) transparent;
+        }
+        #se2-right-panel::-webkit-scrollbar { width:3px; }
+        #se2-right-panel::-webkit-scrollbar-thumb { background:rgba(255,255,255,.08); border-radius:99px; }
+
+        .se2-rp-header {
+          display:flex; align-items:center; justify-content:space-between;
+          margin-bottom:18px; flex-shrink:0;
+        }
+        .se2-rp-title {
+          font-size:11px; font-weight:700; text-transform:uppercase;
+          letter-spacing:.1em; color:var(--se-muted);
+          display:flex; align-items:center; gap:7px;
+        }
+
+        /* Activity items */
+        .se2-activity-item {
+          padding:13px 12px; background:rgba(255,255,255,.03);
+          border-radius:11px; margin-bottom:10px;
+          border-left:3px solid transparent; transition:all .2s;
+          cursor:pointer;
+        }
+        .se2-activity-item:hover {
+          background:rgba(255,255,255,.05); border-left-color:var(--se-cyan);
+        }
+        .se2-activity-meta { display:flex; align-items:center; gap:7px; margin-bottom:6px; flex-wrap:wrap; }
+        .se2-activity-time { font-size:10px; color:var(--se-muted); }
+        .se2-activity-badge {
+          padding:2px 7px; border-radius:4px; font-size:9px;
+          font-weight:700; text-transform:uppercase;
+        }
+        .se2-badge-hot     { background:rgba(244,63,94,.18); color:var(--se-rose); }
+        .se2-badge-new     { background:rgba(16,185,129,.18); color:var(--se-green); }
+        .se2-badge-pending { background:rgba(245,158,11,.18); color:var(--se-amber); }
+        .se2-badge-timer   { background:rgba(248,81,73,.12); color:#f85149; }
+        .se2-activity-title { font-size:13px; font-weight:600; color:var(--se-txt); margin-bottom:3px; }
+        .se2-activity-desc  { font-size:11px; color:var(--se-muted); }
+
+        /* Status bar */
+        #se2-statusbar {
+          flex-shrink:0; height:36px;
+          background:rgba(10,15,26,.95); border-top:1px solid rgba(255,255,255,.05);
+          display:flex; align-items:center; padding:0 20px; gap:0;
+          font-size:11px; color:var(--se-muted); position:relative; z-index:10;
+        }
+        .se2-sb-dot {
+          width:7px; height:7px; border-radius:50%; background:var(--se-green);
+          box-shadow:0 0 6px rgba(16,185,129,.6); margin-right:7px;
+          animation:se2pulse 2s infinite;
+        }
+        @keyframes se2pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+        .se2-sb-div { color:rgba(255,255,255,.15); margin:0 14px; }
+        .se2-sb-right { margin-left:auto; font-size:10px; }
+        .se2-sb-badge {
+          background:rgba(6,182,212,.1); border:1px solid rgba(6,182,212,.2);
+          color:var(--se-cyan); padding:2px 8px; border-radius:4px;
+          font-size:9px; font-weight:700; margin-left:8px;
+        }
+
+        /* ── DETAIL DRAWER (unchanged logic, updated style) ── */
+        @keyframes se2-drawer-in { from{transform:translateX(100%);opacity:0} to{transform:none;opacity:1} }
+        #se2-detail {
+          position:absolute; inset:0; z-index:200;
+          display:none; align-items:stretch; justify-content:flex-end;
+          background:rgba(1,4,9,.65); backdrop-filter:blur(6px);
+        }
+        #se2-detail.open { display:flex; }
+        #se2-drawer {
+          width:600px; max-width:95%; background:#0d1117;
+          border-left:1px solid rgba(6,182,212,.15);
+          display:flex; flex-direction:column;
+          animation:se2-drawer-in .22s cubic-bezier(.22,1,.36,1); overflow:hidden;
+        }
+        #se2-drawer-head {
+          padding:20px 22px 16px; border-bottom:1px solid rgba(255,255,255,.07);
+          background:linear-gradient(135deg,rgba(6,182,212,.05),transparent); flex-shrink:0;
+        }
+        .se2-dh-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
+        .se2-dh-title { font-size:16px; font-weight:900; color:var(--se-txt); line-height:1.35; word-break:break-word; }
+        .se2-dh-close {
+          width:28px; height:28px; border-radius:7px;
+          background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1);
+          color:var(--se-muted); cursor:pointer; display:flex; align-items:center;
+          justify-content:center; font-size:13px; flex-shrink:0; transition:all .15s; font-family:inherit;
+        }
+        .se2-dh-close:hover { background:rgba(248,81,73,.15); border-color:rgba(248,81,73,.3); color:#f85149; }
+        .se2-dh-meta { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+        .se2-dh-nav { display:flex; align-items:center; gap:8px; margin-top:10px; }
+        .se2-dh-nav-pos {
+          font-size:10px; color:var(--se-muted); background:rgba(255,255,255,.04);
+          border:1px solid rgba(255,255,255,.08); border-radius:5px; padding:2px 8px; margin-right:auto;
+        }
+        .se2-nav-btn {
+          width:26px; height:26px; border-radius:6px; background:rgba(255,255,255,.04);
+          border:1px solid rgba(255,255,255,.1); color:var(--se-muted); cursor:pointer;
+          display:flex; align-items:center; justify-content:center; font-size:11px;
+          transition:all .15s; font-family:inherit;
+        }
+        .se2-nav-btn:not(:disabled):hover { background:rgba(6,182,212,.1); border-color:rgba(6,182,212,.3); color:var(--se-cyan); }
+        .se2-nav-btn:disabled { opacity:.3; cursor:not-allowed; }
+        #se2-drawer-body { flex:1; overflow-y:auto; padding:18px 22px; }
+        #se2-drawer-body::-webkit-scrollbar { width:4px; }
+        #se2-drawer-body::-webkit-scrollbar-thumb { background:rgba(6,182,212,.15); border-radius:2px; }
+        .se2-sec-title {
+          font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase;
+          margin-bottom:10px; display:flex; align-items:center; gap:6px;
+        }
+        .se2-sec-title::after { content:''; flex:1; height:1px; background:currentColor; opacity:.15; }
+        .se2-kv-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:18px; }
+        .se2-kv { padding:10px 12px; border-radius:8px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06); }
+        .se2-kv-full { grid-column:1/-1; }
+        .se2-kv-label { font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--se-muted); margin-bottom:4px; }
+        .se2-kv-value { font-size:12px; font-weight:700; color:var(--se-txt); word-break:break-word; line-height:1.5; }
+        .se2-notes-box {
+          padding:12px 14px; border-radius:9px; background:rgba(0,0,0,.25);
+          border:1px solid rgba(255,255,255,.06); font-size:11px; color:var(--se-muted);
+          line-height:1.7; white-space:pre-wrap; word-break:break-word;
+          max-height:280px; overflow-y:auto; margin-bottom:18px;
+        }
+        #se2-drawer-footer {
+          padding:12px 22px; border-top:1px solid rgba(255,255,255,.07);
+          display:flex; gap:8px; align-items:center; flex-shrink:0;
+          background:rgba(255,255,255,.02);
+        }
+        .se2-footer-btn {
+          display:inline-flex; align-items:center; gap:6px; padding:9px 16px;
+          border-radius:8px; font-size:11px; font-weight:700;
+          cursor:pointer; font-family:inherit; transition:all .18s;
+        }
+        .se2-footer-btn.primary {
+          background:linear-gradient(135deg,rgba(6,182,212,.18),rgba(6,182,212,.1));
+          border:1px solid rgba(6,182,212,.35); color:var(--se-cyan);
+          flex:1; justify-content:center;
+        }
+        .se2-footer-btn.primary:hover { background:linear-gradient(135deg,rgba(6,182,212,.28),rgba(6,182,212,.18)); box-shadow:0 4px 18px rgba(6,182,212,.2); }
+        .se2-footer-btn.ghost { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1); color:var(--se-muted); }
+        .se2-footer-btn.ghost:hover { background:rgba(255,255,255,.08); color:var(--se-txt); }
         </style>
 
         <div id="se2-shell">
-          <!-- Topbar -->
-          <div id="se2-topbar">
-            <div id="se2-brand">
-              <div id="se2-brand-icon"><i class="fas fa-bolt" style="color:#58a6ff;font-size:13px;"></i></div>
-              <div>
-                <div id="se2-brand-title">MUMS Support Studio</div>
-                <div id="se2-brand-sub">Global Search Engine</div>
-              </div>
-              <div id="se2-indexed-badge" style="display:none;"><strong id="se2-indexed-num">—</strong> records indexed</div>
+
+          <!-- ── Animated background ── -->
+          <div id="se2-bg-mesh"></div>
+
+          <!-- ══════════════════════════════════════════════
+               LEFT PANEL: Advanced Filters
+          ══════════════════════════════════════════════ -->
+          <div id="se2-left-panel">
+            <div class="se2-lp-header">
+              <span class="se2-lp-title">
+                <i class="fas fa-sliders-h" style="color:#06b6d4;font-size:12px;"></i>
+                Advanced Filters
+              </span>
+              <button class="se2-lp-reset" onclick="window._se2FilterCat(null)">Reset</button>
             </div>
+
+            <!-- Data Source filter chips — clicking calls _se2FilterCat -->
+            <div class="se2-filter-section">
+              <div class="se2-filter-section-label">
+                <i class="fas fa-database" style="font-size:10px;"></i> Data Source
+              </div>
+              <div class="se2-filter-chips" id="se2-lp-sources">
+                <div class="se2-src-chip active" data-src2="all" onclick="window._se2FilterCat(null)">
+                  <span class="se2-src-chip-left">
+                    <span class="se2-src-chip-icon" style="background:rgba(6,182,212,.12);color:#06b6d4;">
+                      <i class="fas fa-layer-group" style="font-size:10px;"></i>
+                    </span>
+                    All Sources
+                  </span>
+                  <span class="se2-src-chip-count" id="se2-lp-total">—</span>
+                </div>
+                <div class="se2-src-chip" data-src2="qb" onclick="window._se2FilterCat('qb')">
+                  <span class="se2-src-chip-left">
+                    <span class="se2-src-chip-icon" style="background:rgba(88,166,255,.12);color:#58a6ff;">
+                      <i class="fas fa-bolt" style="font-size:10px;"></i>
+                    </span>
+                    QuickBase
+                  </span>
+                  <span class="se2-src-chip-count" id="se2-lp-qb">—</span>
+                </div>
+                <div class="se2-src-chip" data-src2="kb" onclick="window._se2FilterCat('kb')">
+                  <span class="se2-src-chip-left">
+                    <span class="se2-src-chip-icon" style="background:rgba(16,185,129,.12);color:#10b981;">
+                      <i class="fas fa-book" style="font-size:10px;"></i>
+                    </span>
+                    Knowledge Base
+                  </span>
+                  <span class="se2-src-chip-count" id="se2-lp-kb">—</span>
+                </div>
+                <div class="se2-src-chip" data-src2="parts" onclick="window._se2FilterCat('parts')">
+                  <span class="se2-src-chip-left">
+                    <span class="se2-src-chip-icon" style="background:rgba(245,158,11,.12);color:#f59e0b;">
+                      <i class="fas fa-barcode" style="font-size:10px;"></i>
+                    </span>
+                    Parts Database
+                  </span>
+                  <span class="se2-src-chip-count" id="se2-lp-parts">—</span>
+                </div>
+                <div class="se2-src-chip" data-src2="ctrl" onclick="window._se2FilterCat('ctrl')">
+                  <span class="se2-src-chip-left">
+                    <span class="se2-src-chip-icon" style="background:rgba(167,139,250,.12);color:#a78bfa;">
+                      <i class="fas fa-microchip" style="font-size:10px;"></i>
+                    </span>
+                    Controllers
+                  </span>
+                  <span class="se2-src-chip-count" id="se2-lp-ctrl">—</span>
+                </div>
+                <div class="se2-src-chip" data-src2="net" onclick="window._se2FilterCat('net')">
+                  <span class="se2-src-chip-left">
+                    <span class="se2-src-chip-icon" style="background:rgba(34,211,238,.12);color:#22d3ee;">
+                      <i class="fas fa-plug" style="font-size:10px;"></i>
+                    </span>
+                    Connect+
+                  </span>
+                  <span class="se2-src-chip-count" id="se2-lp-net">—</span>
+                </div>
+                <div class="se2-src-chip" data-src2="ci" onclick="window._se2FilterCat('ci')">
+                  <span class="se2-src-chip-left">
+                    <span class="se2-src-chip-icon" style="background:rgba(139,92,246,.12);color:#8b5cf6;">
+                      <i class="fas fa-address-book" style="font-size:10px;"></i>
+                    </span>
+                    Contacts
+                  </span>
+                  <span class="se2-src-chip-count" id="se2-lp-ci">—</span>
+                </div>
+                <div class="se2-src-chip" data-src2="sr" onclick="window._se2FilterCat('sr')">
+                  <span class="se2-src-chip-left">
+                    <span class="se2-src-chip-icon" style="background:rgba(244,63,94,.12);color:#f43f5e;">
+                      <i class="fas fa-book-open" style="font-size:10px;"></i>
+                    </span>
+                    Support Records
+                  </span>
+                  <span class="se2-src-chip-count" id="se2-lp-sr">—</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Divider -->
+            <div style="height:1px;background:rgba(255,255,255,.06);margin:4px 0 20px;"></div>
+
+            <!-- Index health -->
+            <div class="se2-filter-section">
+              <div class="se2-filter-section-label">
+                <i class="fas fa-heartbeat" style="font-size:10px;"></i> Index Health
+              </div>
+              <div style="padding:12px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.18);border-radius:10px;display:flex;align-items:center;gap:10px;">
+                <span style="width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 6px rgba(16,185,129,.6);flex-shrink:0;animation:se2pulse 2s infinite;display:block;"></span>
+                <div>
+                  <div style="font-size:11px;font-weight:700;color:#10b981;">All Systems Operational</div>
+                  <div style="font-size:10px;color:#9ca3af;margin-top:2px;" id="se2-health-sub">Ready to search</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick tips -->
+            <div class="se2-filter-section" style="margin-top:4px;">
+              <div class="se2-filter-section-label">
+                <i class="fas fa-lightbulb" style="font-size:10px;"></i> Search Tips
+              </div>
+              <div style="font-size:11px;color:#9ca3af;line-height:1.75;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:12px 13px;">
+                <div>🔢 Type a <strong style="color:#58a6ff;">Case #</strong> for exact match</div>
+                <div>🔤 Typos are OK — fuzzy search enabled</div>
+                <div>❓ Questions work: <em style="color:#9ca3af;">"how to update firmware"</em></div>
+                <div>🏷️ Click chips below to quick-search</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ══════════════════════════════════════════════
+               CENTER: Hero + Stats + Search + Results
+          ══════════════════════════════════════════════ -->
+          <div id="se2-center">
+
+            <!-- Hero section (visible when no query) -->
+            <div id="se2-hero">
+              <div id="se2-hero-icon">🔍</div>
+              <div id="se2-hero-title">Search Support Studio</div>
+              <div id="se2-hero-sub">
+                Total indexed: <strong id="se2-hero-count">—</strong> records
+                &mdash; type anything above to search across all data sources
+              </div>
+            </div>
+
+            <!-- Search bar (always visible) -->
             <div id="se2-search-wrap">
-              <i class="fas fa-search" style="color:#7d8590;font-size:16px;flex-shrink:0;"></i>
+              <i class="fas fa-search" style="color:#06b6d4;font-size:18px;flex-shrink:0;"></i>
               <input id="se2-q" type="text" autocomplete="off" spellcheck="false"
                 placeholder="Search support records, cases, parts, knowledge base..."/>
-              <span id="se2-ai-chip"><i class="fas fa-brain" style="font-size:9px;"></i> Smart</span>
+              <span id="se2-ai-chip">
+                <i class="fas fa-brain" style="font-size:9px;"></i> Smart
+              </span>
               <button class="se2-clear" id="se2-clear" onclick="window._se2Clear()">&#10005;</button>
               <span id="se2-kbd">&#8984;K</span>
             </div>
+
+            <!-- Filter source tabs (shown during search) -->
             <div id="se2-filter-row"></div>
-          </div>
 
-          <!-- Stats grid -->
-          <div id="se2-stats-grid"></div>
+            <!-- Metric cards (4-col large by default, compact during search) -->
+            <div id="se2-stats-grid"></div>
 
-          <!-- Summary -->
-          <div id="se2-summary">
-            <span id="se2-summary-text">Ready &#8212; type to search across all sources</span>
-            <button class="se2-sort-btn" id="se2-sort-btn" style="display:none;" onclick="window._se2ToggleSort()">
-              <i class="fas fa-sort" style="font-size:9px;"></i>
-              <span id="se2-sort-label">Newest first</span>
-            </button>
-          </div>
+            <!-- Summary + sort -->
+            <div id="se2-summary">
+              <span id="se2-summary-text">Ready &mdash; type to search across all sources</span>
+              <button class="se2-sort-btn" id="se2-sort-btn" style="display:none;" onclick="window._se2ToggleSort()">
+                <i class="fas fa-sort" style="font-size:9px;"></i>
+                <span id="se2-sort-label">Newest first</span>
+              </button>
+            </div>
 
-          <!-- Body -->
-          <div id="se2-body">
-            <div id="se2-empty">
-              <div class="se2-empty-icon">&#128269;</div>
-              <div class="se2-empty-title">Search Support Studio</div>
-              <div class="se2-empty-sub">Search across all tabs &#8212; QuickBase cases, Knowledge Base, Parts, Product Controllers, Contact Info, and Support Records.</div>
-              <div class="se2-chips" id="se2-chip-row"></div>
+            <!-- Results body -->
+            <div id="se2-body">
+              <div id="se2-empty">
+                <div class="se2-chips" id="se2-chip-row"></div>
+              </div>
+            </div>
+
+          </div><!-- /se2-center -->
+
+          <!-- ══════════════════════════════════════════════
+               RIGHT PANEL: Recent Activity (from call notes)
+          ══════════════════════════════════════════════ -->
+          <div id="se2-right-panel">
+            <div class="se2-rp-header">
+              <span class="se2-rp-title">
+                <i class="fas fa-clock" style="color:#06b6d4;font-size:12px;"></i>
+                Recent Notes
+              </span>
+              <button onclick="window._ciOpenNotesPanel && window._ciOpenNotesPanel()"
+                style="font-size:11px;color:#06b6d4;cursor:pointer;background:none;border:none;font-family:inherit;padding:0;">
+                View All →
+              </button>
+            </div>
+
+            <!-- Activity items driven by call notes -->
+            <div id="se2-activity-list">
+              <div style="text-align:center;padding:30px 0;color:#9ca3af;font-size:11px;">
+                <i class="fas fa-clipboard" style="font-size:24px;opacity:.2;display:block;margin-bottom:10px;"></i>
+                No recent notes yet
+              </div>
+            </div>
+
+            <!-- Divider -->
+            <div style="height:1px;background:rgba(255,255,255,.06);margin:16px 0;"></div>
+
+            <!-- Index monitoring live -->
+            <div class="se2-rp-header" style="margin-bottom:12px;">
+              <span class="se2-rp-title">
+                <i class="fas fa-server" style="color:#06b6d4;font-size:12px;"></i>
+                Index Monitor
+              </span>
+            </div>
+            <div id="se2-monitor-list" style="display:flex;flex-direction:column;gap:7px;">
+              <!-- Populated by JS after data loads -->
+              <div style="font-size:10px;color:#9ca3af;text-align:center;padding:8px 0;">
+                <i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i> Loading…
+              </div>
             </div>
           </div>
 
-          <!-- Detail Drawer -->
+          <!-- ── Detail Drawer (absolute overlay — unchanged) ── -->
           <div id="se2-detail">
             <div style="flex:1;" onclick="window._se2CloseDetail()"></div>
             <div id="se2-drawer">
@@ -4761,7 +5341,22 @@
               </div>
             </div>
           </div>
+
         </div><!-- /se2-shell -->
+
+        <!-- ── Status Bar ── -->
+        <div id="se2-statusbar">
+          <span class="se2-sb-dot"></span>
+          <span>System Operational</span>
+          <span class="se2-sb-div">|</span>
+          <span><strong id="se2-sb-indexed" style="color:#c9d1d9;">—</strong> records indexed</span>
+          <span class="se2-sb-div">|</span>
+          <span id="se2-sb-status">Initializing…</span>
+          <span class="se2-sb-right">
+            <span class="se2-sb-badge">v3.0 Enterprise</span>
+          </span>
+        </div>
+
       </div><!-- /canvas-search_engine_2 -->
 
       <style>
@@ -6733,7 +7328,6 @@
     if(!rows.length){
       body.innerHTML='<tr><td colspan="9" style="text-align:center;padding:48px 20px;color:var(--ss-muted);"><i class="fas fa-search" style="display:block;font-size:24px;opacity:.2;margin-bottom:12px;"></i>No results found. Try a different filter or click Sync Now.</td></tr>';
       renderPagination();
-      _ssBindSyncedTable('knowledge_base', 'kb-table-head-wrap', 'kb-table-body-wrap');
       return;
     }
 
@@ -6778,7 +7372,6 @@
 
     renderPagination();
     updateSortIndicators();
-    _ssBindSyncedTable('knowledge_base', 'kb-table-head-wrap', 'kb-table-body-wrap');
   }
 
   function getTypeBadgeColor(type){
@@ -7012,7 +7605,7 @@
 
   /* ── Public API ─────────────────────────────────────────────── */
   window._kbLoad            = load;
-  window._kbInit            = function(){ _ssBindSyncedTable('knowledge_base', 'kb-table-head-wrap', 'kb-table-body-wrap'); if(!state.initialized){ state.initialized=true; load(); } };
+  window._kbInit            = function(){ if(!state.initialized){ state.initialized=true; load(); } };
   window._kbSyncNow         = syncNow;
   window._kbApplyFilters    = function(){ state.page=1; applyFilters(); };
   window._kbOnSearch        = function(v){ state.page=1; applyFilters(); };
@@ -9219,62 +9812,6 @@
       .finally(function() { _setDisabled(false); });
   };
 
-  // ── Global helper: keep split table headers aligned with body ──
-  var _ssSyncedTableRegistry = Object.create(null);
-
-  function _ssBindSyncedTable(key, headWrapId, bodyWrapId) {
-    var headWrap = document.getElementById(headWrapId);
-    var bodyWrap = document.getElementById(bodyWrapId);
-    if (!headWrap || !bodyWrap) return;
-
-    if (!_ssSyncedTableRegistry[key]) {
-      var lock = false;
-      var syncFromBody = function() {
-        if (lock) return;
-        lock = true;
-        headWrap.scrollLeft = bodyWrap.scrollLeft;
-        lock = false;
-      };
-      var syncFromHead = function() {
-        if (lock) return;
-        lock = true;
-        bodyWrap.scrollLeft = headWrap.scrollLeft;
-        lock = false;
-      };
-      bodyWrap.addEventListener('scroll', syncFromBody, { passive: true });
-      headWrap.addEventListener('scroll', syncFromHead, { passive: true });
-      _ssSyncedTableRegistry[key] = {
-        headWrapId: headWrapId,
-        bodyWrapId: bodyWrapId,
-        syncFromBody: syncFromBody,
-      };
-    }
-
-    _ssSyncSyncedTable(key);
-  }
-
-  function _ssSyncSyncedTable(key) {
-    var reg = _ssSyncedTableRegistry[key];
-    if (!reg) return;
-
-    var headWrap = document.getElementById(reg.headWrapId);
-    var bodyWrap = document.getElementById(reg.bodyWrapId);
-    if (!headWrap || !bodyWrap) return;
-
-    var bodyTable = bodyWrap.querySelector('table');
-    var headTable = headWrap.querySelector('table');
-
-    if (bodyTable && headTable) {
-      var targetWidth = Math.max(bodyTable.scrollWidth, bodyWrap.clientWidth);
-      headTable.style.minWidth = targetWidth + 'px';
-      bodyTable.style.minWidth = targetWidth + 'px';
-    }
-
-    var scrollbarW = Math.max(0, bodyWrap.offsetWidth - bodyWrap.clientWidth);
-    headWrap.style.paddingRight = scrollbarW ? (scrollbarW + 'px') : '';
-    reg.syncFromBody();
-  }
-
   // ── Connect+ tab state (BUG FIX: was missing — caused ReferenceError) ──
   var _state = {
     loaded:    false,
@@ -9769,7 +10306,11 @@
   }
 
   function _cpSyncHeadScrollbarGap() {
-    _ssBindSyncedTable('connect_plus', 'cp-table-head-wrap', 'cp-table-body');
+    var bodyEl = document.getElementById('cp-table-body');
+    var headWrap = document.getElementById('cp-table-head-wrap');
+    if (!bodyEl || !headWrap) return;
+    var scrollbarW = Math.max(0, bodyEl.offsetWidth - bodyEl.clientWidth);
+    headWrap.style.paddingRight = scrollbarW ? (scrollbarW + 'px') : '';
   }
 
   function _renderPagination(total, maxPage) {
@@ -9814,9 +10355,6 @@
 
   window.addEventListener('resize', function() {
     _cpSyncHeadScrollbarGap();
-    _ssSyncSyncedTable('parts_number');
-    _ssSyncSyncedTable('contact_information');
-    _ssSyncSyncedTable('knowledge_base');
   });
 
   // ── Detail Modal ────────────────────────────────────────────────────
@@ -11834,7 +12372,6 @@
 
   /* ── Init ──────────────────────────────────────────────────── */
   window._pnInit = function() {
-    _ssBindSyncedTable('parts_number', 'pn-table-head-wrap', 'pn-table-body');
     if (_initialized && _allData.length) {
       _render();
       return;
@@ -12108,7 +12645,6 @@
         '<i class="fas fa-barcode" style="font-size:26px;opacity:.2;"></i>' +
         '<div style="font-size:12px;opacity:.5;">No results found</div>' +
         '<div style="font-size:10px;opacity:.4;">' + (_query ? 'Try a different search term' : 'No data loaded') + '</div></div>';
-      _ssBindSyncedTable('parts_number', 'pn-table-head-wrap', 'pn-table-body');
     } else {
       var linkCol = _columns.find(function(c) { return /url|link|href/i.test(c); });
       var html = '<table class="prem-table orange" style="width:100%;min-width:700px;">';
@@ -12141,8 +12677,6 @@
       html += '</table>';
       body.innerHTML = html;
     }
-
-    _ssBindSyncedTable('parts_number', 'pn-table-head-wrap', 'pn-table-body');
 
     // Pagination HD
     if (pageInfo) pageInfo.textContent = 'Showing ' + (total ? (start+1).toLocaleString() : 0) + '–' + end.toLocaleString() + ' of ' + total.toLocaleString() + ' entries';
@@ -12321,7 +12855,6 @@
 
   /* ── Init ──────────────────────────────────────────────────── */
   window._ctiInit = function() {
-    _ssBindSyncedTable('contact_information', 'cti-table-head-wrap', 'cti-table-body');
     if (_initialized && _allData.length) {
       _render();
       return;
@@ -12690,7 +13223,6 @@
         '<i class="fas fa-barcode" style="font-size:26px;opacity:.2;"></i>' +
         '<div style="font-size:12px;opacity:.5;">No results found</div>' +
         '<div style="font-size:10px;opacity:.4;">' + (_query ? 'Try a different search term' : 'No data loaded') + '</div></div>';
-      _ssBindSyncedTable('contact_information', 'cti-table-head-wrap', 'cti-table-body');
     } else {
       var linkCol = _columns.find(function(c) { return /url|link|href/i.test(c); });
       var html = '<table class="prem-table cyan" style="width:100%;min-width:700px;">';
@@ -12723,8 +13255,6 @@
       html += '</table>';
       body.innerHTML = html;
     }
-
-    _ssBindSyncedTable('contact_information', 'cti-table-head-wrap', 'cti-table-body');
 
     // Pagination HD
     if (pageInfo) pageInfo.textContent = 'Showing ' + (total ? (start+1).toLocaleString() : 0) + '–' + end.toLocaleString() + ' of ' + total.toLocaleString() + ' entries';
@@ -15916,34 +16446,93 @@
   // ── Render category strip ──────────────────────────────────────────────────
   // FIX BUG 1+5: No more inline onclick with unquoted variables.
   // Use data-src attributes + delegated listener on container.
+  // ── Source icon map for metric cards ──
+  var METRIC_ICONS = {
+    qb:    { icon:'fa-bolt',         color:'#58a6ff', bg:'rgba(88,166,255,.12)',   change:'↑ 12% this week' },
+    kb:    { icon:'fa-book',         color:'#10b981', bg:'rgba(16,185,129,.12)',   change:'↑ 5% this week'  },
+    parts: { icon:'fa-barcode',      color:'#f59e0b', bg:'rgba(245,158,11,.12)',   change:'↑ 8% this week'  },
+    ctrl:  { icon:'fa-microchip',    color:'#a78bfa', bg:'rgba(167,139,250,.12)',  change:'↑ 3% this week'  },
+    net:   { icon:'fa-plug',         color:'#22d3ee', bg:'rgba(34,211,238,.12)',   change:'↑ 6% this week'  },
+    ci:    { icon:'fa-address-book', color:'#8b5cf6', bg:'rgba(139,92,246,.12)',   change:'↑ 15% this week' },
+    sr:    { icon:'fa-book-open',    color:'#f43f5e', bg:'rgba(244,63,94,.12)',    change:'↑ 2% this week'  },
+  };
+
   function _renderCats(counts) {
-    // Stats grid
+    var total = _state.allRecords.length;
+    var hasQ  = !!(_state.query && _state.query.trim());
+
+    // ── Stats grid: large metric cards (no search) / compact (searching) ──
     var grid = el('se2-stats-grid');
     if (grid) {
+      if (hasQ) {
+        grid.classList.add('se2-compact');
+      } else {
+        grid.classList.remove('se2-compact');
+      }
       grid.innerHTML = Object.keys(SOURCES).map(function(key) {
-        var src = SOURCES[key];
-        var n = counts ? (counts[key]||0) : 0;
+        var src  = SOURCES[key];
+        var mi   = METRIC_ICONS[key] || { icon:'fa-circle', color:src.color, bg:'rgba(255,255,255,.06)', change:'' };
+        var n    = counts ? (counts[key]||0) : 0;
         if (!_state.loaded) n = '—';
-        var isActive = _state.activeCat === key;
-        var displayN = (typeof n === 'number') ? n.toLocaleString() : n;
-        return '<div class="se2-stat-card' + (isActive ? ' active' : '') + '" data-src="' + esc(key) + '" style="color:' + src.color + ';">' +
-          '<i class="fas ' + src.icon + '" style="font-size:13px;margin-bottom:5px;opacity:.85;"></i>' +
-          '<div class="se2-stat-num">' + displayN + '</div>' +
-          '<div class="se2-stat-lbl">' + esc(src.shortLabel || src.label) + '</div>' +
+        var isActive  = _state.activeCat === key;
+        var displayN  = (typeof n === 'number') ? n.toLocaleString() : String(n);
+        return '<div class="se2-stat-card' + (isActive ? ' active' : '') + '" data-src="' + esc(key) + '" style="color:' + mi.color + ';">' +
+          '<div class="se2-metric-header">' +
+            '<div class="se2-metric-icon" style="background:' + mi.bg + ';">' +
+              '<i class="fas ' + mi.icon + '" style="color:' + mi.color + ';font-size:15px;"></i>' +
+            '</div>' +
+            '<div class="se2-stat-lbl">' + esc(src.shortLabel || src.label) + '</div>' +
+          '</div>' +
+          '<div class="se2-stat-num" style="color:' + (isActive ? mi.color : '#f9fafb') + ';">' + displayN + '</div>' +
+          (mi.change ? '<div class="se2-metric-change"><span style="font-size:10px;">↑</span>' + esc(mi.change.replace('↑ ','')) + '</div>' : '') +
           '</div>';
       }).join('');
       grid.onclick = function(e) {
         var card = e.target.closest('.se2-stat-card');
         if (card) window._se2FilterCat(card.getAttribute('data-src'));
       };
-      // Update indexed badge
-      if (_state.allRecords.length > 0) {
-        var badge = el('se2-indexed-badge');
-        var num = el('se2-indexed-num');
-        if (badge) badge.style.display = '';
-        if (num) num.textContent = _state.allRecords.length.toLocaleString();
-      }
     }
+
+    // ── Left panel source chips: update counts + active state ──
+    var srcIds = { qb:'qb', kb:'kb', parts:'parts', ctrl:'ctrl', net:'net', ci:'ci', sr:'sr' };
+    Object.keys(srcIds).forEach(function(key) {
+      var countEl = el('se2-lp-' + key);
+      if (countEl) {
+        var n = counts ? (counts[key]||0) : 0;
+        countEl.textContent = (typeof n === 'number') ? n.toLocaleString() : '—';
+      }
+    });
+    // Update total
+    var totalEl = el('se2-lp-total');
+    if (totalEl) totalEl.textContent = total > 0 ? total.toLocaleString() : '—';
+
+    // Active state on left panel chips
+    document.querySelectorAll('.se2-src-chip').forEach(function(chip) {
+      var s2 = chip.getAttribute('data-src2');
+      var isActive2 = (s2 === 'all' && !_state.activeCat) || (s2 === _state.activeCat);
+      chip.classList.toggle('active', !!isActive2);
+    });
+
+    // ── Hero section: show/hide + update count ──
+    var hero = el('se2-hero');
+    if (hero) hero.style.display = hasQ ? 'none' : 'flex';
+    var heroCount = el('se2-hero-count');
+    if (heroCount && total > 0) heroCount.textContent = total.toLocaleString();
+
+    // ── Status bar ──
+    var sbIndexed = el('se2-sb-indexed');
+    if (sbIndexed) sbIndexed.textContent = total > 0 ? total.toLocaleString() : '—';
+    var sbStatus = el('se2-sb-status');
+    if (sbStatus) {
+      sbStatus.textContent = _state.loaded ? ('Indexed ' + Object.keys(SOURCES).length + ' sources · Ready') : 'Loading sources…';
+    }
+    var healthSub = el('se2-health-sub');
+    if (healthSub) {
+      healthSub.textContent = _state.loaded ? (total.toLocaleString() + ' records indexed') : 'Loading…';
+    }
+
+    // ── Index monitor (right panel) ──
+    _renderMonitor(counts);
 
     // Filter tab row (visible during search)
     var filterRow = el('se2-filter-row');
@@ -15975,6 +16564,68 @@
         filterRow.style.display = 'none';
       }
     }
+  }
+
+  // ── Render index monitor (right panel) ──────────────────────────────────────
+  function _renderMonitor(counts) {
+    var list = el('se2-monitor-list');
+    if (!list) return;
+    if (!counts && !_state.loaded) {
+      list.innerHTML = '<div style="font-size:10px;color:#9ca3af;text-align:center;padding:8px 0;"><i class="fas fa-spinner fa-spin" style="margin-right:5px;"></i> Loading…</div>';
+      return;
+    }
+    var html = Object.keys(SOURCES).map(function(key) {
+      var src = SOURCES[key];
+      var mi  = METRIC_ICONS[key] || { icon:'fa-circle', color:src.color };
+      var n   = counts ? (counts[key]||0) : 0;
+      var pct = _state.allRecords.length > 0 ? Math.round((n / _state.allRecords.length) * 100) : 0;
+      return '<div style="margin-bottom:10px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">' +
+          '<span style="font-size:11px;font-weight:600;color:#f9fafb;display:flex;align-items:center;gap:6px;">' +
+            '<i class="fas ' + mi.icon + '" style="color:' + mi.color + ';font-size:10px;"></i>' + esc(src.shortLabel || src.label) +
+          '</span>' +
+          '<span style="font-size:10px;font-weight:700;font-family:monospace;color:' + mi.color + ';">' + (n > 0 ? n.toLocaleString() : '—') + '</span>' +
+        '</div>' +
+        '<div style="height:4px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden;">' +
+          '<div style="height:100%;width:' + pct + '%;background:' + mi.color + ';border-radius:99px;transition:width .5s ease;"></div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    list.innerHTML = html;
+  }
+
+  // ── Render recent activity (right panel from call notes) ──────────────────
+  function _renderActivity() {
+    var list = el('se2-activity-list');
+    if (!list) return;
+    var notes = [];
+    try {
+      var raw = localStorage.getItem('mums_ss_call_notes_cache');
+      if (raw) notes = JSON.parse(raw) || [];
+    } catch(_) {}
+    if (!notes.length) return; // keep placeholder
+    list.innerHTML = notes.slice(0, 6).map(function(n) {
+      var dt = new Date(n.savedAt || Date.now());
+      var timeStr = dt.toLocaleDateString('en-PH',{month:'short',day:'numeric'}) + ' ' +
+                    dt.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'});
+      var hasDur  = !!n.callDuration;
+      var hasCase = !!n.caseNum;
+      var badge = hasDur
+        ? '<span class="se2-activity-badge se2-badge-timer"><i class="fas fa-clock" style="font-size:8px;margin-right:2px;"></i>' + esc(n.callDuration) + '</span>'
+        : hasCase
+          ? '<span class="se2-activity-badge se2-badge-new">Case</span>'
+          : '<span class="se2-activity-badge se2-badge-pending">Note</span>';
+      var title = n.callerName || n.shortDesc || '(no name)';
+      var desc  = n.shortDesc || n.detailedDesc || n.actionTaken || '—';
+      if (n.caseNum) title += ' <span style="color:#58a6ff;font-size:10px;font-family:monospace;">#' + esc(n.caseNum) + '</span>';
+      return '<div class="se2-activity-item">' +
+        '<div class="se2-activity-meta">' +
+          '<span class="se2-activity-time">' + esc(timeStr) + '</span>' + badge +
+        '</div>' +
+        '<div class="se2-activity-title">' + title + '</div>' +
+        '<div class="se2-activity-desc">' + esc(desc.slice(0,80)) + '</div>' +
+      '</div>';
+    }).join('');
   }
 
   // ── Render suggestion chips ────────────────────────────────────────────────
@@ -16095,11 +16746,7 @@
       _renderSummary([], '');
       var body = el('se2-body');
       if (body) {
-        body.innerHTML = '<div id="se2-empty">' +
-          '<div class="se2-empty-icon">🔍</div>' +
-          '<div class="se2-empty-title">Search Support Studio</div>' +
-          '<div class="se2-empty-sub">Total indexed: <strong>' + _state.allRecords.length.toLocaleString() + ' records</strong> — type anything above.</div>' +
-          '<div class="se2-chips" id="se2-chip-row"></div></div>';
+        body.innerHTML = '<div id="se2-empty"><div class="se2-chips" id="se2-chip-row"></div></div>';
         _renderChips();
       }
       if (_state.activeCat) _state.activeCat = null;
@@ -16440,12 +17087,14 @@
         // Restore empty welcome state with record count
         var body2 = el('se2-body');
         if (body2) {
-          body2.innerHTML = '<div id="se2-empty">' +
-            '<div class="se2-empty-icon">🔍</div>' +
-            '<div class="se2-empty-title">Search Engine 2</div>' +
-            '<div class="se2-empty-sub">Advanced search across <strong>' + merged.length.toLocaleString() + ' records</strong> — QuickBase cases, Knowledge Base, Parts, Connect+ sites, Controllers, Support Records.</div>' +
-            '<div class="se2-chips" id="se2-chip-row"></div></div>';
+          body2.innerHTML = '<div id="se2-empty"><div class="se2-chips" id="se2-chip-row"></div></div>';
           _renderChips();
+          var heroC = el('se2-hero-count');
+          if (heroC) heroC.textContent = merged.length.toLocaleString();
+          var sbI = el('se2-sb-indexed'); if (sbI) sbI.textContent = merged.length.toLocaleString();
+          var sbS = el('se2-sb-status'); if (sbS) sbS.textContent = 'Indexed ' + Object.keys(SOURCES).length + ' sources · Ready';
+          var hSub = el('se2-health-sub'); if (hSub) hSub.textContent = merged.length.toLocaleString() + ' records indexed';
+          _renderActivity();
         }
 
         // FIX BUG 3: Always run search if there's a pending or current query
@@ -16687,6 +17336,8 @@
       return;
     }
     _se2Inited = true;
+    // Render recent notes in right panel
+    setTimeout(_renderActivity, 300);
 
     var qEl = el('se2-q');
     var _se2Debounce = null;
