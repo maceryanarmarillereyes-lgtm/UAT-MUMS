@@ -16490,6 +16490,29 @@
     ].join(' ').toLowerCase();
     var normHaystack = _normLoose(haystack);
     var normOriginal = _normLoose(original);
+    var phoneDigits = String(original || '').replace(/\D+/g, '');
+
+    // Structured phone query path (e.g., +1(954)553-5645):
+    // require contiguous digit match to prevent broad fuzzy hits.
+    if (!/[a-z]/i.test(original) && phoneDigits.length >= 7) {
+      var digitHay = String([
+        r.phone || '', r.title || '', r.res || '', r.searchBlob || ''
+      ].join(' ')).replace(/\D+/g, '');
+      var candidates = [phoneDigits];
+      if (phoneDigits.length === 11 && phoneDigits.charAt(0) === '1') candidates.push(phoneDigits.slice(1));
+      if (phoneDigits.length >= 10) candidates.push(phoneDigits.slice(-10));
+      var okPhone = candidates.some(function(c) { return c && digitHay.indexOf(c) !== -1; });
+      return okPhone ? 15000 : 0;
+    }
+
+    // Structured email query path: punctuation-insensitive exact containment.
+    if (original.indexOf('@') !== -1) {
+      var emailNeedle = String(original || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+      var emailHay = String([
+        r.email || '', r.title || '', r.res || '', r.searchBlob || ''
+      ].join(' ')).toLowerCase().replace(/[^a-z0-9]+/g, '');
+      return (emailNeedle && emailHay.indexOf(emailNeedle) !== -1) ? 14000 : 0;
+    }
 
     if (parsed.isNumeric && (r.case === parsed.original || r.id === parsed.original)) return 10000;
 
