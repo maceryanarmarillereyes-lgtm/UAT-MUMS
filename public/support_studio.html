@@ -1250,11 +1250,18 @@
       padding: 0;
     }
     .ss-mini-btn i { font-size: 11px; }
+    .ss-mini-btn.ss-mini-collapse {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      margin-top: auto;
+    }
     .ss-mini-btn:hover { color: #e6edf3; border-color: rgba(88,166,255,.38); background: rgba(88,166,255,.12); }
     .ss-mini-btn.active { color: #58a6ff; border-color: rgba(88,166,255,.45); background: rgba(88,166,255,.15); }
     #ss-right-sidebar.ss-collapsed-notes #right-call-info { display: none !important; }
     #ss-right-sidebar.ss-bookmarks-mode #right-call-info { display: none !important; }
     #ss-right-sidebar.ss-bookmarks-mode #ci-bookmarks-panel { display: flex !important; }
+    #ss-right-sidebar.ss-right-hidden { display: none !important; }
 
     .ss-panel {
       padding: 16px 14px;
@@ -6121,6 +6128,7 @@
       <button class="ss-mini-btn" id="ss-mini-bookmarks-btn" title="Bookmarks" onclick="window._ssOpenBookmarksPanel()">
         <i class="fas fa-bookmark"></i>
       </button>
+      <button class="ss-mini-btn ss-mini-collapse" id="ss-mini-collapse-btn" title="Collapse right sidebar" onclick="window._ssToggleSidebarCollapse()">>></button>
     </aside>
 
     <!-- ── PERSISTENT RIGHT SIDEBAR ──────────────────────────── -->
@@ -8267,19 +8275,27 @@
 
   var _ssNotesSidebarVisible = false;
   var _ssRightSidebarMode = 'notes';
+  var _ssRightSidebarCollapsed = false;
 
   function _ssSyncMiniRail() {
     var right = document.getElementById('ss-right-sidebar');
     var notesBtn = document.getElementById('ss-mini-notes-btn');
     var bookmarksBtn = document.getElementById('ss-mini-bookmarks-btn');
+    var collapseBtn = document.getElementById('ss-mini-collapse-btn');
     if (!right) return;
 
+    right.classList.toggle('ss-right-hidden', _ssRightSidebarCollapsed);
     right.classList.toggle('ss-collapsed-notes', !_ssNotesSidebarVisible);
     right.classList.toggle('ss-bookmarks-mode', _ssNotesSidebarVisible && _ssRightSidebarMode === 'bookmarks');
 
     if (notesBtn) notesBtn.classList.toggle('active', _ssNotesSidebarVisible && _ssRightSidebarMode === 'notes');
     if (bookmarksBtn) bookmarksBtn.classList.toggle('active', _ssNotesSidebarVisible && _ssRightSidebarMode === 'bookmarks');
+    if (collapseBtn) {
+      collapseBtn.textContent = _ssRightSidebarCollapsed ? '<<' : '>>';
+      collapseBtn.title = _ssRightSidebarCollapsed ? 'Show right sidebar' : 'Collapse right sidebar';
+    }
 
+    if (_ssRightSidebarCollapsed) return;
     if (_ssNotesSidebarVisible && _ssRightSidebarMode === 'notes') renderRecentNotes();
     if (_ssNotesSidebarVisible && _ssRightSidebarMode === 'bookmarks' && typeof window._ssRenderBookmarks === 'function') {
       window._ssRenderBookmarks();
@@ -8287,6 +8303,7 @@
   }
 
   window._ssToggleRightNotes = function() {
+    _ssRightSidebarCollapsed = false;
     if (_ssNotesSidebarVisible && _ssRightSidebarMode === 'notes') {
       _ssNotesSidebarVisible = false;
     } else {
@@ -8297,11 +8314,17 @@
   };
 
   window._ssOpenBookmarksPanel = function() {
+    _ssRightSidebarCollapsed = false;
     _ssNotesSidebarVisible = true;
     _ssRightSidebarMode = 'bookmarks';
     if (typeof window._se2SetBookmarkFolderFilter === 'function') window._se2SetBookmarkFolderFilter('default');
     _ssSyncMiniRail();
     if (typeof window._se2EnsureBookmarksLoaded === 'function') window._se2EnsureBookmarksLoaded();
+  };
+
+  window._ssToggleSidebarCollapse = function() {
+    _ssRightSidebarCollapsed = !_ssRightSidebarCollapsed;
+    _ssSyncMiniRail();
   };
 
   // ── Call Widget & Timer ───────────────────────────────────────────────────
@@ -8345,6 +8368,7 @@
   function _cwShowCallInfo() {
     var sec = document.getElementById('ci-call-info-section');
     if (sec) sec.style.display = 'flex';
+    _ssRightSidebarCollapsed = false;
     _ssNotesSidebarVisible = true;
     _ssRightSidebarMode = 'notes';
     _ssSyncMiniRail();
