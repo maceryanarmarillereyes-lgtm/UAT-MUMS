@@ -4705,6 +4705,12 @@
           margin:24px 24px 0;
           flex-shrink:0;
         }
+        /* Guardrail: SE2 search must remain visible for all users/sessions. */
+        #se2-center > #se2-search-wrap {
+          display:flex !important;
+          visibility:visible !important;
+          opacity:1 !important;
+        }
         #se2-search-wrap:focus-within {
           border-color:var(--se-cyan);
           box-shadow:0 0 0 4px rgba(6,182,212,.12), 0 20px 60px rgba(6,182,212,.22);
@@ -16231,6 +16237,48 @@
 
   // ── DOM helpers ────────────────────────────────────────────────────────────
   function el(id) { return document.getElementById(id); }
+  function _ensureSe2SearchVisible() {
+    var center = el('se2-center');
+    if (!center) return;
+    var hero = el('se2-hero');
+    var wrap = el('se2-search-wrap');
+    var filterRow = el('se2-filter-row');
+    if (!hero) {
+      hero = document.createElement('div');
+      hero.id = 'se2-hero';
+      hero.innerHTML =
+        '<div id="se2-hero-icon">🔍</div>' +
+        '<div id="se2-hero-title">Search Support Studio</div>' +
+        '<div id="se2-hero-sub">Total indexed: <strong id="se2-hero-count">—</strong> records &mdash; type anything above to search across all data sources</div>';
+      center.insertBefore(hero, center.firstChild || null);
+    }
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = 'se2-search-wrap';
+      wrap.innerHTML =
+        '<i class="fas fa-search" style="color:#06b6d4;font-size:18px;flex-shrink:0;"></i>' +
+        '<input id="se2-q" type="text" autocomplete="off" spellcheck="false" placeholder="Search support records, cases, parts, knowledge base..."/>' +
+        '<span id="se2-ai-chip"><i class="fas fa-brain" style="font-size:9px;"></i> Smart</span>' +
+        '<button class="se2-clear" id="se2-clear" onclick="window._se2Clear()">&#10005;</button>' +
+        '<span id="se2-kbd">&#8984;K</span>';
+      center.insertBefore(wrap, filterRow || null);
+    }
+    if (hero.nextElementSibling !== wrap) {
+      center.insertBefore(wrap, hero.nextElementSibling);
+    }
+
+    // Permanent hardening: if any stale script/theme moves the bar or hides it,
+    // pin it back to the canonical spot and force visibility.
+    if (wrap.parentElement !== center) {
+      center.insertBefore(wrap, filterRow || center.firstChild || null);
+    } else if (filterRow && wrap.nextElementSibling !== filterRow) {
+      center.insertBefore(wrap, filterRow);
+    }
+    wrap.style.display = 'flex';
+    wrap.style.visibility = 'visible';
+    wrap.style.opacity = '1';
+    wrap.style.pointerEvents = 'auto';
+  }
   function esc(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -16721,6 +16769,8 @@
 
   // ── Main run ───────────────────────────────────────────────────────────────
   function _run() {
+    _ensureSe2SearchVisible();
+
     var q = _state.query.trim();
     var clearBtn = el('se2-clear');
     if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
@@ -17321,6 +17371,8 @@
   var _se2Inited = false;
 
   function _se2Init() {
+    _ensureSe2SearchVisible();
+
     if (_se2Inited) {
       // Re-visit: refresh QB data and re-run current search
       var freshQb = _extractQbRecords();
@@ -17341,7 +17393,8 @@
 
     var qEl = el('se2-q');
     var _se2Debounce = null;
-    if (qEl) {
+    if (qEl && !qEl._se2Bound) {
+      qEl._se2Bound = true;
       qEl.addEventListener('input', function() {
         clearTimeout(_se2Debounce);
         var val = qEl.value;
