@@ -15,8 +15,8 @@ function sendJson(res, code, body) {
   res.end(JSON.stringify(body));
 }
 
-function docKey(userId) {
-  return `ss_home_apps_${String(userId).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+function docKey() {
+  return 'ss_home_program_applications_v1';
 }
 
 function safeText(value, max) {
@@ -67,7 +67,7 @@ module.exports = async (req, res) => {
     const user = await getUserFromJwt(jwt);
     if (!user) return sendJson(res, 401, { ok: false, error: 'unauthorized' });
 
-    const key = docKey(user.id);
+    const key = docKey();
 
     if (req.method === 'GET') {
       const out = await serviceSelect('mums_documents', `select=value&key=eq.${encodeURIComponent(key)}&limit=1`);
@@ -77,7 +77,11 @@ module.exports = async (req, res) => {
       const row = Array.isArray(out.json) && out.json[0] ? out.json[0] : null;
       const value = row ? row.value : null;
       const apps = normalizeApps(value && value.apps);
-      return sendJson(res, 200, { ok: true, apps });
+      return sendJson(res, 200, {
+        ok: true,
+        apps,
+        updatedAt: row && row.updated_at ? row.updated_at : null,
+      });
     }
 
     if (req.method === 'POST') {
@@ -112,7 +116,7 @@ module.exports = async (req, res) => {
         return sendJson(res, 500, { ok: false, error: 'db_write_failed', detail: out.text ? out.text.slice(0, 300) : 'Unknown DB error' });
       }
 
-      return sendJson(res, 200, { ok: true, saved: apps.length, apps });
+      return sendJson(res, 200, { ok: true, saved: apps.length, apps, updatedAt: nowIso });
     }
 
     return sendJson(res, 405, { ok: false, error: 'method_not_allowed' });
