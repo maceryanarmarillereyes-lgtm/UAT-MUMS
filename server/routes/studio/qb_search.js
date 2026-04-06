@@ -204,11 +204,28 @@ async function queryAllRecords({ realm, token, tableId, where, select, skip, top
 // FIX v2.1: When term is purely numeric (e.g. '441056'), also add an
 // EX clause on field 3 (Record ID#). QB CT does NOT work on numeric fields
 // so a numeric-only search with CT returns 0 results — EX on field 3 fixes this.
-function buildSearchWhere(term, textFieldIds) {
+function buildSearchWhere(term, textFieldIds, opts = {}) {
   if (!term) return '';
 
   // Use at most 20 text field IDs to avoid QB WHERE clause length limits
   const fids = textFieldIds.slice(0, 20);
+  const phoneFieldIds = Array.isArray(opts.phoneFieldIds) ? opts.phoneFieldIds.filter(Number.isFinite) : [];
+
+  // Phone-focused path:
+  // If query is composed of symbols/digits only and has enough digits,
+  // search directly against phone fields using normalized digit token.
+  // This avoids QB CT broad matches for inputs like +1(954)553-5645.
+  const hasLetter = /[a-z]/i.test(term);
+  const digitOnly = String(term).replace(/\D+/g, '');
+  if (!hasLetter && digitOnly.length >= 7) {
+    const primaryPhoneToken = digitOnly.length >= 10 ? digitOnly.slice(-10) : digitOnly;
+    const targetIds = phoneFieldIds.length ? phoneFieldIds.slice(0, 8) : fids.slice(0, 8);
+    if (targetIds.length) {
+      const enc = encLit(primaryPhoneToken);
+      const phoneClauses = targetIds.map(id => `{${id}.CT.'${enc}'}`);
+      return phoneClauses.length === 1 ? phoneClauses[0] : `(${phoneClauses.join(' OR ')})`;
+    }
+  }
 
   // Split search term into individual tokens for broader matching
   const tokens = term.trim().split(/\s+/).filter(t => t.length >= 2);
@@ -295,7 +312,8 @@ module.exports = async (req, res) => {
     const searchFieldIds = [...new Set(boostedSearchIds)].filter(Number.isFinite);
 
     // ── Build search WHERE clause ──────────────────────────────────
-    const where = q ? buildSearchWhere(q, searchFieldIds) : '';
+    const phoneFieldIds = resolvePriorityFieldIds(allFields, ['Contact - Phone', 'Contact Phone', 'Phone']);
+    const where = q ? buildSearchWhere(q, searchFieldIds, { phoneFieldIds }) : '';
 
     // ── Select fields: use report fields (from QB report metadata) ──
     // For display: use the known text/key field IDs so we get useful data back
