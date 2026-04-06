@@ -17044,7 +17044,7 @@
     if (window.__se2KbLoaded && Array.isArray(window.__se2KbCache) && window.__se2KbCache.length > 0) {
       kbPromise = Promise.resolve(window.__se2KbCache);
     } else if (Array.isArray(window.__studioSrRecords) && window.__studioSrRecords.length > 0) {
-      kbPromise = Promise.resolve(_mapSupportRecords(window.__studioSrRecords));
+      kbPromise = Promise.resolve(_mapSupportRecords(window.__studioSrRecords, 'sr'));
     } else if (window.__se2KbPromise) {
       // Pre-load already in-flight — reuse it instead of re-fetching
       kbPromise = window.__se2KbPromise;
@@ -17203,7 +17203,7 @@
       .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
       .then(function(j) {
         var flat = Array.isArray(j.flat) ? j.flat : (Array.isArray(j) ? j : []);
-        var mapped = _mapSupportRecords(flat, 'kb');
+        var mapped = _mapSupportRecords(flat, 'sr');
         window.__studioSrRecords = flat;
         window.__se2KbCache  = mapped;
         window.__se2KbLoaded = true;
@@ -17212,7 +17212,7 @@
       })
       .catch(function(err) {
         console.warn('[SE2] KB JSON load failed:', err.message);
-        var fallback = _mapSupportRecords(window.__studioSrRecords || [], 'kb');
+        var fallback = _mapSupportRecords(window.__studioSrRecords || [], 'sr');
         window.__se2KbCache  = fallback;
         window.__se2KbLoaded = false;
         window.__se2KbPromise = null;
