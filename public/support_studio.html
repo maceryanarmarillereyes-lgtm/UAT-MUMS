@@ -5095,7 +5095,7 @@
                     <span class="se2-src-chip-icon" style="background:rgba(88,166,255,.12);color:#58a6ff;">
                       <i class="fas fa-bolt" style="font-size:10px;"></i>
                     </span>
-                    QuickBase
+                    QuickBase_S
                   </span>
                   <span class="se2-src-chip-count" id="se2-lp-qb">—</span>
                 </div>
@@ -5113,7 +5113,7 @@
                     <span class="se2-src-chip-icon" style="background:rgba(245,158,11,.12);color:#f59e0b;">
                       <i class="fas fa-barcode" style="font-size:10px;"></i>
                     </span>
-                    Parts Database
+                    Part Number
                   </span>
                   <span class="se2-src-chip-count" id="se2-lp-parts">—</span>
                 </div>
@@ -5122,7 +5122,7 @@
                     <span class="se2-src-chip-icon" style="background:rgba(167,139,250,.12);color:#a78bfa;">
                       <i class="fas fa-microchip" style="font-size:10px;"></i>
                     </span>
-                    Controllers
+                    Product Controllers
                   </span>
                   <span class="se2-src-chip-count" id="se2-lp-ctrl">—</span>
                 </div>
@@ -5140,7 +5140,7 @@
                     <span class="se2-src-chip-icon" style="background:rgba(139,92,246,.12);color:#8b5cf6;">
                       <i class="fas fa-address-book" style="font-size:10px;"></i>
                     </span>
-                    Contacts
+                    Contact Information
                   </span>
                   <span class="se2-src-chip-count" id="se2-lp-ci">—</span>
                 </div>
@@ -9936,6 +9936,7 @@
       if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
         // ✅ Serve from cache — instant, no network
         _state.all     = cached.data;
+        window.__studioCpRecords = Array.isArray(_state.all) ? _state.all.slice() : [];
         _state.loaded  = true;
         _state.loading = false;
         _buildFilterOptions();
@@ -10026,6 +10027,7 @@
           });
         }
         _state.all     = data;
+        window.__studioCpRecords = Array.isArray(data) ? data.slice() : [];
         _state.loaded  = true;
         _state.loading = false;
         _buildFilterOptions();
@@ -12425,6 +12427,7 @@
     _loading    = false;
     _initialized = true;
     _allData    = rows;
+    window.__studioPnRecords = Array.isArray(rows) ? rows.slice() : [];
 
     if (rows.length) {
       var firstRow = rows[0];
@@ -12908,6 +12911,7 @@
     _loading    = false;
     _initialized = true;
     _allData    = rows;
+    window.__studioCiRecords = Array.isArray(rows) ? rows.slice() : [];
 
     if (rows.length) {
       var firstRow = rows[0];
@@ -16074,14 +16078,14 @@
 
   // Source definitions
   var SOURCES = {
-    qb:    { label:'QuickBase Cases',    shortLabel:'QuickBase',  color:'#58a6ff', icon:'fa-link'         },
-    qbd:   { label:'Deep Search QB',     shortLabel:'Deep Search QB', color:'#3b82f6', icon:'fa-search' },
-    kb:    { label:'Knowledge Base',     shortLabel:'Knowledge',  color:'#10b981', icon:'fa-book'         },
-    parts: { label:'Parts',              shortLabel:'Parts',      color:'#f59e0b', icon:'fa-barcode'      },
-    ctrl:  { label:'Controllers',        shortLabel:'Controllers',color:'#a78bfa', icon:'fa-microchip'    },
-    net:   { label:'Connect+ / Net',     shortLabel:'Connect+',   color:'#22d3ee', icon:'fa-plug'         },
-    ci:    { label:'Contact Info',       shortLabel:'Contacts',   color:'#14b8a6', icon:'fa-address-book' },
-    sr:    { label:'Support Records',    shortLabel:'Support',    color:'#f43f5e', icon:'fa-book-open'    }
+    qb:    { label:'QuickBase_S',          shortLabel:'QuickBase_S',          color:'#58a6ff', icon:'fa-link'         },
+    qbd:   { label:'Deep Search',          shortLabel:'Deep Search',          color:'#3b82f6', icon:'fa-search'       },
+    kb:    { label:'Knowledge Base',       shortLabel:'Knowledge Base',       color:'#10b981', icon:'fa-book'         },
+    parts: { label:'Part Number',          shortLabel:'Part Number',          color:'#f59e0b', icon:'fa-barcode'      },
+    ctrl:  { label:'Product Controllers',  shortLabel:'Product Controllers',  color:'#a78bfa', icon:'fa-microchip'    },
+    net:   { label:'Connect+',             shortLabel:'Connect+',             color:'#22d3ee', icon:'fa-plug'         },
+    ci:    { label:'Contact Information',  shortLabel:'Contact Information',  color:'#14b8a6', icon:'fa-address-book' },
+    sr:    { label:'Support Records',      shortLabel:'Support Records',      color:'#f43f5e', icon:'fa-book-open'    }
   };
 
   var CAT_MAP = {
@@ -16288,6 +16292,109 @@
         .catch(function() { return _fetchBundleApi(bundleId); });
     }
     return _fetchBundleApi(bundleId);
+  }
+
+  function _rowValueByRegex(row, regexes) {
+    var obj = (row && typeof row === 'object') ? row : {};
+    var keys = Object.keys(obj);
+    for (var i = 0; i < regexes.length; i++) {
+      var rx = regexes[i];
+      var key = keys.find(function(k) { return rx.test(String(k || '')); });
+      if (key) {
+        var val = String(obj[key] || '').trim();
+        if (val) return val;
+      }
+    }
+    return '';
+  }
+
+  function _rowSearchBlob(row) {
+    var obj = (row && typeof row === 'object') ? row : {};
+    return Object.keys(obj).map(function(k) { return obj[k]; }).filter(function(v) {
+      return v != null && String(v).trim() !== '';
+    }).join(' · ');
+  }
+
+  function _parseSimpleCsvObjects(text) {
+    var rows = [];
+    var cur = '';
+    var inQ = false;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (ch === '"') {
+        if (inQ && text[i + 1] === '"') { cur += '"'; i++; continue; }
+        inQ = !inQ;
+        continue;
+      }
+      if (ch === '\n' && !inQ) { rows.push(cur); cur = ''; continue; }
+      if (ch === '\r' && !inQ) continue;
+      cur += ch;
+    }
+    if (cur) rows.push(cur);
+    if (!rows.length) return [];
+
+    function parseLine(line) {
+      var out = [];
+      var cell = '';
+      var q = false;
+      for (var j = 0; j < line.length; j++) {
+        var c = line[j];
+        if (c === '"') {
+          if (q && line[j + 1] === '"') { cell += '"'; j++; }
+          else q = !q;
+        } else if (c === ',' && !q) {
+          out.push(cell.trim());
+          cell = '';
+        } else {
+          cell += c;
+        }
+      }
+      out.push(cell.trim());
+      return out;
+    }
+
+    var header = parseLine(rows[0]);
+    var mapped = [];
+    for (var r = 1; r < rows.length; r++) {
+      var line = rows[r];
+      if (!line || !line.trim()) continue;
+      var cols = parseLine(line);
+      var obj = {};
+      for (var h = 0; h < header.length; h++) obj[header[h]] = cols[h] || '';
+      mapped.push(obj);
+    }
+    return mapped;
+  }
+
+  function _loadContactInformationRecords(seedRecords) {
+    var seeded = _toArray(seedRecords);
+    if (seeded.length) return Promise.resolve(seeded);
+    var cachePromise = (window.StudioCache && typeof window.StudioCache.getBundle === 'function')
+      ? window.StudioCache.getBundle('contact_information')
+          .then(function(row) { return _extractBundleData(row); })
+          .catch(function() { return []; })
+      : Promise.resolve([]);
+
+    return cachePromise.then(function(fromCache) {
+      if (Array.isArray(fromCache) && fromCache.length) return fromCache;
+      var csvUrl = String(window._ctiCsvUrl || '').trim();
+      if (!csvUrl) {
+        try {
+          var raw = localStorage.getItem('ss_contact_information_settings');
+          if (raw) {
+            var cfg = JSON.parse(raw);
+            csvUrl = String((cfg && cfg.csvUrl) || '').trim();
+          }
+        } catch (_) {}
+      }
+      if (!csvUrl) return [];
+      return fetch(csvUrl, { cache: 'no-store' })
+        .then(function(resp) {
+          return resp.ok ? resp.text() : Promise.reject(new Error('contact_csv_http_' + resp.status));
+        })
+        .then(function(text) { return _parseSimpleCsvObjects(text); })
+        .catch(function() { return []; });
+    });
   }
 
   function _mapGenericRecords(records, src, cat) {
@@ -16926,14 +17033,31 @@
     var pnPromise = _loadBundleRecords('parts_number', window.__se2PartsData || window.__studioPnRecords)
       .then(function(pnData) {
       return _toArray(pnData).map(function(r) {
-        return { _src:'parts', title:r.partNo||r.name||r.part_number||'',
-          res:r.desc||r.description||'', cat:'Parts',
-          partNo:r.partNo||r.part_number, desc:r.desc||r.description, brand:r.brand||r.manufacturer };
+        var row = r && typeof r === 'object' ? r : {};
+        var partNo = row.partNo || row.part_number || row.partnumber ||
+          _rowValueByRegex(row, [/^part\s*number$/i, /part\s*#|part\s*no|partno|p\/?n/i, /model/i]);
+        var desc = row.desc || row.description ||
+          _rowValueByRegex(row, [/^description$/i, /\bdesc\b/i, /details?/i, /product/i]);
+        var brand = row.brand || row.manufacturer ||
+          _rowValueByRegex(row, [/^brand$/i, /manufacturer|maker|vendor|source/i]);
+        var pType = row.type || row.category ||
+          _rowValueByRegex(row, [/^type$/i, /category|group|class/i]);
+        var blob = _rowSearchBlob(row);
+        return {
+          _src:'parts',
+          title: partNo || desc || brand || row.name || 'Part Number Record',
+          res: [brand, pType, desc].filter(Boolean).join(' · ') || blob.slice(0, 1200),
+          cat:'Part Number',
+          partNo: String(partNo || ''),
+          desc: String(desc || ''),
+          brand: String(brand || ''),
+          searchBlob: blob
+        };
       });
     });
 
     // ── Contact Information
-    var ciPromise = _loadBundleRecords('contact_information', window.__studioCiRecords || [])
+    var ciPromise = _loadContactInformationRecords(window.__studioCiRecords || [])
       .then(function(ciData) {
         return _toArray(ciData).map(function(r) {
           var row = r && typeof r === 'object' ? r : {};
@@ -16969,6 +17093,9 @@
       .then(function(sources) {
         var merged = [];
         sources.forEach(function(s) { if (Array.isArray(s)) merged = merged.concat(s); });
+        window.__studioCpRecords = sources[1];
+        window.__studioPnRecords = sources[2];
+        window.__studioCiRecords = sources[3];
         _state.allRecords = merged;
         _state.loaded     = true;
         _state.loading    = false;
