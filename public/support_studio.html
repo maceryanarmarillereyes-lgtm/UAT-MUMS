@@ -15510,23 +15510,27 @@
     }
 
     body.innerHTML = html;
+    _haUpdateWizardActions();
+    backBtn.style.display = step > 1 ? '' : 'none';
+
+    var input = document.getElementById('ha-step-input');
+    if (input) {
+      setTimeout(function(){ try { input.focus(); } catch(_){} }, 10);
+      return;
+    }
+  }
+
+  function _haUpdateWizardActions() {
+    var nextBtn = document.getElementById('ha-next-btn');
+    var backBtn = document.getElementById('ha-back-btn');
+    if (!nextBtn || !backBtn) return;
+
+    var step = _haState.step;
     var isValid = _haIsStepValid(step);
     nextBtn.style.opacity = isValid ? '1' : '.5';
     nextBtn.style.pointerEvents = isValid ? 'auto' : 'none';
     nextBtn.innerHTML = step < 4 ? '<i class="fas fa-arrow-right"></i> Next' : '<i class="fas fa-check"></i> Create Now';
     backBtn.style.display = step > 1 ? '' : 'none';
-
-    var input = document.getElementById('ha-step-input');
-    if (input) {
-      input.addEventListener('input', function() {
-        if (step === 1) _haState.draft.label = input.value;
-        else if (step === 2) _haState.draft.link = input.value;
-        else if (step === 3) _haState.draft.icon = input.value;
-        else _haState.draft.description = input.value;
-        _haRenderWizard();
-      });
-      setTimeout(function(){ try { input.focus(); } catch(_){} }, 10);
-    }
   }
 
   function _haResetWizard() {
@@ -15622,7 +15626,22 @@
     var closeBtn = document.getElementById('home-apps-close-btn');
     if (closeBtn) closeBtn.addEventListener('click', _haCloseModal);
     var modal = document.getElementById('home-apps-modal');
-    if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) _haCloseModal(); });
+    if (modal) {
+      modal.addEventListener('click', function(e) {
+        // Keep modal open when clicking outside panel (requested behavior).
+        e.stopPropagation();
+      });
+    }
+
+    document.addEventListener('input', function(e) {
+      if (!e.target || e.target.id !== 'ha-step-input') return;
+      if (_haState.step === 1) _haState.draft.label = e.target.value;
+      else if (_haState.step === 2) _haState.draft.link = e.target.value;
+      else if (_haState.step === 3) _haState.draft.icon = e.target.value;
+      else _haState.draft.description = e.target.value;
+      _haRenderStepper();
+      _haUpdateWizardActions();
+    });
 
     var backBtn = document.getElementById('ha-back-btn');
     if (backBtn) backBtn.addEventListener('click', function() {
@@ -15640,9 +15659,7 @@
       }
     });
 
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && _haState.modalOpen) _haCloseModal();
-    });
+    // Escape close disabled by request: close only via explicit close button (x).
   }
 
   function _haInit() {
