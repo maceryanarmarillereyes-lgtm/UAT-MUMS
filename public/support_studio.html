@@ -16544,33 +16544,10 @@
     // ── Stats grid: large metric cards (no search) / compact (searching) ──
     var grid = el('se2-stats-grid');
     if (grid) {
-      if (hasQ) {
-        grid.classList.add('se2-compact');
-      } else {
-        grid.classList.remove('se2-compact');
-      }
-      grid.innerHTML = Object.keys(SOURCES).map(function(key) {
-        var src  = SOURCES[key];
-        var mi   = METRIC_ICONS[key] || { icon:'fa-circle', color:src.color, bg:'rgba(255,255,255,.06)', change:'' };
-        var n    = counts ? (counts[key]||0) : 0;
-        if (!_state.loaded) n = '—';
-        var isActive  = _state.activeCat === key;
-        var displayN  = (typeof n === 'number') ? n.toLocaleString() : String(n);
-        return '<div class="se2-stat-card' + (isActive ? ' active' : '') + '" data-src="' + esc(key) + '" style="color:' + mi.color + ';">' +
-          '<div class="se2-metric-header">' +
-            '<div class="se2-metric-icon" style="background:' + mi.bg + ';">' +
-              '<i class="fas ' + mi.icon + '" style="color:' + mi.color + ';font-size:15px;"></i>' +
-            '</div>' +
-            '<div class="se2-stat-lbl">' + esc(src.shortLabel || src.label) + '</div>' +
-          '</div>' +
-          '<div class="se2-stat-num" style="color:' + (isActive ? mi.color : '#f9fafb') + ';">' + displayN + '</div>' +
-          (mi.change ? '<div class="se2-metric-change"><span style="font-size:10px;">↑</span>' + esc(mi.change.replace('↑ ','')) + '</div>' : '') +
-          '</div>';
-      }).join('');
-      grid.onclick = function(e) {
-        var card = e.target.closest('.se2-stat-card');
-        if (card) window._se2FilterCat(card.getAttribute('data-src'));
-      };
+      // UX update: left sidebar already contains source result bars;
+      // remove center result cards to reduce visual noise.
+      grid.style.display = 'none';
+      grid.innerHTML = '';
     }
 
     // ── Left panel source chips: update counts + active state ──
@@ -16753,9 +16730,34 @@
     } else {
       var parsed = _normaliseQuery(query);
       var aiOn = parsed.tokens.length > parsed.original.split(' ').length;
-      s.innerHTML = 'Found <strong>' + results.length.toLocaleString() + '</strong> result' + (results.length !== 1 ? 's' : '') +
-        ' for <em style="color:#c9d1d9;">&quot;' + esc(parsed.original) + '&quot;</em>' +
-        (aiOn ? ' &nbsp;<span style="font-size:9px;padding:1px 7px;border-radius:5px;background:rgba(162,93,220,.12);color:#c084fc;border:1px solid rgba(162,93,220,.25);">Smart</span>' : '');
+      var primarySource = '';
+      var ranked = Object.keys(SOURCES).map(function(k) {
+        return { key: k, n: Number((_countsByCat(results)[k]) || 0) };
+      }).filter(function(x) { return x.n > 0; }).sort(function(a, b) { return b.n - a.n; });
+      if (ranked.length) {
+        var top = ranked[0];
+        var srcTop = SOURCES[top.key] || {};
+        primarySource = '<span style="font-size:10px;color:#9ca3af;">Top Source</span>' +
+          '<span style="font-size:12px;font-weight:800;color:' + esc(srcTop.color || '#c9d1d9') + ';">' +
+          esc(srcTop.shortLabel || srcTop.label || top.key) + ' · ' + top.n.toLocaleString() + '</span>';
+      } else {
+        primarySource = '<span style="font-size:10px;color:#9ca3af;">Top Source</span><span style="font-size:12px;font-weight:800;color:#c9d1d9;">—</span>';
+      }
+      s.innerHTML =
+        '<div style="display:grid;grid-template-columns:repeat(3,minmax(140px,1fr));gap:8px;align-items:stretch;">' +
+          '<div style="padding:8px 10px;border-radius:10px;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.24);display:flex;flex-direction:column;gap:2px;">' +
+            '<span style="font-size:10px;color:#7dd3fc;">Found</span>' +
+            '<span style="font-size:18px;font-weight:900;color:#e6edf3;line-height:1;">' + results.length.toLocaleString() + '</span>' +
+          '</div>' +
+          '<div style="padding:8px 10px;border-radius:10px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.24);display:flex;flex-direction:column;gap:2px;min-width:0;">' +
+            '<span style="font-size:10px;color:#a5b4fc;">Query</span>' +
+            '<span style="font-size:12px;font-weight:800;color:#e6edf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(parsed.original) + '</span>' +
+          '</div>' +
+          '<div style="padding:8px 10px;border-radius:10px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.24);display:flex;flex-direction:column;gap:2px;">' +
+            primarySource +
+          '</div>' +
+        '</div>' +
+        (aiOn ? '<div style="margin-top:6px;font-size:10px;color:#c084fc;">Smart query expansion active</div>' : '');
       var chip = el('se2-ai-chip');
       if (chip) chip.classList.toggle('on', aiOn);
     }
