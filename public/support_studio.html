@@ -5095,9 +5095,18 @@
                     <span class="se2-src-chip-icon" style="background:rgba(88,166,255,.12);color:#58a6ff;">
                       <i class="fas fa-bolt" style="font-size:10px;"></i>
                     </span>
-                    QuickBase
+                    QuickBase_S
                   </span>
                   <span class="se2-src-chip-count" id="se2-lp-qb">—</span>
+                </div>
+                <div class="se2-src-chip" data-src2="qbd" onclick="window._se2FilterCat('qbd')">
+                  <span class="se2-src-chip-left">
+                    <span class="se2-src-chip-icon" style="background:rgba(59,130,246,.12);color:#3b82f6;">
+                      <i class="fas fa-search" style="font-size:10px;"></i>
+                    </span>
+                    Deep Search
+                  </span>
+                  <span class="se2-src-chip-count" id="se2-lp-qbd">—</span>
                 </div>
                 <div class="se2-src-chip" data-src2="kb" onclick="window._se2FilterCat('kb')">
                   <span class="se2-src-chip-left">
@@ -5113,7 +5122,7 @@
                     <span class="se2-src-chip-icon" style="background:rgba(245,158,11,.12);color:#f59e0b;">
                       <i class="fas fa-barcode" style="font-size:10px;"></i>
                     </span>
-                    Parts Database
+                    Part Number
                   </span>
                   <span class="se2-src-chip-count" id="se2-lp-parts">—</span>
                 </div>
@@ -5122,7 +5131,7 @@
                     <span class="se2-src-chip-icon" style="background:rgba(167,139,250,.12);color:#a78bfa;">
                       <i class="fas fa-microchip" style="font-size:10px;"></i>
                     </span>
-                    Controllers
+                    Product Controllers
                   </span>
                   <span class="se2-src-chip-count" id="se2-lp-ctrl">—</span>
                 </div>
@@ -5140,7 +5149,7 @@
                     <span class="se2-src-chip-icon" style="background:rgba(139,92,246,.12);color:#8b5cf6;">
                       <i class="fas fa-address-book" style="font-size:10px;"></i>
                     </span>
-                    Contacts
+                    Contact Information
                   </span>
                   <span class="se2-src-chip-count" id="se2-lp-ci">—</span>
                 </div>
@@ -9936,6 +9945,7 @@
       if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
         // ✅ Serve from cache — instant, no network
         _state.all     = cached.data;
+        window.__studioCpRecords = Array.isArray(_state.all) ? _state.all.slice() : [];
         _state.loaded  = true;
         _state.loading = false;
         _buildFilterOptions();
@@ -10026,6 +10036,7 @@
           });
         }
         _state.all     = data;
+        window.__studioCpRecords = Array.isArray(data) ? data.slice() : [];
         _state.loaded  = true;
         _state.loading = false;
         _buildFilterOptions();
@@ -12425,6 +12436,7 @@
     _loading    = false;
     _initialized = true;
     _allData    = rows;
+    window.__studioPnRecords = Array.isArray(rows) ? rows.slice() : [];
 
     if (rows.length) {
       var firstRow = rows[0];
@@ -12908,6 +12920,7 @@
     _loading    = false;
     _initialized = true;
     _allData    = rows;
+    window.__studioCiRecords = Array.isArray(rows) ? rows.slice() : [];
 
     if (rows.length) {
       var firstRow = rows[0];
@@ -16074,14 +16087,14 @@
 
   // Source definitions
   var SOURCES = {
-    qb:    { label:'QuickBase Cases',    shortLabel:'QuickBase',  color:'#58a6ff', icon:'fa-link'         },
-    qbd:   { label:'Deep Search QB',     shortLabel:'Deep Search QB', color:'#3b82f6', icon:'fa-search' },
-    kb:    { label:'Knowledge Base',     shortLabel:'Knowledge',  color:'#10b981', icon:'fa-book'         },
-    parts: { label:'Parts',              shortLabel:'Parts',      color:'#f59e0b', icon:'fa-barcode'      },
-    ctrl:  { label:'Controllers',        shortLabel:'Controllers',color:'#a78bfa', icon:'fa-microchip'    },
-    net:   { label:'Connect+ / Net',     shortLabel:'Connect+',   color:'#22d3ee', icon:'fa-plug'         },
-    ci:    { label:'Contact Info',       shortLabel:'Contacts',   color:'#14b8a6', icon:'fa-address-book' },
-    sr:    { label:'Support Records',    shortLabel:'Support',    color:'#f43f5e', icon:'fa-book-open'    }
+    qb:    { label:'QuickBase_S',          shortLabel:'QuickBase_S',          color:'#58a6ff', icon:'fa-link'         },
+    qbd:   { label:'Deep Search',          shortLabel:'Deep Search',          color:'#3b82f6', icon:'fa-search'       },
+    kb:    { label:'Knowledge Base',       shortLabel:'Knowledge Base',       color:'#10b981', icon:'fa-book'         },
+    parts: { label:'Part Number',          shortLabel:'Part Number',          color:'#f59e0b', icon:'fa-barcode'      },
+    ctrl:  { label:'Product Controllers',  shortLabel:'Product Controllers',  color:'#a78bfa', icon:'fa-microchip'    },
+    net:   { label:'Connect+',             shortLabel:'Connect+',             color:'#22d3ee', icon:'fa-plug'         },
+    ci:    { label:'Contact Information',  shortLabel:'Contact Information',  color:'#14b8a6', icon:'fa-address-book' },
+    sr:    { label:'Support Records',      shortLabel:'Support Records',      color:'#f43f5e', icon:'fa-book-open'    }
   };
 
   var CAT_MAP = {
@@ -16290,6 +16303,109 @@
     return _fetchBundleApi(bundleId);
   }
 
+  function _rowValueByRegex(row, regexes) {
+    var obj = (row && typeof row === 'object') ? row : {};
+    var keys = Object.keys(obj);
+    for (var i = 0; i < regexes.length; i++) {
+      var rx = regexes[i];
+      var key = keys.find(function(k) { return rx.test(String(k || '')); });
+      if (key) {
+        var val = String(obj[key] || '').trim();
+        if (val) return val;
+      }
+    }
+    return '';
+  }
+
+  function _rowSearchBlob(row) {
+    var obj = (row && typeof row === 'object') ? row : {};
+    return Object.keys(obj).map(function(k) { return obj[k]; }).filter(function(v) {
+      return v != null && String(v).trim() !== '';
+    }).join(' · ');
+  }
+
+  function _parseSimpleCsvObjects(text) {
+    var rows = [];
+    var cur = '';
+    var inQ = false;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (ch === '"') {
+        if (inQ && text[i + 1] === '"') { cur += '"'; i++; continue; }
+        inQ = !inQ;
+        continue;
+      }
+      if (ch === '\n' && !inQ) { rows.push(cur); cur = ''; continue; }
+      if (ch === '\r' && !inQ) continue;
+      cur += ch;
+    }
+    if (cur) rows.push(cur);
+    if (!rows.length) return [];
+
+    function parseLine(line) {
+      var out = [];
+      var cell = '';
+      var q = false;
+      for (var j = 0; j < line.length; j++) {
+        var c = line[j];
+        if (c === '"') {
+          if (q && line[j + 1] === '"') { cell += '"'; j++; }
+          else q = !q;
+        } else if (c === ',' && !q) {
+          out.push(cell.trim());
+          cell = '';
+        } else {
+          cell += c;
+        }
+      }
+      out.push(cell.trim());
+      return out;
+    }
+
+    var header = parseLine(rows[0]);
+    var mapped = [];
+    for (var r = 1; r < rows.length; r++) {
+      var line = rows[r];
+      if (!line || !line.trim()) continue;
+      var cols = parseLine(line);
+      var obj = {};
+      for (var h = 0; h < header.length; h++) obj[header[h]] = cols[h] || '';
+      mapped.push(obj);
+    }
+    return mapped;
+  }
+
+  function _loadContactInformationRecords(seedRecords) {
+    var seeded = _toArray(seedRecords);
+    if (seeded.length) return Promise.resolve(seeded);
+    var cachePromise = (window.StudioCache && typeof window.StudioCache.getBundle === 'function')
+      ? window.StudioCache.getBundle('contact_information')
+          .then(function(row) { return _extractBundleData(row); })
+          .catch(function() { return []; })
+      : Promise.resolve([]);
+
+    return cachePromise.then(function(fromCache) {
+      if (Array.isArray(fromCache) && fromCache.length) return fromCache;
+      var csvUrl = String(window._ctiCsvUrl || '').trim();
+      if (!csvUrl) {
+        try {
+          var raw = localStorage.getItem('ss_contact_information_settings');
+          if (raw) {
+            var cfg = JSON.parse(raw);
+            csvUrl = String((cfg && cfg.csvUrl) || '').trim();
+          }
+        } catch (_) {}
+      }
+      if (!csvUrl) return [];
+      return fetch(csvUrl, { cache: 'no-store' })
+        .then(function(resp) {
+          return resp.ok ? resp.text() : Promise.reject(new Error('contact_csv_http_' + resp.status));
+        })
+        .then(function(text) { return _parseSimpleCsvObjects(text); })
+        .catch(function() { return []; });
+    });
+  }
+
   function _mapGenericRecords(records, src, cat) {
     return _toArray(records).map(function(r) {
       var keys = Object.keys(r || {});
@@ -16428,37 +16544,14 @@
     // ── Stats grid: large metric cards (no search) / compact (searching) ──
     var grid = el('se2-stats-grid');
     if (grid) {
-      if (hasQ) {
-        grid.classList.add('se2-compact');
-      } else {
-        grid.classList.remove('se2-compact');
-      }
-      grid.innerHTML = Object.keys(SOURCES).map(function(key) {
-        var src  = SOURCES[key];
-        var mi   = METRIC_ICONS[key] || { icon:'fa-circle', color:src.color, bg:'rgba(255,255,255,.06)', change:'' };
-        var n    = counts ? (counts[key]||0) : 0;
-        if (!_state.loaded) n = '—';
-        var isActive  = _state.activeCat === key;
-        var displayN  = (typeof n === 'number') ? n.toLocaleString() : String(n);
-        return '<div class="se2-stat-card' + (isActive ? ' active' : '') + '" data-src="' + esc(key) + '" style="color:' + mi.color + ';">' +
-          '<div class="se2-metric-header">' +
-            '<div class="se2-metric-icon" style="background:' + mi.bg + ';">' +
-              '<i class="fas ' + mi.icon + '" style="color:' + mi.color + ';font-size:15px;"></i>' +
-            '</div>' +
-            '<div class="se2-stat-lbl">' + esc(src.shortLabel || src.label) + '</div>' +
-          '</div>' +
-          '<div class="se2-stat-num" style="color:' + (isActive ? mi.color : '#f9fafb') + ';">' + displayN + '</div>' +
-          (mi.change ? '<div class="se2-metric-change"><span style="font-size:10px;">↑</span>' + esc(mi.change.replace('↑ ','')) + '</div>' : '') +
-          '</div>';
-      }).join('');
-      grid.onclick = function(e) {
-        var card = e.target.closest('.se2-stat-card');
-        if (card) window._se2FilterCat(card.getAttribute('data-src'));
-      };
+      // UX update: left sidebar already contains source result bars;
+      // remove center result cards to reduce visual noise.
+      grid.style.display = 'none';
+      grid.innerHTML = '';
     }
 
     // ── Left panel source chips: update counts + active state ──
-    var srcIds = { qb:'qb', kb:'kb', parts:'parts', ctrl:'ctrl', net:'net', ci:'ci', sr:'sr' };
+    var srcIds = { qb:'qb', qbd:'qbd', kb:'kb', parts:'parts', ctrl:'ctrl', net:'net', ci:'ci', sr:'sr' };
     Object.keys(srcIds).forEach(function(key) {
       var countEl = el('se2-lp-' + key);
       if (countEl) {
@@ -16476,6 +16569,33 @@
       var isActive2 = (s2 === 'all' && !_state.activeCat) || (s2 === _state.activeCat);
       chip.classList.toggle('active', !!isActive2);
     });
+
+    // Auto-sort Data Source chips when searching: highest counts first.
+    var srcWrap = el('se2-lp-sources');
+    if (srcWrap) {
+      var allChip = srcWrap.querySelector('.se2-src-chip[data-src2="all"]');
+      var chips = Array.from(srcWrap.querySelectorAll('.se2-src-chip')).filter(function(chip) {
+        return chip.getAttribute('data-src2') !== 'all';
+      });
+      var defaultOrder = ['qb','qbd','kb','parts','ctrl','net','ci','sr'];
+      chips.sort(function(a, b) {
+        var ak = a.getAttribute('data-src2') || '';
+        var bk = b.getAttribute('data-src2') || '';
+        if (hasQ) {
+          var ac = Number((counts && counts[ak]) || 0);
+          var bc = Number((counts && counts[bk]) || 0);
+          if (_state.activeCat && ak === _state.activeCat && bk !== _state.activeCat) return -1;
+          if (_state.activeCat && bk === _state.activeCat && ak !== _state.activeCat) return 1;
+          if (bc !== ac) return bc - ac;
+          var al = (SOURCES[ak] && (SOURCES[ak].shortLabel || SOURCES[ak].label)) || ak;
+          var bl = (SOURCES[bk] && (SOURCES[bk].shortLabel || SOURCES[bk].label)) || bk;
+          return String(al).localeCompare(String(bl));
+        }
+        return defaultOrder.indexOf(ak) - defaultOrder.indexOf(bk);
+      });
+      chips.forEach(function(chip) { srcWrap.appendChild(chip); });
+      if (allChip) srcWrap.insertBefore(allChip, srcWrap.firstChild);
+    }
 
     // ── Hero section: show/hide + update count ──
     var hero = el('se2-hero');
@@ -16610,12 +16730,59 @@
     } else {
       var parsed = _normaliseQuery(query);
       var aiOn = parsed.tokens.length > parsed.original.split(' ').length;
-      s.innerHTML = 'Found <strong>' + results.length.toLocaleString() + '</strong> result' + (results.length !== 1 ? 's' : '') +
-        ' for <em style="color:#c9d1d9;">&quot;' + esc(parsed.original) + '&quot;</em>' +
-        (aiOn ? ' &nbsp;<span style="font-size:9px;padding:1px 7px;border-radius:5px;background:rgba(162,93,220,.12);color:#c084fc;border:1px solid rgba(162,93,220,.25);">Smart</span>' : '');
+      var primarySource = '';
+      var ranked = Object.keys(SOURCES).map(function(k) {
+        return { key: k, n: Number((_countsByCat(results)[k]) || 0) };
+      }).filter(function(x) { return x.n > 0; }).sort(function(a, b) { return b.n - a.n; });
+      if (ranked.length) {
+        var top = ranked[0];
+        var srcTop = SOURCES[top.key] || {};
+        primarySource = '<span style="font-size:10px;color:#9ca3af;">Top Source</span>' +
+          '<span style="font-size:12px;font-weight:800;color:' + esc(srcTop.color || '#c9d1d9') + ';">' +
+          esc(srcTop.shortLabel || srcTop.label || top.key) + ' · ' + top.n.toLocaleString() + '</span>';
+      } else {
+        primarySource = '<span style="font-size:10px;color:#9ca3af;">Top Source</span><span style="font-size:12px;font-weight:800;color:#c9d1d9;">—</span>';
+      }
+      s.innerHTML =
+        '<div style="display:grid;grid-template-columns:repeat(3,minmax(140px,1fr));gap:8px;align-items:stretch;">' +
+          '<div style="padding:8px 10px;border-radius:10px;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.24);display:flex;flex-direction:column;gap:2px;">' +
+            '<span style="font-size:10px;color:#7dd3fc;">Found</span>' +
+            '<span style="font-size:18px;font-weight:900;color:#e6edf3;line-height:1;">' + results.length.toLocaleString() + '</span>' +
+          '</div>' +
+          '<div style="padding:8px 10px;border-radius:10px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.24);display:flex;flex-direction:column;gap:2px;min-width:0;">' +
+            '<span style="font-size:10px;color:#a5b4fc;">Query</span>' +
+            '<span style="font-size:12px;font-weight:800;color:#e6edf3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(parsed.original) + '</span>' +
+          '</div>' +
+          '<div style="padding:8px 10px;border-radius:10px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.24);display:flex;flex-direction:column;gap:2px;">' +
+            primarySource +
+          '</div>' +
+        '</div>' +
+        (aiOn ? '<div style="margin-top:6px;font-size:10px;color:#c084fc;">Smart query expansion active</div>' : '');
       var chip = el('se2-ai-chip');
       if (chip) chip.classList.toggle('on', aiOn);
     }
+  }
+
+  function _renderLoadingWidget(msg) {
+    var body = el('se2-body');
+    if (!body) return;
+    var label = esc(msg || 'Loading all data sources…');
+    body.innerHTML =
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:260px;gap:16px;text-align:center;">' +
+        '<div style="position:relative;width:76px;height:76px;border-radius:50%;border:1px solid rgba(6,182,212,.25);background:radial-gradient(circle at 30% 30%, rgba(6,182,212,.22), rgba(6,182,212,.04));display:grid;place-items:center;box-shadow:0 0 0 8px rgba(6,182,212,.05),0 0 40px rgba(59,130,246,.18);">' +
+          '<div class="se2-spin" style="width:24px;height:24px;border:2px solid rgba(6,182,212,.25);border-top-color:#22d3ee;border-radius:50%;"></div>' +
+        '</div>' +
+        '<div style="font-size:13px;font-weight:700;color:#7dd3fc;letter-spacing:.01em;">' + label + '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(4,minmax(90px,1fr));gap:8px;width:min(620px,92%);">' +
+          Object.keys(SOURCES).map(function(key) {
+            var src = SOURCES[key] || {};
+            return '<div style="padding:7px 8px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+              '<span style="font-size:10px;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(src.shortLabel || src.label || key) + '</span>' +
+              '<span style="width:7px;height:7px;border-radius:50%;background:' + esc(src.color || '#22d3ee') + ';box-shadow:0 0 0 4px rgba(34,211,238,.14);animation:se2pulse 1.4s ease-in-out infinite;"></span>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>';
   }
 
   // ── Main run ───────────────────────────────────────────────────────────────
@@ -16630,9 +16797,7 @@
       // FIX BUG 3: store pending query so _loadData.then() will run it
       if (q) _state.pendingQuery = q;
       var bodyEl = el('se2-body');
-      if (bodyEl && !bodyEl.querySelector('.se2-spin')) {
-        bodyEl.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:#7d8590;font-size:12px;"><div class="se2-spin"></div><span>Loading data sources…</span></div>';
-      }
+      _renderLoadingWidget('Gathering source data…');
       _renderSummary([], '');
       return;
     }
@@ -16800,19 +16965,43 @@
 
     var token = _sessionToken();
     var headers = token ? { Authorization: 'Bearer ' + token } : {};
-    var p = fetch('/api/studio/qb_search?skip=0&top=10000', { headers: headers })
-      .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('qb_search_http_' + r.status)); })
-      .then(function(j) {
-        if (!j || !j.ok) throw new Error((j && (j.error || j.message)) || 'qb_search_failed');
-        var rows = Array.isArray(j.records) ? j.records : [];
-        var columns = Array.isArray(j.columns) ? j.columns : [];
-        var globalColumnMap = j.columnMap && typeof j.columnMap === 'object' ? j.columnMap : {};
+    var pageSize = 2000;
+    var maxRows = 30000;
+    var latestColumnMap = {};
+    var latestColumns = [];
 
+    function fetchPage(skip, acc) {
+      return fetch('/api/studio/qb_search?skip=' + skip + '&top=' + pageSize, { headers: headers })
+        .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('qb_search_http_' + r.status)); })
+        .then(function(j) {
+          if (!j || !j.ok) throw new Error((j && (j.error || j.message)) || 'qb_search_failed');
+          var rows = Array.isArray(j.records) ? j.records : [];
+          if (j.columnMap && typeof j.columnMap === 'object') latestColumnMap = j.columnMap;
+          if (Array.isArray(j.columns)) latestColumns = j.columns;
+
+          var merged = acc.concat(rows);
+          if (merged.length > maxRows) merged = merged.slice(0, maxRows);
+
+          var total = Number(j.total || 0);
+          var hasMoreByPage = rows.length >= pageSize;
+          var hasMoreByTotal = total > 0 ? merged.length < Math.min(total, maxRows) : hasMoreByPage;
+          if (hasMoreByPage && hasMoreByTotal && merged.length < maxRows) {
+            return fetchPage(skip + rows.length, merged);
+          }
+          return merged;
+        });
+    }
+
+    var p = fetchPage(0, [])
+      .then(function(rows) {
         // Keep existing globals synced so other Search Studio flows can reuse them.
         window.__studioQbRecords = rows;
-        window.__studioQbColumns = columns;
+        window.__studioQbColumns = latestColumns;
+        window.__studioQbDeepRecords = rows;
+        window.__studioQbDeepColumns = latestColumns;
 
-        var mapped = _mapQbRowsToSe2(rows, globalColumnMap);
+        // Deep source must be isolated as qbd for SE2 Data Source filters.
+        var mapped = _mapQbRowsToSe2(rows, latestColumnMap, 'qbd');
 
         window.__se2QbCache = mapped;
         window.__se2QbPromise = null;
@@ -16894,17 +17083,14 @@
     _renderSummary([], ''); // show "Loading data sources…"
 
     var body = el('se2-body');
-    if (body && !body.querySelector('.se2-spin')) {
-      body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:14px;color:#7d8590;font-size:12px;">' +
-        '<div class="se2-spin"></div><span>Loading all data sources…</span></div>';
-    }
+    _renderLoadingWidget('Loading all data sources…');
 
     // ── KB JSON — use shared promise to prevent duplicate fetches (FIX BUG 4)
     var kbPromise;
     if (window.__se2KbLoaded && Array.isArray(window.__se2KbCache) && window.__se2KbCache.length > 0) {
       kbPromise = Promise.resolve(window.__se2KbCache);
     } else if (Array.isArray(window.__studioSrRecords) && window.__studioSrRecords.length > 0) {
-      kbPromise = Promise.resolve(_mapSupportRecords(window.__studioSrRecords));
+      kbPromise = Promise.resolve(_mapSupportRecords(window.__studioSrRecords, 'sr'));
     } else if (window.__se2KbPromise) {
       // Pre-load already in-flight — reuse it instead of re-fetching
       kbPromise = window.__se2KbPromise;
@@ -16926,14 +17112,31 @@
     var pnPromise = _loadBundleRecords('parts_number', window.__se2PartsData || window.__studioPnRecords)
       .then(function(pnData) {
       return _toArray(pnData).map(function(r) {
-        return { _src:'parts', title:r.partNo||r.name||r.part_number||'',
-          res:r.desc||r.description||'', cat:'Parts',
-          partNo:r.partNo||r.part_number, desc:r.desc||r.description, brand:r.brand||r.manufacturer };
+        var row = r && typeof r === 'object' ? r : {};
+        var partNo = row.partNo || row.part_number || row.partnumber ||
+          _rowValueByRegex(row, [/^part\s*number$/i, /part\s*#|part\s*no|partno|p\/?n/i, /model/i]);
+        var desc = row.desc || row.description ||
+          _rowValueByRegex(row, [/^description$/i, /\bdesc\b/i, /details?/i, /product/i]);
+        var brand = row.brand || row.manufacturer ||
+          _rowValueByRegex(row, [/^brand$/i, /manufacturer|maker|vendor|source/i]);
+        var pType = row.type || row.category ||
+          _rowValueByRegex(row, [/^type$/i, /category|group|class/i]);
+        var blob = _rowSearchBlob(row);
+        return {
+          _src:'parts',
+          title: partNo || desc || brand || row.name || 'Part Number Record',
+          res: [brand, pType, desc].filter(Boolean).join(' · ') || blob.slice(0, 1200),
+          cat:'Part Number',
+          partNo: String(partNo || ''),
+          desc: String(desc || ''),
+          brand: String(brand || ''),
+          searchBlob: blob
+        };
       });
     });
 
     // ── Contact Information
-    var ciPromise = _loadBundleRecords('contact_information', window.__studioCiRecords || [])
+    var ciPromise = _loadContactInformationRecords(window.__studioCiRecords || [])
       .then(function(ciData) {
         return _toArray(ciData).map(function(r) {
           var row = r && typeof r === 'object' ? r : {};
@@ -16969,6 +17172,9 @@
       .then(function(sources) {
         var merged = [];
         sources.forEach(function(s) { if (Array.isArray(s)) merged = merged.concat(s); });
+        window.__studioCpRecords = sources[1];
+        window.__studioPnRecords = sources[2];
+        window.__studioCiRecords = sources[3];
         _state.allRecords = merged;
         _state.loaded     = true;
         _state.loading    = false;
@@ -17043,7 +17249,7 @@
       .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
       .then(function(j) {
         var flat = Array.isArray(j.flat) ? j.flat : (Array.isArray(j) ? j : []);
-        var mapped = _mapSupportRecords(flat, 'kb');
+        var mapped = _mapSupportRecords(flat, 'sr');
         window.__studioSrRecords = flat;
         window.__se2KbCache  = mapped;
         window.__se2KbLoaded = true;
@@ -17052,7 +17258,7 @@
       })
       .catch(function(err) {
         console.warn('[SE2] KB JSON load failed:', err.message);
-        var fallback = _mapSupportRecords(window.__studioSrRecords || [], 'kb');
+        var fallback = _mapSupportRecords(window.__studioSrRecords || [], 'sr');
         window.__se2KbCache  = fallback;
         window.__se2KbLoaded = false;
         window.__se2KbPromise = null;
