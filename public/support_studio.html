@@ -656,6 +656,8 @@
     /* ── PANELS AREA ── */
     .home-panels-area {
       flex: 1; overflow: hidden; padding: 12px;
+      display: flex;
+      flex-direction: column;
     }
     .home-panels-area::-webkit-scrollbar { width: 3px; }
     .home-panels-area::-webkit-scrollbar-track { background: transparent; }
@@ -685,11 +687,14 @@
 
     /* panel cards */
     .hp-grid {
+      flex: 1;
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-rows: auto auto minmax(0, 1fr);
       gap: 10px;
+      min-height: 0;
     }
-    .hp-grid > .hp-card { grid-column: span 2; min-width: 0; }
+    .hp-grid > .hp-card { grid-column: span 2; min-width: 0; min-height: 0; }
     /* First row (ODP + Oncall) — equal height, fill each other */
     .hp-grid > .hp-card:nth-child(1),
     .hp-grid > .hp-card:nth-child(2) {
@@ -719,9 +724,8 @@
     .hp-empty span { font-size: 10px; color: rgba(255,255,255,.18); }
     #hp-controller-testing-lab-card,
     #hp-connect-credential-card {
-      height: calc(100vh - 460px);
-      height: calc(100dvh - 460px);
-      min-height: 260px;
+      height: auto;
+      min-height: 0;
     }
     #hp-controller-testing-lab-card { grid-column: span 3; }
     #hp-connect-credential-card { grid-column: span 1; }
