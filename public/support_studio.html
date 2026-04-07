@@ -794,6 +794,25 @@
     }
     .ha-step-chip.active { color: #79c0ff; border-color: rgba(88,166,255,.35); background: rgba(88,166,255,.14); }
     .ha-step-chip.done { color: #3fb950; border-color: rgba(63,185,80,.35); background: rgba(63,185,80,.12); }
+    @keyframes haBlinkPulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(245,158,11,.25); }
+      50% { opacity: .72; box-shadow: 0 0 0 5px rgba(245,158,11,.08); }
+    }
+    .ha-upload-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(245,158,11,.45);
+      background: rgba(245,158,11,.14);
+      color: #fbbf24 !important;
+      font-weight: 800 !important;
+      text-decoration: none !important;
+      animation: haBlinkPulse 1s ease-in-out infinite;
+    }
+    .ha-upload-link:hover { background: rgba(245,158,11,.22); color: #fcd34d !important; }
+    .ha-upload-arrows { color: #fb7185; font-weight: 900; letter-spacing: .04em; }
 
     /* ── Oneday Password Card — Premium v2 ─────────────────── */
     .hp-odp-grid {
@@ -15502,7 +15521,9 @@
       html = '<div style="font-size:10px;font-weight:800;color:#79c0ff;letter-spacing:.06em;margin-bottom:6px;">3. Application Icon Link <span style="color:#f85149;">(Required)</span></div>' +
              '<input id="ha-step-input" dir="ltr" class="odp-input" style="height:36px;text-align:left;direction:ltr;unicode-bidi:plaintext;" value="' + _haEsc(_haState.draft.icon) + '" placeholder="https://..." />' +
              '<div style="margin-top:8px;font-size:10px;color:var(--ss-muted);">' +
-             '<a href="' + _haEsc(ICON_UPLOAD_REPO_URL) + '" target="_blank" rel="noopener noreferrer" style="color:#79c0ff;font-weight:700;text-decoration:none;">Upload here the image and copy the link</a>' +
+             '<a href="' + _haEsc(ICON_UPLOAD_REPO_URL) + '" target="_blank" rel="noopener noreferrer" class="ha-upload-link">' +
+             '<span class="ha-upload-arrows">⇢⇢</span> Upload here the image and copy the link <span class="ha-upload-arrows">⇢⇢</span>' +
+             '</a>' +
              '</div>';
     } else {
       html = '<div style="font-size:10px;font-weight:800;color:#79c0ff;letter-spacing:.06em;margin-bottom:6px;">4. Short Description <span style="color:#f85149;">(Required)</span></div>' +
