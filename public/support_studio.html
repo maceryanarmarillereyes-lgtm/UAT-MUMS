@@ -830,6 +830,7 @@
 
     /* ── Controller Testing Lab Widget ───────────────────────────────────── */
     #hp-controller-testing-lab-card .hp-card-head { position: relative; }
+<<<<<<< Updated upstream
     .hp-ctl-config-btn {
       margin-left: auto;
       width: 24px;
@@ -987,6 +988,422 @@
       font-weight: 700;
     }
     .hp-ctl-chip .hp-ctl-settings-btn { padding: 4px 10px; font-size: 9px; }
+=======
+    /* ═══════════════════════════════════════════════════════════
+       CONTROLLER TESTING LAB — Premium Enterprise UI v2
+       Dark glass aesthetic, horizontal config list, vertical lab display
+    ═══════════════════════════════════════════════════════════ */
+
+    /* ── Gear icon button ── */
+    .hp-ctl-config-btn {
+      margin-left: auto;
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      border: 1px solid rgba(162,93,220,.28);
+      background: rgba(162,93,220,.08);
+      color: #c084fc;
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all .2s ease; flex-shrink: 0;
+    }
+    .hp-ctl-config-btn:hover {
+      color: #e9d5ff;
+      border-color: rgba(162,93,220,.55);
+      background: rgba(162,93,220,.18);
+      transform: rotate(45deg);
+      box-shadow: 0 0 10px rgba(162,93,220,.3);
+    }
+
+    /* ── Main lab display area — vertical columns ── */
+    .hp-ctl-list {
+      height: 100%;
+      display: flex;
+      flex-direction: row;       /* horizontal scroll of vertical columns */
+      gap: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      background: linear-gradient(135deg, rgba(10,15,28,.95), rgba(15,22,40,.98));
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 12px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(162,93,220,.25) transparent;
+    }
+    .hp-ctl-list::-webkit-scrollbar { height: 3px; }
+    .hp-ctl-list::-webkit-scrollbar-thumb { background: rgba(162,93,220,.3); border-radius: 99px; }
+
+    /* ── Empty state ── */
+    .hp-ctl-empty {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; color: rgba(255,255,255,.22); font-size: 11px;
+      min-height: 120px;
+    }
+    .hp-ctl-empty i { font-size: 26px; opacity: .35; }
+    .hp-ctl-empty span { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+
+    /* ── Vertical column = one controller ── */
+    .hp-ctl-col {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: flex-start;
+      padding: 14px 12px 12px;
+      min-width: 160px; flex-shrink: 0;
+      border-right: 1px solid rgba(255,255,255,.07);
+      position: relative; gap: 10px;
+      transition: background .2s;
+    }
+    .hp-ctl-col:last-child { border-right: none; }
+    .hp-ctl-col:hover { background: rgba(255,255,255,.02); }
+
+    /* Controller type badge at top */
+    .hp-ctl-col-badge {
+      font-size: 8px; font-weight: 800; letter-spacing: .1em;
+      text-transform: uppercase; padding: 2px 8px; border-radius: 99px;
+      background: rgba(162,93,220,.12); border: 1px solid rgba(162,93,220,.25);
+      color: #c084fc; align-self: stretch; text-align: center;
+    }
+
+    /* Widget image inside column */
+    .hp-ctl-col-img {
+      width: 90px; height: 90px;
+      object-fit: contain;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.1);
+      background: rgba(255,255,255,.04);
+      padding: 6px;
+      flex-shrink: 0;
+    }
+
+    /* Name and IP in column */
+    .hp-ctl-col-meta {
+      width: 100%; display: flex; flex-direction: column; gap: 3px; align-items: center;
+    }
+    .hp-ctl-col-name {
+      font-size: 11px; font-weight: 800; color: #e2e8f0;
+      letter-spacing: .03em; text-align: center;
+    }
+    .hp-ctl-col-ip {
+      font-size: 9px; color: rgba(255,255,255,.38);
+      font-family: 'JetBrains Mono', monospace; text-align: center;
+    }
+
+    /* Status pill in column */
+    .hp-ctl-col-status {
+      font-size: 9px; font-weight: 800; letter-spacing: .08em;
+      text-transform: uppercase; padding: 3px 10px; border-radius: 99px;
+      background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.25);
+      color: #10b981; white-space: nowrap;
+    }
+    .hp-ctl-col-status.offline  { background: rgba(248,81,73,.1); border-color: rgba(248,81,73,.25); color: #f85149; }
+    .hp-ctl-col-status.maintenance { background: rgba(251,191,36,.1); border-color: rgba(251,191,36,.25); color: #fbbf24; }
+
+    /* Settings button at bottom of column */
+    .hp-ctl-col-settings {
+      margin-top: auto;
+      width: 100%;
+      border: 1px solid rgba(88,166,255,.3);
+      background: rgba(88,166,255,.08);
+      color: #79c0ff;
+      border-radius: 8px;
+      padding: 6px 0;
+      font-size: 10px; font-weight: 800;
+      cursor: pointer; letter-spacing: .04em;
+      transition: all .18s;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .hp-ctl-col-settings:hover {
+      background: rgba(88,166,255,.18);
+      border-color: rgba(88,166,255,.55);
+      color: #b3d9ff;
+      box-shadow: 0 0 12px rgba(88,166,255,.15);
+    }
+
+    /* ── Horizontal list in Config modal ── */
+    .hp-ctl-chip-row {
+      display: flex; flex-direction: column;
+      gap: 0; overflow-y: auto; max-height: 220px;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 10px;
+      background: rgba(0,0,0,.2);
+    }
+    .hp-ctl-chip {
+      display: grid;
+      grid-template-columns: 38px 1fr auto auto;
+      align-items: center; gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      transition: background .15s; position: relative;
+    }
+    .hp-ctl-chip:last-child { border-bottom: none; }
+    .hp-ctl-chip:hover { background: rgba(255,255,255,.03); }
+    .hp-ctl-chip-img {
+      width: 34px; height: 34px; object-fit: contain;
+      border-radius: 7px; border: 1px solid rgba(255,255,255,.1);
+      background: rgba(255,255,255,.04); padding: 3px;
+    }
+    .hp-ctl-chip-meta { min-width: 0; }
+    .hp-ctl-chip-name { font-size: 11px; font-weight: 800; color: #e2e8f0; }
+    .hp-ctl-chip-ip   { font-size: 9px; color: rgba(255,255,255,.38); font-family: monospace; margin-top: 2px; }
+    .hp-ctl-chip-status {
+      font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 99px;
+      background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.25); color: #10b981;
+    }
+    .hp-ctl-chip-status.offline     { background: rgba(248,81,73,.1); border-color: rgba(248,81,73,.25); color: #f85149; }
+    .hp-ctl-chip-status.maintenance { background: rgba(251,191,36,.1); border-color: rgba(251,191,36,.25); color: #fbbf24; }
+    .hp-ctl-chip .hp-ctl-settings-btn { padding: 5px 12px; font-size: 9px; }
+
+    /* ── Settings btn (shared) ── */
+    .hp-ctl-settings-btn {
+      border: 1px solid rgba(88,166,255,.35);
+      background: rgba(88,166,255,.1);
+      color: #79c0ff;
+      border-radius: 7px;
+      padding: 5px 14px;
+      font-size: 10px; font-weight: 800;
+      cursor: pointer; white-space: nowrap;
+      transition: all .15s;
+    }
+    .hp-ctl-settings-btn:hover {
+      background: rgba(88,166,255,.2);
+      border-color: rgba(88,166,255,.6);
+      color: #b3d9ff;
+    }
+
+    /* ── Modal overlay ── */
+    .hp-ctl-modal {
+      position: fixed; inset: 0; z-index: 9950;
+      display: none; align-items: center; justify-content: center;
+      background: rgba(2,6,23,.75);
+      backdrop-filter: blur(8px); padding: 16px;
+    }
+    .hp-ctl-modal.open { display: flex; }
+
+    /* ── Config dialog (main modal) ── */
+    .hp-ctl-dialog {
+      width: min(640px, 95vw);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 16px;
+      background: linear-gradient(145deg, #0f172a 0%, #1a2035 100%);
+      box-shadow: 0 40px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06);
+      overflow: hidden;
+      animation: ctlModalIn .22s cubic-bezier(.34,1.56,.64,1);
+    }
+    @keyframes ctlModalIn {
+      from { opacity:0; transform: scale(.93) translateY(12px); }
+      to   { opacity:1; transform: scale(1)  translateY(0); }
+    }
+    .hp-ctl-dialog-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 14px 18px;
+      background: linear-gradient(90deg, rgba(162,93,220,.1), rgba(88,166,255,.06));
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .hp-ctl-dialog-title {
+      font-size: 13px; font-weight: 900; color: #f1f5f9;
+      letter-spacing: .02em; display: flex; align-items: center; gap: 8px;
+    }
+    .hp-ctl-dialog-title::before {
+      content: '⚙';
+      font-size: 14px; opacity: .7;
+    }
+
+    /* Add Controller button */
+    .hp-ctl-add-btn {
+      border: 1px solid rgba(162,93,220,.45);
+      background: linear-gradient(135deg, rgba(162,93,220,.25), rgba(88,166,255,.15));
+      color: #e9d5ff;
+      border-radius: 8px; padding: 6px 14px;
+      font-size: 11px; font-weight: 800; letter-spacing: .04em;
+      cursor: pointer; transition: all .18s;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .hp-ctl-add-btn:hover {
+      background: linear-gradient(135deg, rgba(162,93,220,.4), rgba(88,166,255,.25));
+      border-color: rgba(162,93,220,.7);
+      box-shadow: 0 0 18px rgba(162,93,220,.25);
+    }
+
+    /* Dialog body */
+    .hp-ctl-dialog-body { padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* Top row: dropdown + preview side by side */
+    .hp-ctl-top-row {
+      display: grid; grid-template-columns: 1fr 200px; gap: 16px; align-items: start;
+    }
+
+    /* Left: selector + label */
+    .hp-ctl-select-section { display: flex; flex-direction: column; gap: 6px; }
+    .hp-ctl-select-label {
+      font-size: 9px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .1em; color: rgba(255,255,255,.4);
+    }
+    .hp-ctl-select {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 10px;
+      background: rgba(0,0,0,.35);
+      padding: 10px 14px;
+      font-weight: 700; font-size: 13px;
+      color: #f1f5f9;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      cursor: pointer;
+      transition: border-color .2s;
+    }
+    .hp-ctl-select:focus {
+      outline: none;
+      border-color: rgba(162,93,220,.6);
+      box-shadow: 0 0 0 3px rgba(162,93,220,.12);
+    }
+    .hp-ctl-select option { background: #1a2035; color: #f1f5f9; }
+
+    /* Right: preview panel */
+    .hp-ctl-preview {
+      width: 200px; flex-shrink: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 12px; padding: 18px 14px;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 12px;
+      position: relative; overflow: hidden;
+    }
+    .hp-ctl-preview::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(circle at 50% 30%, rgba(162,93,220,.08), transparent 70%);
+      pointer-events: none;
+    }
+    .hp-ctl-preview img {
+      width: 100px; height: 100px;
+      object-fit: contain;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.04);
+      padding: 8px;
+      transition: transform .3s ease;
+    }
+    .hp-ctl-preview:hover img { transform: scale(1.04); }
+    #hp-ctl-add-now-btn {
+      width: 100%;
+      border: 1px solid rgba(162,93,220,.5);
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      color: #fff;
+      border-radius: 9px; padding: 9px 0;
+      font-size: 11px; font-weight: 900; letter-spacing: .06em;
+      cursor: pointer; transition: all .2s;
+      box-shadow: 0 4px 15px rgba(124,58,237,.3);
+    }
+    #hp-ctl-add-now-btn:hover {
+      background: linear-gradient(135deg, #8b5cf6, #6366f1);
+      box-shadow: 0 6px 22px rgba(124,58,237,.45);
+      transform: translateY(-1px);
+    }
+
+    /* Horizontal controller list header */
+    .hp-ctl-list-header {
+      font-size: 9px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .1em; color: rgba(255,255,255,.35);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .hp-ctl-list-header::after {
+      content: ''; flex: 1; height: 1px;
+      background: rgba(255,255,255,.07);
+    }
+
+    /* Settings modal (dark) */
+    #hp-ctl-settings-modal .hp-ctl-dialog {
+      width: min(440px, 95vw);
+      background: linear-gradient(145deg, #0f172a 0%, #131e35 100%);
+    }
+    #hp-ctl-settings-modal .hp-ctl-dialog-head {
+      background: linear-gradient(90deg, rgba(88,166,255,.1), rgba(34,211,238,.06));
+    }
+    #hp-ctl-settings-modal .hp-ctl-dialog-title { color: #f8fafc; }
+    #hp-ctl-settings-modal .hp-ctl-dialog-title::before { content: '⚡'; }
+
+    .hp-ctl-settings-field {
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .hp-ctl-settings-field label {
+      font-size: 9px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .1em; color: rgba(255,255,255,.4);
+    }
+    .hp-ctl-settings-input {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 9px;
+      background: rgba(0,0,0,.4);
+      color: #e2e8f0;
+      padding: 10px 13px;
+      font-size: 13px; font-weight: 600;
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+      transition: border-color .2s;
+    }
+    .hp-ctl-settings-input:focus {
+      outline: none;
+      border-color: rgba(88,166,255,.55);
+      box-shadow: 0 0 0 3px rgba(88,166,255,.1);
+    }
+    .hp-ctl-settings-select {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 9px;
+      background: rgba(0,0,0,.4);
+      color: #e2e8f0;
+      padding: 10px 13px;
+      font-size: 13px; font-weight: 600;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+      cursor: pointer; transition: border-color .2s;
+    }
+    .hp-ctl-settings-select:focus {
+      outline: none;
+      border-color: rgba(88,166,255,.55);
+      box-shadow: 0 0 0 3px rgba(88,166,255,.1);
+    }
+    .hp-ctl-settings-select option { background: #0f172a; }
+    .hp-ctl-save-btn {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #1d4ed8, #2563eb);
+      color: #fff; padding: 11px 0;
+      font-size: 13px; font-weight: 900; letter-spacing: .04em;
+      cursor: pointer; transition: all .2s;
+      box-shadow: 0 4px 18px rgba(37,99,235,.35);
+      margin-top: 4px;
+    }
+    .hp-ctl-save-btn:hover {
+      background: linear-gradient(135deg, #2563eb, #3b82f6);
+      box-shadow: 0 6px 26px rgba(37,99,235,.5);
+      transform: translateY(-1px);
+    }
+    .hp-ctl-delete-btn {
+      width: 100%;
+      border: 1px solid rgba(248,81,73,.3);
+      border-radius: 10px;
+      background: rgba(248,81,73,.08);
+      color: #f85149; padding: 9px 0;
+      font-size: 11px; font-weight: 800; letter-spacing: .04em;
+      cursor: pointer; transition: all .2s;
+    }
+    .hp-ctl-delete-btn:hover {
+      background: rgba(248,81,73,.18);
+      border-color: rgba(248,81,73,.55);
+      box-shadow: 0 4px 14px rgba(248,81,73,.2);
+    }
+    .hp-ctl-modal-close {
+      width: 28px; height: 28px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 7px; color: rgba(255,255,255,.5);
+      cursor: pointer; display: flex; align-items: center;
+      justify-content: center; font-size: 13px;
+      transition: all .15s; flex-shrink: 0;
+    }
+    .hp-ctl-modal-close:hover { background: rgba(248,81,73,.12); color: #f85149; border-color: rgba(248,81,73,.3); }
+>>>>>>> Stashed changes
 
     /* ── Oneday Password Card — Premium v2 ─────────────────── */
     .hp-odp-grid {
@@ -3670,10 +4087,15 @@
                 </div>
               </div>
 
+<<<<<<< Updated upstream
+=======
+              <!-- ═══ CONTROLLER CONFIG MODAL ═══ -->
+>>>>>>> Stashed changes
               <div class="hp-ctl-modal" id="hp-ctl-config-modal" aria-hidden="true">
                 <div class="hp-ctl-dialog">
                   <div class="hp-ctl-dialog-head">
                     <div class="hp-ctl-dialog-title">Controller Configuration Settings</div>
+<<<<<<< Updated upstream
                     <button class="hp-ctl-add-btn" id="hp-ctl-add-btn">+Add Controller</button>
                   </div>
                   <div class="hp-ctl-dialog-body">
@@ -3689,10 +4111,51 @@
                       <button class="hp-ctl-add-btn" id="hp-ctl-add-now-btn" type="button">ADD NOW</button>
                     </div>
                     <div class="hp-ctl-chip-row" id="hp-ctl-chip-row"></div>
+=======
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <button class="hp-ctl-add-btn" id="hp-ctl-add-btn">
+                        <i class="fas fa-plus" style="font-size:9px;"></i> Add Controller
+                      </button>
+                      <button class="hp-ctl-modal-close" onclick="document.getElementById('hp-ctl-config-modal').classList.remove('open');" title="Close">✕</button>
+                    </div>
+                  </div>
+                  <div class="hp-ctl-dialog-body">
+                    <!-- Top row: selector on left, preview on right -->
+                    <div class="hp-ctl-top-row">
+                      <!-- Left: Select controller type -->
+                      <div class="hp-ctl-select-section">
+                        <div class="hp-ctl-select-label">Select Controller Type</div>
+                        <select class="hp-ctl-select" id="hp-ctl-type-select">
+                          <option value="E2">E2 Controller</option>
+                          <option value="E3">E3 Gateway</option>
+                          <option value="Site Supervisor">Site Supervisor</option>
+                        </select>
+                        <div style="margin-top:10px;font-size:10px;color:rgba(255,255,255,.3);line-height:1.6;">
+                          Select the controller model then click <strong style="color:rgba(255,255,255,.5);">Add Controller</strong> above, or click <strong style="color:#a78bfa;">Add Now</strong> in the preview.
+                        </div>
+                      </div>
+                      <!-- Right: Preview card -->
+                      <div class="hp-ctl-preview">
+                        <img id="hp-ctl-preview-img" alt="Controller preview" src="/Widget%20Images/E2_Widget.svg" />
+                        <button id="hp-ctl-add-now-btn" type="button">
+                          <i class="fas fa-plus" style="font-size:10px;"></i> ADD NOW
+                        </button>
+                      </div>
+                    </div>
+                    <!-- Configured controllers list -->
+                    <div class="hp-ctl-list-header">
+                      <i class="fas fa-server" style="font-size:9px;opacity:.6;"></i>
+                      Configured Controllers
+                    </div>
+                    <div class="hp-ctl-chip-row" id="hp-ctl-chip-row">
+                      <div style="padding:20px;text-align:center;color:rgba(255,255,255,.25);font-size:11px;">No controllers added yet.</div>
+                    </div>
+>>>>>>> Stashed changes
                   </div>
                 </div>
               </div>
 
+<<<<<<< Updated upstream
               <div class="hp-ctl-modal" id="hp-ctl-settings-modal" aria-hidden="true">
                 <div class="hp-ctl-dialog" style="width:min(420px,92vw);background:#1f2937;">
                   <div class="hp-ctl-dialog-head" style="background:rgba(0,0,0,.28);">
@@ -3712,6 +4175,42 @@
                         <option value="Maintenance">Maintenance</option>
                       </select>
                     </label>
+=======
+              <!-- ═══ CONTROLLER SETTINGS MODAL ═══ -->
+              <div class="hp-ctl-modal" id="hp-ctl-settings-modal" aria-hidden="true">
+                <div class="hp-ctl-dialog" id="hp-ctl-settings-dialog">
+                  <div class="hp-ctl-dialog-head">
+                    <div class="hp-ctl-dialog-title" id="hp-ctl-settings-title">Controller Settings</div>
+                    <button class="hp-ctl-modal-close" onclick="document.getElementById('hp-ctl-settings-modal').classList.remove('open');document.getElementById('hp-ctl-settings-modal').setAttribute('aria-hidden','true');" title="Close">✕</button>
+                  </div>
+                  <div class="hp-ctl-dialog-body" style="gap:14px;">
+                    <!-- Controller image preview in settings -->
+                    <div style="display:flex;align-items:center;gap:14px;padding:10px 14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:10px;">
+                      <img id="hp-ctl-settings-img" src="/Widget%20Images/E2_Widget.svg" style="width:52px;height:52px;object-fit:contain;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);padding:4px;" alt="Controller"/>
+                      <div>
+                        <div id="hp-ctl-settings-type-label" style="font-size:13px;font-weight:900;color:#f1f5f9;"></div>
+                        <div id="hp-ctl-settings-id-label" style="font-size:9px;color:rgba(255,255,255,.3);margin-top:2px;font-family:monospace;"></div>
+                      </div>
+                    </div>
+                    <div class="hp-ctl-settings-field">
+                      <label>IP Address</label>
+                      <input id="hp-ctl-ip-input" class="hp-ctl-settings-input" type="text" placeholder="e.g. 192.168.1.100" />
+                    </div>
+                    <div class="hp-ctl-settings-field">
+                      <label>Connection Status</label>
+                      <select id="hp-ctl-status-select" class="hp-ctl-settings-select">
+                        <option value="Online">🟢 Online</option>
+                        <option value="Offline">🔴 Offline</option>
+                        <option value="Maintenance">🟡 Maintenance</option>
+                      </select>
+                    </div>
+                    <button class="hp-ctl-save-btn" id="hp-ctl-settings-save-btn">
+                      <i class="fas fa-save" style="font-size:11px;margin-right:6px;"></i> Save Settings
+                    </button>
+                    <button class="hp-ctl-delete-btn" id="hp-ctl-settings-delete-btn">
+                      <i class="fas fa-trash-alt" style="font-size:10px;margin-right:5px;"></i> Remove Controller
+                    </button>
+>>>>>>> Stashed changes
                   </div>
                 </div>
               </div>
@@ -8799,9 +9298,15 @@
     var STORAGE_KEY = 'mums_controller_lab_items_v1';
     var editingId = null;
     var CATALOG = {
+<<<<<<< Updated upstream
       'E2': { img: '/Widget%20Images/E2_Widget.svg' },
       'E3': { img: '/Widget%20Images/E3_Widget.svg' },
       'Site Supervisor': { img: '/Widget%20Images/Site%20Supervisor_Widget.svg' }
+=======
+      'E2':             { img: '/Widget%20Images/E2_Widget.svg',             label: 'E2 Controller'    },
+      'E3':             { img: '/Widget%20Images/E3_Widget.svg',             label: 'E3 Gateway'       },
+      'Site Supervisor':{ img: '/Widget%20Images/Site%20Supervisor_Widget.svg', label: 'Site Supervisor' }
+>>>>>>> Stashed changes
     };
     var FALLBACK_IMG = '/Widget%20Images/quickbase_logo.png';
 
@@ -8810,6 +9315,7 @@
       .replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     function getItems() {
+<<<<<<< Updated upstream
       try {
         var raw = localStorage.getItem(STORAGE_KEY);
         var parsed = raw ? JSON.parse(raw) : [];
@@ -8832,12 +9338,35 @@
     function openModal(id, open) {
       var el = document.getElementById(id);
       if (!el) return;
+=======
+      try { var r=localStorage.getItem(STORAGE_KEY); var p=r?JSON.parse(r):[]; return Array.isArray(p)?p:[]; }
+      catch(_){ return []; }
+    }
+    function setItems(items) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items||[])); } catch(_) {}
+    }
+    function imageFor(type) {
+      var hit = CATALOG[type]; return hit && hit.img ? hit.img : FALLBACK_IMG;
+    }
+    function labelFor(type) {
+      var hit = CATALOG[type]; return hit && hit.label ? hit.label : type;
+    }
+    function statusCls(status) {
+      var v = String(status||'').toLowerCase();
+      if(v==='offline') return 'offline';
+      if(v==='maintenance') return 'maintenance';
+      return '';
+    }
+    function openModal(id, open) {
+      var el = document.getElementById(id); if(!el) return;
+>>>>>>> Stashed changes
       el.classList.toggle('open', !!open);
       el.setAttribute('aria-hidden', open ? 'false' : 'true');
     }
     function renderPreview() {
       var sel = document.getElementById('hp-ctl-type-select');
       var img = document.getElementById('hp-ctl-preview-img');
+<<<<<<< Updated upstream
       if (!sel || !img) return;
       img.src = imageFor(sel.value);
     }
@@ -8877,11 +9406,67 @@
           '</div>';
       }).join('');
     }
+=======
+      if(!sel||!img) return;
+      img.src = imageFor(sel.value);
+      img.alt = sel.value;
+    }
+
+    /* ── Horizontal list in config modal ── */
+    function renderChipRow(items) {
+      var row = document.getElementById('hp-ctl-chip-row'); if(!row) return;
+      if(!items.length) {
+        row.innerHTML = '<div style="padding:20px;text-align:center;color:rgba(255,255,255,.25);font-size:11px;">No controllers added yet. Select a type and click Add Now.</div>';
+        return;
+      }
+      row.innerHTML = items.map(function(item){
+        var cls = statusCls(item.status);
+        return '<div class="hp-ctl-chip">'+
+          '<img class="hp-ctl-chip-img" src="'+esc(imageFor(item.type))+'" alt="'+esc(item.type)+'" onerror="this.src=\''+esc(FALLBACK_IMG)+'\';" />'+
+          '<div class="hp-ctl-chip-meta">'+
+            '<div class="hp-ctl-chip-name">'+esc(labelFor(item.type))+'</div>'+
+            '<div class="hp-ctl-chip-ip">'+esc(item.ip||'—')+'</div>'+
+          '</div>'+
+          '<span class="hp-ctl-chip-status '+cls+'">'+esc(item.status||'Online')+'</span>'+
+          '<button class="hp-ctl-settings-btn" data-ctl-settings="'+esc(item.id)+'">'+
+            '<i class="fas fa-sliders-h" style="font-size:9px;margin-right:4px;"></i>Settings'+
+          '</button>'+
+        '</div>';
+      }).join('');
+    }
+
+    /* ── Vertical column display in main lab area ── */
+    function renderMainList(items) {
+      var host = document.getElementById('hp-ctl-list'); if(!host) return;
+      if(!items.length) {
+        host.innerHTML = '<div class="hp-ctl-empty"><i class="fas fa-network-wired"></i><span>No controller configured yet</span><span style="font-size:9px;opacity:.5;">Click the ⚙ icon above to add one</span></div>';
+        return;
+      }
+      host.innerHTML = items.map(function(item){
+        var cls = statusCls(item.status);
+        var statusIcon = cls==='offline' ? '🔴' : cls==='maintenance' ? '🟡' : '🟢';
+        return '<div class="hp-ctl-col">'+
+          '<div class="hp-ctl-col-badge">'+esc(item.type)+'</div>'+
+          '<img class="hp-ctl-col-img" src="'+esc(imageFor(item.type))+'" alt="'+esc(item.type)+'" onerror="this.src=\''+esc(FALLBACK_IMG)+'\';" />'+
+          '<div class="hp-ctl-col-meta">'+
+            '<div class="hp-ctl-col-name">'+esc(labelFor(item.type))+'</div>'+
+            '<div class="hp-ctl-col-ip">'+esc(item.ip||'—')+'</div>'+
+          '</div>'+
+          '<span class="hp-ctl-col-status '+cls+'">'+statusIcon+' '+esc(item.status||'Online')+'</span>'+
+          '<button class="hp-ctl-col-settings" data-ctl-settings="'+esc(item.id)+'">'+
+            '<i class="fas fa-sliders-h" style="font-size:9px;"></i> Settings'+
+          '</button>'+
+        '</div>';
+      }).join('');
+    }
+
+>>>>>>> Stashed changes
     function renderAll() {
       var items = getItems();
       renderChipRow(items);
       renderMainList(items);
     }
+<<<<<<< Updated upstream
     function addController() {
       var sel = document.getElementById('hp-ctl-type-select');
       if (!sel) return;
@@ -8905,13 +9490,57 @@
     }
     function saveSettings() {
       if (!editingId) return;
+=======
+
+    function addController() {
+      var sel = document.getElementById('hp-ctl-type-select'); if(!sel) return;
+      var type = sel.value || 'E2';
+      var items = getItems();
+      var idx = items.length + 1;
+      items.push({
+        id: String(Date.now())+'_'+Math.random().toString(36).slice(2,7),
+        type: type,
+        ip: '192.168.123.'+idx,
+        status: 'Online'
+      });
+      setItems(items);
+      renderAll();
+    }
+
+    function openSettings(id) {
+      var items = getItems();
+      var target = items.find(function(it){ return it.id===id; });
+      if(!target) return;
+      editingId = id;
+      // Populate settings modal
+      var ipEl  = document.getElementById('hp-ctl-ip-input');
+      var stEl  = document.getElementById('hp-ctl-status-select');
+      var imgEl = document.getElementById('hp-ctl-settings-img');
+      var tyEl  = document.getElementById('hp-ctl-settings-type-label');
+      var idEl  = document.getElementById('hp-ctl-settings-id-label');
+      if(ipEl)  ipEl.value  = target.ip     || '';
+      if(stEl)  stEl.value  = target.status || 'Online';
+      if(imgEl) imgEl.src   = imageFor(target.type);
+      if(tyEl)  tyEl.textContent = labelFor(target.type);
+      if(idEl)  idEl.textContent = 'ID: '+target.id.slice(0,16);
+      openModal('hp-ctl-settings-modal', true);
+    }
+
+    function saveSettings() {
+      if(!editingId) return;
+>>>>>>> Stashed changes
       var ipEl = document.getElementById('hp-ctl-ip-input');
       var stEl = document.getElementById('hp-ctl-status-select');
       var ip = (ipEl && ipEl.value ? ipEl.value.trim() : '') || 'N/A';
       var st = (stEl && stEl.value ? stEl.value.trim() : 'Online');
       var items = getItems().map(function(it){
+<<<<<<< Updated upstream
         if (it.id !== editingId) return it;
         return Object.assign({}, it, { ip: ip, status: st });
+=======
+        if(it.id!==editingId) return it;
+        return Object.assign({}, it, {ip:ip, status:st});
+>>>>>>> Stashed changes
       });
       setItems(items);
       openModal('hp-ctl-settings-modal', false);
@@ -8919,6 +9548,7 @@
       renderAll();
     }
 
+<<<<<<< Updated upstream
     document.addEventListener('click', function(e){
       var t = e.target;
       if (!t) return;
@@ -8938,6 +9568,47 @@
     });
     var selectEl = document.getElementById('hp-ctl-type-select');
     if (selectEl) selectEl.addEventListener('change', renderPreview);
+=======
+    function deleteController() {
+      if(!editingId) return;
+      if(!confirm('Remove this controller from the lab?')) return;
+      var items = getItems().filter(function(it){ return it.id!==editingId; });
+      setItems(items);
+      openModal('hp-ctl-settings-modal', false);
+      openModal('hp-ctl-config-modal', false);
+      editingId = null;
+      renderAll();
+    }
+
+    /* ── Event delegation ── */
+    document.addEventListener('click', function(e){
+      var t = e.target; if(!t) return;
+      // Gear icon → open config modal
+      var cfg = t.closest && t.closest('#hp-ctl-config-btn');
+      if(cfg){ openModal('hp-ctl-config-modal', true); renderPreview(); renderAll(); return; }
+      // Add Now in preview
+      var addNow = t.closest && t.closest('#hp-ctl-add-now-btn');
+      if(addNow){ addController(); return; }
+      // Add Controller button in header
+      var quickAdd = t.closest && t.closest('#hp-ctl-add-btn');
+      if(quickAdd){ addController(); return; }
+      // Save settings
+      var saveBtn = t.closest && t.closest('#hp-ctl-settings-save-btn');
+      if(saveBtn){ saveSettings(); return; }
+      // Delete controller
+      var delBtn = t.closest && t.closest('#hp-ctl-settings-delete-btn');
+      if(delBtn){ deleteController(); return; }
+      // Any settings button (chip row or column)
+      var settingsBtn = t.closest && t.closest('[data-ctl-settings]');
+      if(settingsBtn){ openSettings(String(settingsBtn.getAttribute('data-ctl-settings')||'')); return; }
+      // Backdrop click to close
+      if(t.id==='hp-ctl-config-modal'){ openModal('hp-ctl-config-modal', false); return; }
+      if(t.id==='hp-ctl-settings-modal'){ openModal('hp-ctl-settings-modal', false); return; }
+    });
+
+    var selectEl = document.getElementById('hp-ctl-type-select');
+    if(selectEl) selectEl.addEventListener('change', renderPreview);
+>>>>>>> Stashed changes
 
     renderPreview();
     renderAll();
