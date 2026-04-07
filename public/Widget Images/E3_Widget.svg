@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="E3 Widget">
+  <rect x="2" y="2" width="116" height="116" rx="14" fill="#111827" stroke="#64748b"/>
+  <rect x="16" y="10" width="88" height="100" rx="10" fill="#0b1220" stroke="#334155"/>
+  <rect x="22" y="16" width="76" height="14" rx="4" fill="#1d4ed8"/>
+  <rect x="22" y="34" width="76" height="42" rx="4" fill="#dbeafe"/>
+  <rect x="24" y="38" width="72" height="8" rx="3" fill="#1e3a8a"/>
+  <rect x="24" y="50" width="58" height="5" rx="2" fill="#334155"/>
+  <rect x="24" y="58" width="64" height="5" rx="2" fill="#475569"/>
+  <rect x="24" y="66" width="49" height="5" rx="2" fill="#64748b"/>
+  <text x="60" y="92" text-anchor="middle" font-family="Segoe UI, Arial" font-size="18" font-weight="700" fill="#93c5fd">E3</text>
+</svg>

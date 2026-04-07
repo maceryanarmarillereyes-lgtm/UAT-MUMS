@@ -916,10 +916,10 @@
     .hp-ctl-modal.open { display: flex; }
     .hp-ctl-dialog {
       width: min(740px, 94vw);
-      border: 1px solid rgba(255,255,255,.14);
+      border: 1px solid rgba(255,255,255,.38);
       border-radius: 12px;
-      background: #6d6d6d;
-      box-shadow: 0 20px 40px rgba(0,0,0,.45);
+      background: linear-gradient(180deg, #8b8b8b 0%, #7a7a7a 100%);
+      box-shadow: 0 24px 54px rgba(2,6,23,.55);
       overflow: hidden;
     }
     .hp-ctl-dialog-head {
@@ -928,13 +928,13 @@
       justify-content: space-between;
       gap: 8px;
       padding: 9px 12px;
-      background: rgba(0,0,0,.2);
-      border-bottom: 1px solid rgba(255,255,255,.3);
+      background: rgba(255,255,255,.08);
+      border-bottom: 1px solid rgba(255,255,255,.55);
     }
-    .hp-ctl-dialog-title { font-size: 12px; font-weight: 900; color: #111; letter-spacing: .02em; }
+    .hp-ctl-dialog-title { font-size: 12px; font-weight: 900; color: #111827; letter-spacing: .02em; }
     .hp-ctl-add-btn {
-      border: 1px solid rgba(88,166,255,.45);
-      background: #4092e6;
+      border: 1px solid rgba(255,255,255,.5);
+      background: linear-gradient(180deg, #56b4ff, #3c93e7);
       color: #fff;
       border-radius: 999px;
       padding: 5px 12px;
@@ -956,8 +956,8 @@
     .hp-ctl-preview {
       width: 220px;
       margin: 0 auto 12px;
-      background: rgba(255,210,223,.86);
-      border: 1px solid rgba(255,255,255,.5);
+      background: rgba(255,225,236,.82);
+      border: 1px solid rgba(255,255,255,.62);
       border-radius: 8px;
       padding: 14px 10px;
       display: flex;
@@ -973,8 +973,8 @@
       padding: 8px 2px 2px;
     }
     .hp-ctl-chip {
-      border: 1px solid rgba(255,255,255,.2);
-      background: rgba(0,0,0,.15);
+      border: 1px solid rgba(255,255,255,.34);
+      background: rgba(255,255,255,.09);
       color: #f1f5f9;
       border-radius: 9px;
       padding: 7px 9px;
@@ -3685,7 +3685,7 @@
                       </select>
                     </div>
                     <div class="hp-ctl-preview">
-                      <img id="hp-ctl-preview-img" alt="Controller preview" src="/Widget%20Images/quickbase_logo.png" />
+                      <img id="hp-ctl-preview-img" alt="Controller preview" src="/Widget%20Images/E2_Widget.svg" />
                       <button class="hp-ctl-add-btn" id="hp-ctl-add-now-btn" type="button">ADD NOW</button>
                     </div>
                     <div class="hp-ctl-chip-row" id="hp-ctl-chip-row"></div>
@@ -8799,9 +8799,9 @@
     var STORAGE_KEY = 'mums_controller_lab_items_v1';
     var editingId = null;
     var CATALOG = {
-      'E2': { img: '/Widget%20Images/quickbase_logo.png' },
-      'E3': { img: '/Widget%20Images/quickbase_logo.png' },
-      'Site Supervisor': { img: '/Widget%20Images/quickbase_logo.png' }
+      'E2': { img: '/Widget%20Images/E2_Widget.svg' },
+      'E3': { img: '/Widget%20Images/E3_Widget.svg' },
+      'Site Supervisor': { img: '/Widget%20Images/Site%20Supervisor_Widget.svg' }
     };
     var FALLBACK_IMG = '/Widget%20Images/quickbase_logo.png';
 
