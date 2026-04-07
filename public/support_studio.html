@@ -654,7 +654,7 @@
 
     /* ── PANELS AREA ── */
     .home-panels-area {
-      flex: 1; overflow-y: auto; padding: 12px;
+      flex: 1; overflow: hidden; padding: 12px;
     }
     .home-panels-area::-webkit-scrollbar { width: 3px; }
     .home-panels-area::-webkit-scrollbar-track { background: transparent; }
@@ -685,9 +685,10 @@
     /* panel cards */
     .hp-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
     }
+    .hp-grid > .hp-card { grid-column: span 2; min-width: 0; }
     /* First row (ODP + Oncall) — equal height, fill each other */
     .hp-grid > .hp-card:nth-child(1),
     .hp-grid > .hp-card:nth-child(2) {
@@ -715,6 +716,13 @@
     .hp-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 64px; gap: 6px; }
     .hp-empty i { font-size: 18px; opacity: .1; }
     .hp-empty span { font-size: 10px; color: rgba(255,255,255,.18); }
+    #hp-controller-testing-lab-card,
+    #hp-connect-credential-card {
+      height: calc(100vh - 430px);
+      min-height: 260px;
+    }
+    #hp-controller-testing-lab-card { grid-column: span 3; }
+    #hp-connect-credential-card { grid-column: span 1; }
 
     .hp-apps-manage-btn {
       margin-left: auto;
@@ -3465,7 +3473,7 @@
               </div>
 
               <!-- Controller Testing Lab — 1 col, empty placeholder -->
-              <div class="hp-card">
+              <div class="hp-card" id="hp-controller-testing-lab-card">
                 <div class="hp-card-head">
                   <div class="hp-icon" style="background:rgba(162,93,220,.15);border:1px solid rgba(162,93,220,.25);color:var(--ss-purple);"><i class="fas fa-flask"></i></div>
                   <span class="hp-title">Controller Testing Lab</span>
@@ -3476,7 +3484,7 @@
               </div>
 
               <!-- Connect+ Updated Credential — 1 col, empty placeholder -->
-              <div class="hp-card">
+              <div class="hp-card" id="hp-connect-credential-card">
                 <div class="hp-card-head">
                   <div class="hp-icon" style="background:rgba(34,211,238,.15);border:1px solid rgba(34,211,238,.25);color:var(--ss-cyan);"><i class="fas fa-plug"></i></div>
                   <span class="hp-title">Connect+ Updated Credential</span>
@@ -8380,7 +8388,7 @@
 
   var _ssNotesSidebarVisible = false;
   var _ssRightSidebarMode = 'notes';
-  var _ssRightSidebarCollapsed = false;
+  var _ssRightSidebarCollapsed = true;
 
   function _ssSyncMiniRail() {
     var right = document.getElementById('ss-right-sidebar');
