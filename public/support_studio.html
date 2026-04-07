@@ -187,6 +187,7 @@
       display: flex;
       flex-direction: column;
       height: 100vh;
+      height: 100dvh;
       overflow: hidden;
     }
 
@@ -654,7 +655,9 @@
 
     /* ── PANELS AREA ── */
     .home-panels-area {
-      flex: 1; overflow-y: auto; padding: 12px;
+      flex: 1; overflow: hidden; padding: 12px;
+      display: flex;
+      flex-direction: column;
     }
     .home-panels-area::-webkit-scrollbar { width: 3px; }
     .home-panels-area::-webkit-scrollbar-track { background: transparent; }
@@ -684,10 +687,14 @@
 
     /* panel cards */
     .hp-grid {
+      flex: 1;
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-rows: auto auto minmax(0, 1fr);
       gap: 10px;
+      min-height: 0;
     }
+    .hp-grid > .hp-card { grid-column: span 2; min-width: 0; min-height: 0; }
     /* First row (ODP + Oncall) — equal height, fill each other */
     .hp-grid > .hp-card:nth-child(1),
     .hp-grid > .hp-card:nth-child(2) {
@@ -715,6 +722,13 @@
     .hp-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 64px; gap: 6px; }
     .hp-empty i { font-size: 18px; opacity: .1; }
     .hp-empty span { font-size: 10px; color: rgba(255,255,255,.18); }
+    #hp-controller-testing-lab-card,
+    #hp-connect-credential-card {
+      height: auto;
+      min-height: 0;
+    }
+    #hp-controller-testing-lab-card { grid-column: span 3; }
+    #hp-connect-credential-card { grid-column: span 1; }
 
     .hp-apps-manage-btn {
       margin-left: auto;
@@ -813,6 +827,166 @@
     }
     .ha-upload-link:hover { background: rgba(245,158,11,.22); color: #fcd34d !important; }
     .ha-upload-arrows { color: #fb7185; font-weight: 900; letter-spacing: .04em; }
+
+    /* ── Controller Testing Lab Widget ───────────────────────────────────── */
+    #hp-controller-testing-lab-card .hp-card-head { position: relative; }
+    .hp-ctl-config-btn {
+      margin-left: auto;
+      width: 24px;
+      height: 24px;
+      border-radius: 7px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.04);
+      color: #d2a8ff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: .15s ease;
+    }
+    .hp-ctl-config-btn:hover {
+      color: #e9d5ff;
+      border-color: rgba(210,168,255,.45);
+      background: rgba(210,168,255,.16);
+    }
+    .hp-ctl-list {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 10px;
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+      overflow: hidden;
+    }
+    .hp-ctl-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: rgba(255,255,255,.38);
+      font-size: 11px;
+    }
+    .hp-ctl-empty i { font-size: 20px; opacity: .6; }
+    .hp-ctl-item {
+      display: grid;
+      grid-template-columns: 56px 1fr auto auto;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,.11);
+    }
+    .hp-ctl-item:last-child { border-bottom: none; }
+    .hp-ctl-thumb {
+      width: 46px;
+      height: 46px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,.18);
+      object-fit: cover;
+      background: rgba(255,255,255,.04);
+    }
+    .hp-ctl-meta { min-width: 0; }
+    .hp-ctl-name { font-size: 11px; font-weight: 800; color: #e6edf3; letter-spacing: .04em; }
+    .hp-ctl-ip { font-size: 10px; color: var(--ss-muted); margin-top: 2px; }
+    .hp-ctl-status { font-size: 11px; font-weight: 700; color: #3fb950; margin-right: 8px; white-space: nowrap; }
+    .hp-ctl-status.offline { color: #f85149; }
+    .hp-ctl-status.maintenance { color: #fbbf24; }
+    .hp-ctl-settings-btn {
+      border: 1px solid rgba(88,166,255,.38);
+      background: rgba(88,166,255,.16);
+      color: #79c0ff;
+      border-radius: 999px;
+      padding: 5px 14px;
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .hp-ctl-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 9950;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(2,6,23,.68);
+      backdrop-filter: blur(3px);
+      padding: 16px;
+    }
+    .hp-ctl-modal.open { display: flex; }
+    .hp-ctl-dialog {
+      width: min(740px, 94vw);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 12px;
+      background: #6d6d6d;
+      box-shadow: 0 20px 40px rgba(0,0,0,.45);
+      overflow: hidden;
+    }
+    .hp-ctl-dialog-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 9px 12px;
+      background: rgba(0,0,0,.2);
+      border-bottom: 1px solid rgba(255,255,255,.3);
+    }
+    .hp-ctl-dialog-title { font-size: 12px; font-weight: 900; color: #111; letter-spacing: .02em; }
+    .hp-ctl-add-btn {
+      border: 1px solid rgba(88,166,255,.45);
+      background: #4092e6;
+      color: #fff;
+      border-radius: 999px;
+      padding: 5px 12px;
+      font-size: 11px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    .hp-ctl-dialog-body { padding: 14px; }
+    .hp-ctl-select-row { display:flex; justify-content:center; margin-bottom:10px; }
+    .hp-ctl-select {
+      min-width: 170px;
+      border: 1px solid rgba(0,0,0,.3);
+      border-radius: 7px;
+      background: #f8fafc;
+      padding: 6px 8px;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .hp-ctl-preview {
+      width: 220px;
+      margin: 0 auto 12px;
+      background: rgba(255,210,223,.86);
+      border: 1px solid rgba(255,255,255,.5);
+      border-radius: 8px;
+      padding: 14px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .hp-ctl-preview img { width: 94px; height: 94px; object-fit: contain; }
+    .hp-ctl-chip-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 8px 2px 2px;
+    }
+    .hp-ctl-chip {
+      border: 1px solid rgba(255,255,255,.2);
+      background: rgba(0,0,0,.15);
+      color: #f1f5f9;
+      border-radius: 9px;
+      padding: 7px 9px;
+      min-width: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .hp-ctl-chip .hp-ctl-settings-btn { padding: 4px 10px; font-size: 9px; }
 
     /* ── Oneday Password Card — Premium v2 ─────────────────── */
     .hp-odp-grid {
@@ -1306,6 +1480,7 @@
     .ss-sidebar {
       width: 200px;
       min-width: 200px;
+      min-height: 0;
       background: var(--ss-surface);
       border-right: 1px solid var(--ss-border);
       display: flex;
@@ -1324,6 +1499,7 @@
     .ss-right-mini-rail {
       width: 34px;
       min-width: 34px;
+      min-height: 0;
       border-left: 1px solid var(--ss-border);
       background: var(--ss-surface);
       display: flex;
@@ -3465,24 +3641,78 @@
               </div>
 
               <!-- Controller Testing Lab — 1 col, empty placeholder -->
-              <div class="hp-card">
+              <div class="hp-card" id="hp-controller-testing-lab-card">
                 <div class="hp-card-head">
                   <div class="hp-icon" style="background:rgba(162,93,220,.15);border:1px solid rgba(162,93,220,.25);color:var(--ss-purple);"><i class="fas fa-flask"></i></div>
                   <span class="hp-title">Controller Testing Lab</span>
+                  <button class="hp-ctl-config-btn" id="hp-ctl-config-btn" title="Controller configuration settings">
+                    <i class="fas fa-cog"></i>
+                  </button>
                 </div>
                 <div class="hp-body">
-                  <div class="hp-empty"><i class="fas fa-flask"></i><span>Coming soon</span></div>
+                  <div class="hp-ctl-list" id="hp-ctl-list">
+                    <div class="hp-ctl-empty" id="hp-ctl-empty">
+                      <i class="fas fa-network-wired"></i>
+                      <span>No controller configured yet.</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <!-- Connect+ Updated Credential — 1 col, empty placeholder -->
-              <div class="hp-card">
+              <div class="hp-card" id="hp-connect-credential-card">
                 <div class="hp-card-head">
                   <div class="hp-icon" style="background:rgba(34,211,238,.15);border:1px solid rgba(34,211,238,.25);color:var(--ss-cyan);"><i class="fas fa-plug"></i></div>
                   <span class="hp-title">Connect+ Updated Credential</span>
                 </div>
                 <div class="hp-body">
                   <div class="hp-empty"><i class="fas fa-plug"></i><span>Coming soon</span></div>
+                </div>
+              </div>
+
+              <div class="hp-ctl-modal" id="hp-ctl-config-modal" aria-hidden="true">
+                <div class="hp-ctl-dialog">
+                  <div class="hp-ctl-dialog-head">
+                    <div class="hp-ctl-dialog-title">Controller Configuration Settings</div>
+                    <button class="hp-ctl-add-btn" id="hp-ctl-add-btn">+Add Controller</button>
+                  </div>
+                  <div class="hp-ctl-dialog-body">
+                    <div class="hp-ctl-select-row">
+                      <select class="hp-ctl-select" id="hp-ctl-type-select">
+                        <option value="E2">E2</option>
+                        <option value="E3">E3</option>
+                        <option value="Site Supervisor">Site Supervisor</option>
+                      </select>
+                    </div>
+                    <div class="hp-ctl-preview">
+                      <img id="hp-ctl-preview-img" alt="Controller preview" src="/Widget%20Images/quickbase_logo.png" />
+                      <button class="hp-ctl-add-btn" id="hp-ctl-add-now-btn" type="button">ADD NOW</button>
+                    </div>
+                    <div class="hp-ctl-chip-row" id="hp-ctl-chip-row"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="hp-ctl-modal" id="hp-ctl-settings-modal" aria-hidden="true">
+                <div class="hp-ctl-dialog" style="width:min(420px,92vw);background:#1f2937;">
+                  <div class="hp-ctl-dialog-head" style="background:rgba(0,0,0,.28);">
+                    <div class="hp-ctl-dialog-title" style="color:#f8fafc;">Controller Settings</div>
+                    <button class="hp-ctl-add-btn" id="hp-ctl-settings-save-btn">Save</button>
+                  </div>
+                  <div class="hp-ctl-dialog-body" style="display:flex;flex-direction:column;gap:10px;">
+                    <label style="font-size:10px;color:#cbd5e1;font-weight:700;">
+                      IP ADDRESS
+                      <input id="hp-ctl-ip-input" type="text" style="margin-top:4px;width:100%;border:1px solid rgba(255,255,255,.2);background:#0f172a;color:#e2e8f0;border-radius:7px;padding:8px 9px;" />
+                    </label>
+                    <label style="font-size:10px;color:#cbd5e1;font-weight:700;">
+                      STATUS
+                      <select id="hp-ctl-status-select" style="margin-top:4px;width:100%;border:1px solid rgba(255,255,255,.2);background:#0f172a;color:#e2e8f0;border-radius:7px;padding:8px 9px;">
+                        <option value="Online">Online</option>
+                        <option value="Offline">Offline</option>
+                        <option value="Maintenance">Maintenance</option>
+                      </select>
+                    </label>
+                  </div>
                 </div>
               </div>
 
@@ -8380,7 +8610,7 @@
 
   var _ssNotesSidebarVisible = false;
   var _ssRightSidebarMode = 'notes';
-  var _ssRightSidebarCollapsed = false;
+  var _ssRightSidebarCollapsed = true;
 
   function _ssSyncMiniRail() {
     var right = document.getElementById('ss-right-sidebar');
@@ -8563,6 +8793,155 @@
   renderRecentNotes();
   _ssSyncMiniRail();
   document.title = 'MUMS Support Studio';
+
+  // ── Home: Controller Testing Lab Widget ───────────────────────────────
+  (function(){
+    var STORAGE_KEY = 'mums_controller_lab_items_v1';
+    var editingId = null;
+    var CATALOG = {
+      'E2': { img: '/Widget%20Images/quickbase_logo.png' },
+      'E3': { img: '/Widget%20Images/quickbase_logo.png' },
+      'Site Supervisor': { img: '/Widget%20Images/quickbase_logo.png' }
+    };
+    var FALLBACK_IMG = '/Widget%20Images/quickbase_logo.png';
+
+    function esc(v){ return String(v == null ? '' : v)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+    function getItems() {
+      try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        var parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch(_) { return []; }
+    }
+    function setItems(items) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items || [])); } catch(_) {}
+    }
+    function imageFor(type) {
+      var hit = CATALOG[type];
+      return hit && hit.img ? hit.img : FALLBACK_IMG;
+    }
+    function statusClass(status) {
+      var v = String(status || '').toLowerCase();
+      if (v === 'offline') return 'offline';
+      if (v === 'maintenance') return 'maintenance';
+      return '';
+    }
+    function openModal(id, open) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.classList.toggle('open', !!open);
+      el.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+    function renderPreview() {
+      var sel = document.getElementById('hp-ctl-type-select');
+      var img = document.getElementById('hp-ctl-preview-img');
+      if (!sel || !img) return;
+      img.src = imageFor(sel.value);
+    }
+    function renderChipRow(items) {
+      var row = document.getElementById('hp-ctl-chip-row');
+      if (!row) return;
+      if (!items.length) {
+        row.innerHTML = '<div style="font-size:10px;color:rgba(255,255,255,.75);">No controller yet.</div>';
+        return;
+      }
+      row.innerHTML = items.map(function(item){
+        return '' +
+          '<div class="hp-ctl-chip">' +
+            '<span>' + esc(item.type) + '</span>' +
+            '<button class="hp-ctl-settings-btn" data-ctl-settings="' + esc(item.id) + '">Settings</button>' +
+          '</div>';
+      }).join('');
+    }
+    function renderMainList(items) {
+      var host = document.getElementById('hp-ctl-list');
+      if (!host) return;
+      if (!items.length) {
+        host.innerHTML = '<div class="hp-ctl-empty" id="hp-ctl-empty"><i class="fas fa-network-wired"></i><span>No controller configured yet.</span></div>';
+        return;
+      }
+      host.innerHTML = items.map(function(item){
+        var cls = statusClass(item.status);
+        return '' +
+          '<div class="hp-ctl-item">' +
+            '<img class="hp-ctl-thumb" src="' + esc(imageFor(item.type)) + '" alt="' + esc(item.type) + '" onerror="this.onerror=null;this.src=\'' + esc(FALLBACK_IMG) + '\';" />' +
+            '<div class="hp-ctl-meta">' +
+              '<div class="hp-ctl-name">Controller: ' + esc(item.type) + '</div>' +
+              '<div class="hp-ctl-ip">IP Address: ' + esc(item.ip || 'N/A') + '</div>' +
+            '</div>' +
+            '<div class="hp-ctl-status ' + cls + '">Status: ' + esc(item.status || 'Online') + '</div>' +
+            '<button class="hp-ctl-settings-btn" data-ctl-settings="' + esc(item.id) + '">Settings</button>' +
+          '</div>';
+      }).join('');
+    }
+    function renderAll() {
+      var items = getItems();
+      renderChipRow(items);
+      renderMainList(items);
+    }
+    function addController() {
+      var sel = document.getElementById('hp-ctl-type-select');
+      if (!sel) return;
+      var type = sel.value || 'E2';
+      var items = getItems();
+      var nextIp = '192.168.123.' + (items.length + 1);
+      items.push({ id: String(Date.now()) + '_' + Math.random().toString(36).slice(2,7), type: type, ip: nextIp, status: 'Online' });
+      setItems(items);
+      renderAll();
+    }
+    function openSettings(id) {
+      var items = getItems();
+      var target = items.find(function(it){ return it.id === id; });
+      if (!target) return;
+      editingId = id;
+      var ipEl = document.getElementById('hp-ctl-ip-input');
+      var stEl = document.getElementById('hp-ctl-status-select');
+      if (ipEl) ipEl.value = target.ip || '';
+      if (stEl) stEl.value = target.status || 'Online';
+      openModal('hp-ctl-settings-modal', true);
+    }
+    function saveSettings() {
+      if (!editingId) return;
+      var ipEl = document.getElementById('hp-ctl-ip-input');
+      var stEl = document.getElementById('hp-ctl-status-select');
+      var ip = (ipEl && ipEl.value ? ipEl.value.trim() : '') || 'N/A';
+      var st = (stEl && stEl.value ? stEl.value.trim() : 'Online');
+      var items = getItems().map(function(it){
+        if (it.id !== editingId) return it;
+        return Object.assign({}, it, { ip: ip, status: st });
+      });
+      setItems(items);
+      openModal('hp-ctl-settings-modal', false);
+      editingId = null;
+      renderAll();
+    }
+
+    document.addEventListener('click', function(e){
+      var t = e.target;
+      if (!t) return;
+      var cfg = t.closest && t.closest('#hp-ctl-config-btn');
+      if (cfg) { openModal('hp-ctl-config-modal', true); renderPreview(); renderAll(); return; }
+      var addNow = t.closest && t.closest('#hp-ctl-add-now-btn');
+      if (addNow) { addController(); return; }
+      var quickAdd = t.closest && t.closest('#hp-ctl-add-btn');
+      if (quickAdd) { addController(); return; }
+      var saveBtn = t.closest && t.closest('#hp-ctl-settings-save-btn');
+      if (saveBtn) { saveSettings(); return; }
+      var settingsBtn = t.closest && t.closest('[data-ctl-settings]');
+      if (settingsBtn) { openSettings(String(settingsBtn.getAttribute('data-ctl-settings') || '')); return; }
+      if (t.id === 'hp-ctl-config-modal' || t.id === 'hp-ctl-settings-modal') {
+        openModal(t.id, false);
+      }
+    });
+    var selectEl = document.getElementById('hp-ctl-type-select');
+    if (selectEl) selectEl.addEventListener('change', renderPreview);
+
+    renderPreview();
+    renderAll();
+  })();
 
   // ── Settings nav switching ──────────────────────────────────────
   // NOTE FOR AI: Each settings section has its own accent color.
