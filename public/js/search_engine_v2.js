@@ -7,27 +7,31 @@
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
 /**
- * MUMS Search Engine v2 — Advanced Client-Side Search
- * Inverted Index + TF-IDF + Fuzzy Matching + Trigram Autocomplete + NLP Query Parser
+ * MUMS Search Engine v2 — Advanced Client-Side Search (2026 AI-Style Upgrade)
+ * Inverted Index + TF-IDF + Aggressive Fuzzy Matching + Trigram + Intent Parsing
  * Pure client-side JavaScript — zero external dependencies
  */
 (function(global) {
   'use strict';
 
-  // ── STOP WORDS ────────────────────────────────────────────────────────────
+  // ── STOP WORDS (Upgraded with Conversational/Taglish Fillers) ─────────────
   var STOP_WORDS = new Set([
     'the','a','an','is','are','was','were','to','for','in','on','of','and','or',
     'but','not','with','this','that','these','those','from','by','at','be','been',
     'have','has','had','do','does','did','will','would','could','should','may',
     'might','can','its','it','as','so','if','then','than','when','where','how',
     'what','which','who','there','their','they','them','our','your','we','us',
-    'i','my','me','he','she','his','her','him','was','about','after','before',
-    'also','any','some','all','more','most','just','up','out','get','got','per'
+    'i','my','me','he','she','his','her','him','about','after','before',
+    'also','any','some','all','more','most','just','up','out','get','got','per',
+    // 2026 Conversational Fillers
+    'paano','pano','saan','bakit','ano','ang','mga','yung','sa','ng','ni','na',
+    'ayaw','mag','gumana','para','fix','resolve','issue','problem','error','help',
+    'please','pls','paki','kasi','daw','raw'
   ]);
 
-  // ── SYNONYM MAP ───────────────────────────────────────────────────────────
+  // ── SYNONYM MAP (Upgraded with Intents & Slang) ───────────────────────────
   var SYNONYM_MAP = {
-    'offline':      ['down','unreachable','not responding','disconnected','no communication','off'],
+    'offline':      ['down','unreachable','not responding','disconnected','no communication','off','walang connection','ayaw mag connect'],
     'online':       ['up','connected','active','running','live'],
     'license':      ['license key','activation','licence','licensing','activation key'],
     'firmware':     ['firmware update','software update','fw update','fw','sw update'],
@@ -69,8 +73,9 @@
     'gateway':      ['e2 gateway','e3 gateway','network gateway','protocol gateway'],
     'protocol':     ['bacnet','modbus','lonworks','jbus','communication protocol'],
     'update':       ['upgrade','patch','version','fw update','software update'],
-    'reset':        ['restart','reboot','factory reset','cold start','power cycle'],
-    'offline delay':['offline delay alarm','delayed offline','delay alarm','oda']
+    'reset':        ['restart','reboot','factory reset','cold start','power cycle','patayin at buhayin','i-reset'],
+    'offline delay':['offline delay alarm','delayed offline','delay alarm','oda'],
+    'defective':    ['sira','basag','ayaw gumana','not working','dead','ayaw mag-on']
   };
 
   // ── ABBREVIATIONS ─────────────────────────────────────────────────────────
@@ -99,9 +104,9 @@
 
   // ── INVERTED INDEX ────────────────────────────────────────────────────────
   function InvertedIndex() {
-    this.index = {};          // term → { df, postings: [{ri, fields, tf}] }
+    this.index = {};          
     this.docCount = 0;
-    this.docLengths = [];     // total terms per doc (for TF normalisation)
+    this.docLengths = [];     
     this.fieldWeights = { title:4, eu:2.5, cat:2, case:5, res:1 };
   }
 
@@ -119,7 +124,7 @@
         case:  tokenise(r.case),
         res:   tokeniseNoStop((r.res || '').slice(0, 400))
       };
-      var tfMap = {};   // term → { field, count }
+      var tfMap = {};   
 
       Object.keys(fields).forEach(function(f) {
         fields[f].forEach(function(term) {
@@ -142,13 +147,8 @@
     });
   };
 
-  InvertedIndex.prototype.lookup = function(term) {
-    return this.index[term] || null;
-  };
-
-  InvertedIndex.prototype.allTerms = function() {
-    return Object.keys(this.index);
-  };
+  InvertedIndex.prototype.lookup = function(term) { return this.index[term] || null; };
+  InvertedIndex.prototype.allTerms = function() { return Object.keys(this.index); };
 
   // ── TF-IDF SCORER ─────────────────────────────────────────────────────────
   function TFIDFScorer(invertedIndex) {
@@ -169,7 +169,7 @@
 
       entry.postings.forEach(function(p) {
         var docLen = self.idx.docLengths[p.ri] || 1;
-        var tf = (p.tf / docLen) * 100;  // normalised TF
+        var tf = (p.tf / docLen) * 100;  
         var fieldBoost = 0;
         Object.keys(p.fields).forEach(function(f) {
           fieldBoost += (self.FW[f] || 1) * p.fields[f];
@@ -178,7 +178,6 @@
       });
     });
 
-    // Build ranked result array (skip zero scores)
     var results = [];
     for (var i = 0; i < records.length; i++) {
       if (scores[i] > 0) results.push({ record: records[i], score: scores[i], ri: i });
@@ -187,13 +186,13 @@
     return results;
   };
 
-  // ── LEVENSHTEIN DISTANCE ──────────────────────────────────────────────────
+  // ── LEVENSHTEIN DISTANCE (Aggressive) ─────────────────────────────────────
   function levenshtein(a, b) {
     if (a === b) return 0;
     var la = a.length, lb = b.length;
     if (la === 0) return lb;
     if (lb === 0) return la;
-    if (Math.abs(la - lb) > 3) return 999;
+    if (Math.abs(la - lb) > 4) return 999; // More forgiving length diff
     var row = [];
     for (var j = 0; j <= lb; j++) row[j] = j;
     for (var i = 1; i <= la; i++) {
@@ -210,13 +209,13 @@
 
   // ── FUZZY MATCHER ─────────────────────────────────────────────────────────
   function FuzzyMatcher(indexedTerms) {
-    // Keep only terms ≥ 3 chars for fuzzy matching performance
     this.terms = indexedTerms.filter(function(t) { return t.length >= 3; });
   }
 
   FuzzyMatcher.prototype.suggest = function(typo, maxDist) {
     if (!typo || typo.length < 3) return [];
-    maxDist = maxDist || (typo.length <= 4 ? 1 : 2);
+    // Aggressive fuzzy: longer words tolerate more typos
+    maxDist = maxDist || (typo.length <= 4 ? 1 : (typo.length <= 7 ? 2 : 3));
     var results = [];
     var self = this;
     self.terms.forEach(function(term) {
@@ -230,8 +229,8 @@
 
   // ── TRIGRAM SUGGESTER ─────────────────────────────────────────────────────
   function TrigramSuggester(allTerms) {
-    this.termFreq = {};   // term → frequency (proxy for importance)
-    this.trigramMap = {}; // trigram → [terms]
+    this.termFreq = {};   
+    this.trigramMap = {}; 
     this._build(allTerms);
   }
 
@@ -259,19 +258,17 @@
     if (!prefix || prefix.length < 2) return [];
     limit = limit || 8;
 
-    // Prefix matches first
     var prefixMatches = Object.keys(this.termFreq).filter(function(t) {
       return t.startsWith(prefix) && t !== prefix;
     });
     prefixMatches.sort(function(a, b) { return b.length - a.length; });
 
-    // Trigram similarity for non-prefix
     var scored = {};
     var tgs = this._trigrams(prefix);
     var self = this;
     tgs.forEach(function(tg) {
       (self.trigramMap[tg] || []).forEach(function(term) {
-        if (term.startsWith(prefix)) return; // already in prefix matches
+        if (term.startsWith(prefix)) return; 
         scored[term] = (scored[term] || 0) + 1;
       });
     });
@@ -284,14 +281,14 @@
       .slice(0, limit);
   };
 
-  // ── QUERY PARSER ──────────────────────────────────────────────────────────
+  // ── QUERY PARSER (Intent Parsing) ─────────────────────────────────────────
   function QueryParser() {}
 
   QueryParser.prototype.parse = function(raw) {
     var q = String(raw || '').trim();
     var result = {
       original: q,
-      type: 'keyword',   // 'case' | 'phrase' | 'boolean' | 'question' | 'keyword'
+      type: 'keyword',   
       caseNumber: null,
       must: [],
       mustNot: [],
@@ -301,7 +298,6 @@
     };
     if (!q) return result;
 
-    // Detect direct case lookup
     var caseMatch = q.match(/(?:^|\s)(?:#|case\s+)(\d{5,7})(?:\s|$)/i);
     if (caseMatch) {
       result.type = 'case';
@@ -309,12 +305,10 @@
       return result;
     }
 
-    // Detect question format
-    if (/^(how|what|why|when|where|who|is|can|does|should)\b/i.test(q)) {
+    if (/^(how|what|why|when|where|who|is|can|does|should|paano|saan|bakit)\b/i.test(q)) {
       result.type = 'question';
     }
 
-    // Extract quoted phrases
     var phraseRx = /"([^"]+)"/g;
     var m;
     while ((m = phraseRx.exec(q)) !== null) {
@@ -322,7 +316,6 @@
     }
     q = q.replace(phraseRx, '');
 
-    // Extract boolean operators: +term -term
     var tokens = q.split(/\s+/);
     tokens.forEach(function(tok) {
       if (tok.startsWith('+') && tok.length > 1) result.must.push(tok.slice(1).toLowerCase());
@@ -330,21 +323,18 @@
     });
     q = q.replace(/[+-]\S+/g, '').trim();
 
-    // Tokenise remaining query
+    // Strip STOP WORDS to find pure intent
     result.tokens = tokeniseNoStop(q).filter(function(t) {
       return !STOP_WORDS.has(t);
     });
 
-    // Expand with synonyms
     var expanded = result.tokens.slice();
     result.tokens.forEach(function(tok) {
-      // Check abbreviations
       if (ABBREV_MAP[tok]) {
         tokeniseNoStop(ABBREV_MAP[tok]).forEach(function(t) {
           if (expanded.indexOf(t) < 0) expanded.push(t);
         });
       }
-      // Check synonyms
       Object.keys(SYNONYM_MAP).forEach(function(key) {
         if (tok === key || key.startsWith(tok + ' ') || tok.startsWith(key)) {
           SYNONYM_MAP[key].forEach(function(syn) {
@@ -390,7 +380,6 @@
     var records = this.records;
     var fuzzyTerms = [];
 
-    // Direct case number lookup
     if (parsed.type === 'case' && parsed.caseNumber) {
       var cn = parsed.caseNumber;
       var caseResults = records.filter(function(r) { return String(r.case || '') === cn; });
@@ -401,7 +390,6 @@
 
     var queryTerms = parsed.expanded.length ? parsed.expanded : parsed.tokens;
 
-    // Exact phrase matching (filter first)
     var pool = records;
     if (parsed.phrases.length) {
       pool = records.filter(function(r) {
@@ -410,7 +398,6 @@
       });
     }
 
-    // Boolean must/must-not filters
     if (parsed.must.length || parsed.mustNot.length) {
       pool = pool.filter(function(r) {
         var hay = [r.title, r.res, r.cat, r.eu].join(' ').toLowerCase();
@@ -420,34 +407,30 @@
       });
     }
 
-    // If no queryTerms, return phrase/boolean filtered pool
     if (!queryTerms.length) {
       return { results: pool.slice(0, 500).map(function(r) { return { record: r, score: 1 }; }), parsed: parsed, fuzzyTerms: [] };
     }
 
-    // Rebuild sub-index for filtered pool if needed
     var useIndex = this;
     var scored;
     if (pool.length < records.length && pool.length > 0) {
-      // Build a minimal scoring pass over the pool
       scored = this._scorePool(pool, queryTerms);
     } else {
       scored = this.scorer.score(records, queryTerms);
     }
 
-    // Fuzzy fallback: if very few results, expand with fuzzy terms
+    // Aggressive Fuzzy Fallback
     if (scored.length < 5 && parsed.tokens.length > 0) {
       var self = this;
       parsed.tokens.forEach(function(tok) {
-        if (useIndex.index.lookup(tok)) return; // exact term exists
-        var suggestions = self.fuzzy.suggest(tok, tok.length <= 4 ? 1 : 2);
+        if (useIndex.index.lookup(tok)) return; 
+        var suggestions = self.fuzzy.suggest(tok, tok.length <= 4 ? 1 : (tok.length <= 7 ? 2 : 3));
         suggestions.forEach(function(sug) {
           if (fuzzyTerms.indexOf(sug) < 0) fuzzyTerms.push(sug);
         });
       });
       if (fuzzyTerms.length) {
         var extraScored = useIndex.scorer.score(records, fuzzyTerms);
-        // Merge with penalty (0.6x for fuzzy matches)
         extraScored.forEach(function(item) {
           var existing = scored.find(function(s) { return s.ri === item.ri; });
           if (!existing) scored.push({ record: item.record, score: item.score * 0.6, ri: item.ri });
@@ -460,7 +443,6 @@
   };
 
   SearchEngine.prototype._scorePool = function(pool, queryTerms) {
-    // Lightweight scoring over a subset — no full index needed
     var fw = this.index.fieldWeights;
     var results = pool.map(function(r) {
       var hay = {
@@ -487,7 +469,6 @@
     return this.trigram.complete(prefix.toLowerCase(), 8);
   };
 
-  // Expose globally
   global.SE2Engine = SearchEngine;
   global.SE2Tokenise = tokeniseNoStop;
 
