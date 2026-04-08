@@ -18165,17 +18165,69 @@
   }
 
   // ── Query engine ───────────────────────────────────────────────────────────
+  // NOISE TOKENS: carry minimal signal — suppress from scoring to prevent false positives
+  var SE2_NOISE_TOKENS = new Set([
+    'part','number','parts','numbers','type','model','unit','item','product',
+    'controller','control','system','device','equipment','serial','code',
+    'information','info','details','data','record','report','list','catalog',
+    'request','inquiry','question','support','service','case','ticket',
+    'replacement','upgrade','update','version','new','old','latest'
+  ]);
+  // PART NUMBER pattern — alphanumeric codes like XR77, 845-1300, XBL650BQB100
+  var SE2_PART_NO_RX = /^[A-Za-z]{1,6}[\-\d][\w\-]{2,}$|^\d{3,4}[-\s]\d{3,4}$|^[A-Za-z]\d{3,}$|^[A-Za-z]{2,4}\d{2,4}$/;
+  // Question-prefix strip (more thorough than Q_STRIP)
+  var SE2_Q_PREFIX_RX = /^(?:how\s+(?:do|can|to|does|would|should)\s+|what\s+(?:is|are|was|were|does|do)\s+|where\s+(?:is|can|do|are)\s+|why\s+(?:is|does|do|did)\s+|who\s+(?:is|has|can)\s+|is\s+there\s+|can\s+(?:i|you)\s+|should\s+i\s+|do\s+you\s+(?:have|know)\s+)/i;
+
   function _normaliseQuery(raw) {
     var q = String(raw || '').trim();
+    // Strip question prefixes first (BUG FIX: "what is xr77" → "xr77")
+    q = q.replace(SE2_Q_PREFIX_RX, '').trim();
+    // Then apply original Q_STRIP patterns
     Q_STRIP.forEach(function(rx) { q = q.replace(rx, ' '); });
     q = q.trim();
-    var words = q.toLowerCase().split(/\s+/);
-    var expanded = [];
-    words.forEach(function(w) {
-      expanded.push(w);
-      if (SYNONYMS[w]) expanded.push(SYNONYMS[w]);
+
+    // Detect part-number codes in the query (BUG FIX: route to parts mode)
+    var rawWords = q.toLowerCase().split(/\s+/).filter(Boolean);
+    var isPartNoQuery = rawWords.some(function(w) { return SE2_PART_NO_RX.test(w); });
+    var partNoCodes = rawWords.filter(function(w) { return SE2_PART_NO_RX.test(w); });
+
+    // Build tokens — exclude stop words and noise tokens
+    var stopSet = new Set(['the','a','an','is','are','was','were','to','for','in','on','of','and','or',
+      'but','not','with','this','that','from','by','at','be','been','have','has','had',
+      'do','does','did','will','would','could','should','may','might','can','its','it','as',
+      'so','if','then','than','when','where','how','what','which','who','there','their',
+      'they','them','our','your','we','us','i','my','me','he','she','his','her','him',
+      'about','after','before','also','any','some','all','more','most','just','up','out',
+      'get','got','per','find','search','show','tell','give','explain','list',
+      'paano','pano','saan','bakit','ano','ang','mga','yung','sa','ng','ni','na',
+      'please','pls','paki','kasi','daw','raw','help','fix','resolve','issue','error','problem']);
+
+    var tokens = rawWords.filter(function(w) {
+      return w.length >= 2 && !stopSet.has(w);
     });
-    return { original: q, tokens: Array.from(new Set(expanded.filter(Boolean))), isNumeric: /^\d{4,}$/.test(q.trim()) };
+
+    // Expand tokens with synonyms — skip noise expansion
+    var expanded = tokens.slice();
+    tokens.forEach(function(w) {
+      if (SYNONYMS[w] && !SE2_NOISE_TOKENS.has(w)) {
+        var syn = SYNONYMS[w];
+        if (typeof syn === 'string') expanded.push(syn);
+      }
+    });
+    // Put part-number codes at front of expanded list for priority scoring
+    if (partNoCodes.length) {
+      partNoCodes.forEach(function(code) {
+        if (expanded.indexOf(code) < 0) expanded.unshift(code);
+      });
+    }
+
+    return {
+      original: q,
+      tokens: Array.from(new Set(expanded.filter(Boolean))),
+      isNumeric: /^\d{4,}$/.test(q.trim()),
+      isPartNoQuery: isPartNoQuery,
+      partNoCodes: partNoCodes
+    };
   }
 
   function _normLoose(v) {
@@ -18253,16 +18305,43 @@
     var score = 0;
     var titleHay = idx.titleHay;
     var normTitle = idx.normTitle;
+    // BUG FIX (2026-04-09): Part-number exact-match scoring
+    // When query has alphanumeric part codes (e.g. "xr77"), exact-match the title.
+    // Non-parts records get 0.08x multiplier so they don't pollute the results.
+    if (parsed.isPartNoQuery) {
+      var isPartsRec = String(r._src || '') === 'parts' ||
+        String(r._id || r.id || '').startsWith('parts_') ||
+        String(r.cat || '').toLowerCase().includes('part');
+      var partScore = 0;
+      (parsed.partNoCodes || []).forEach(function(code) {
+        var codeNorm = code.toLowerCase().replace(/[^a-z0-9]/g, '');
+        var titleNorm = titleHay.replace(/[^a-z0-9]/g, '');
+        if (titleHay === code || titleHay.startsWith(code + ' ') || titleHay.endsWith(' ' + code)) {
+          partScore += 10000;
+        } else if (titleNorm.startsWith(codeNorm) || titleNorm.includes(codeNorm)) {
+          partScore += 5000;
+        } else if (haystack.includes(code)) {
+          partScore += isPartsRec ? 500 : 10;
+        }
+      });
+      if (partScore === 0 && !isPartsRec) return 0;
+      if (!isPartsRec) partScore *= 0.08;
+      return partScore;
+    }
+
+    // Standard keyword scoring
     if (titleHay.includes(original)) score += 500;
     else if (haystack.includes(original)) score += 200;
     else if (normOriginal && (normTitle.includes(normOriginal) || normHaystack.includes(normOriginal))) score += 220;
 
     tokens.forEach(function(t) {
       if (t.length < 2) return;
+      // BUG FIX: Noise tokens get minimal weight
+      var noiseW = SE2_NOISE_TOKENS.has(t) ? 0.05 : 1.0;
       var normT = _normLoose(t);
-      if (titleHay.includes(t) || (normT && normTitle.includes(normT))) score += 80;
-      else if (haystack.includes(t) || (normT && normHaystack.includes(normT))) score += 20;
-      if (titleHay.startsWith(t) || (normT && normTitle.startsWith(normT))) score += 40;
+      if (titleHay.includes(t) || (normT && normTitle.includes(normT))) score += 80 * noiseW;
+      else if (haystack.includes(t) || (normT && normHaystack.includes(normT))) score += 20 * noiseW;
+      if (titleHay.startsWith(t) || (normT && normTitle.startsWith(normT))) score += 40 * noiseW;
     });
 
     return score;
@@ -18285,8 +18364,10 @@
         if (score > 0) results.push({ r: r, score: score + 5 });
       });
     }
-    // Performance optimization: final ordering is enforced in _run()
-    // as newest → oldest, so skip intermediate score sort here.
+    // BUG FIX: Sort by score for part-number queries to surface exact matches
+    if (parsed.isPartNoQuery) {
+      results.sort(function(a, b) { return b.score - a.score; });
+    }
     return results.map(function(x) { return x.r; });
   }
 
@@ -18462,18 +18543,24 @@
         (rows.length > LIMIT ? '<span style="font-size:9px;opacity:.45;margin-left:4px;">showing ' + LIMIT + '</span>' : '') + '</div>';
       rows.slice(0, LIMIT).forEach(function(r) {
         var gi = results.indexOf(r);
+        // BUG FIX: For parts records, show brand + type in meta; use desc as body
+        var isParts = String(r._src || '') === 'parts' || String(r._id || r.id || '').startsWith('parts_');
         var titleHl = hl(r.title || r.site || r.partNo || '(no title)', tokens);
-        var bodyText = (r.res || r.desc || r.notes || r.directory || '').slice(0, 280);
+        var bodyText = isParts
+          ? ([r.brand, r.cat, r.desc].filter(Boolean).join(' · ') || r.res || '').slice(0, 200)
+          : (r.res || r.desc || r.notes || r.directory || '').slice(0, 280);
         var bodyHl = hl(bodyText, tokens);
         var caseNum = r.case || r.caseNum || '';
         var endUser = r.eu || r.endUser || r.directory || '';
         var age = r.age || '';
+        var brandChip = (isParts && r.brand) ? '<span class="se2-eu-chip" style="color:#f59e0b;background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.2);"><i class="fas fa-tag" style="font-size:8px;margin-right:3px;"></i>' + esc(r.brand) + '</span>' : '';
         html += '<div class="se2-card" data-se2-idx="' + gi + '" style="animation:se2CardIn .22s ease both;animation-delay:' + Math.min(gi*12,350) + 'ms;">' +
           '<div class="se2-card-meta">' +
             '<span class="se2-badge" style="color:' + src.color + ';background:' + src.color + '1a;border:1px solid ' + src.color + '33;">' +
               '<i class="fas ' + src.icon + '" style="font-size:8px;margin-right:3px;"></i>' + esc(src.shortLabel || src.label) + '</span>' +
             (caseNum ? '<span class="se2-case-num">#' + hl(caseNum, tokens) + '</span>' : '') +
-            (endUser ? '<span class="se2-eu-chip"><i class="fas fa-user" style="font-size:8px;margin-right:3px;"></i>' + hl(endUser, tokens) + '</span>' : '') +
+            brandChip +
+            (endUser && !isParts ? '<span class="se2-eu-chip"><i class="fas fa-user" style="font-size:8px;margin-right:3px;"></i>' + hl(endUser, tokens) + '</span>' : '') +
             (age ? '<span class="se2-age-chip" style="margin-left:auto;">' + esc(age) + '</span>' : '') +
           '</div>' +
           '<div class="se2-card-title">' + titleHl + '</div>' +
@@ -18604,7 +18691,15 @@
     }
     // Product decision: always keep Search Engine 2 sorted newest → oldest.
     // Fallback when date is missing: use numeric case/id descending.
-    results = results.slice().sort(function(a, b) { return _toNewestRank(b) - _toNewestRank(a); });
+    // BUG FIX (2026-04-09): Part-number queries sort by score (exact match first),
+    // not by newest→oldest. Support case queries keep newest→oldest.
+    var parsedQ = _normaliseQuery(_state.query);
+    if (parsedQ.isPartNoQuery) {
+      // Keep the score-sorted order from _search()
+      // (already sorted in _search when isPartNoQuery=true)
+    } else {
+      results = results.slice().sort(function(a, b) { return _toNewestRank(b) - _toNewestRank(a); });
+    }
     _state.results = results;
     _renderCats(visibilityCounts);
     _renderSummary(results, q);
