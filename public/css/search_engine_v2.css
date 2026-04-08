@@ -1,0 +1,182 @@
+/* Search Engine 2 — AI Style UI v5.0 */
+
+.se2-ai-greeting {
+  background: linear-gradient(135deg, #1a1f35, #0f172a);
+  border-left: 3px solid #6366f1;
+  color: #e2e8f0;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.se2-section {
+  margin-bottom: 16px;
+}
+
+.se2-section h4 {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.se2-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.se2-card {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 10px 12px;
+  transition: border-color 0.15s;
+}
+
+.se2-card:hover { border-color: #6366f1; }
+
+.se2-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 3px;
+}
+
+.se2-card-meta {
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.se2-card-body {
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.se2-card-badge {
+  display: inline-block;
+  background: #1e293b;
+  color: #6366f1;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  font-family: monospace;
+}
+
+.se2-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.se2-table th {
+  text-align: left;
+  color: #64748b;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.se2-table td {
+  color: #cbd5e1;
+  padding: 5px 8px;
+  border-bottom: 1px solid #0f172a;
+  vertical-align: top;
+}
+
+.se2-table tr:hover td { background: #1e293b; }
+
+.se2-no-results {
+  color: #94a3b8;
+  font-size: 13px;
+  padding: 12px;
+  background: #0f172a;
+  border-radius: 6px;
+  border: 1px dashed #1e293b;
+}
+
+.se2-no-results ul {
+  margin: 8px 0 0 16px;
+  padding: 0;
+}
+
+.se2-no-results li { margin-bottom: 4px; }
+
+.se2-contact-card .se2-card-body {
+  font-family: monospace;
+  font-size: 11px;
+  color: #7dd3fc;
+}
+
+/* Autocomplete dropdown */
+.se2-autocomplete {
+  position: absolute;
+  z-index: 9999;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+  min-width: 280px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+.se2-autocomplete-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #cbd5e1;
+  transition: background 0.1s;
+}
+
+.se2-autocomplete-item:hover,
+.se2-autocomplete-item.active {
+  background: #1e293b;
+  color: #6366f1;
+}
+
+/* Source filter chips */
+.se2-source-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.se2-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.se2-chip:hover, .se2-chip.active {
+  background: #6366f1;
+  color: #fff;
+  border-color: #6366f1;
+}
+
+.se2-chip-count {
+  background: rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 0 4px;
+  font-size: 10px;
+}
