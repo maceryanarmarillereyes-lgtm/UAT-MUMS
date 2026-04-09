@@ -4229,3 +4229,219 @@
       border-radius: 8px; font-size: 10px; font-weight: 700;
       font-family: var(--ss-mono, monospace);
     }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       CONTROLLER LAB — Enhanced Booking System v4.0 CSS
+    ══════════════════════════════════════════════════════════════════════ */
+
+    /* ── Header badge (Available / In-Use) ─────────────────────────────── */
+    .hp-ctl-col-header-badge {
+      align-self: stretch;
+      text-align: center;
+      font-size: 8px; font-weight: 800; letter-spacing: .1em;
+      text-transform: uppercase; padding: 3px 10px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+    }
+    .hp-ctl-col-header-badge.available {
+      background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.25);
+      color: #10b981;
+    }
+    .hp-ctl-col-header-badge.in-use {
+      background: rgba(248,81,73,.12); border: 1px solid rgba(248,81,73,.3);
+      color: #f87171;
+      animation: badge-pulse 2.5s ease-in-out infinite;
+    }
+    @keyframes badge-pulse {
+      0%,100% { opacity:1; } 50% { opacity:.65; }
+    }
+
+    /* ── User strip (avatar + name inside card when in use) ────────────── */
+    .hp-ctl-user-strip {
+      display: flex; align-items: center; gap: 7px;
+      width: 100%; padding: 6px 8px;
+      background: rgba(162,93,220,.08); border: 1px solid rgba(162,93,220,.2);
+      border-radius: 9px; flex-shrink: 0;
+    }
+    .hp-ctl-user-avatar {
+      width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+      border: 1.5px solid rgba(162,93,220,.4);
+      overflow: hidden; display: flex; align-items: center; justify-content: center;
+    }
+    .hp-ctl-user-info { min-width: 0; flex: 1; }
+    .hp-ctl-user-name {
+      font-size: 10px; font-weight: 800; color: #c084fc;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .hp-ctl-user-task {
+      font-size: 8px; color: rgba(255,255,255,.35);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+
+    /* ── Countdown timer ────────────────────────────────────────────────── */
+    .hp-ctl-countdown {
+      display: flex; align-items: center; gap: 5px;
+      padding: 5px 10px; border-radius: 8px;
+      background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.25);
+      width: 100%;
+    }
+    .hp-ctl-countdown i { color: #fbbf24; flex-shrink: 0; }
+    .hp-ctl-countdown-val {
+      font-size: 14px; font-weight: 900; color: #fbbf24;
+      font-family: 'JetBrains Mono', monospace; letter-spacing: .04em;
+      flex: 1; text-align: center;
+    }
+    .hp-ctl-countdown-label { font-size: 8px; color: rgba(255,255,255,.35); white-space: nowrap; }
+    .hp-ctl-countdown.urgent {
+      background: rgba(248,81,73,.12); border-color: rgba(248,81,73,.35);
+      animation: badge-pulse 1s ease-in-out infinite;
+    }
+    .hp-ctl-countdown.urgent .hp-ctl-countdown-val { color: #f87171; }
+    .hp-ctl-countdown.urgent i { color: #f87171; }
+
+    /* ── Queue pill ─────────────────────────────────────────────────────── */
+    .hp-ctl-queue-pill {
+      display: flex; align-items: center; gap: 5px;
+      padding: 3px 9px; border-radius: 99px; width: fit-content;
+      background: rgba(162,93,220,.12); border: 1px solid rgba(162,93,220,.25);
+      color: #c084fc; font-size: 9px; font-weight: 700; letter-spacing: .04em;
+    }
+
+    /* ── Actions row (replaces old overlay) ─────────────────────────────── */
+    .hp-ctl-col-actions {
+      width: 100%; display: flex; flex-direction: column; gap: 5px; margin-top: auto;
+    }
+
+    /* ── Book / Queue button ────────────────────────────────────────────── */
+    .hp-ctl-book-btn {
+      width: 100%; padding: 8px 10px; border-radius: 9px;
+      font-size: 10px; font-weight: 800; letter-spacing: .04em;
+      cursor: pointer; font-family: inherit;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      transition: all .2s;
+      background: linear-gradient(135deg, rgba(34,197,94,.18), rgba(16,185,129,.12));
+      border: 1px solid rgba(34,197,94,.4); color: #4ade80;
+    }
+    .hp-ctl-book-btn:hover {
+      background: linear-gradient(135deg, rgba(34,197,94,.28), rgba(16,185,129,.2));
+      box-shadow: 0 4px 16px rgba(34,197,94,.2);
+    }
+    .hp-ctl-book-btn.queue-mode {
+      background: linear-gradient(135deg, rgba(162,93,220,.18), rgba(162,93,220,.1));
+      border-color: rgba(162,93,220,.4); color: #c084fc;
+    }
+    .hp-ctl-book-btn.queue-mode:hover {
+      background: linear-gradient(135deg, rgba(162,93,220,.28), rgba(162,93,220,.18));
+      box-shadow: 0 4px 16px rgba(162,93,220,.2);
+    }
+
+    /* ── In-use col state ───────────────────────────────────────────────── */
+    .hp-ctl-col.in-use {
+      background: rgba(248,81,73,.03);
+      border-right-color: rgba(248,81,73,.15);
+    }
+    .hp-ctl-col.in-use .hp-ctl-col-img {
+      filter: brightness(.88) saturate(.7);
+    }
+
+    /* ── In-use notice inside booking modal ─────────────────────────────── */
+    .hp-ctl-bk-inuse-notice {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px 14px; border-radius: 10px;
+      background: rgba(245,158,11,.07); border: 1px solid rgba(245,158,11,.25);
+      margin-bottom: 4px;
+    }
+    .hp-ctl-bk-inuse-icon {
+      width: 32px; height: 32px; border-radius: 9px;
+      background: rgba(245,158,11,.15); border: 1px solid rgba(245,158,11,.3);
+      display: flex; align-items: center; justify-content: center;
+      color: #f59e0b; font-size: 14px; flex-shrink: 0;
+    }
+    .hp-ctl-bk-inuse-text { flex: 1; min-width: 0; }
+    .hp-ctl-bk-inuse-title { font-size: 12px; font-weight: 800; color: #f59e0b; margin-bottom: 3px; }
+    .hp-ctl-bk-inuse-owner { font-size: 11px; color: #e2e8f0; }
+    .hp-ctl-bk-inuse-end { font-size: 10px; color: #f87171; font-family: monospace; margin-top: 2px; }
+    .hp-ctl-bk-inuse-msg { font-size: 9px; color: rgba(255,255,255,.45); margin-top: 5px; font-style: italic; line-height: 1.5; }
+
+    /* ── Queue modal dialog ─────────────────────────────────────────────── */
+    .hp-ctl-queue-dialog { max-width: 480px; }
+    .hp-ctl-q-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 9px;
+      background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07);
+    }
+    .hp-ctl-q-item.is-me {
+      background: rgba(162,93,220,.08); border-color: rgba(162,93,220,.25);
+    }
+    .hp-ctl-q-pos {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: rgba(88,166,255,.15); border: 1px solid rgba(88,166,255,.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 900; color: #58a6ff; flex-shrink: 0;
+    }
+    .hp-ctl-q-meta { flex: 1; min-width: 0; }
+    .hp-ctl-q-name { font-size: 11px; font-weight: 700; color: #e2e8f0; }
+    .hp-ctl-q-task { font-size: 9px; color: rgba(255,255,255,.4); margin-top: 1px; }
+    .hp-ctl-q-urgent-badge {
+      font-size: 7px; font-weight: 900; padding: 2px 7px; border-radius: 4px;
+      background: rgba(245,158,11,.15); border: 1px solid rgba(245,158,11,.3);
+      color: #f59e0b; letter-spacing: .06em; flex-shrink: 0;
+    }
+    .hp-ctl-q-leave-btn {
+      font-size: 9px; font-weight: 700; padding: 3px 9px; border-radius: 6px;
+      background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.2);
+      color: #f85149; cursor: pointer; font-family: inherit; transition: all .15s;
+    }
+    .hp-ctl-q-leave-btn:hover { background: rgba(248,81,73,.18); }
+
+    /* ── Alarm banner ───────────────────────────────────────────────────── */
+    @keyframes bell-ring {
+      0%  { transform: rotate(-15deg); }
+      100%{ transform: rotate(15deg);  }
+    }
+    @keyframes slide-in-top {
+      from { transform: translateY(-100%); opacity: 0; }
+      to   { transform: translateY(0);      opacity: 1; }
+    }
+    .hp-ctl-alarm-banner {
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+      z-index: 99999;
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #0f172a, #1e1b4b);
+      border: 1.5px solid rgba(162,93,220,.5);
+      border-radius: 14px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.7), 0 0 0 1px rgba(162,93,220,.15) inset;
+      color: #e2e8f0;
+      animation: slide-in-top .3s ease;
+      min-width: 320px; max-width: min(520px, 90vw);
+    }
+    .hp-ctl-alarm-dismiss {
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+      color: rgba(255,255,255,.6); border-radius: 7px; padding: 5px 10px;
+      cursor: pointer; font-size: 11px; font-family: inherit; transition: all .15s;
+      flex-shrink: 0;
+    }
+    .hp-ctl-alarm-dismiss:hover { background: rgba(248,81,73,.15); color: #f85149; }
+
+    /* ── Urgent notification banner ─────────────────────────────────────── */
+    .hp-ctl-urgent-banner {
+      position: fixed; top: 16px; right: 16px;
+      z-index: 99998;
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 16px 18px;
+      background: linear-gradient(135deg, rgba(245,158,11,.15), rgba(15,23,42,.98));
+      border: 1.5px solid rgba(245,158,11,.45);
+      border-radius: 14px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.6), 0 0 0 1px rgba(245,158,11,.1) inset;
+      color: #e2e8f0;
+      animation: slide-in-top .3s ease;
+      max-width: min(480px, 90vw);
+    }
+
+    /* ── Override old hp-ctl-col-overlay and hp-ctl-use-btn (deprecated) ── */
+    .hp-ctl-col-overlay { display: none !important; }
+    .hp-ctl-use-btn     { display: none !important; }
+
+    /* ── Col: remove border-right on last child when in-use state set ────── */
+    .hp-ctl-col.in-use:last-child { border-right: none; }

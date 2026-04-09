@@ -40,6 +40,21 @@
   <script src="/js/support_studio/supabase_loader.js"></script>
 
   <!-- Studio Cache Manager — IndexedDB-based persistent cache -->
+  <!-- Supabase SDK — loaded via first-party proxy for ODP Realtime -->
+  <script>
+    (function() {
+      var s = document.createElement('script');
+      s.src = '/api/vendor/supabase';
+      s.onload = function() {
+        document.dispatchEvent(new CustomEvent('mums:supabase_ready'));
+      };
+      s.onerror = function() {
+        console.warn('[MUMS] Supabase SDK load failed via proxy — Realtime disabled');
+      };
+      document.head.appendChild(s);
+    })();
+  </script>
+
   <script src="/js/studio_cache.js"></script>
   
   
@@ -997,6 +1012,17 @@
                   <!-- ── FORM BODY ── -->
                   <div id="hp-ctl-booking-body">
 
+                    <!-- In-Use Notice (shown when controller is already booked) -->
+                    <div id="hp-ctl-bk-inuse-notice" class="hp-ctl-bk-inuse-notice" style="display:none;">
+                      <div class="hp-ctl-bk-inuse-icon"><i class="fas fa-user-clock"></i></div>
+                      <div class="hp-ctl-bk-inuse-text">
+                        <div class="hp-ctl-bk-inuse-title">Controller In Use</div>
+                        <div class="hp-ctl-bk-inuse-owner">Currently used by: <strong id="hp-ctl-bk-inuse-name">—</strong></div>
+                        <div class="hp-ctl-bk-inuse-end" id="hp-ctl-bk-inuse-end"></div>
+                        <div class="hp-ctl-bk-inuse-msg">You can directly communicate with the existing user for your urgent task.</div>
+                      </div>
+                    </div>
+
                     <!-- Step indicators -->
                     <div class="hp-ctl-bk-steps">
                       <div class="hp-ctl-bk-step active" data-step="1">
@@ -1082,12 +1108,21 @@
                       </div>
                     </div>
 
+                    <!-- Alarm notification preference -->
+                    <div class="hp-ctl-bk-field" style="flex-direction:row;align-items:center;gap:10px;padding:10px 14px;background:rgba(162,93,220,.05);border:1px solid rgba(162,93,220,.15);border-radius:10px;">
+                      <input type="checkbox" id="hp-ctl-bk-notify-alarm" style="accent-color:#a855f7;width:16px;height:16px;cursor:pointer;flex-shrink:0;">
+                      <label for="hp-ctl-bk-notify-alarm" style="cursor:pointer;flex:1;">
+                        <div style="font-size:11px;font-weight:700;color:#c084fc;"><i class="fas fa-bell" style="margin-right:5px;"></i>Notify me when queue turn arrives</div>
+                        <div style="font-size:9px;color:rgba(255,255,255,.4);margin-top:2px;">Receive alarm + notification when it's your scheduled time on the controller</div>
+                      </label>
+                    </div>
+
                     <!-- Register button -->
                     <button class="hp-ctl-bk-register" id="hp-ctl-bk-register-btn"
                       onclick="window._ctlSubmitBooking()">
                       <span class="hp-ctl-bk-spinner" id="hp-ctl-bk-spinner"></span>
                       <i class="fas fa-bolt" id="hp-ctl-bk-register-icon"></i>
-                      <span id="hp-ctl-bk-register-label">Log Session</span>
+                      <span id="hp-ctl-bk-register-label">Book this Controller</span>
                     </button>
 
                     <!-- Success state -->
@@ -1098,6 +1133,111 @@
                       <div class="hp-ctl-bk-success-title">Session Logged!</div>
                       <p id="hp-ctl-bk-success-msg" class="hp-ctl-bk-success-msg"></p>
                       <div id="hp-ctl-bk-sheet-status"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ═══ QUEUE MODAL ═══ -->
+              <div id="hp-ctl-queue-modal" class="hp-ctl-modal" aria-hidden="true">
+                <div class="hp-ctl-dialog hp-ctl-queue-dialog">
+                  <div class="hp-ctl-dialog-head" style="background:linear-gradient(135deg,rgba(162,93,220,.12),rgba(162,93,220,.04));border-bottom:1px solid rgba(162,93,220,.2);">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                      <div style="width:34px;height:34px;border-radius:10px;background:rgba(162,93,220,.15);border:1px solid rgba(162,93,220,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-list-alt" style="color:#c084fc;font-size:14px;"></i>
+                      </div>
+                      <div>
+                        <div class="hp-ctl-dialog-title" id="hp-ctl-q-ctrl-name" style="color:#c084fc;">Controller Queue</div>
+                        <div style="font-size:9px;color:rgba(255,255,255,.4);margin-top:1px;">Join the waiting queue for this controller</div>
+                      </div>
+                    </div>
+                    <button class="hp-ctl-modal-close" onclick="window._ctlCloseQueue()">✕</button>
+                  </div>
+                  <div class="hp-ctl-dialog-body" style="gap:14px;">
+                    <!-- Controller preview -->
+                    <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:10px;">
+                      <img id="hp-ctl-q-ctrl-img" src="/Widget%20Images/E2_Widget.png" style="width:44px;height:44px;object-fit:contain;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);padding:4px;" alt="Controller"/>
+                      <div>
+                        <div style="font-size:11px;font-weight:700;color:#e2e8f0;">Currently in use by:</div>
+                        <div style="font-size:13px;font-weight:900;color:#f85149;margin-top:2px;" id="hp-ctl-q-current-user">—</div>
+                        <div style="font-size:10px;color:#6b7280;margin-top:3px;font-family:monospace;" id="hp-ctl-q-end-time">—</div>
+                      </div>
+                    </div>
+                    <!-- Queue list -->
+                    <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;margin-bottom:-6px;">Current Queue</div>
+                    <div id="hp-ctl-q-list" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;"></div>
+                    <!-- Already queued msg -->
+                    <div id="hp-ctl-q-already-msg" style="display:none;padding:10px 14px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:9px;font-size:11px;color:#10b981;"></div>
+                    <!-- Join section -->
+                    <div id="hp-ctl-q-join-section">
+                      <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">Join Queue</div>
+                      <div class="hp-ctl-settings-field">
+                        <label>What will you be doing? (optional)</label>
+                        <input id="hp-ctl-q-task-input" class="hp-ctl-settings-input" type="text" placeholder="e.g. Firmware test, protocol config…" autocomplete="off"/>
+                      </div>
+                      <!-- Urgent toggle -->
+                      <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.18);border-radius:10px;margin-bottom:10px;">
+                        <input type="checkbox" id="hp-ctl-q-urgent" style="accent-color:#f59e0b;width:16px;height:16px;cursor:pointer;flex-shrink:0;margin-top:2px;">
+                        <label for="hp-ctl-q-urgent" style="cursor:pointer;">
+                          <div style="font-size:11px;font-weight:700;color:#f59e0b;"><i class="fas fa-bolt" style="margin-right:5px;"></i>This is urgent</div>
+                          <div style="font-size:9px;color:rgba(255,255,255,.4);margin-top:2px;">The current user will be notified of your urgent request. System will log this override request.</div>
+                        </label>
+                      </div>
+                      <!-- Alarm preference -->
+                      <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:rgba(162,93,220,.05);border:1px solid rgba(162,93,220,.15);border-radius:10px;margin-bottom:12px;">
+                        <input type="checkbox" id="hp-ctl-q-alarm" style="accent-color:#a855f7;width:16px;height:16px;cursor:pointer;flex-shrink:0;margin-top:2px;" checked>
+                        <label for="hp-ctl-q-alarm" style="cursor:pointer;">
+                          <div style="font-size:11px;font-weight:700;color:#c084fc;"><i class="fas fa-bell" style="margin-right:5px;"></i>Notify me when it's my turn</div>
+                          <div style="font-size:9px;color:rgba(255,255,255,.4);margin-top:2px;">Receive an alarm + browser notification when the current session ends</div>
+                        </label>
+                      </div>
+                      <button class="hp-ctl-save-btn" onclick="window._ctlJoinQueue()" style="background:linear-gradient(135deg,rgba(162,93,220,.22),rgba(162,93,220,.12));border-color:rgba(162,93,220,.4);color:#c084fc;">
+                        <i class="fas fa-list-alt" style="font-size:11px;margin-right:7px;"></i> Join Queue
+                      </button>
+                    </div>
+                    <!-- Override section -->
+                    <div style="padding:10px 14px;background:rgba(248,81,73,.04);border:1px dashed rgba(248,81,73,.25);border-radius:10px;">
+                      <div style="font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#f85149;margin-bottom:6px;">Emergency Override</div>
+                      <div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:10px;line-height:1.6;">Only use when absolutely critical. Override will be logged to the audit spreadsheet. Make sure to communicate with the current user first.</div>
+                      <button class="hp-ctl-delete-btn" data-ctl-override="" id="hp-ctl-q-override-btn" onclick="window._ctlOverride(window._queueCtlId||'')" style="font-size:10px;padding:8px 14px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size:10px;margin-right:5px;"></i> Override (Urgent)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ═══ OVERRIDE CONFIRMATION MODAL ═══ -->
+              <div id="hp-ctl-override-modal" class="hp-ctl-modal" aria-hidden="true">
+                <div class="hp-ctl-dialog" style="max-width:420px;">
+                  <div class="hp-ctl-dialog-head" style="background:rgba(248,81,73,.08);border-bottom:1px solid rgba(248,81,73,.2);">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                      <i class="fas fa-exclamation-triangle" style="color:#f85149;font-size:18px;"></i>
+                      <div class="hp-ctl-dialog-title" style="color:#f85149;">Confirm Emergency Override</div>
+                    </div>
+                    <button class="hp-ctl-modal-close" onclick="window._ctlCloseOverride()">✕</button>
+                  </div>
+                  <div class="hp-ctl-dialog-body" style="gap:14px;">
+                    <div style="padding:12px 14px;background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:10px;">
+                      <div style="font-size:12px;color:rgba(255,255,255,.8);line-height:1.7;">
+                        You are about to <strong style="color:#f85149;">override</strong> the current session on <strong id="hp-ctl-ov-ctrl-name" style="color:#fff;"></strong>,
+                        currently used by <strong id="hp-ctl-ov-owner" style="color:#f59e0b;"></strong>.
+                      </div>
+                      <div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:8px;font-style:italic;">
+                        ⚠ This action will be permanently logged in the audit spreadsheet. Only override if you have already communicated with the current user.
+                      </div>
+                    </div>
+                    <div class="hp-ctl-settings-field">
+                      <label>Reason for Override (Required)</label>
+                      <input id="hp-ctl-ov-reason" class="hp-ctl-settings-input" type="text" placeholder="e.g. Critical firmware deploy, time-sensitive test…" autocomplete="off"/>
+                    </div>
+                    <div style="display:flex;gap:10px;">
+                      <button class="hp-ctl-save-btn" id="hp-ctl-ov-confirm-btn" style="flex:1;background:rgba(248,81,73,.15);border-color:rgba(248,81,73,.4);color:#f85149;">
+                        <i class="fas fa-exclamation-triangle" style="font-size:11px;margin-right:6px;"></i> Confirm Override
+                      </button>
+                      <button class="hp-ctl-save-btn" onclick="window._ctlCloseOverride()" style="flex:1;">
+                        Cancel
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -3347,7 +3487,8 @@
   <script src="/js/support_studio/features/cache_ui.js"></script>
   <script src="/js/support_studio/features/se2.js"></script>
   <script src="/js/support_studio/features/tab_connect_parts_contact.js"></script>
-  <script src="/js/pages/support_studio_patches.js"></script>
+  <!-- support_studio_patches moved to end of body -->
+<script src="/js/pages/support_studio_patches.js"></script>
 </body>
 
 </html>

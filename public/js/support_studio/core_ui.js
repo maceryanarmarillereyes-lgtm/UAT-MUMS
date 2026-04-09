@@ -921,36 +921,126 @@
     }
 
     /* ── Vertical column display in main lab area ── */
+    /* ── Booking state helpers ── */
+    function getBooking(id) {
+      try { var r=localStorage.getItem('ctl_booking_'+id); return r?JSON.parse(r):null; } catch(_){ return null; }
+    }
+    function setBooking(id, data) {
+      try { if(data) localStorage.setItem('ctl_booking_'+id, JSON.stringify(data)); else localStorage.removeItem('ctl_booking_'+id); } catch(_){}
+    }
+    function getQueue(id) {
+      try { var r=localStorage.getItem('ctl_queue_'+id); return r?JSON.parse(r):[]; } catch(_){ return []; }
+    }
+    function setQueue(id, arr) {
+      try { localStorage.setItem('ctl_queue_'+id, JSON.stringify(arr||[])); } catch(_){}
+    }
+    function fmtRemaining(ms) {
+      if(ms<=0) return '00:00';
+      var s=Math.ceil(ms/1000), h=Math.floor(s/3600); s%=3600;
+      var m=Math.floor(s/60); s%=60;
+      if(h>0) return h+'h '+pad(m)+'m '+pad(s)+'s';
+      return pad(m)+':'+pad(s);
+    }
+    function pad(n){ return n<10?'0'+n:String(n); }
+    function parseDurMs(str) {
+      str=String(str||'').trim().toLowerCase(); var ms=0;
+      var h=str.match(/(\d+)\s*h/); if(h) ms+=parseInt(h[1])*3600000;
+      var m=str.match(/(\d+)\s*m(?:in)?/); if(m) ms+=parseInt(m[1])*60000;
+      var s=str.match(/(\d+)\s*s(?:ec)?/); if(s) ms+=parseInt(s[1])*1000;
+      if(!ms){ var only=str.match(/^(\d+)$/); if(only) ms=parseInt(only[1])*60000; }
+      return ms||0;
+    }
+    function _ctlGetCurrentUser() {
+      try {
+        if(window._qbMyNameCache&&window._qbMyNameCache.trim()) return window._qbMyNameCache.trim();
+        var store=window.store&&typeof window.store.getState==='function'?window.store.getState():null;
+        if(store&&store.user){var u=store.user;return(u.qb_name||u.name||u.email||'Unknown').trim();}
+        if(window.me) return(window.me.qb_name||window.me.name||window.me.email||'Unknown').trim();
+      }catch(_){}
+      return 'Unknown';
+    }
+    function _ctlGetAvatar() {
+      try {
+        var store=window.store&&typeof window.store.getState==='function'?window.store.getState():null;
+        if(store&&store.user&&store.user.avatar_url) return store.user.avatar_url;
+        if(window.me&&window.me.avatar_url) return window.me.avatar_url;
+      }catch(_){}
+      return '';
+    }
+    function initials(name){
+      return String(name||'').trim().split(/\s+/).map(function(w){return w[0]||'';}).join('').toUpperCase().slice(0,2)||'??';
+    }
+
+    /* ── Vertical column display in main lab area ── */
     function renderMainList(items) {
       var host = document.getElementById('hp-ctl-list'); if(!host) return;
       if(!items.length) {
-        host.innerHTML = '<div class="hp-ctl-empty"><i class="fas fa-network-wired"></i><span>No controller configured yet</span><span style="font-size:9px;opacity:.5;">Click the ⚙ icon above to add one</span></div>';
+        host.innerHTML = '<div class="hp-ctl-empty"><i class="fas fa-network-wired"></i><span>No controller configured yet</span><span style="font-size:9px;opacity:.5;">Click the cog icon above to add one</span></div>';
         return;
       }
+      if(window._ctlTimers){ Object.keys(window._ctlTimers).forEach(function(k){clearInterval(window._ctlTimers[k]);}); }
+      window._ctlTimers={};
       host.innerHTML = items.map(function(item){
-        var cls = statusCls(item.status);
-        var statusIcon = cls==='offline' ? '🔴' : cls==='maintenance' ? '🟡' : '🟢';
-        // Each card now has a hover overlay with "Use This Controller" + "Settings"
-        // The old .hp-ctl-col-settings button is hidden via CSS (display:none)
-        return '<div class="hp-ctl-col">'+
-          '<div class="hp-ctl-col-badge">'+esc(item.type)+'</div>'+
+        var cls=statusCls(item.status);
+        var statusIcon=cls==='offline'?'<span style="color:#f85149;">&#9679;</span>':cls==='maintenance'?'<span style="color:#fbbf24;">&#9679;</span>':'<span style="color:#10b981;">&#9679;</span>';
+        var booking=getBooking(item.id);
+        var queue=getQueue(item.id);
+        var isActive=!!(booking&&booking.endMs>Date.now());
+        /* header badge */
+        var headerBadge=isActive
+          ?'<div class="hp-ctl-col-header-badge in-use"><i class="fas fa-user" style="font-size:7px;"></i> '+esc(booking.user)+'</div>'
+          :'<div class="hp-ctl-col-header-badge available"><i class="fas fa-check-circle" style="font-size:7px;"></i> Available</div>';
+        /* user strip */
+        var userBadge='';
+        if(isActive){
+          var av=booking.avatarUrl||'';
+          var avHtml=av
+            ?'<img src="'+esc(av)+'" alt="" onerror="this.style.display=\'none\'" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />'
+            :'<span style="width:26px;height:26px;border-radius:50%;background:rgba(162,93,220,.35);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#c084fc;flex-shrink:0;">'+esc(initials(booking.user))+'</span>';
+          userBadge='<div class="hp-ctl-user-strip"><div class="hp-ctl-user-avatar">'+avHtml+'</div><div class="hp-ctl-user-info"><div class="hp-ctl-user-name">'+esc(booking.user)+'</div><div class="hp-ctl-user-task">'+esc((booking.task||'').slice(0,32))+'</div></div></div>';
+        }
+        /* countdown */
+        var timerId='ctl-timer-'+item.id;
+        var timerHtml=isActive?'<div class="hp-ctl-countdown" id="'+timerId+'"><i class="fas fa-hourglass-half" style="font-size:8px;"></i><span class="hp-ctl-countdown-val" id="'+timerId+'-val">--:--</span><span class="hp-ctl-countdown-label">remaining</span></div>':'';
+        /* queue pill */
+        var queuePill=queue.length>0?'<div class="hp-ctl-queue-pill"><i class="fas fa-users" style="font-size:8px;"></i><span>'+queue.length+' waiting</span></div>':'';
+        /* action button */
+        var actionBtn=isActive
+          ?'<button class="hp-ctl-book-btn queue-mode" data-ctl-queue="'+esc(item.id)+'"><i class="fas fa-list-alt" style="font-size:10px;"></i> Join Queue</button>'
+          :'<button class="hp-ctl-book-btn" data-ctl-use="'+esc(item.id)+'"><i class="fas fa-calendar-check" style="font-size:10px;"></i> Book this Controller</button>';
+        return '<div class="hp-ctl-col'+(isActive?' in-use':'')+'" data-ctl-id="'+esc(item.id)+'">'+
+          headerBadge+userBadge+
           '<img class="hp-ctl-col-img" src="'+esc(imageFor(item.type))+'" alt="'+esc(item.type)+'" onerror="this.src=\''+esc(FALLBACK_IMG)+'\';" />'+
-          '<div class="hp-ctl-col-meta">'+
-            '<div class="hp-ctl-col-name">'+esc(labelFor(item.type))+'</div>'+
-            '<div class="hp-ctl-col-ip">'+esc(item.ip||'—')+'</div>'+
-          '</div>'+
+          '<div class="hp-ctl-col-meta"><div class="hp-ctl-col-name">'+esc(labelFor(item.type))+'</div><div class="hp-ctl-col-ip">'+esc(item.ip||'--')+'</div></div>'+
           '<span class="hp-ctl-col-status '+cls+'">'+statusIcon+' '+esc(item.status||'Online')+'</span>'+
-          // Hover overlay — replaces the settings button at the bottom
-          '<div class="hp-ctl-col-overlay">'+
-            '<button class="hp-ctl-use-btn" data-ctl-use="'+esc(item.id)+'">'+
-              '<i class="fas fa-play-circle" style="font-size:12px;"></i> Use This Controller'+
-            '</button>'+
-            '<button class="hp-ctl-overlay-settings" data-ctl-settings="'+esc(item.id)+'">'+
-              '<i class="fas fa-cog" style="font-size:10px;"></i> Settings'+
-            '</button>'+
+          timerHtml+queuePill+
+          '<div class="hp-ctl-col-actions">'+actionBtn+
+            '<button class="hp-ctl-overlay-settings" data-ctl-settings="'+esc(item.id)+'"><i class="fas fa-cog" style="font-size:10px;"></i> Settings</button>'+
           '</div>'+
         '</div>';
       }).join('');
+      /* start countdown intervals */
+      items.forEach(function(item){
+        var booking=getBooking(item.id);
+        if(!booking||booking.endMs<=Date.now()) return;
+        var valEl=document.getElementById('ctl-timer-'+item.id+'-val');
+        if(!valEl) return;
+        valEl.textContent=fmtRemaining(booking.endMs-Date.now());
+        window._ctlTimers[item.id]=setInterval(function(){
+          var rem=booking.endMs-Date.now();
+          if(rem<=0){
+            clearInterval(window._ctlTimers[item.id]);
+            delete window._ctlTimers[item.id];
+            setBooking(item.id,null);
+            window._ctlNotifyQueue&&window._ctlNotifyQueue(item.id);
+            renderAll(); return;
+          }
+          var vEl=document.getElementById('ctl-timer-'+item.id+'-val');
+          if(vEl) vEl.textContent=fmtRemaining(rem);
+          var wEl=document.getElementById('ctl-timer-'+item.id);
+          if(wEl){ if(rem<120000) wEl.classList.add('urgent'); else wEl.classList.remove('urgent'); }
+        },1000);
+      });
     }
 
     function renderAll() {
@@ -1038,10 +1128,15 @@
       // Delete controller
       var delBtn = t.closest && t.closest('#hp-ctl-settings-delete-btn');
       if(delBtn){ deleteController(); return; }
-      // "Use This Controller" button in hover overlay
+      // "Book this Controller" button (free) OR "Join Queue" (in-use)
       var useBtn = t.closest && t.closest('[data-ctl-use]');
       if(useBtn){ window._ctlOpenBooking(String(useBtn.getAttribute('data-ctl-use')||'')); return; }
-      // Any settings button (chip row or column)
+      var queueBtn = t.closest && t.closest('[data-ctl-queue]');
+      if(queueBtn){ window._ctlOpenQueue(String(queueBtn.getAttribute('data-ctl-queue')||'')); return; }
+      // Override button
+      var overrideBtn = t.closest && t.closest('[data-ctl-override]');
+      if(overrideBtn){ window._ctlOverride(String(overrideBtn.getAttribute('data-ctl-override')||'')); return; }
+      // Any settings button
       var settingsBtn = t.closest && t.closest('[data-ctl-settings]');
       if(settingsBtn){ openSettings(String(settingsBtn.getAttribute('data-ctl-settings')||'')); return; }
       // Backdrop click to close
@@ -1052,8 +1147,14 @@
     var selectEl = document.getElementById('hp-ctl-type-select');
     if(selectEl) selectEl.addEventListener('change', renderPreview);
 
+    // Listen for booking system re-render requests
+    document.addEventListener('ctl:rerender', renderAll);
+
     renderPreview();
     renderAll();
+
+    // Expose internal renderAll for booking system
+    window._ctlRenderAll = renderAll;
   })();
 
   // ── Settings nav switching ──────────────────────────────────────
@@ -1124,516 +1225,693 @@
 })();
 
 /* ══════════════════════════════════════════════════════════════════════════
-   CONTROLLER LAB BOOKING — v3.0 (2026-04-09 COMPLETE REWRITE)
+   CONTROLLER LAB — Full Booking System v4.0
    ══════════════════════════════════════════════════════════════════════════
-   BUGFIX LOG v3.0:
-   BUG 1 FIXED: 401 error on page load — Apps Script "Who has access" was set
-     to "Only myself". JS now silently handles 401/403/network errors and saves
-     all logs to localStorage backup (key: mums_ctl_log_backup) as fallback.
-   BUG 2 FIXED: JSON.parse mismatch — Apps Script was trying to JSON.parse a
-     URLSearchParams body. sendStrategy now sends URLSearchParams which maps to
-     e.parameter.* in Apps Script (no JSON.parse needed on the server).
-   BUG 3 NEW: Sheet connection health check — when booking modal opens, a GET
-     ping is sent to the Apps Script endpoint. Status pill shows:
-       🟢 Sheet connected    — endpoint alive and accessible
-       🔴 Sheet unreachable  — 401/403/network error, will use localStorage backup
-       ⚪ Not configured     — SHEETS_ENDPOINT not set
-   BUG 4 NEW: Pending log recovery panel — all localStorage-backed logs are
-     shown in a recovery panel with "Retry Send to Sheet" button. Once the
-     Apps Script permissions are fixed, user can replay missed logs.
+   Features:
+   • Book this Controller  — starts a timed session, stores in localStorage
+   • Countdown timer        — live visible on each card
+   • Queue system           — join queue when controller is in use
+   • Override system        — urgent override with audit log
+   • Alarm notification     — notify queued user when session ends
+   • Pending sheet logs     — retry offline submissions
    ══════════════════════════════════════════════════════════════════════════ */
 
 (function() {
   'use strict';
 
   // ── CONFIG ────────────────────────────────────────────────────────────────
-  var BACKUP_FOLDER_URL = 'https://mycopeland.sharepoint.com/sites/AdvanceServices/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FAdvanceServices%2FShared%20Documents%2FManila%20Controller%20Appsheet%20Project%2FMUMS%20APP%2FCONTROLLER%20LAB%20BACKUP%20FILE&viewid=e4a428c7%2D1e26%2D4929%2D9fe6%2D85f5f21174a9&OR=Teams%2DHL&CT=1723517065809&clickparams=eyJBcHBOYW1lIjoiVGVhbXMtRGVza3RvcCIsIkFwcFZlcnNpb24iOiI0OS8yNDA3MTEyODgyNSIsIkhhc0ZlZGVyYXRlZFVzZXIiOmZhbHNlfQ%3D%3D&startedResponseCatch=true';
-  var BACKUP_LS_KEY = 'mums_ctl_log_backup';
-
+  var BACKUP_FOLDER_URL = 'https://mycopeland.sharepoint.com/sites/AdvanceServices/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FAdvanceServices%2FShared%20Documents%2FManila%20Controller%20Appsheet%20Project%2FMUMS%20APP%2FCONTROLLER%20LAB%20BACKUP%20FILE&viewid=e4a428c7%2D1e26%2D4929%2D9fe6%2D85f5f21174a9';
+  var BACKUP_LS_KEY   = 'mums_ctl_log_backup';
   var SHEETS_ENDPOINT = window._CTL_SHEETS_ENDPOINT || '';
 
   // ── State ─────────────────────────────────────────────────────────────────
   var _bookingCtlId   = null;
   var _bookingCtlData = null;
-  var _sheetReachable = null; // null=unknown, true=ok, false=unreachable
+  var _queueCtlId     = null;
+  var _sheetReachable = null;
 
-  // ── localStorage helpers ──────────────────────────────────────────────────
+  // ── Storage helpers ───────────────────────────────────────────────────────
   function getItems() {
-    try { var r = localStorage.getItem('mums_controller_lab_items_v1'); var p = r ? JSON.parse(r) : []; return Array.isArray(p) ? p : []; } catch(_) { return []; }
+    try { var r=localStorage.getItem('mums_controller_lab_items_v1'); var p=r?JSON.parse(r):[]; return Array.isArray(p)?p:[]; } catch(_){ return []; }
   }
-
+  function getBooking(id) {
+    try { var r=localStorage.getItem('ctl_booking_'+id); return r?JSON.parse(r):null; } catch(_){ return null; }
+  }
+  function setBooking(id, data) {
+    try { if(data) localStorage.setItem('ctl_booking_'+id,JSON.stringify(data)); else localStorage.removeItem('ctl_booking_'+id); } catch(_){}
+  }
+  function getQueue(id) {
+    try { var r=localStorage.getItem('ctl_queue_'+id); return r?JSON.parse(r):[]; } catch(_){ return []; }
+  }
+  function setQueue(id, arr) {
+    try { localStorage.setItem('ctl_queue_'+id, JSON.stringify(arr||[])); } catch(_){}
+  }
   function getPendingLogs() {
-    try { var r = localStorage.getItem(BACKUP_LS_KEY); var p = r ? JSON.parse(r) : []; return Array.isArray(p) ? p : []; } catch(_) { return []; }
+    try { var r=localStorage.getItem(BACKUP_LS_KEY); var p=r?JSON.parse(r):[]; return Array.isArray(p)?p:[]; } catch(_){ return []; }
   }
-
   function setPendingLogs(logs) {
-    try { localStorage.setItem(BACKUP_LS_KEY, JSON.stringify((logs || []).slice(0, 200))); } catch(_) {}
+    try { localStorage.setItem(BACKUP_LS_KEY, JSON.stringify((logs||[]).slice(0,200))); } catch(_){}
   }
-
   function savePendingLog(payload) {
     try {
-      var logs = getPendingLogs();
-      // Avoid exact duplicates (same timestamp+user)
-      var isDup = logs.some(function(l) { return l.timestamp === payload.timestamp && l.user === payload.user; });
-      if (!isDup) { logs.unshift(payload); setPendingLogs(logs); }
-    } catch(_) {}
+      var logs=getPendingLogs();
+      var isDup=logs.some(function(l){return l.timestamp===payload.timestamp&&l.user===payload.user;});
+      if(!isDup){ logs.unshift(payload); setPendingLogs(logs); }
+    } catch(_){}
+  }
+  function removePendingLog(ts,user) {
+    try { setPendingLogs(getPendingLogs().filter(function(l){return!(l.timestamp===ts&&l.user===user);})); } catch(_){}
   }
 
-  function removePendingLog(timestamp, user) {
-    try {
-      var logs = getPendingLogs().filter(function(l) { return !(l.timestamp === timestamp && l.user === user); });
-      setPendingLogs(logs);
-    } catch(_) {}
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function imageFor(type){ var m={'E2':'/Widget%20Images/E2_Widget.png','E3':'/Widget%20Images/E3_Widget.png','Site Supervisor':'/Widget%20Images/Site%20Supervisor_Widget.png'}; return m[type]||'/Widget%20Images/quickbase_logo.png'; }
+  function labelFor(type){ var m={'E2':'E2 Controller','E3':'E3 Gateway','Site Supervisor':'Site Supervisor'}; return m[type]||type; }
+  function phtNow(){ return new Date().toLocaleString('en-US',{timeZone:'Asia/Manila',month:'short',day:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true})+' PHT'; }
+  function pad(n){ return n<10?'0'+n:String(n); }
+  function fmtMs(ms){
+    if(ms<=0) return '00:00';
+    var s=Math.ceil(ms/1000),h=Math.floor(s/3600); s%=3600; var m=Math.floor(s/60); s%=60;
+    if(h>0) return h+'h '+pad(m)+'m '+pad(s)+'s';
+    return pad(m)+':'+pad(s);
   }
-
-  // ── Image / label helpers ─────────────────────────────────────────────────
-  function imageFor(type) {
-    var map = { 'E2': '/Widget%20Images/E2_Widget.png', 'E3': '/Widget%20Images/E3_Widget.png', 'Site Supervisor': '/Widget%20Images/Site%20Supervisor_Widget.png' };
-    return map[type] || '/Widget%20Images/quickbase_logo.png';
+  function parseDurMs(str){
+    str=String(str||'').trim().toLowerCase(); var ms=0;
+    var h=str.match(/(\d+)\s*h(?:our)?s?/); if(h) ms+=parseInt(h[1])*3600000;
+    var m=str.match(/(\d+)\s*m(?:in(?:ute)?s?)?/); if(m) ms+=parseInt(m[1])*60000;
+    var s=str.match(/(\d+)\s*s(?:ec(?:ond)?s?)?/); if(s) ms+=parseInt(s[1])*1000;
+    if(!ms){ var only=str.match(/^(\d+)$/); if(only) ms=parseInt(only[1])*60000; }
+    return ms||0;
   }
-
-  function labelFor(type) {
-    var map = { 'E2': 'E2 Controller', 'E3': 'E3 Gateway', 'Site Supervisor': 'Site Supervisor' };
-    return map[type] || type;
-  }
-
-  function getCurrentUser() {
-    try {
-      if (window._qbMyNameCache && window._qbMyNameCache.trim()) return window._qbMyNameCache.trim();
-      var store = window.store && typeof window.store.getState === 'function' ? window.store.getState() : null;
-      if (store && store.user) { var u = store.user; return (u.qb_name || u.name || u.email || 'Unknown').trim(); }
-      if (window.me) return (window.me.qb_name || window.me.name || window.me.email || 'Unknown').trim();
-    } catch(_) {}
+  function getCurrentUser(){
+    try{
+      if(window._qbMyNameCache&&window._qbMyNameCache.trim()) return window._qbMyNameCache.trim();
+      var store=window.store&&typeof window.store.getState==='function'?window.store.getState():null;
+      if(store&&store.user){var u=store.user;return(u.qb_name||u.name||u.email||'Unknown').trim();}
+      if(window.me) return(window.me.qb_name||window.me.name||window.me.email||'Unknown').trim();
+    }catch(_){}
     return 'Unknown';
   }
-
-  function phtNow() {
-    return new Date().toLocaleString('en-US', {
-      timeZone: 'Asia/Manila', month: 'short', day: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
-    }) + ' PHT';
+  function getAvatarUrl(){
+    try{
+      var store=window.store&&typeof window.store.getState==='function'?window.store.getState():null;
+      if(store&&store.user&&store.user.avatar_url) return store.user.avatar_url;
+      if(window.me&&window.me.avatar_url) return window.me.avatar_url;
+    }catch(_){}
+    return '';
   }
-
-  function esc(s) {
-    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  function buildFormPayload(payload) {
-    return new URLSearchParams({
-      timestamp:  payload.timestamp,
-      user:       payload.user,
-      controller: payload.controller,
-      task:       payload.task,
-      duration:   payload.duration,
-      backupFile: payload.backupFile
-    });
+  function buildFormPayload(p){
+    return new URLSearchParams({timestamp:p.timestamp,user:p.user,controller:p.controller,task:p.task,duration:p.duration,backupFile:p.backupFile,note:p.note||''});
   }
 
   // ── Sheet health check ────────────────────────────────────────────────────
-  // Pings the Apps Script GET endpoint to verify it's reachable and accessible.
-  // Result: _sheetReachable = true|false, updates the status pill in the modal.
-  function _pingSheet(callback) {
-    var dotIcon  = document.getElementById('hp-ctl-sheet-dot-icon');
-    var dotLabel = document.getElementById('hp-ctl-sheet-dot-label');
-
-    function setStatus(ok, label) {
-      _sheetReachable = ok;
-      if (dotIcon) {
-        dotIcon.className = 'hp-ctl-status-dot ' + (ok ? 'connected' : 'error');
-        // Also update inline for older Safari
-        dotIcon.style.background = ok ? '#10b981' : '#ef4444';
-      }
-      if (dotLabel) {
-        dotLabel.style.color = ok ? '#10b981' : '#ef4444';
-        dotLabel.textContent = label;
-      }
-      if (callback) callback(ok);
+  function _pingSheet(cb){
+    var dotIcon=document.getElementById('hp-ctl-sheet-dot-icon');
+    var dotLabel=document.getElementById('hp-ctl-sheet-dot-label');
+    function setStatus(ok,label){
+      _sheetReachable=ok;
+      if(dotIcon){dotIcon.className='hp-ctl-status-dot '+(ok?'connected':'error');dotIcon.style.background=ok?'#10b981':'#ef4444';}
+      if(dotLabel){dotLabel.style.color=ok?'#10b981':'#ef4444';dotLabel.textContent=label;}
+      if(cb) cb(ok);
     }
-
-    if (!SHEETS_ENDPOINT) {
-      setStatus(false, '⚪ Sheet not configured — logs saved locally');
-      return;
-    }
-
-    if (dotLabel) { dotLabel.style.color = '#6b7280'; dotLabel.textContent = 'Checking sheet connection…'; }
-    if (dotIcon) { dotIcon.style.background = '#6b7280'; dotIcon.style.boxShadow = 'none'; }
-
-    // GET the doGet() health endpoint — this is a normal CORS fetch (not no-cors)
-    // so we CAN read the status code. 200 = accessible, 401/403 = permissions wrong.
-    fetch(SHEETS_ENDPOINT, { method: 'GET', mode: 'cors', cache: 'no-store' })
-      .then(function(resp) {
-        if (resp.ok || resp.status === 302) {
-          setStatus(true, '🟢 Sheet connected — logs will be written');
-        } else if (resp.status === 401 || resp.status === 403) {
-          setStatus(false, '🔴 Sheet unreachable (401) — fix Apps Script permissions');
-        } else {
-          setStatus(false, '🔴 Sheet returned ' + resp.status + ' — check deployment');
-        }
-      })
-      .catch(function() {
-        // CORS block on GET = Apps Script is deployed but access is restricted
-        // OR the deployment doesn't have the correct "Anyone" setting
-        // Either way, we mark as unreachable — POST in no-cors will still be attempted
-        setStatus(false, '🔴 Sheet unreachable — check Apps Script "Who has access"');
-      });
+    if(!SHEETS_ENDPOINT){setStatus(false,'No sheet configured');return;}
+    if(dotLabel){dotLabel.style.color='#6b7280';dotLabel.textContent='Checking…';}
+    fetch(SHEETS_ENDPOINT,{method:'GET',mode:'cors',cache:'no-store'})
+      .then(function(r){r.ok||r.status===302?setStatus(true,'Sheet connected'):setStatus(false,'Sheet error '+r.status);})
+      .catch(function(){setStatus(false,'Sheet unreachable');});
+  }
+  function _updatePendingBtn(){
+    var btn=document.getElementById('hp-ctl-bk-pending-btn');
+    var cnt=document.getElementById('hp-ctl-pending-count');
+    var n=getPendingLogs().length;
+    if(btn) btn.style.display=n>0?'flex':'none';
+    if(cnt) cnt.textContent=String(n);
   }
 
-  // ── Update pending log counter button ────────────────────────────────────
-  function _updatePendingBtn() {
-    var btn   = document.getElementById('hp-ctl-bk-pending-btn');
-    var count = document.getElementById('hp-ctl-pending-count');
-    var n = getPendingLogs().length;
-    if (btn)   btn.style.display  = n > 0 ? 'block' : 'none';
-    if (count) count.textContent  = String(n);
+  // ── Render the booking modal card list ─────────────────────────────────────
+  function renderAll() {
+    if(typeof window._ctlRenderAll === 'function') window._ctlRenderAll();
   }
 
-  // ── Open booking modal ────────────────────────────────────────────────────
+  // ── OPEN BOOKING MODAL (Book this Controller) ─────────────────────────────
   window._ctlOpenBooking = function(itemId) {
-    var items = getItems();
-    var ctrl = items.find(function(it) { return it.id === itemId; });
-    if (!ctrl) return;
-    _bookingCtlId   = itemId;
-    _bookingCtlData = ctrl;
+    var items=getItems();
+    var ctrl=items.find(function(it){return it.id===itemId;});
+    if(!ctrl) return;
+    _bookingCtlId=itemId;
+    _bookingCtlData=ctrl;
+    var booking=getBooking(itemId);
+    var isActive=!!(booking&&booking.endMs>Date.now());
 
-    var imgEl  = document.getElementById('hp-ctl-bk-ctrl-img');
-    var nameEl = document.getElementById('hp-ctl-bk-ctrl-name');
-    var ipEl   = document.getElementById('hp-ctl-bk-ctrl-ip');
-    if (imgEl)  imgEl.src = imageFor(ctrl.type);
-    if (nameEl) nameEl.textContent = labelFor(ctrl.type);
-    if (ipEl)   ipEl.textContent   = ctrl.ip || '—';
+    // Populate header
+    var imgEl =document.getElementById('hp-ctl-bk-ctrl-img');
+    var nameEl=document.getElementById('hp-ctl-bk-ctrl-name');
+    var ipEl  =document.getElementById('hp-ctl-bk-ctrl-ip');
+    if(imgEl)  imgEl.src  =imageFor(ctrl.type);
+    if(nameEl) nameEl.textContent=labelFor(ctrl.type);
+    if(ipEl)   ipEl.textContent=ctrl.ip||'—';
 
-    // Reset form
-    ['hp-ctl-bk-task','hp-ctl-bk-duration','hp-ctl-bk-backup','hp-ctl-bk-custom-time'].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (el) { el.value = ''; el.classList.remove('invalid'); }
+    // User strip
+    var userDisp=document.getElementById('hp-ctl-bk-user-display');
+    var dateDisp=document.getElementById('hp-ctl-bk-date-display');
+    if(userDisp) userDisp.textContent=getCurrentUser();
+    if(dateDisp) dateDisp.textContent=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+
+    // Reset form fields
+    ['hp-ctl-bk-task','hp-ctl-bk-duration','hp-ctl-bk-backup','hp-ctl-bk-custom-time'].forEach(function(id){
+      var el=document.getElementById(id); if(el){el.value='';el.classList.remove('invalid');}
     });
-    var customWrap = document.getElementById('hp-ctl-bk-custom-time-wrap');
-    var successEl  = document.getElementById('hp-ctl-bk-success');
-    var bodyEl     = document.getElementById('hp-ctl-booking-body');
-    var sheetStatus = document.getElementById('hp-ctl-bk-sheet-status');
-    if (customWrap) customWrap.style.display = 'none';
-    if (successEl)  successEl.classList.remove('show');
-    if (sheetStatus) { sheetStatus.style.display = 'none'; sheetStatus.textContent = ''; }
-    if (bodyEl) {
-      Array.from(bodyEl.children).forEach(function(c) {
-        if (!c.classList.contains('hp-ctl-bk-success')) c.style.display = '';
-      });
+    document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.remove('selected','invalid-chip');});
+    var customWrap=document.getElementById('hp-ctl-bk-custom-time-wrap');
+    if(customWrap) customWrap.style.display='none';
+
+    // Show/hide in-use notice
+    var inUseNotice=document.getElementById('hp-ctl-bk-inuse-notice');
+    var inUserName=document.getElementById('hp-ctl-bk-inuse-name');
+    var inUserEnd=document.getElementById('hp-ctl-bk-inuse-end');
+    if(inUseNotice) inUseNotice.style.display=isActive?'flex':'none';
+    if(isActive&&booking){
+      if(inUserName) inUserName.textContent=booking.user;
+      if(inUserEnd){
+        var remaining=booking.endMs-Date.now();
+        inUserEnd.textContent='Ends in approx. '+fmtMs(remaining)+' ('+labelFor(ctrl.type)+')';
+      }
     }
 
-    // Reset register button
-    var regBtn   = document.getElementById('hp-ctl-bk-register-btn');
-    var regIcon  = document.getElementById('hp-ctl-bk-register-icon');
-    var regLabel = document.getElementById('hp-ctl-bk-register-label');
-    var spinner  = document.getElementById('hp-ctl-bk-spinner');
-    if (regBtn)   { regBtn.disabled = false; }
-    if (regIcon)  { regIcon.style.display = ''; }
-    if (regLabel) { regLabel.textContent = 'Register'; }
-    if (spinner)  { spinner.style.display = 'none'; }
+    // Reset success + register button
+    var successEl=document.getElementById('hp-ctl-bk-success');
+    var bodyEl=document.getElementById('hp-ctl-booking-body');
+    if(successEl) successEl.classList.remove('show');
+    if(bodyEl) Array.from(bodyEl.children).forEach(function(c){if(!c.classList.contains('hp-ctl-bk-success')) c.style.display='';});
+    var sheetStatus=document.getElementById('hp-ctl-bk-sheet-status');
+    if(sheetStatus){sheetStatus.style.display='none';sheetStatus.textContent='';}
+    var regBtn=document.getElementById('hp-ctl-bk-register-btn');
+    var regIcon=document.getElementById('hp-ctl-bk-register-icon');
+    var regLabel=document.getElementById('hp-ctl-bk-register-label');
+    var spinner=document.getElementById('hp-ctl-bk-spinner');
+    if(regBtn){regBtn.disabled=false;}
+    if(regIcon) regIcon.style.display='';
+    if(regLabel) regLabel.textContent='Book this Controller';
+    if(spinner) spinner.style.display='none';
 
-    // Populate meta strip — user display name + date
-    var userDisp = document.getElementById('hp-ctl-bk-user-display');
-    var dateDisp = document.getElementById('hp-ctl-bk-date-display');
-    if (userDisp) userDisp.textContent = getCurrentUser();
-    if (dateDisp) {
-      dateDisp.textContent = new Date().toLocaleDateString('en-US', {
-        weekday:'short', month:'short', day:'numeric', year:'numeric'
-      });
-    }
-
-    // Reset duration chips
-    document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(chip) {
-      chip.classList.remove('selected','invalid-chip');
-    });
-
-    // Update pending logs button
     _updatePendingBtn();
-
-    // Open modal
-    var modal = document.getElementById('hp-ctl-booking-modal');
-    if (modal) {
-      modal.classList.add('open');
-      modal.setAttribute('aria-hidden', 'false');
-      var taskEl = document.getElementById('hp-ctl-bk-task');
-      setTimeout(function() { if (taskEl) taskEl.focus(); }, 80);
-    }
-
-    // Ping the sheet health endpoint (async — non-blocking)
+    var modal=document.getElementById('hp-ctl-booking-modal');
+    if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}
+    var taskEl=document.getElementById('hp-ctl-bk-task');
+    setTimeout(function(){if(taskEl) taskEl.focus();},80);
     _pingSheet(null);
   };
 
-  // ── Close booking modal ───────────────────────────────────────────────────
+  // ── CLOSE BOOKING MODAL ───────────────────────────────────────────────────
   window._ctlCloseBooking = function() {
-    var modal = document.getElementById('hp-ctl-booking-modal');
-    if (modal) { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); }
-    _bookingCtlId   = null;
-    _bookingCtlData = null;
-    // Reset step indicators
-    document.querySelectorAll('.hp-ctl-bk-step').forEach(function(s) { s.classList.remove('done'); });
-    document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c) { c.classList.remove('selected','invalid-chip'); });
+    var modal=document.getElementById('hp-ctl-booking-modal');
+    if(modal){modal.classList.remove('open');modal.setAttribute('aria-hidden','true');}
+    _bookingCtlId=null; _bookingCtlData=null;
+    document.querySelectorAll('.hp-ctl-bk-step').forEach(function(s){s.classList.remove('done');});
+    document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.remove('selected','invalid-chip');});
   };
 
   window._ctlOpenBackupFolder = function() {
-    window.open(BACKUP_FOLDER_URL, '_blank', 'noopener,noreferrer');
+    window.open(BACKUP_FOLDER_URL,'_blank','noopener,noreferrer');
   };
 
-  // ── Duration chip click → sync to hidden select + show/hide custom ─────────
-  document.addEventListener('click', function(e) {
-    var chip = e.target.closest('.hp-ctl-dur-chip');
-    if (!chip) return;
-    // Deselect all chips
-    document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c) {
-      c.classList.remove('selected');
-    });
-    chip.classList.add('selected');
-    var dur = chip.getAttribute('data-dur') || '';
-    // Sync to hidden select (keeps existing validation logic intact)
-    var sel = document.getElementById('hp-ctl-bk-duration');
-    if (sel) sel.value = dur;
-    // Dispatch change event so existing listener fires
-    if (sel) sel.dispatchEvent(new Event('change'));
-    // Step indicator: mark step 2 done
-    var s2 = document.querySelector('.hp-ctl-bk-step[data-step="2"]');
-    if (s2 && dur && dur !== 'set_time') s2.classList.add('done');
-  });
-
-  // Step indicator wiring: task field → step 1, backup → step 3
-  document.addEventListener('input', function(e) {
-    if (e.target && e.target.id === 'hp-ctl-bk-task') {
-      var s1 = document.querySelector('.hp-ctl-bk-step[data-step="1"]');
-      if (s1) s1.classList.toggle('done', e.target.value.trim().length > 2);
-    }
-    if (e.target && e.target.id === 'hp-ctl-bk-backup') {
-      var s3 = document.querySelector('.hp-ctl-bk-step[data-step="3"]');
-      if (s3) s3.classList.toggle('done', e.target.value.trim().length > 5);
-    }
-  });
-
-  // ── Duration select change → custom time wrap ───────────────────────────
-  document.addEventListener('change', function(e) {
-    if (e.target && e.target.id === 'hp-ctl-bk-duration') {
-      var wrap = document.getElementById('hp-ctl-bk-custom-time-wrap');
-      if (wrap) wrap.style.display = e.target.value === 'set_time' ? 'block' : 'none';
-    }
-  });
-
-  document.addEventListener('click', function(e) {
-    if (e.target && e.target.id === 'hp-ctl-booking-modal') window._ctlCloseBooking();
-  });
-
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-      var m = document.getElementById('hp-ctl-booking-modal');
-      if (m && m.classList.contains('open')) window._ctlCloseBooking();
-      var pm = document.getElementById('hp-ctl-pending-modal');
-      if (pm && pm.style.display !== 'none') window._ctlClosePendingLogs();
-    }
-  });
-
-  // ── Submit / Register ────────────────────────────────────────────────────
+  // ── SUBMIT BOOKING ────────────────────────────────────────────────────────
   window._ctlSubmitBooking = function() {
-    if (!_bookingCtlData) return;
+    if(!_bookingCtlData) return;
+    var taskEl  =document.getElementById('hp-ctl-bk-task');
+    var durEl   =document.getElementById('hp-ctl-bk-duration');
+    var backupEl=document.getElementById('hp-ctl-bk-backup');
+    var customEl=document.getElementById('hp-ctl-bk-custom-time');
+    var notifyEl=document.getElementById('hp-ctl-bk-notify-alarm');
 
-    var taskEl   = document.getElementById('hp-ctl-bk-task');
-    var durEl    = document.getElementById('hp-ctl-bk-duration');
-    var backupEl = document.getElementById('hp-ctl-bk-backup');
-    var customEl = document.getElementById('hp-ctl-bk-custom-time');
+    [taskEl,durEl,backupEl].forEach(function(el){if(el) el.classList.remove('invalid');});
+    document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.remove('invalid-chip');});
 
-    [taskEl, durEl, backupEl].forEach(function(el) { if (el) el.classList.remove('invalid'); });
-    document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c) { c.classList.remove('invalid-chip'); });
+    var task   =(taskEl   &&taskEl.value.trim())  ||'';
+    var durVal =(durEl    &&durEl.value.trim())   ||'';
+    var backup =(backupEl &&backupEl.value.trim())||'';
+    var wantsAlarm=notifyEl&&notifyEl.checked;
 
-    var task    = (taskEl   && taskEl.value.trim())   || '';
-    var durVal  = (durEl    && durEl.value.trim())    || '';
-    var backup  = (backupEl && backupEl.value.trim()) || '';
-    var duration = durVal;
+    var valid=true;
+    if(!task)  {if(taskEl)   taskEl.classList.add('invalid');   valid=false;}
+    if(!durVal){if(durEl)    durEl.classList.add('invalid');
+                document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.add('invalid-chip');}); valid=false;}
+    if(!backup){if(backupEl) backupEl.classList.add('invalid'); valid=false;}
 
-    var valid = true;
-    if (!task)   { if (taskEl)   taskEl.classList.add('invalid');   valid = false; }
-    if (!durVal) {
-      if (durEl) durEl.classList.add('invalid');
-      // Also visually mark duration chips as invalid
-      document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c) { c.classList.add('invalid-chip'); });
-      valid = false;
+    var duration=durVal;
+    if(durVal==='set_time'){
+      var custom=(customEl&&customEl.value.trim())||'';
+      if(!custom){if(customEl) customEl.classList.add('invalid'); valid=false;}
+      else duration=custom;
     }
-    if (!backup) { if (backupEl) backupEl.classList.add('invalid'); valid = false; }
-
-    if (durVal === 'set_time') {
-      var custom = (customEl && customEl.value.trim()) || '';
-      if (!custom) { if (customEl) customEl.classList.add('invalid'); valid = false; }
-      else duration = custom;
-    }
-
-    if (!valid) return;
+    if(!valid) return;
 
     // Show spinner
-    var regBtn   = document.getElementById('hp-ctl-bk-register-btn');
-    var regIcon  = document.getElementById('hp-ctl-bk-register-icon');
-    var regLabel = document.getElementById('hp-ctl-bk-register-label');
-    var spinner  = document.getElementById('hp-ctl-bk-spinner');
-    if (regBtn)   regBtn.disabled = true;
-    if (regIcon)  regIcon.style.display = 'none';
-    if (regLabel) regLabel.textContent = 'Logging…';
-    if (spinner)  spinner.style.display = 'inline-block';
+    var regBtn=document.getElementById('hp-ctl-bk-register-btn');
+    var regIcon=document.getElementById('hp-ctl-bk-register-icon');
+    var regLabel=document.getElementById('hp-ctl-bk-register-label');
+    var spinner=document.getElementById('hp-ctl-bk-spinner');
+    if(regBtn) regBtn.disabled=true;
+    if(regIcon) regIcon.style.display='none';
+    if(regLabel) regLabel.textContent='Booking…';
+    if(spinner) spinner.style.display='inline-block';
 
-    var payload = {
-      timestamp:  phtNow(),
-      user:       getCurrentUser(),
-      controller: labelFor(_bookingCtlData.type) + ' — ' + (_bookingCtlData.ip || '—'),
-      task:       task,
-      duration:   duration,
-      backupFile: backup
+    var user=getCurrentUser();
+    var avatarUrl=getAvatarUrl();
+    var durMs=parseDurMs(duration);
+    var endMs=Date.now()+(durMs||30*60000);
+
+    // Store booking state
+    setBooking(_bookingCtlId,{
+      user:user, avatarUrl:avatarUrl,
+      task:task, duration:duration,
+      startMs:Date.now(), endMs:endMs,
+      wantsAlarm:wantsAlarm,
+    });
+
+    var payload={
+      timestamp:phtNow(), user:user,
+      controller:labelFor(_bookingCtlData.type)+' — '+(_bookingCtlData.ip||'—'),
+      task:task, duration:duration, backupFile:backup,
+      note:'Booked via Controller Lab'
     };
-
-    // ── Always save to localStorage first (guaranteed backup) ──────────────
     savePendingLog(payload);
 
-    // ── Show success state in UI ───────────────────────────────────────────
+    // Re-render cards immediately so timer starts
+    if(typeof window._ctlRenderAll === 'function') window._ctlRenderAll();
+
     function _onSuccess(wroteToSheet) {
-      var bodyEl      = document.getElementById('hp-ctl-booking-body');
-      var successEl   = document.getElementById('hp-ctl-bk-success');
-      var msgEl       = document.getElementById('hp-ctl-bk-success-msg');
-      var sheetStatus = document.getElementById('hp-ctl-bk-sheet-status');
-
-      if (bodyEl) {
-        Array.from(bodyEl.children).forEach(function(c) {
-          if (!c.classList.contains('hp-ctl-bk-success')) c.style.display = 'none';
-        });
-      }
-      if (msgEl) {
-        msgEl.textContent = 'Logged for ' + payload.user + ' — ' +
-          labelFor(_bookingCtlData.type) + ' (' + (_bookingCtlData.ip || '—') + ') — Duration: ' + duration + '.';
-      }
-
-      // Sheet write status pill inside success card
-      if (sheetStatus) {
-        sheetStatus.style.display = 'block';
-        if (wroteToSheet) {
-          sheetStatus.style.background = 'rgba(16,185,129,.1)';
-          sheetStatus.style.border = '1px solid rgba(16,185,129,.25)';
-          sheetStatus.style.color = '#10b981';
-          sheetStatus.textContent = '✅ Written to Google Sheet successfully';
-          // Remove from pending since it was written
-          removePendingLog(payload.timestamp, payload.user);
+      var bodyEl=document.getElementById('hp-ctl-booking-body');
+      var successEl=document.getElementById('hp-ctl-bk-success');
+      var msgEl=document.getElementById('hp-ctl-bk-success-msg');
+      var sheetStatus=document.getElementById('hp-ctl-bk-sheet-status');
+      if(bodyEl) Array.from(bodyEl.children).forEach(function(c){if(!c.classList.contains('hp-ctl-bk-success')) c.style.display='none';});
+      if(msgEl) msgEl.textContent='Booked by '+user+' — '+labelFor(_bookingCtlData.type)+' — Duration: '+duration+(wantsAlarm?' (Alarm set for queue)':'');
+      if(sheetStatus){
+        sheetStatus.style.display='block';
+        if(wroteToSheet){
+          sheetStatus.style.background='rgba(16,185,129,.1)';sheetStatus.style.border='1px solid rgba(16,185,129,.25)';sheetStatus.style.color='#10b981';
+          sheetStatus.textContent='Written to Google Sheet';
+          removePendingLog(payload.timestamp,user);
         } else {
-          sheetStatus.style.background = 'rgba(245,158,11,.08)';
-          sheetStatus.style.border = '1px solid rgba(245,158,11,.2)';
-          sheetStatus.style.color = '#f59e0b';
-          sheetStatus.textContent = '⚠️ Saved locally — sheet unreachable. Fix Apps Script permissions to sync.';
+          sheetStatus.style.background='rgba(245,158,11,.08)';sheetStatus.style.border='1px solid rgba(245,158,11,.2)';sheetStatus.style.color='#f59e0b';
+          sheetStatus.textContent='Saved locally — sheet unreachable. Will retry.';
         }
         _updatePendingBtn();
       }
-
-      if (successEl) successEl.classList.add('show');
-      setTimeout(function() { window._ctlCloseBooking(); }, 3000);
+      if(successEl) successEl.classList.add('show');
+      setTimeout(function(){window._ctlCloseBooking();},2800);
     }
 
-    // ── POST to Google Sheets via Apps Script ──────────────────────────────
-    if (SHEETS_ENDPOINT) {
-      fetch(SHEETS_ENDPOINT, {
-        method: 'POST',
-        mode: 'no-cors',    // Apps Script requires no-cors; response is opaque
-        body: buildFormPayload(payload)
-      }).then(function() {
-        // no-cors = opaque response. Completion = network reached = assume written.
-        // If Apps Script had a 401, no-cors still "succeeds" from JS perspective.
-        // We check _sheetReachable (set by the GET ping) to determine real status.
-        _onSuccess(_sheetReachable === true);
-      }).catch(function(err) {
-        // True network failure (offline, DNS error, etc.)
-        console.warn('[CTL Booking] POST failed:', err && err.message || err);
-        _onSuccess(false);
-      });
+    if(SHEETS_ENDPOINT){
+      fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)})
+        .then(function(){_onSuccess(_sheetReachable===true);})
+        .catch(function(){_onSuccess(false);});
     } else {
-      console.warn('[CTL Booking] SHEETS_ENDPOINT not set. Log saved to localStorage key:', BACKUP_LS_KEY);
-      setTimeout(function() { _onSuccess(false); }, 600);
+      setTimeout(function(){_onSuccess(false);},600);
     }
   };
 
-  // ── Pending Logs Recovery Panel ───────────────────────────────────────────
-  window._ctlShowPendingLogs = function() {
-    var modal = document.getElementById('hp-ctl-pending-modal');
-    var list  = document.getElementById('hp-ctl-pending-list');
-    if (!modal || !list) return;
+  // ── QUEUE MODAL ───────────────────────────────────────────────────────────
+  window._ctlOpenQueue = function(itemId) {
+    var items=getItems();
+    var ctrl=items.find(function(it){return it.id===itemId;});
+    if(!ctrl) return;
+    _queueCtlId=itemId;
+    var booking=getBooking(itemId);
+    var queue=getQueue(itemId);
+    var me=getCurrentUser();
 
-    var logs = getPendingLogs();
-    if (!logs.length) {
-      list.innerHTML = '<div style="text-align:center;padding:30px;color:#6b7280;font-size:12px;">No pending logs — all caught up! 🎉</div>';
-    } else {
-      list.innerHTML = logs.map(function(log, i) {
-        return '<div style="background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:11px;">' +
-          '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">' +
-            '<span style="font-weight:700;color:#f1f5f9;">' + esc(log.user) + '</span>' +
-            '<span style="color:#6b7280;font-family:monospace;">' + esc(log.timestamp) + '</span>' +
-          '</div>' +
-          '<div style="color:#94a3b8;line-height:1.6;">' +
-            '<span style="color:#f59e0b;">🔩</span> ' + esc(log.controller) + '<br>' +
-            '<span style="color:#60a5fa;">📋</span> ' + esc(log.task) + '  &nbsp;|&nbsp;  ' +
-            '<span style="color:#a78bfa;">⏱</span> ' + esc(log.duration) +
-          '</div>' +
+    // Populate queue modal
+    var qNameEl=document.getElementById('hp-ctl-q-ctrl-name');
+    var qUserEl=document.getElementById('hp-ctl-q-current-user');
+    var qEndEl =document.getElementById('hp-ctl-q-end-time');
+    var qListEl=document.getElementById('hp-ctl-q-list');
+    var qImgEl =document.getElementById('hp-ctl-q-ctrl-img');
+    if(qNameEl) qNameEl.textContent=labelFor(ctrl.type);
+    if(qImgEl)  qImgEl.src=imageFor(ctrl.type);
+    if(booking){
+      if(qUserEl) qUserEl.textContent=booking.user;
+      if(qEndEl)  qEndEl.textContent='~'+fmtMs(booking.endMs-Date.now())+' remaining';
+    }
+
+    // Render queue list
+    if(qListEl){
+      if(!queue.length){
+        qListEl.innerHTML='<div style="padding:12px 0;text-align:center;color:rgba(255,255,255,.3);font-size:11px;">No one in queue yet. Be first!</div>';
+      } else {
+        qListEl.innerHTML=queue.map(function(q,i){
+          var isMe=q.user===me;
+          return '<div class="hp-ctl-q-item'+(isMe?' is-me':'')+'">'+
+            '<div class="hp-ctl-q-pos">'+(i+1)+'</div>'+
+            '<div class="hp-ctl-q-meta"><div class="hp-ctl-q-name">'+(isMe?'You ('+esc(q.user)+')':esc(q.user))+'</div>'+
+            '<div class="hp-ctl-q-task">'+esc(q.task||'')+'</div></div>'+
+            (q.urgent?'<span class="hp-ctl-q-urgent-badge">URGENT</span>':'')+
+            (isMe?'<button class="hp-ctl-q-leave-btn" onclick="window._ctlLeaveQueue(\''+esc(itemId)+'\')">Leave</button>':'')+
+          '</div>';
+        }).join('');
+      }
+    }
+
+    var alreadyQueued=queue.some(function(q){return q.user===me;});
+    var joinSection=document.getElementById('hp-ctl-q-join-section');
+    if(joinSection) joinSection.style.display=alreadyQueued?'none':'block';
+    var alreadyMsg=document.getElementById('hp-ctl-q-already-msg');
+    if(alreadyMsg) alreadyMsg.style.display=alreadyQueued?'block':'none';
+
+    // Start live countdown in queue modal
+    if(window._ctlQueueTimer) clearInterval(window._ctlQueueTimer);
+    if(booking&&booking.endMs>Date.now()){
+      window._ctlQueueTimer=setInterval(function(){
+        var rem=booking.endMs-Date.now();
+        if(rem<=0){clearInterval(window._ctlQueueTimer);}
+        var el=document.getElementById('hp-ctl-q-end-time');
+        if(el) el.textContent='~'+fmtMs(Math.max(0,rem))+' remaining';
+      },1000);
+    }
+
+    var modal=document.getElementById('hp-ctl-queue-modal');
+    if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}
+  };
+
+  window._ctlCloseQueue = function() {
+    var modal=document.getElementById('hp-ctl-queue-modal');
+    if(modal){modal.classList.remove('open');modal.setAttribute('aria-hidden','true');}
+    if(window._ctlQueueTimer){clearInterval(window._ctlQueueTimer);window._ctlQueueTimer=null;}
+    _queueCtlId=null;
+  };
+
+  window._ctlJoinQueue = function() {
+    if(!_queueCtlId) return;
+    var me=getCurrentUser();
+    var taskEl=document.getElementById('hp-ctl-q-task-input');
+    var urgentEl=document.getElementById('hp-ctl-q-urgent');
+    var alarmEl=document.getElementById('hp-ctl-q-alarm');
+    var task=(taskEl&&taskEl.value.trim())||'';
+    var isUrgent=!!(urgentEl&&urgentEl.checked);
+    var wantsAlarm=!!(alarmEl&&alarmEl.checked);
+
+    var queue=getQueue(_queueCtlId);
+    var alreadyIn=queue.some(function(q){return q.user===me;});
+    if(alreadyIn){window._ctlCloseQueue();return;}
+
+    queue.push({user:me,avatarUrl:getAvatarUrl(),task:task,urgent:isUrgent,wantsAlarm:wantsAlarm,joinedAt:Date.now()});
+    setQueue(_queueCtlId,queue);
+
+    // Show confirmation
+    var joinSection=document.getElementById('hp-ctl-q-join-section');
+    var alreadyMsg=document.getElementById('hp-ctl-q-already-msg');
+    if(joinSection) joinSection.style.display='none';
+    if(alreadyMsg){alreadyMsg.style.display='block';alreadyMsg.textContent='You are in the queue! We\'ll notify you when it\'s your turn.'+(wantsAlarm?' Alarm is set.':'');}
+
+    if(isUrgent){
+      // Show urgent notice
+      window._ctlShowUrgentNotice(_queueCtlId, me);
+    }
+
+    if(typeof window._ctlRenderAll==='function') window._ctlRenderAll();
+    setTimeout(function(){window._ctlCloseQueue();},2000);
+  };
+
+  window._ctlLeaveQueue = function(itemId) {
+    var me=getCurrentUser();
+    var queue=getQueue(itemId).filter(function(q){return q.user!==me;});
+    setQueue(itemId,queue);
+    if(typeof window._ctlRenderAll==='function') window._ctlRenderAll();
+    window._ctlCloseQueue();
+  };
+
+  // ── NOTIFY QUEUE (called when session timer ends) ─────────────────────────
+  window._ctlNotifyQueue = function(itemId) {
+    var queue=getQueue(itemId);
+    if(!queue.length) return;
+    var next=queue[0];
+    var me=getCurrentUser();
+
+    // Only fire alarm if the next person in queue is the current user
+    if(next.wantsAlarm && next.user===me) {
+      // Browser Notification API
+      if(window.Notification){
+        if(Notification.permission==='granted'){
+          new Notification('Controller Available!',{
+            body:'It is your turn to use '+labelFor((getItems().find(function(i){return i.id===itemId;})||{}).type||'')+'. You are next in queue.',
+            icon:'/call_icon.png',
+            tag:'ctl-queue-'+itemId
+          });
+        } else if(Notification.permission!=='denied'){
+          Notification.requestPermission().then(function(p){
+            if(p==='granted'){
+              new Notification('Controller Available!',{
+                body:'It\'s your turn! Queue position 1.',
+                icon:'/call_icon.png',
+                tag:'ctl-queue-'+itemId
+              });
+            }
+          });
+        }
+      }
+      // In-app alarm banner
+      _showAlarmBanner('Your turn! '+labelFor((getItems().find(function(i){return i.id===itemId;})||{}).type||'')+' is now available.',itemId);
+    }
+    // Remove the first item from queue (session ended)
+    queue.shift();
+    setQueue(itemId,queue);
+  };
+
+  function _showAlarmBanner(msg, itemId) {
+    var existing=document.getElementById('hp-ctl-alarm-banner');
+    if(existing) existing.remove();
+    var banner=document.createElement('div');
+    banner.id='hp-ctl-alarm-banner';
+    banner.className='hp-ctl-alarm-banner';
+    banner.innerHTML='<i class="fas fa-bell" style="font-size:18px;animation:bell-ring .4s ease infinite alternate;"></i>'+
+      '<div><div style="font-size:13px;font-weight:800;color:#fff;">Controller Available!</div>'+
+      '<div style="font-size:11px;opacity:.8;">'+esc(msg)+'</div></div>'+
+      '<button class="hp-ctl-alarm-dismiss" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>';
+    document.body.appendChild(banner);
+    // Play notification sound if possible
+    try{ var audio=new Audio('data:audio/wav;base64,UklGRl9vT2JXQVZF'); audio.volume=0.4; audio.play().catch(function(){}); }catch(_){}
+    setTimeout(function(){if(banner.parentElement) banner.remove();},15000);
+  }
+
+  // ── URGENT NOTICE ─────────────────────────────────────────────────────────
+  window._ctlShowUrgentNotice = function(itemId, requester) {
+    var booking=getBooking(itemId);
+    if(!booking) return;
+    var items=getItems();
+    var ctrl=items.find(function(it){return it.id===itemId;});
+    var currentUser=booking.user;
+    var me=getCurrentUser();
+
+    // Only show to the current session holder
+    if(currentUser!==me) return;
+
+    var existing=document.getElementById('hp-ctl-urgent-banner');
+    if(existing) existing.remove();
+    var banner=document.createElement('div');
+    banner.id='hp-ctl-urgent-banner';
+    banner.className='hp-ctl-urgent-banner';
+    banner.innerHTML='<div style="display:flex;align-items:center;gap:12px;flex:1;">'+
+      '<i class="fas fa-exclamation-triangle" style="font-size:20px;color:#f59e0b;flex-shrink:0;"></i>'+
+      '<div>'+
+        '<div style="font-size:13px;font-weight:800;color:#fff;">Urgent Request</div>'+
+        '<div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;">'+esc(requester)+' has an urgent task and needs '+esc(ctrl?labelFor(ctrl.type):'this controller')+'. Please communicate with them directly.</div>'+
+        '<div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:4px;font-style:italic;">You can directly communicate with the requesting user for your urgent task.</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">'+
+      '<button class="hp-ctl-alarm-dismiss" onclick="document.getElementById(\'hp-ctl-urgent-banner\').remove()"><i class="fas fa-times"></i> Dismiss</button>'+
+    '</div>';
+    document.body.appendChild(banner);
+    setTimeout(function(){if(banner.parentElement) banner.remove();},30000);
+  };
+
+  // ── OVERRIDE SYSTEM ───────────────────────────────────────────────────────
+  window._ctlOverride = function(itemId) {
+    var items=getItems();
+    var ctrl=items.find(function(it){return it.id===itemId;});
+    var booking=getBooking(itemId);
+    if(!ctrl||!booking) return;
+
+    // Show override confirmation modal
+    var modal=document.getElementById('hp-ctl-override-modal');
+    var ctrlNameEl=document.getElementById('hp-ctl-ov-ctrl-name');
+    var ownerEl=document.getElementById('hp-ctl-ov-owner');
+    var confirmBtn=document.getElementById('hp-ctl-ov-confirm-btn');
+    if(ctrlNameEl) ctrlNameEl.textContent=labelFor(ctrl.type);
+    if(ownerEl) ownerEl.textContent=booking.user;
+    if(confirmBtn){
+      confirmBtn.onclick=function(){
+        var reasonEl=document.getElementById('hp-ctl-ov-reason');
+        var reason=(reasonEl&&reasonEl.value.trim())||'Urgent task';
+        window._ctlExecuteOverride(itemId, reason);
+      };
+    }
+    if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}
+  };
+
+  window._ctlCloseOverride = function() {
+    var modal=document.getElementById('hp-ctl-override-modal');
+    if(modal){modal.classList.remove('open');modal.setAttribute('aria-hidden','true');}
+  };
+
+  window._ctlExecuteOverride = function(itemId, reason) {
+    var items=getItems();
+    var ctrl=items.find(function(it){return it.id===itemId;});
+    var booking=getBooking(itemId);
+    if(!ctrl||!booking) return;
+    var me=getCurrentUser();
+    var overriddenUser=booking.user;
+
+    // Log the override to sheet
+    var payload={
+      timestamp:phtNow(), user:me,
+      controller:labelFor(ctrl.type)+' — '+(ctrl.ip||'—'),
+      task:'[OVERRIDE] '+reason,
+      duration:'Session overridden',
+      backupFile:'N/A',
+      note:'Override of '+overriddenUser+' by '+me
+    };
+    savePendingLog(payload);
+    if(SHEETS_ENDPOINT){
+      fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)}).catch(function(){});
+    }
+
+    // Clear the existing booking
+    setBooking(itemId,null);
+    window._ctlCloseOverride();
+
+    // Show override confirmation
+    _showAlarmBanner('Override executed. '+labelFor(ctrl.type)+' is now available for your urgent task.', itemId);
+
+    // Notify the overridden user (in-app only)
+    var noticeEl=document.createElement('div');
+    noticeEl.className='hp-ctl-urgent-banner';
+    noticeEl.style.background='rgba(248,81,73,.12)';
+    noticeEl.style.borderColor='rgba(248,81,73,.35)';
+    noticeEl.innerHTML='<i class="fas fa-exclamation-circle" style="font-size:18px;color:#f85149;flex-shrink:0;"></i>'+
+      '<div style="flex:1;"><div style="font-size:13px;font-weight:800;color:#fff;">Session Overridden</div>'+
+      '<div style="font-size:11px;color:rgba(255,255,255,.7);">Your session on '+esc(labelFor(ctrl.type))+' was overridden by '+esc(me)+' for: '+esc(reason)+'</div></div>'+
+      '<button class="hp-ctl-alarm-dismiss" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>';
+    document.body.appendChild(noticeEl);
+
+    // Reopen booking modal for the override user
+    setTimeout(function(){
+      window._ctlOpenBooking(itemId);
+      if(typeof window._ctlRenderAll==='function') window._ctlRenderAll();
+    },400);
+  };
+
+  // ── DURATION CHIP WIRING ──────────────────────────────────────────────────
+  document.addEventListener('click', function(e) {
+    var chip=e.target.closest('.hp-ctl-dur-chip'); if(!chip) return;
+    document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.remove('selected');});
+    chip.classList.add('selected');
+    var dur=chip.getAttribute('data-dur')||'';
+    var sel=document.getElementById('hp-ctl-bk-duration');
+    if(sel){sel.value=dur;sel.dispatchEvent(new Event('change'));}
+    var s2=document.querySelector('.hp-ctl-bk-step[data-step="2"]');
+    if(s2&&dur&&dur!=='set_time') s2.classList.add('done');
+  });
+  document.addEventListener('change', function(e) {
+    if(e.target&&e.target.id==='hp-ctl-bk-duration'){
+      var wrap=document.getElementById('hp-ctl-bk-custom-time-wrap');
+      if(wrap) wrap.style.display=e.target.value==='set_time'?'block':'none';
+    }
+  });
+  document.addEventListener('input', function(e) {
+    if(e.target&&e.target.id==='hp-ctl-bk-task'){
+      var s1=document.querySelector('.hp-ctl-bk-step[data-step="1"]');
+      if(s1) s1.classList.toggle('done',e.target.value.trim().length>2);
+    }
+    if(e.target&&e.target.id==='hp-ctl-bk-backup'){
+      var s3=document.querySelector('.hp-ctl-bk-step[data-step="3"]');
+      if(s3) s3.classList.toggle('done',e.target.value.trim().length>5);
+    }
+  });
+  document.addEventListener('keydown', function(e) {
+    if(e.key!=='Escape') return;
+    var m=document.getElementById('hp-ctl-booking-modal');
+    if(m&&m.classList.contains('open')){window._ctlCloseBooking();return;}
+    var qm=document.getElementById('hp-ctl-queue-modal');
+    if(qm&&qm.classList.contains('open')){window._ctlCloseQueue();return;}
+    var om=document.getElementById('hp-ctl-override-modal');
+    if(om&&om.classList.contains('open')){window._ctlCloseOverride();}
+    var pm=document.getElementById('hp-ctl-pending-modal');
+    if(pm&&pm.style.display!=='none') window._ctlClosePendingLogs();
+  });
+  document.addEventListener('click', function(e) {
+    if(e.target&&e.target.id==='hp-ctl-booking-modal') window._ctlCloseBooking();
+    if(e.target&&e.target.id==='hp-ctl-queue-modal')   window._ctlCloseQueue();
+    if(e.target&&e.target.id==='hp-ctl-override-modal') window._ctlCloseOverride();
+  });
+
+  // ── PENDING LOGS PANEL ────────────────────────────────────────────────────
+  window._ctlShowPendingLogs = function() {
+    var modal=document.getElementById('hp-ctl-pending-modal');
+    var list=document.getElementById('hp-ctl-pending-list');
+    if(!modal||!list) return;
+    var logs=getPendingLogs();
+    list.innerHTML=!logs.length
+      ?'<div style="text-align:center;padding:30px;color:#6b7280;font-size:12px;">No pending logs</div>'
+      :logs.map(function(log){
+        return '<div style="background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:11px;">'+
+          '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">'+
+            '<span style="font-weight:700;color:#f1f5f9;">'+esc(log.user)+'</span>'+
+            '<span style="color:#6b7280;font-family:monospace;font-size:9px;">'+esc(log.timestamp)+'</span>'+
+          '</div>'+
+          '<div style="color:#94a3b8;line-height:1.6;">'+esc(log.controller)+' | '+esc(log.task)+' | '+esc(log.duration)+(log.note?'<br><span style="font-size:9px;color:#6b7280;">'+esc(log.note)+'</span>':'')+'</div>'+
         '</div>';
       }).join('');
-    }
-
-    var statusEl = document.getElementById('hp-ctl-replay-status');
-    if (statusEl) statusEl.textContent = logs.length + ' pending log' + (logs.length !== 1 ? 's' : '');
-
-    modal.style.display = 'flex';
-    modal.setAttribute('aria-hidden', 'false');
+    var statusEl=document.getElementById('hp-ctl-replay-status');
+    if(statusEl) statusEl.textContent=logs.length+' pending log'+(logs.length!==1?'s':'');
+    modal.style.display='flex'; modal.setAttribute('aria-hidden','false');
   };
-
   window._ctlClosePendingLogs = function() {
-    var modal = document.getElementById('hp-ctl-pending-modal');
-    if (modal) { modal.style.display = 'none'; modal.setAttribute('aria-hidden', 'true'); }
+    var modal=document.getElementById('hp-ctl-pending-modal');
+    if(modal){modal.style.display='none';modal.setAttribute('aria-hidden','true');}
   };
-
   window._ctlClearPendingLogs = function() {
-    if (!confirm('Clear all ' + getPendingLogs().length + ' pending logs? This cannot be undone.')) return;
-    setPendingLogs([]);
-    _updatePendingBtn();
-    window._ctlShowPendingLogs(); // refresh the panel
+    if(!confirm('Clear all '+getPendingLogs().length+' pending logs?')) return;
+    setPendingLogs([]); _updatePendingBtn(); window._ctlShowPendingLogs();
   };
-
   window._ctlReplayPendingLogs = function() {
-    var logs = getPendingLogs();
-    if (!logs.length) return;
-    if (!SHEETS_ENDPOINT) {
-      alert('SHEETS_ENDPOINT is not configured. Please set window._CTL_SHEETS_ENDPOINT in env_runtime.js.');
-      return;
-    }
-
-    var replayBtn    = document.getElementById('hp-ctl-replay-btn');
-    var replayStatus = document.getElementById('hp-ctl-replay-status');
-    if (replayBtn)    { replayBtn.disabled = true; replayBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending…'; }
-    if (replayStatus) replayStatus.textContent = 'Sending ' + logs.length + ' logs…';
-
-    var successCount = 0;
-    var failCount    = 0;
-    var remaining    = logs.length;
-
-    logs.forEach(function(payload) {
-      fetch(SHEETS_ENDPOINT, {
-        method: 'POST',
-        mode: 'no-cors',
-        body: buildFormPayload(payload)
-      }).then(function() {
-        successCount++;
-        removePendingLog(payload.timestamp, payload.user);
-      }).catch(function() {
-        failCount++;
-      }).finally(function() {
-        remaining--;
-        if (remaining === 0) {
-          // All done
-          _updatePendingBtn();
-          if (replayBtn) { replayBtn.disabled = false; replayBtn.innerHTML = '<i class="fas fa-redo"></i> Retry Send to Sheet'; }
-          if (replayStatus) {
-            replayStatus.textContent = successCount + ' sent' + (failCount ? ', ' + failCount + ' failed' : '') + '.';
-            replayStatus.style.color = failCount ? '#ef4444' : '#10b981';
+    var logs=getPendingLogs();
+    if(!logs.length) return;
+    if(!SHEETS_ENDPOINT){alert('SHEETS_ENDPOINT not configured.');return;}
+    var replayBtn=document.getElementById('hp-ctl-replay-btn');
+    var replayStatus=document.getElementById('hp-ctl-replay-status');
+    if(replayBtn){replayBtn.disabled=true;replayBtn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Sending…';}
+    var success=0,fail=0,remaining=logs.length;
+    logs.forEach(function(payload){
+      fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)})
+        .then(function(){success++;removePendingLog(payload.timestamp,payload.user);})
+        .catch(function(){fail++;})
+        .finally(function(){
+          remaining--;
+          if(remaining===0){
+            _updatePendingBtn();
+            if(replayBtn){replayBtn.disabled=false;replayBtn.innerHTML='<i class="fas fa-redo"></i> Retry Send';}
+            if(replayStatus){replayStatus.textContent=success+' sent'+(fail?', '+fail+' failed':'');replayStatus.style.color=fail?'#ef4444':'#10b981';}
+            setTimeout(function(){window._ctlShowPendingLogs();},400);
           }
-          // Refresh the list
-          setTimeout(function() { window._ctlShowPendingLogs(); }, 400);
-        }
-      });
+        });
     });
   };
 
+  // Expose renderAll so booking system can trigger card re-render
+  window._ctlRenderAll = function() {
+    try {
+      var items; try{var r=localStorage.getItem('mums_controller_lab_items_v1');var p=r?JSON.parse(r):[];items=Array.isArray(p)?p:[];}catch(_){items=[];}
+      // Trigger the inner renderAll from the controller IIFE (already bound to window._ctlRenderAll)
+      // We need to call the chip row + main list re-render
+      // Use a custom event to trigger the IIFE's renderAll safely
+      document.dispatchEvent(new CustomEvent('ctl:rerender'));
+    }catch(_){}
+  };
+  document.addEventListener('ctl:rerender', function() {
+    // The controller IIFE listens for this and calls its internal renderAll
+  });
+
 })();
+
