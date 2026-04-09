@@ -14,6 +14,7 @@
 //   3. Deep search card click: _qbsOpenDeepResult + [data-action] fallback.
 //   4. Banner dismissal memory: banner stays hidden after dismiss (sessionStorage).
 //   5. Deep search card: remove Case View Details button + improve Assigned To.
+//   7. Connect+ tab: column alignment fix — header-keyed mapping, permanent.
 //
 // v3.0 FIX — Three permanent bug fixes:
 //
@@ -275,7 +276,7 @@
   // Falls back to Map lookup, then array scan, then bare recordId-only snap.
   function defineQbsOpenDeepResult() {
     window._qbsOpenDeepResult = function (caseNum, cardEl) {
-      if (!caseNum || String(caseNum) === '—') return;
+      if (!caseNum || String(caseNum) === '\u2014') return;
       var rid = String(caseNum);
       var snap = null;
 
@@ -517,9 +518,9 @@
 
     function styleAssignedToValue(el) {
       var name = (el.textContent || '').trim();
-      if (!name || name === '—' || name === '-') {
+      if (!name || name === '\u2014' || name === '-') {
         el.style.cssText += ';color:#484f58 !important;font-weight:600 !important;font-size:11px !important;';
-        if (el.textContent.trim() === '-') el.textContent = '—';
+        if (el.textContent.trim() === '-') el.textContent = '\u2014';
       } else {
         el.style.cssText += ';color:#e6edf3 !important;font-weight:700 !important;font-size:11px !important;';
         if (!el.querySelector('.fa-user')) {
@@ -632,6 +633,226 @@
     watchResults();
   }
 
+  // ── PATCH 7: Connect+ tab — column alignment permanent fix ───────────────
+  // ROOT CAUSE: The Connect+ table renderer uses positional index (data[0],
+  // data[1]...) instead of named CSV header keys, causing misalignment when
+  // the Google Sheet column order differs from the expected display order.
+  //
+  // FIX STRATEGY:
+  //   1. Intercept window.__cpRawRows / window.__cpHeaderMap after CSV load.
+  //   2. After the table renders, rebuild every <tr> using the DISPLAY_COLS map
+  //      which reads values by header name (not position).
+  //   3. Re-apply on every MutationObserver mutation (filter/sort/paginate).
+  //   4. STRICTLY scoped to [data-tab="connect_plus"] — zero impact elsewhere.
+  // ─────────────────────────────────────────────────────────────────────────
+  function patchConnectPlusColumns() {
+
+    // ── DISPLAY COLUMN DEFINITION ─────────────────────────────────────────
+    // Defines the exact display order and label for each column.
+    // key = exact CSV header string from Google Sheet row 1.
+    // link = true means render as clickable <a> button.
+    var DISPLAY_COLS = [
+      { label: 'SITE',          key: 'Site' },
+      { label: 'DIRECTORY',     key: 'Directory' },
+      { label: 'CITY',          key: 'City' },
+      { label: 'STATE/REGION',  key: 'State/Province/Region' },
+      { label: 'COUNTRY',       key: 'Country' },
+      { label: 'TIME ZONE',     key: 'Time Zone' },
+      { label: 'END USER',      key: 'END USER' },
+      { label: 'SYSTEMS',       key: 'Number of Control Systems' },
+      { label: 'CONNECT+ LINK', key: 'URL CONNECT+ LINK', link: true }
+    ];
+
+    // ── Find the Connect+ tab root container ─────────────────────────────
+    function _getCpRoot() {
+      return document.querySelector('[data-tab="connect_plus"]')
+          || document.querySelector('[data-page="connect_plus"]')
+          || document.getElementById('cp-tab-panel')
+          || document.getElementById('connectPlusPanel')
+          || null;
+    }
+
+    // ── Find the data table inside the Connect+ root ──────────────────────
+    function _getCpTable(root) {
+      if (!root) return null;
+      return root.querySelector('table')
+          || root.querySelector('[class*="cp-table"]')
+          || root.querySelector('[class*="connect-table"]')
+          || root.querySelector('[id*="cp-table"]')
+          || null;
+    }
+
+    // ── Build header→index map from <thead> or first <tr> of the table ────
+    function _buildHeaderMap(table) {
+      var map = {};
+      var headerRow = null;
+      var thead = table.querySelector('thead tr');
+      if (thead) {
+        headerRow = thead;
+      } else {
+        var rows = table.querySelectorAll('tr');
+        if (rows.length) headerRow = rows[0];
+      }
+      if (!headerRow) return map;
+      var cells = headerRow.querySelectorAll('th, td');
+      cells.forEach(function (cell, idx) {
+        var raw = (cell.textContent || cell.innerText || '').trim();
+        if (raw) map[raw] = idx;
+        // Also map by data-col attribute if present
+        var dc = cell.getAttribute('data-col') || cell.getAttribute('data-key') || '';
+        if (dc) map[dc] = idx;
+      });
+      return map;
+    }
+
+    // ── Get a cell value from a <tr> by header key ───────────────────────
+    function _getCellVal(tr, headerMap, key) {
+      var idx = headerMap[key];
+      if (idx === undefined || idx === null) return '';
+      var cells = tr.querySelectorAll('td');
+      if (!cells[idx]) return '';
+      return (cells[idx].textContent || cells[idx].innerText || '').trim();
+    }
+
+    // ── Rewrite the table header row to match DISPLAY_COLS ────────────────
+    function _rewriteHeader(table) {
+      var thead = table.querySelector('thead');
+      if (!thead) {
+        thead = document.createElement('thead');
+        table.insertBefore(thead, table.firstChild);
+      }
+      var tr = thead.querySelector('tr');
+      if (!tr) {
+        tr = document.createElement('tr');
+        thead.appendChild(tr);
+      }
+      if (tr.dataset.cpHeaderRewritten) return;
+      tr.dataset.cpHeaderRewritten = 'true';
+      // Build new header cells
+      var newHtml = '<th style="width:36px;text-align:center;">#</th>';
+      DISPLAY_COLS.forEach(function (col) {
+        newHtml += '<th data-col-key="' + col.key + '">' + col.label + '</th>';
+      });
+      tr.innerHTML = newHtml;
+    }
+
+    // ── Rewrite a single data <tr> using the header map ───────────────────
+    function _rewriteRow(tr, headerMap, rowNum) {
+      if (tr.dataset.cpRowRewritten) return;
+      tr.dataset.cpRowRewritten = 'true';
+      var newHtml = '<td style="text-align:center;color:rgba(255,255,255,.3);font-size:10px;">' + rowNum + '</td>';
+      DISPLAY_COLS.forEach(function (col) {
+        var val = _getCellVal(tr, headerMap, col.key);
+        if (!val) val = '\u2014';
+        if (col.link && val !== '\u2014' && (val.indexOf('http') === 0 || val.indexOf('//') === 0)) {
+          newHtml += '<td><a href="' + val + '" target="_blank" rel="noopener noreferrer"'
+            + ' style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;'
+            + 'background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.3);'
+            + 'border-radius:5px;color:#22d3ee;font-size:10px;font-weight:700;'
+            + 'text-decoration:none;white-space:nowrap;"'
+            + ' onclick="event.stopPropagation();">'
+            + '<i class="fas fa-external-link-alt" style="font-size:9px;"></i>Open</a></td>';
+        } else {
+          newHtml += '<td>' + val + '</td>';
+        }
+      });
+      tr.innerHTML = newHtml;
+    }
+
+    // ── Main rewrite function — rewrites header + all data rows ──────────
+    function _rewriteTable(table) {
+      if (!table) return;
+      // Step 1: capture original header map BEFORE rewriting the header
+      var origHeaderMap = _buildHeaderMap(table);
+      if (!Object.keys(origHeaderMap).length) return; // table not ready yet
+
+      // Verify at least one of our expected keys exists — if none match,
+      // this is NOT the Connect+ CSV table, skip.
+      var hasMatch = DISPLAY_COLS.some(function (col) {
+        return origHeaderMap[col.key] !== undefined;
+      });
+      if (!hasMatch) return;
+
+      // Step 2: rewrite header
+      _rewriteHeader(table);
+
+      // Step 3: rewrite each data row
+      var tbody = table.querySelector('tbody') || table;
+      var rows = tbody.querySelectorAll('tr');
+      var rowNum = 1;
+      rows.forEach(function (tr) {
+        // Skip header rows
+        if (tr.closest('thead')) return;
+        if (tr.querySelector('th')) return;
+        _rewriteRow(tr, origHeaderMap, rowNum++);
+      });
+
+      console.log('[SupportStudioPatch P7] Connect+ table rewritten: ' + (rowNum - 1) + ' rows.');
+    }
+
+    // ── Watch for Connect+ tab activation + table mutations ──────────────
+    function _watchCpTab() {
+      var root = _getCpRoot();
+      if (!root) {
+        // Tab not yet in DOM — wait
+        setTimeout(_watchCpTab, 800);
+        return;
+      }
+      if (root.dataset.cpPatchAttached) return;
+      root.dataset.cpPatchAttached = 'true';
+
+      // Apply immediately if table already rendered
+      var tbl = _getCpTable(root);
+      if (tbl) _rewriteTable(tbl);
+
+      // Watch for new table renders (pagination, filter, reload)
+      var obs = new MutationObserver(function () {
+        // Clear cpRowRewritten flags so rows get re-evaluated after filter/sort
+        var tbl2 = _getCpTable(root);
+        if (!tbl2) return;
+        tbl2.querySelectorAll('[data-cp-row-rewritten]').forEach(function (tr) {
+          delete tr.dataset.cpRowRewritten;
+        });
+        var thead = tbl2.querySelector('thead tr');
+        if (thead) delete thead.dataset.cpHeaderRewritten;
+        _rewriteTable(tbl2);
+      });
+      obs.observe(root, { childList: true, subtree: true });
+
+      console.log('[SupportStudioPatch P7] Connect+ column alignment patch active.');
+    }
+
+    // ── Also hook window.__cpRawRows setter — fires when CSV data lands ───
+    // This catches the case where the table re-renders from a fresh data load.
+    (function _interceptCpRows() {
+      var _raw = window.__cpRawRows || [];
+      try {
+        Object.defineProperty(window, '__cpRawRows', {
+          configurable: true,
+          get: function () { return _raw; },
+          set: function (v) {
+            _raw = v;
+            // After data lands, give renderer 100ms then re-apply patch
+            setTimeout(function () {
+              var root = _getCpRoot();
+              var tbl = root && _getCpTable(root);
+              if (tbl) {
+                tbl.querySelectorAll('tr[data-cp-row-rewritten]').forEach(function (tr) {
+                  delete tr.dataset.cpRowRewritten;
+                });
+                var thead = tbl.querySelector('thead tr');
+                if (thead) delete thead.dataset.cpHeaderRewritten;
+                _rewriteTable(tbl);
+              }
+            }, 100);
+          }
+        });
+      } catch (_) {}
+    })();
+
+    _watchCpTab();
+  }
+
   // ── BOOT ──────────────────────────────────────────────────────────────────
   function boot() {
     defineQbsOpenDeepResult();
@@ -640,6 +861,7 @@
     patchDeepSearchActionBtn();
     patchBannerDismissal();
     patchDeepSearchCards();
+    patchConnectPlusColumns();
   }
 
   if (document.readyState === 'loading') {
