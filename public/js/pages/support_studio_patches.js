@@ -658,11 +658,24 @@
 
     function _getCpTable(root) {
       if (!root) return null;
+      var bodyWrap = root.querySelector('#cp-table-body');
+      if (bodyWrap) {
+        var bodyTable = bodyWrap.querySelector('table');
+        if (bodyTable) return bodyTable;
+      }
       return root.querySelector('table')
           || root.querySelector('[class*="cp-table"]')
           || root.querySelector('[class*="connect-table"]')
           || root.querySelector('[id*="cp-table"]')
           || null;
+    }
+
+    function _getCpHeadTable(root) {
+      if (!root) return null;
+      var head = root.querySelector('#cp-table-head');
+      if (head) return head;
+      var headWrap = root.querySelector('#cp-table-head-wrap');
+      return headWrap ? headWrap.querySelector('table') : null;
     }
 
     function _cpEscapeHtml(v) {
@@ -675,7 +688,7 @@
     }
 
     // FIX-DYNAMIC: auto-discover headers from live CSV data — no hardcoded columns
-    function _cpDiscoverHeaders(table) {
+    function _cpDiscoverHeaders(bodyTable, headTable) {
       var fromCpHeaders = Array.isArray(window.__cpHeaders)
         ? window.__cpHeaders.filter(function (h) { return typeof h === 'string' && h.trim(); })
         : [];
@@ -698,9 +711,10 @@
         if (mapKeys.length) return mapKeys;
       }
 
-      if (table) {
+      var sourceTable = headTable || bodyTable;
+      if (sourceTable) {
         var domHeaders = [];
-        var headerCells = table.querySelectorAll('thead th[data-col-key]');
+        var headerCells = sourceTable.querySelectorAll('thead th[data-col-key]');
         headerCells.forEach(function (th) {
           var key = (th.getAttribute('data-col-key') || '').trim();
           if (key) domHeaders.push(key);
@@ -711,39 +725,72 @@
       return [];
     }
 
-    function _clearCpRewriteFlags(table) {
-      if (!table) return;
-      table.querySelectorAll('[data-cp-row-rewritten]').forEach(function (tr) {
-        delete tr.dataset.cpRowRewritten;
-      });
-      table.querySelectorAll('thead tr[data-cp-header-rewritten]').forEach(function (tr) {
-        delete tr.dataset.cpHeaderRewritten;
-      });
+    function _clearCpRewriteFlags(bodyTable, headTable) {
+      if (bodyTable) {
+        bodyTable.querySelectorAll('[data-cp-row-rewritten]').forEach(function (tr) {
+          delete tr.dataset.cpRowRewritten;
+        });
+      }
+      if (headTable) {
+        headTable.querySelectorAll('thead tr[data-cp-header-rewritten]').forEach(function (tr) {
+          delete tr.dataset.cpHeaderRewritten;
+        });
+      }
     }
 
-    function _cpReadCurrentHeaderIndexMap(table) {
+    function _cpReadCurrentHeaderIndexMap(headTable) {
       var map = {};
-      if (!table) return map;
-      var headerRow = table.querySelector('thead tr');
+      if (!headTable) return map;
+      var headerRow = headTable.querySelector('thead tr');
       if (!headerRow) return map;
       var headerCells = headerRow.querySelectorAll('th,td');
       var dataIdx = 0;
       headerCells.forEach(function (cell, idx) {
         if (idx === 0) return;
         var key = (cell.getAttribute('data-col-key') || cell.textContent || '').trim();
-        if (key && map[key] === undefined) {
-          map[key] = dataIdx;
-        }
+        if (key && map[key] === undefined) map[key] = dataIdx;
         dataIdx += 1;
       });
       return map;
+    }
+
+    function _cpBuildRawHeaderIndex(headers) {
+      var map = {};
+      headers.forEach(function (h, idx) {
+        if (map[h] === undefined) map[h] = idx;
+      });
+      return map;
+    }
+
+    function _cpGetRawRowObject(rowIndex, headers, rawHeaderIndex) {
+      var rawRows = Array.isArray(window.__cpRawRows) ? window.__cpRawRows : [];
+      if (!rawRows.length) return null;
+
+      var firstRaw = rawRows[0];
+      var rawRow = rawRows[rowIndex];
+      if (Array.isArray(firstRaw) && firstRaw.length && rawRows[rowIndex + 1]) {
+        rawRow = rawRows[rowIndex + 1];
+      }
+      if (!rawRow) return null;
+
+      if (rawRow && typeof rawRow === 'object' && !Array.isArray(rawRow)) return rawRow;
+
+      if (Array.isArray(rawRow)) {
+        var obj = {};
+        headers.forEach(function (h) {
+          var idx = rawHeaderIndex[h];
+          obj[h] = idx === undefined ? '' : String(rawRow[idx] == null ? '' : rawRow[idx]);
+        });
+        return obj;
+      }
+
+      return null;
     }
 
     // FIX-URLDETECT: auto-detect URL cells and render as Open buttons
     function _cpBuildCellHtml(value) {
       var val = String(value == null ? '' : value).trim();
       if (!val) return '<td>—</td>';
-
       if (val.indexOf('http') === 0 || val.indexOf('//') === 0) {
         var safeHref = _cpEscapeHtml(val);
         return '<td><a href="' + safeHref + '" target="_blank" rel="noopener noreferrer"'
@@ -754,77 +801,92 @@
           + ' onclick="event.stopPropagation();">'
           + '<i class="fas fa-external-link-alt" style="font-size:9px;"></i>Open</a></td>';
       }
-
       return '<td>' + _cpEscapeHtml(val) + '</td>';
     }
 
-    function _cpRenderDynamic(table) {
-      if (!table) return;
+    function _cpRenderDynamic(bodyTable, headTable) {
+      if (!bodyTable) return;
       var root = _getCpRoot();
-      if (!root || !root.contains(table)) return;
+      if (!root || !root.contains(bodyTable)) return;
 
-      var headers = _cpDiscoverHeaders(table);
+      var headers = _cpDiscoverHeaders(bodyTable, headTable);
       if (!headers.length) return;
 
-      var currentHeaderMap = _cpReadCurrentHeaderIndexMap(table);
       var schemaFingerprint = JSON.stringify(headers);
-
       // FIX-SCHEMA-CHANGE: detect CSV schema change and force full re-render
       if (_lastCpHeaderFingerprint && _lastCpHeaderFingerprint !== schemaFingerprint) {
-        _clearCpRewriteFlags(table);
+        _clearCpRewriteFlags(bodyTable, headTable);
       }
       _lastCpHeaderFingerprint = schemaFingerprint;
 
-      var thead = table.querySelector('thead');
-      if (!thead) {
-        try {
-          thead = document.createElement('thead');
-          table.insertBefore(thead, table.firstChild);
-        } catch (_) {
-          return;
+      var headerTarget = headTable || bodyTable;
+      var currentHeaderMap = _cpReadCurrentHeaderIndexMap(headerTarget);
+      var rawHeaderIndex = _cpBuildRawHeaderIndex(headers);
+
+      if (headerTarget) {
+        var thead = headerTarget.querySelector('thead');
+        if (!thead) {
+          try {
+            thead = document.createElement('thead');
+            headerTarget.insertBefore(thead, headerTarget.firstChild);
+          } catch (_) {
+            thead = null;
+          }
+        }
+
+        if (thead) {
+          var headerRow = thead.querySelector('tr');
+          if (!headerRow) {
+            try {
+              headerRow = document.createElement('tr');
+              thead.appendChild(headerRow);
+            } catch (_) {
+              headerRow = null;
+            }
+          }
+
+          if (headerRow) {
+            var headerHtml = '<th style="width:36px;text-align:center;">#</th>';
+            headers.forEach(function (header) {
+              var safeHeader = _cpEscapeHtml(header);
+              headerHtml += '<th data-col-key="' + safeHeader + '">' + safeHeader + '</th>';
+            });
+            try {
+              headerRow.innerHTML = headerHtml;
+              // FIX-FLAGPOS: set rewritten flag only after innerHTML succeeds
+              headerRow.dataset.cpHeaderRewritten = 'true';
+            } catch (_) {}
+          }
         }
       }
 
-      var headerRow = thead.querySelector('tr');
-      if (!headerRow) {
-        try {
-          headerRow = document.createElement('tr');
-          thead.appendChild(headerRow);
-        } catch (_) {
-          return;
-        }
-      }
-
-      var headerHtml = '<th style="width:36px;text-align:center;">#</th>';
-      headers.forEach(function (header) {
-        var safeHeader = _cpEscapeHtml(header);
-        headerHtml += '<th data-col-key="' + safeHeader + '">' + safeHeader + '</th>';
-      });
-
-      try {
-        headerRow.innerHTML = headerHtml;
-        // FIX-FLAGPOS: set rewritten flag only after innerHTML succeeds
-        headerRow.dataset.cpHeaderRewritten = 'true';
-      } catch (_) {
-        return;
-      }
-
-      var tbody = table.querySelector('tbody');
+      var tbody = bodyTable.querySelector('tbody');
       if (!tbody) return;
-
       var rows = tbody.querySelectorAll('tr');
       if (!rows.length) return;
 
       rows.forEach(function (tr, idx) {
         var existingCells = tr.querySelectorAll('td');
-        var rowHtml = '<td style="text-align:center;color:rgba(255,255,255,.3);font-size:10px;">' + (idx + 1) + '</td>';
+        var cpIdxRaw = tr.getAttribute('data-cp-idx');
+        var cpIdx = cpIdxRaw != null && cpIdxRaw !== '' ? Number(cpIdxRaw) : idx;
+        if (!isFinite(cpIdx) || cpIdx < 0) cpIdx = idx;
+
+        var rawRowObj = _cpGetRawRowObject(cpIdx, headers, rawHeaderIndex);
+        var rowHtml = '<td style="text-align:center;color:rgba(255,255,255,.3);font-size:10px;">' + (cpIdx + 1) + '</td>';
 
         headers.forEach(function (header, headerIdx) {
+          var fromDom = '';
           var cellIndex = currentHeaderMap[header];
           if (cellIndex === undefined) cellIndex = headerIdx;
-          var cell = existingCells[cellIndex];
-          var rawVal = cell ? (cell.textContent || cell.innerText || '') : '';
-          rowHtml += _cpBuildCellHtml(rawVal);
+          var domCell = existingCells[cellIndex];
+          if (domCell) fromDom = String(domCell.textContent || domCell.innerText || '').trim();
+
+          var fromRaw = rawRowObj && Object.prototype.hasOwnProperty.call(rawRowObj, header)
+            ? String(rawRowObj[header] == null ? '' : rawRowObj[header]).trim()
+            : '';
+
+          var value = fromDom || fromRaw;
+          rowHtml += _cpBuildCellHtml(value);
         });
 
         try {
@@ -837,10 +899,11 @@
 
     function _queueCpRender() {
       var root = _getCpRoot();
-      var table = _getCpTable(root);
-      if (!root || !table || !root.contains(table)) return;
-      _clearCpRewriteFlags(table);
-      _cpRenderDynamic(table);
+      var bodyTable = _getCpTable(root);
+      var headTable = _getCpHeadTable(root);
+      if (!root || !bodyTable || !root.contains(bodyTable)) return;
+      _clearCpRewriteFlags(bodyTable, headTable);
+      _cpRenderDynamic(bodyTable, headTable);
     }
 
     function _watchCpTab() {
