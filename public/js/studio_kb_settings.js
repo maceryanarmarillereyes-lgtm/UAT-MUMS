@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // public/js/studio_kb_settings.js
 // Knowledge Base Sync — Settings UI  v1.1
 // Strategy: replaces the stub #settings-section-kb-settings HTML with

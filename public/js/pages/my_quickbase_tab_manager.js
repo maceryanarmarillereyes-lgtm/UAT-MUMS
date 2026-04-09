@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 (function(rootFactory) {
   if (typeof module !== 'undefined' && module.exports) {
     const built = rootFactory(typeof globalThis !== 'undefined' ? globalThis : global);

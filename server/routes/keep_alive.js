@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // Supabase keep-alive endpoint
 // - Harmless write into `heartbeat` table to prevent Supabase project pausing on free plans.
 // - Uses server-side service role key.

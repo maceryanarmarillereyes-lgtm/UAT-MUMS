@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // server/routes/studio/qb_settings_global.js
 // GET /api/studio/qb_settings_global — returns Studio QB settings in global_quickbase format
 // POST /api/studio/qb_settings_global — saves to Studio QB settings

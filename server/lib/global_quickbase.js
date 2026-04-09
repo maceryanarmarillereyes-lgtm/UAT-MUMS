@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // server/lib/global_quickbase.js
 // Reads/writes Global Quickbase Settings from the mums_documents key-value table.
 // Key: 'mums_global_quickbase_settings'

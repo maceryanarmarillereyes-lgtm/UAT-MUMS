@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 (window.Pages=window.Pages||{}, window.Pages.gmt_overview = function(root){
   const u = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
   if(!u){

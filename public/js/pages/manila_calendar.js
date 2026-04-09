@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // public/js/pages/manila_calendar.js — Manila Vacation Calendar
 // Uses /api/calendar/records — dedicated endpoint that reads the calendar token server-side.
 

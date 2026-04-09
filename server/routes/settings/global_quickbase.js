@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // server/routes/settings/global_quickbase.js
 // GET  /api/settings/global_quickbase  — any authenticated user
 // POST /api/settings/global_quickbase  — SUPER_ADMIN only

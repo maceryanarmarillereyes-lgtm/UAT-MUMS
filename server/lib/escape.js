@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 function escapeQuickbaseValue(v) {
   if (v === null) return null;
   return String(v).replace(/'/g, "''");

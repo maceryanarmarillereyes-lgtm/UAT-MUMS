@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 /* public/js/security_pin.js
  * MUMS Security PIN System — Frontend Controller v2.0
  * BUG FIX REPORT:

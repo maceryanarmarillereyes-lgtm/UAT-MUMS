@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // server/routes/studio/se2_bookmarks.js
 // GET  /api/studio/se2_bookmarks  — load this user's Search Engine 2 bookmarks/folders
 // POST /api/studio/se2_bookmarks  — save (replace) this user's bookmarks/folders

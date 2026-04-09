@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 const crypto = require('crypto');
 function getSecret() { const env = (typeof globalThis !== 'undefined' && globalThis.__MUMS_ENV) || (typeof process !== 'undefined' && process.env) || {}; return String(env.STUDIO_SECRET_KEY || env.SUPPORT_STUDIO_SECRET || '').trim(); }
 function encryptText(plain) { const text = String(plain || ''); if (!text) return ''; const secret = getSecret(); if (!secret) return text; const iv = crypto.randomBytes(12); const key = crypto.createHash('sha256').update(secret).digest(); const cipher = crypto.createCipheriv('aes-256-gcm', key, iv); const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]); const tag = cipher.getAuthTag(); return `enc:${iv.toString('base64')}:${tag.toString('base64')}:${encrypted.toString('base64')}`; }

@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // server/routes/studio/qb_search.js
 // GET /api/studio/qb_search?q=term&skip=0&top=100
 //

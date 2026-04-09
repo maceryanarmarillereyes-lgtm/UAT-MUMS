@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 (function(){
   const ENABLE_BLOCKER_MODAL = false; // Enterprise: no disruptive modal popouts.
 

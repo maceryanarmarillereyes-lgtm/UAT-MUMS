@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // server/routes/calendar/records.js
 // GET /api/calendar/records
 // Fetches records from Quickbase using the Global Calendar Settings token.
