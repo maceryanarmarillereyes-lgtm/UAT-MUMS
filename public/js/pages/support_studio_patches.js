@@ -690,6 +690,12 @@
         .replace(/'/g, '&#39;');
     }
 
+    function _cpNormalizeHeaderKey(v) {
+      return String(v == null ? '' : v)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '');
+    }
+
     // FIX-DYNAMIC: auto-discover headers from live CSV data — no hardcoded columns
     function _cpDiscoverHeaders(bodyTable, headTable) {
       var fromCpHeaders = Array.isArray(window.__cpHeaders)
@@ -747,12 +753,18 @@
       var headerRow = headTable.querySelector('thead tr');
       if (!headerRow) return map;
       var headerCells = headerRow.querySelectorAll('th,td');
-      var dataIdx = 0;
+      if (!headerCells.length) return map;
+      var firstKey = (headerCells[0].getAttribute('data-col-key') || headerCells[0].textContent || '').trim();
+      var firstNorm = _cpNormalizeHeaderKey(firstKey);
+      var hasRowNumberCell = firstNorm === '' || firstNorm === '#' || firstNorm === 'no' || firstNorm === 'index';
       headerCells.forEach(function (cell, idx) {
-        if (idx === 0) return;
+        if (hasRowNumberCell && idx === 0) return;
         var key = (cell.getAttribute('data-col-key') || cell.textContent || '').trim();
-        if (key && map[key] === undefined) map[key] = dataIdx;
-        dataIdx += 1;
+        if (!key) return;
+        var dataIdx = hasRowNumberCell ? (idx - 1) : idx;
+        if (map[key] === undefined) map[key] = dataIdx;
+        var normalized = _cpNormalizeHeaderKey(key);
+        if (normalized && map[normalized] === undefined) map[normalized] = dataIdx;
       });
       return map;
     }
@@ -761,8 +773,27 @@
       var map = {};
       headers.forEach(function (h, idx) {
         if (map[h] === undefined) map[h] = idx;
+        var normalized = _cpNormalizeHeaderKey(h);
+        if (normalized && map[normalized] === undefined) map[normalized] = idx;
       });
       return map;
+    }
+
+    function _cpGetRawValue(rawRowObj, header) {
+      if (!rawRowObj || typeof rawRowObj !== 'object') return '';
+      if (Object.prototype.hasOwnProperty.call(rawRowObj, header)) {
+        return String(rawRowObj[header] == null ? '' : rawRowObj[header]).trim();
+      }
+      var target = _cpNormalizeHeaderKey(header);
+      if (!target) return '';
+      var keys = Object.keys(rawRowObj);
+      for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        if (_cpNormalizeHeaderKey(key) === target) {
+          return String(rawRowObj[key] == null ? '' : rawRowObj[key]).trim();
+        }
+      }
+      return '';
     }
 
     function _cpGetRawRowObject(rowIndex, headers, rawHeaderIndex) {
@@ -880,13 +911,12 @@
         headers.forEach(function (header, headerIdx) {
           var fromDom = '';
           var cellIndex = currentHeaderMap[header];
+          if (cellIndex === undefined) cellIndex = currentHeaderMap[_cpNormalizeHeaderKey(header)];
           if (cellIndex === undefined) cellIndex = headerIdx;
           var domCell = existingCells[cellIndex];
           if (domCell) fromDom = String(domCell.textContent || domCell.innerText || '').trim();
 
-          var fromRaw = rawRowObj && Object.prototype.hasOwnProperty.call(rawRowObj, header)
-            ? String(rawRowObj[header] == null ? '' : rawRowObj[header]).trim()
-            : '';
+          var fromRaw = _cpGetRawValue(rawRowObj, header);
 
           var value = fromRaw || fromDom;
           rowHtml += _cpBuildCellHtml(value);
