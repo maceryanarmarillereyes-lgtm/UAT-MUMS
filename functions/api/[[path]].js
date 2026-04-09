@@ -122,6 +122,8 @@ async function getRoutes(env) {
     'studio/call_notes':         unwrapCjs(await import('../../server/routes/studio/call_notes.js')),
     'studio/se2_bookmarks':      unwrapCjs(await import('../../server/routes/studio/se2_bookmarks.js')),
     'studio/home_apps':          unwrapCjs(await import('../../server/routes/studio/home_apps.js')),
+    // Back-compat alias for legacy clients still calling /api/home_apps
+    'home_apps':                 unwrapCjs(await import('../../server/routes/studio/home_apps.js')),
     'studio/qb_settings_global': unwrapCjs(await import('../../server/routes/studio/qb_settings_global.js')),
     'studio/qb_monitoring':      unwrapCjs(await import('../../server/routes/studio/qb_monitoring.js')),
     'studio/qb_search':          unwrapCjs(await import('../../server/routes/studio/qb_search.js')),
