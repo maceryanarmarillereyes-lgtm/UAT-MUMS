@@ -672,10 +672,13 @@
 
     function _getCpHeadTable(root) {
       if (!root) return null;
-      var head = root.querySelector('#cp-table-head');
-      if (head) return head;
-      var headWrap = root.querySelector('#cp-table-head-wrap');
-      return headWrap ? headWrap.querySelector('table') : null;
+      var selectors = ['#cp-table-head table', '#cp-table-head-wrap table',
+                       '#cp-table-head', '#cp-table-head-wrap'];
+      for (var i = 0; i < selectors.length; i++) {
+        var el = root.querySelector(selectors[i]);
+        if (el && (el.tagName === 'TABLE' || el.querySelector('thead,tbody,tr'))) return el;
+      }
+      return null;
     }
 
     function _cpEscapeHtml(v) {
@@ -885,7 +888,7 @@
             ? String(rawRowObj[header] == null ? '' : rawRowObj[header]).trim()
             : '';
 
-          var value = fromDom || fromRaw;
+          var value = fromRaw || fromDom;
           rowHtml += _cpBuildCellHtml(value);
         });
 
@@ -897,13 +900,21 @@
       });
     }
 
+    var _cpRenderInProgress = false;
+    var _cpMutDebounce = null;
     function _queueCpRender() {
-      var root = _getCpRoot();
-      var bodyTable = _getCpTable(root);
-      var headTable = _getCpHeadTable(root);
-      if (!root || !bodyTable || !root.contains(bodyTable)) return;
-      _clearCpRewriteFlags(bodyTable, headTable);
-      _cpRenderDynamic(bodyTable, headTable);
+      if (_cpRenderInProgress) return;
+      _cpRenderInProgress = true;
+      try {
+        var root = _getCpRoot();
+        var bodyTable = _getCpTable(root);
+        var headTable = _getCpHeadTable(root);
+        if (!root || !bodyTable || !root.contains(bodyTable)) return;
+        _clearCpRewriteFlags(bodyTable, headTable);
+        _cpRenderDynamic(bodyTable, headTable);
+      } finally {
+        _cpRenderInProgress = false;
+      }
     }
 
     function _watchCpTab() {
@@ -918,7 +929,8 @@
       _queueCpRender();
 
       var obs = new MutationObserver(function () {
-        _queueCpRender();
+        clearTimeout(_cpMutDebounce);
+        _cpMutDebounce = setTimeout(_queueCpRender, 120);
       });
       try {
         obs.observe(root, { childList: true, subtree: true });
