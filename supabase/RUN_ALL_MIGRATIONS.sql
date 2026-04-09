@@ -428,6 +428,23 @@ create index if not exists task_items_distribution_id_idx
 create index if not exists task_items_assigned_to_idx
   on public.task_items (assigned_to);
 
+-- RLS for task tables (Security Advisor requirement)
+alter table public.task_distributions enable row level security;
+drop policy if exists "task_distributions_read"         on public.task_distributions;
+drop policy if exists "task_distributions_service_write" on public.task_distributions;
+create policy "task_distributions_read"
+  on public.task_distributions for select to authenticated using (true);
+create policy "task_distributions_service_write"
+  on public.task_distributions for all to service_role using (true) with check (true);
+
+alter table public.task_items enable row level security;
+drop policy if exists "task_items_read"          on public.task_items;
+drop policy if exists "task_items_service_write" on public.task_items;
+create policy "task_items_read"
+  on public.task_items for select to authenticated using (true);
+create policy "task_items_service_write"
+  on public.task_items for all to service_role using (true) with check (true);
+
 --------------------------------------------------------------------------------
 -- view: team workload matrix (optional helper)
 -- NOTE: We DROP first to avoid Postgres 42P16 (cannot drop columns from view)
