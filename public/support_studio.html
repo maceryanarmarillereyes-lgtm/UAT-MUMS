@@ -940,45 +940,111 @@
               <!-- ═══ CONTROLLER LAB BOOKING MODAL ═══ -->
               <div id="hp-ctl-booking-modal" aria-hidden="true">
                 <div id="hp-ctl-booking-dialog">
-                  <!-- Header -->
+
+                  <!-- ── HERO HEADER ── -->
                   <div id="hp-ctl-booking-head">
-                    <!-- Sheet connection indicator row -->
-                    <div id="hp-ctl-bk-sheet-indicator" style="display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:rgba(0,0,0,.2);border-bottom:1px solid rgba(255,255,255,.06);font-size:10px;">
-                      <span id="hp-ctl-bk-sheet-dot" style="display:flex;align-items:center;gap:6px;color:#6b7280;">
-                        <span id="hp-ctl-sheet-dot-icon" style="width:7px;height:7px;border-radius:50%;background:#6b7280;flex-shrink:0;"></span>
-                        <span id="hp-ctl-sheet-dot-label">Checking sheet connection…</span>
-                      </span>
-                      <button id="hp-ctl-bk-pending-btn" onclick="window._ctlShowPendingLogs()" style="display:none;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#f59e0b;border-radius:6px;padding:2px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">
-                        <i class="fas fa-exclamation-triangle" style="font-size:8px;margin-right:3px;"></i>
+                    <!-- Top bar: sheet status + pending -->
+                    <div class="hp-ctl-bk-topbar">
+                      <div id="hp-ctl-bk-sheet-dot" class="hp-ctl-bk-status-pill">
+                        <span id="hp-ctl-sheet-dot-icon" class="hp-ctl-status-dot"></span>
+                        <span id="hp-ctl-sheet-dot-label">Checking sheet…</span>
+                      </div>
+                      <button id="hp-ctl-bk-pending-btn" onclick="window._ctlShowPendingLogs()" class="hp-ctl-pending-pill" style="display:none;">
+                        <i class="fas fa-exclamation-triangle"></i>
                         <span id="hp-ctl-pending-count">0</span> pending
                       </button>
                     </div>
-                    <div class="hp-ctl-bk-icon">
-                      <img id="hp-ctl-bk-ctrl-img" src="/Widget%20Images/E2_Widget.png" alt="Controller" />
+
+                    <!-- Controller identity block -->
+                    <div class="hp-ctl-bk-identity">
+                      <div class="hp-ctl-bk-avatar">
+                        <img id="hp-ctl-bk-ctrl-img" src="/Widget%20Images/E2_Widget.png" alt="Controller" />
+                        <div class="hp-ctl-bk-avatar-pulse"></div>
+                      </div>
+                      <div class="hp-ctl-bk-identity-text">
+                        <div class="hp-ctl-bk-eyebrow">Controller Lab Session</div>
+                        <div class="hp-ctl-bk-title" id="hp-ctl-bk-ctrl-name">E2 Controller</div>
+                        <div class="hp-ctl-bk-ip-row">
+                          <span class="hp-ctl-bk-ip-dot"></span>
+                          <span id="hp-ctl-bk-ctrl-ip" class="hp-ctl-bk-ip">192.168.123.1</span>
+                          <span class="hp-ctl-bk-online-badge">ONLINE</span>
+                        </div>
+                      </div>
+                      <button class="hp-ctl-bk-close" onclick="window._ctlCloseBooking()" title="Close">
+                        <i class="fas fa-times"></i>
+                      </button>
                     </div>
-                    <div>
-                      <div class="hp-ctl-bk-title" id="hp-ctl-bk-ctrl-name">Use Controller</div>
-                      <div class="hp-ctl-bk-sub" id="hp-ctl-bk-ctrl-ip">192.168.123.1</div>
+
+                    <!-- Session meta strip -->
+                    <div class="hp-ctl-bk-meta-strip">
+                      <div class="hp-ctl-bk-meta-item">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="hp-ctl-bk-user-display">—</span>
+                      </div>
+                      <div class="hp-ctl-bk-meta-divider"></div>
+                      <div class="hp-ctl-bk-meta-item">
+                        <i class="fas fa-calendar-day"></i>
+                        <span id="hp-ctl-bk-date-display">—</span>
+                      </div>
+                      <div class="hp-ctl-bk-meta-divider"></div>
+                      <div class="hp-ctl-bk-meta-item">
+                        <i class="fas fa-flask"></i>
+                        <span>Controller Lab</span>
+                      </div>
                     </div>
-                    <button class="hp-ctl-bk-close" onclick="window._ctlCloseBooking()" title="Close">
-                      <i class="fas fa-times"></i>
-                    </button>
                   </div>
 
-                  <!-- Body — form -->
+                  <!-- ── FORM BODY ── -->
                   <div id="hp-ctl-booking-body">
+
+                    <!-- Step indicators -->
+                    <div class="hp-ctl-bk-steps">
+                      <div class="hp-ctl-bk-step active" data-step="1">
+                        <div class="hp-ctl-bk-step-num">1</div>
+                        <span>Task</span>
+                      </div>
+                      <div class="hp-ctl-bk-step-line"></div>
+                      <div class="hp-ctl-bk-step" data-step="2">
+                        <div class="hp-ctl-bk-step-num">2</div>
+                        <span>Duration</span>
+                      </div>
+                      <div class="hp-ctl-bk-step-line"></div>
+                      <div class="hp-ctl-bk-step" data-step="3">
+                        <div class="hp-ctl-bk-step-num">3</div>
+                        <span>Backup</span>
+                      </div>
+                    </div>
+
                     <!-- Field 1: Task -->
                     <div class="hp-ctl-bk-field">
-                      <label>Task <span class="hp-ctl-bk-req">*</span></label>
+                      <label class="hp-ctl-bk-label">
+                        <i class="fas fa-tasks hp-ctl-bk-label-icon"></i>
+                        Task Description
+                        <span class="hp-ctl-bk-req">Required</span>
+                      </label>
                       <input id="hp-ctl-bk-task" class="hp-ctl-bk-input" type="text"
-                        placeholder="e.g. E2 Firmware Update, Protocol Test, Backup…"
+                        placeholder="e.g. E2 Firmware Update, Protocol Test, Backup Config…"
                         autocomplete="off" />
+                      <div class="hp-ctl-bk-field-hint">Describe what you will be doing on this controller today.</div>
                     </div>
 
                     <!-- Field 2: Duration -->
                     <div class="hp-ctl-bk-field">
-                      <label>Duration <span class="hp-ctl-bk-req">*</span></label>
-                      <select id="hp-ctl-bk-duration" class="hp-ctl-bk-select">
+                      <label class="hp-ctl-bk-label">
+                        <i class="fas fa-stopwatch hp-ctl-bk-label-icon"></i>
+                        Session Duration
+                        <span class="hp-ctl-bk-req">Required</span>
+                      </label>
+                      <div class="hp-ctl-bk-duration-grid">
+                        <button class="hp-ctl-dur-chip" data-dur="5 minutes">5 min</button>
+                        <button class="hp-ctl-dur-chip" data-dur="10 minutes">10 min</button>
+                        <button class="hp-ctl-dur-chip" data-dur="15 minutes">15 min</button>
+                        <button class="hp-ctl-dur-chip" data-dur="30 minutes">30 min</button>
+                        <button class="hp-ctl-dur-chip" data-dur="1 hour">1 hour</button>
+                        <button class="hp-ctl-dur-chip" data-dur="set_time">Custom…</button>
+                      </div>
+                      <!-- Hidden select keeps existing JS logic working -->
+                      <select id="hp-ctl-bk-duration" class="hp-ctl-bk-select" style="display:none;">
                         <option value="">— Select duration —</option>
                         <option value="5 minutes">5 minutes</option>
                         <option value="10 minutes">10 minutes</option>
@@ -987,28 +1053,32 @@
                         <option value="1 hour">1 hour</option>
                         <option value="set_time">Set Time…</option>
                       </select>
-                      <!-- Custom time input shown when "Set Time" selected -->
-                      <div id="hp-ctl-bk-custom-time-wrap">
+                      <div id="hp-ctl-bk-custom-time-wrap" style="display:none;margin-top:10px;">
                         <input id="hp-ctl-bk-custom-time" class="hp-ctl-bk-input"
-                          type="text" placeholder="e.g. 45 minutes, 2 hours…"
+                          type="text" placeholder="e.g. 45 minutes, 2 hours 30 minutes…"
                           autocomplete="off" />
                       </div>
                     </div>
 
-                    <!-- Field 3: Backup File Link -->
+                    <!-- Field 3: Backup File -->
                     <div class="hp-ctl-bk-field">
-                      <label>Existing Backup File Link <span class="hp-ctl-bk-req">*</span></label>
-                      <div class="hp-ctl-bk-link-row">
-                        <input id="hp-ctl-bk-backup" class="hp-ctl-bk-input" type="text"
-                          placeholder="Paste your backup file link here…"
-                          autocomplete="off" />
-                        <button class="hp-ctl-bk-upload-btn" onclick="window._ctlOpenBackupFolder()" title="Open backup folder in SharePoint">
-                          <i class="fas fa-cloud-upload-alt"></i> Click Here to Upload the Backup File then copy the link
-                        </button>
-                      </div>
-                      <div style="font-size:9px;color:#6b7280;margin-top:5px;line-height:1.5;">
-                        <i class="fas fa-info-circle" style="font-size:8px;margin-right:3px;"></i>
-                        Click the button above → upload your file → copy its link → paste it in the field.
+                      <label class="hp-ctl-bk-label">
+                        <i class="fas fa-cloud-upload-alt hp-ctl-bk-label-icon"></i>
+                        Backup File Link
+                        <span class="hp-ctl-bk-req">Required</span>
+                      </label>
+                      <div class="hp-ctl-bk-backup-block">
+                        <div class="hp-ctl-bk-backup-upload-zone" onclick="window._ctlOpenBackupFolder()">
+                          <i class="fas fa-cloud-upload-alt" style="font-size:18px;color:#6b7280;margin-bottom:6px;display:block;"></i>
+                          <div style="font-size:11px;font-weight:700;color:#94a3b8;">Click to Upload Backup File</div>
+                          <div style="font-size:9px;color:#4b5563;margin-top:3px;">Opens SharePoint folder → upload → copy link</div>
+                        </div>
+                        <div class="hp-ctl-bk-backup-input-wrap">
+                          <i class="fas fa-link hp-ctl-bk-backup-icon"></i>
+                          <input id="hp-ctl-bk-backup" class="hp-ctl-bk-input hp-ctl-bk-backup-input" type="text"
+                            placeholder="Paste SharePoint link here after uploading…"
+                            autocomplete="off" />
+                        </div>
                       </div>
                     </div>
 
@@ -1016,16 +1086,18 @@
                     <button class="hp-ctl-bk-register" id="hp-ctl-bk-register-btn"
                       onclick="window._ctlSubmitBooking()">
                       <span class="hp-ctl-bk-spinner" id="hp-ctl-bk-spinner"></span>
-                      <i class="fas fa-save" id="hp-ctl-bk-register-icon"></i>
-                      <span id="hp-ctl-bk-register-label">Register</span>
+                      <i class="fas fa-bolt" id="hp-ctl-bk-register-icon"></i>
+                      <span id="hp-ctl-bk-register-label">Log Session</span>
                     </button>
 
                     <!-- Success state -->
                     <div class="hp-ctl-bk-success" id="hp-ctl-bk-success">
-                      <div class="hp-ctl-bk-success-icon">✅</div>
-                      <h3>Logged Successfully!</h3>
-                      <p id="hp-ctl-bk-success-msg">Your session has been recorded in the Controller Lab log.</p>
-                      <div id="hp-ctl-bk-sheet-status" style="display:none;margin-top:10px;padding:7px 12px;border-radius:8px;font-size:11px;font-weight:600;text-align:center;"></div>
+                      <div class="hp-ctl-bk-success-ring">
+                        <i class="fas fa-check hp-ctl-bk-success-check"></i>
+                      </div>
+                      <div class="hp-ctl-bk-success-title">Session Logged!</div>
+                      <p id="hp-ctl-bk-success-msg" class="hp-ctl-bk-success-msg"></p>
+                      <div id="hp-ctl-bk-sheet-status"></div>
                     </div>
                   </div>
                 </div>

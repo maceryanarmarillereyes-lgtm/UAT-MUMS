@@ -1238,9 +1238,15 @@
 
     function setStatus(ok, label) {
       _sheetReachable = ok;
-      var color = ok ? '#10b981' : '#ef4444';
-      if (dotIcon) { dotIcon.style.background = color; dotIcon.style.boxShadow = '0 0 0 3px ' + color + '22'; }
-      if (dotLabel) { dotLabel.style.color = ok ? '#10b981' : '#ef4444'; dotLabel.textContent = label; }
+      if (dotIcon) {
+        dotIcon.className = 'hp-ctl-status-dot ' + (ok ? 'connected' : 'error');
+        // Also update inline for older Safari
+        dotIcon.style.background = ok ? '#10b981' : '#ef4444';
+      }
+      if (dotLabel) {
+        dotLabel.style.color = ok ? '#10b981' : '#ef4444';
+        dotLabel.textContent = label;
+      }
       if (callback) callback(ok);
     }
 
@@ -1324,6 +1330,21 @@
     if (regLabel) { regLabel.textContent = 'Register'; }
     if (spinner)  { spinner.style.display = 'none'; }
 
+    // Populate meta strip — user display name + date
+    var userDisp = document.getElementById('hp-ctl-bk-user-display');
+    var dateDisp = document.getElementById('hp-ctl-bk-date-display');
+    if (userDisp) userDisp.textContent = getCurrentUser();
+    if (dateDisp) {
+      dateDisp.textContent = new Date().toLocaleDateString('en-US', {
+        weekday:'short', month:'short', day:'numeric', year:'numeric'
+      });
+    }
+
+    // Reset duration chips
+    document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(chip) {
+      chip.classList.remove('selected','invalid-chip');
+    });
+
     // Update pending logs button
     _updatePendingBtn();
 
@@ -1346,13 +1367,48 @@
     if (modal) { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); }
     _bookingCtlId   = null;
     _bookingCtlData = null;
+    // Reset step indicators
+    document.querySelectorAll('.hp-ctl-bk-step').forEach(function(s) { s.classList.remove('done'); });
+    document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c) { c.classList.remove('selected','invalid-chip'); });
   };
 
   window._ctlOpenBackupFolder = function() {
     window.open(BACKUP_FOLDER_URL, '_blank', 'noopener,noreferrer');
   };
 
-  // ── Duration select → custom time input ───────────────────────────────────
+  // ── Duration chip click → sync to hidden select + show/hide custom ─────────
+  document.addEventListener('click', function(e) {
+    var chip = e.target.closest('.hp-ctl-dur-chip');
+    if (!chip) return;
+    // Deselect all chips
+    document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c) {
+      c.classList.remove('selected');
+    });
+    chip.classList.add('selected');
+    var dur = chip.getAttribute('data-dur') || '';
+    // Sync to hidden select (keeps existing validation logic intact)
+    var sel = document.getElementById('hp-ctl-bk-duration');
+    if (sel) sel.value = dur;
+    // Dispatch change event so existing listener fires
+    if (sel) sel.dispatchEvent(new Event('change'));
+    // Step indicator: mark step 2 done
+    var s2 = document.querySelector('.hp-ctl-bk-step[data-step="2"]');
+    if (s2 && dur && dur !== 'set_time') s2.classList.add('done');
+  });
+
+  // Step indicator wiring: task field → step 1, backup → step 3
+  document.addEventListener('input', function(e) {
+    if (e.target && e.target.id === 'hp-ctl-bk-task') {
+      var s1 = document.querySelector('.hp-ctl-bk-step[data-step="1"]');
+      if (s1) s1.classList.toggle('done', e.target.value.trim().length > 2);
+    }
+    if (e.target && e.target.id === 'hp-ctl-bk-backup') {
+      var s3 = document.querySelector('.hp-ctl-bk-step[data-step="3"]');
+      if (s3) s3.classList.toggle('done', e.target.value.trim().length > 5);
+    }
+  });
+
+  // ── Duration select change → custom time wrap ───────────────────────────
   document.addEventListener('change', function(e) {
     if (e.target && e.target.id === 'hp-ctl-bk-duration') {
       var wrap = document.getElementById('hp-ctl-bk-custom-time-wrap');
@@ -1383,6 +1439,7 @@
     var customEl = document.getElementById('hp-ctl-bk-custom-time');
 
     [taskEl, durEl, backupEl].forEach(function(el) { if (el) el.classList.remove('invalid'); });
+    document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c) { c.classList.remove('invalid-chip'); });
 
     var task    = (taskEl   && taskEl.value.trim())   || '';
     var durVal  = (durEl    && durEl.value.trim())    || '';
@@ -1391,7 +1448,12 @@
 
     var valid = true;
     if (!task)   { if (taskEl)   taskEl.classList.add('invalid');   valid = false; }
-    if (!durVal) { if (durEl)    durEl.classList.add('invalid');    valid = false; }
+    if (!durVal) {
+      if (durEl) durEl.classList.add('invalid');
+      // Also visually mark duration chips as invalid
+      document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c) { c.classList.add('invalid-chip'); });
+      valid = false;
+    }
     if (!backup) { if (backupEl) backupEl.classList.add('invalid'); valid = false; }
 
     if (durVal === 'set_time') {
