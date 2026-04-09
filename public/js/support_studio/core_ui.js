@@ -1376,6 +1376,16 @@
       backupFile: backup
     };
 
+    // Convert payload to URL-encoded form body for Apps Script compatibility
+    var formPayload = new URLSearchParams({
+      timestamp: payload.timestamp,
+      user: payload.user,
+      controller: payload.controller,
+      task: payload.task,
+      duration: payload.duration,
+      backupFile: payload.backupFile
+    });
+
     // ── POST to Google Sheets via Apps Script endpoint ─────────────────
     function _onSuccess() {
       // Show success state
@@ -1414,12 +1424,11 @@
       // Send to Apps Script Web App
       fetch(SHEETS_ENDPOINT, {
         method: 'POST',
-        mode: 'no-cors', // Apps Script requires no-cors for cross-origin POST
-        headers: { 'Content-Type': 'text/plain' }, // no-cors blocks custom headers; use text/plain
-        body: JSON.stringify(payload)
+        body: formPayload
+      }).then(function(res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
       }).then(function() {
-        // no-cors → response is opaque (type: 'opaque'), can't read body
-        // We assume success if fetch didn't throw
         _onSuccess();
       }).catch(function(err) {
         _onError(err.message || String(err));
