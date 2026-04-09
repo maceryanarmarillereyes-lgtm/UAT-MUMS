@@ -672,8 +672,8 @@
 
     function _getCpHeadTable(root) {
       if (!root) return null;
-      var selectors = ['#cp-table-head table', '#cp-table-head-wrap table',
-                       '#cp-table-head', '#cp-table-head-wrap'];
+      var selectors = ['#cp-table-head table','#cp-table-head-wrap table',
+                       '#cp-table-head','#cp-table-head-wrap'];
       for (var i = 0; i < selectors.length; i++) {
         var el = root.querySelector(selectors[i]);
         if (el && (el.tagName === 'TABLE' || el.querySelector('thead,tbody,tr'))) return el;
