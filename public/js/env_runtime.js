@@ -118,3 +118,6 @@
     })
     .catch(function(){ readyResolve(env); });
 })();
+
+// Controller Lab - Google Sheets Web App Endpoint
+window._CTL_SHEETS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwqLf7vypKtM978oGn5_qovvLwmjzjDvwNM1WnvyykjT71TxxxJ6KFjF-BogbGLXWA5ow/exec';

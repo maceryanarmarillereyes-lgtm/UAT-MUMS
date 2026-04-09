@@ -942,6 +942,17 @@
                 <div id="hp-ctl-booking-dialog">
                   <!-- Header -->
                   <div id="hp-ctl-booking-head">
+                    <!-- Sheet connection indicator row -->
+                    <div id="hp-ctl-bk-sheet-indicator" style="display:flex;align-items:center;justify-content:space-between;padding:6px 14px;background:rgba(0,0,0,.2);border-bottom:1px solid rgba(255,255,255,.06);font-size:10px;">
+                      <span id="hp-ctl-bk-sheet-dot" style="display:flex;align-items:center;gap:6px;color:#6b7280;">
+                        <span id="hp-ctl-sheet-dot-icon" style="width:7px;height:7px;border-radius:50%;background:#6b7280;flex-shrink:0;"></span>
+                        <span id="hp-ctl-sheet-dot-label">Checking sheet connection…</span>
+                      </span>
+                      <button id="hp-ctl-bk-pending-btn" onclick="window._ctlShowPendingLogs()" style="display:none;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#f59e0b;border-radius:6px;padding:2px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;">
+                        <i class="fas fa-exclamation-triangle" style="font-size:8px;margin-right:3px;"></i>
+                        <span id="hp-ctl-pending-count">0</span> pending
+                      </button>
+                    </div>
                     <div class="hp-ctl-bk-icon">
                       <img id="hp-ctl-bk-ctrl-img" src="/Widget%20Images/E2_Widget.png" alt="Controller" />
                     </div>
@@ -1014,7 +1025,36 @@
                       <div class="hp-ctl-bk-success-icon">✅</div>
                       <h3>Logged Successfully!</h3>
                       <p id="hp-ctl-bk-success-msg">Your session has been recorded in the Controller Lab log.</p>
+                      <div id="hp-ctl-bk-sheet-status" style="display:none;margin-top:10px;padding:7px 12px;border-radius:8px;font-size:11px;font-weight:600;text-align:center;"></div>
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ═══ PENDING LOGS RECOVERY MODAL ═══ -->
+              <div id="hp-ctl-pending-modal" aria-hidden="true" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);align-items:center;justify-content:center;">
+                <div style="background:#0d1117;border:1px solid rgba(255,255,255,.1);border-radius:16px;width:min(600px,95vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(245,158,11,.06);">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                      <span style="font-size:16px;">📋</span>
+                      <div>
+                        <div style="font-size:13px;font-weight:800;color:#f1f5f9;">Pending Log Recovery</div>
+                        <div style="font-size:10px;color:#6b7280;margin-top:1px;">These logs were saved locally — sheet was unreachable when they were submitted</div>
+                      </div>
+                    </div>
+                    <button onclick="window._ctlClosePendingLogs()" style="background:none;border:none;color:#6b7280;cursor:pointer;font-size:16px;padding:4px;">✕</button>
+                  </div>
+                  <div id="hp-ctl-pending-list" style="flex:1;overflow-y:auto;padding:14px 18px;"></div>
+                  <div style="padding:12px 18px;border-top:1px solid rgba(255,255,255,.07);display:flex;gap:8px;align-items:center;">
+                    <button id="hp-ctl-replay-btn" onclick="window._ctlReplayPendingLogs()"
+                      style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#4ade80;border-radius:8px;padding:8px 16px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;">
+                      <i class="fas fa-redo"></i> Retry Send to Sheet
+                    </button>
+                    <button onclick="window._ctlClearPendingLogs()"
+                      style="background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);color:#f85149;border-radius:8px;padding:8px 16px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">
+                      <i class="fas fa-trash"></i> Clear All
+                    </button>
+                    <span id="hp-ctl-replay-status" style="font-size:10px;color:#6b7280;margin-left:auto;"></span>
                   </div>
                 </div>
               </div>

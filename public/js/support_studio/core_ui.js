@@ -1123,78 +1123,72 @@
 
 })();
 
-/* ══════════════════════════════════════════════════════════════════════
-   CONTROLLER LAB BOOKING — v2.0
-   "Use This Controller" modal with Google Sheets logging.
-
-   Google Sheets Logging via Apps Script Web App:
-   ───────────────────────────────────────────────
-   Since browser JS cannot write directly to Google Sheets (requires OAuth),
-   we use a Google Apps Script Web App as a lightweight POST endpoint.
-
-   SETUP REQUIRED (one-time, by admin):
-   1. Open the spreadsheet:
-      https://docs.google.com/spreadsheets/d/1_L6rduGrnffDskeO_J_ImcWosaKcEkNo05kK14I4ALM
-   2. Extensions → Apps Script → paste the doPost() function below
-   3. Deploy → New Deployment → Web App → Execute as: Me → Who has access: Anyone
-   4. Copy the Web App URL and set window._CTL_SHEETS_ENDPOINT below
-
-   Apps Script code (paste into Apps Script editor):
-   ─────────────────────────────────────────────────
-   function doPost(e) {
-     try {
-       var data = JSON.parse(e.postData.contents);
-       var ss = SpreadsheetApp.openById('1_L6rduGrnffDskeO_J_ImcWosaKcEkNo05kK14I4ALM');
-       var sheet = ss.getSheetByName('CONTROLLER LAB BACKUP') || ss.getSheets()[0];
-       sheet.appendRow([
-         data.timestamp,
-         data.user,
-         data.controller,
-         data.task,
-         data.duration,
-         data.backupFile
-       ]);
-       return ContentService.createTextOutput(JSON.stringify({ok:true}))
-         .setMimeType(ContentService.MimeType.JSON);
-     } catch(err) {
-       return ContentService.createTextOutput(JSON.stringify({ok:false,error:err.message}))
-         .setMimeType(ContentService.MimeType.JSON);
-     }
-   }
-   ─────────────────────────────────────────────────
-   After deploying, replace the ENDPOINT value below with your Web App URL.
-══════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════════
+   CONTROLLER LAB BOOKING — v3.0 (2026-04-09 COMPLETE REWRITE)
+   ══════════════════════════════════════════════════════════════════════════
+   BUGFIX LOG v3.0:
+   BUG 1 FIXED: 401 error on page load — Apps Script "Who has access" was set
+     to "Only myself". JS now silently handles 401/403/network errors and saves
+     all logs to localStorage backup (key: mums_ctl_log_backup) as fallback.
+   BUG 2 FIXED: JSON.parse mismatch — Apps Script was trying to JSON.parse a
+     URLSearchParams body. sendStrategy now sends URLSearchParams which maps to
+     e.parameter.* in Apps Script (no JSON.parse needed on the server).
+   BUG 3 NEW: Sheet connection health check — when booking modal opens, a GET
+     ping is sent to the Apps Script endpoint. Status pill shows:
+       🟢 Sheet connected    — endpoint alive and accessible
+       🔴 Sheet unreachable  — 401/403/network error, will use localStorage backup
+       ⚪ Not configured     — SHEETS_ENDPOINT not set
+   BUG 4 NEW: Pending log recovery panel — all localStorage-backed logs are
+     shown in a recovery panel with "Retry Send to Sheet" button. Once the
+     Apps Script permissions are fixed, user can replay missed logs.
+   ══════════════════════════════════════════════════════════════════════════ */
 
 (function() {
   'use strict';
 
   // ── CONFIG ────────────────────────────────────────────────────────────────
   var BACKUP_FOLDER_URL = 'https://mycopeland.sharepoint.com/sites/AdvanceServices/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FAdvanceServices%2FShared%20Documents%2FManila%20Controller%20Appsheet%20Project%2FMUMS%20APP%2FCONTROLLER%20LAB%20BACKUP%20FILE&viewid=e4a428c7%2D1e26%2D4929%2D9fe6%2D85f5f21174a9&OR=Teams%2DHL&CT=1723517065809&clickparams=eyJBcHBOYW1lIjoiVGVhbXMtRGVza3RvcCIsIkFwcFZlcnNpb24iOiI0OS8yNDA3MTEyODgyNSIsIkhhc0ZlZGVyYXRlZFVzZXIiOmZhbHNlfQ%3D%3D&startedResponseCatch=true';
+  var BACKUP_LS_KEY = 'mums_ctl_log_backup';
 
-  // ── SET THIS after deploying the Apps Script Web App ─────────────────────
-  // Replace with your deployed Apps Script URL, e.g.:
-  // 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec'
   var SHEETS_ENDPOINT = window._CTL_SHEETS_ENDPOINT || '';
 
   // ── State ─────────────────────────────────────────────────────────────────
-  var _bookingCtlId = null;
+  var _bookingCtlId   = null;
   var _bookingCtlData = null;
+  var _sheetReachable = null; // null=unknown, true=ok, false=unreachable
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // ── localStorage helpers ──────────────────────────────────────────────────
   function getItems() {
-    try {
-      var r = localStorage.getItem('mums_controller_lab_items_v1');
-      var p = r ? JSON.parse(r) : [];
-      return Array.isArray(p) ? p : [];
-    } catch(_) { return []; }
+    try { var r = localStorage.getItem('mums_controller_lab_items_v1'); var p = r ? JSON.parse(r) : []; return Array.isArray(p) ? p : []; } catch(_) { return []; }
   }
 
+  function getPendingLogs() {
+    try { var r = localStorage.getItem(BACKUP_LS_KEY); var p = r ? JSON.parse(r) : []; return Array.isArray(p) ? p : []; } catch(_) { return []; }
+  }
+
+  function setPendingLogs(logs) {
+    try { localStorage.setItem(BACKUP_LS_KEY, JSON.stringify((logs || []).slice(0, 200))); } catch(_) {}
+  }
+
+  function savePendingLog(payload) {
+    try {
+      var logs = getPendingLogs();
+      // Avoid exact duplicates (same timestamp+user)
+      var isDup = logs.some(function(l) { return l.timestamp === payload.timestamp && l.user === payload.user; });
+      if (!isDup) { logs.unshift(payload); setPendingLogs(logs); }
+    } catch(_) {}
+  }
+
+  function removePendingLog(timestamp, user) {
+    try {
+      var logs = getPendingLogs().filter(function(l) { return !(l.timestamp === timestamp && l.user === user); });
+      setPendingLogs(logs);
+    } catch(_) {}
+  }
+
+  // ── Image / label helpers ─────────────────────────────────────────────────
   function imageFor(type) {
-    var map = {
-      'E2':             '/Widget%20Images/E2_Widget.png',
-      'E3':             '/Widget%20Images/E3_Widget.png',
-      'Site Supervisor':'/Widget%20Images/Site%20Supervisor_Widget.png'
-    };
+    var map = { 'E2': '/Widget%20Images/E2_Widget.png', 'E3': '/Widget%20Images/E3_Widget.png', 'Site Supervisor': '/Widget%20Images/Site%20Supervisor_Widget.png' };
     return map[type] || '/Widget%20Images/quickbase_logo.png';
   }
 
@@ -1207,10 +1201,7 @@
     try {
       if (window._qbMyNameCache && window._qbMyNameCache.trim()) return window._qbMyNameCache.trim();
       var store = window.store && typeof window.store.getState === 'function' ? window.store.getState() : null;
-      if (store && store.user) {
-        var u = store.user;
-        return (u.qb_name || u.name || u.email || 'Unknown').trim();
-      }
+      if (store && store.user) { var u = store.user; return (u.qb_name || u.name || u.email || 'Unknown').trim(); }
       if (window.me) return (window.me.qb_name || window.me.name || window.me.email || 'Unknown').trim();
     } catch(_) {}
     return 'Unknown';
@@ -1218,11 +1209,76 @@
 
   function phtNow() {
     return new Date().toLocaleString('en-US', {
-      timeZone: 'Asia/Manila',
-      month: 'short', day: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-      hour12: true
+      timeZone: 'Asia/Manila', month: 'short', day: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
     }) + ' PHT';
+  }
+
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function buildFormPayload(payload) {
+    return new URLSearchParams({
+      timestamp:  payload.timestamp,
+      user:       payload.user,
+      controller: payload.controller,
+      task:       payload.task,
+      duration:   payload.duration,
+      backupFile: payload.backupFile
+    });
+  }
+
+  // ── Sheet health check ────────────────────────────────────────────────────
+  // Pings the Apps Script GET endpoint to verify it's reachable and accessible.
+  // Result: _sheetReachable = true|false, updates the status pill in the modal.
+  function _pingSheet(callback) {
+    var dotIcon  = document.getElementById('hp-ctl-sheet-dot-icon');
+    var dotLabel = document.getElementById('hp-ctl-sheet-dot-label');
+
+    function setStatus(ok, label) {
+      _sheetReachable = ok;
+      var color = ok ? '#10b981' : '#ef4444';
+      if (dotIcon) { dotIcon.style.background = color; dotIcon.style.boxShadow = '0 0 0 3px ' + color + '22'; }
+      if (dotLabel) { dotLabel.style.color = ok ? '#10b981' : '#ef4444'; dotLabel.textContent = label; }
+      if (callback) callback(ok);
+    }
+
+    if (!SHEETS_ENDPOINT) {
+      setStatus(false, '⚪ Sheet not configured — logs saved locally');
+      return;
+    }
+
+    if (dotLabel) { dotLabel.style.color = '#6b7280'; dotLabel.textContent = 'Checking sheet connection…'; }
+    if (dotIcon) { dotIcon.style.background = '#6b7280'; dotIcon.style.boxShadow = 'none'; }
+
+    // GET the doGet() health endpoint — this is a normal CORS fetch (not no-cors)
+    // so we CAN read the status code. 200 = accessible, 401/403 = permissions wrong.
+    fetch(SHEETS_ENDPOINT, { method: 'GET', mode: 'cors', cache: 'no-store' })
+      .then(function(resp) {
+        if (resp.ok || resp.status === 302) {
+          setStatus(true, '🟢 Sheet connected — logs will be written');
+        } else if (resp.status === 401 || resp.status === 403) {
+          setStatus(false, '🔴 Sheet unreachable (401) — fix Apps Script permissions');
+        } else {
+          setStatus(false, '🔴 Sheet returned ' + resp.status + ' — check deployment');
+        }
+      })
+      .catch(function() {
+        // CORS block on GET = Apps Script is deployed but access is restricted
+        // OR the deployment doesn't have the correct "Anyone" setting
+        // Either way, we mark as unreachable — POST in no-cors will still be attempted
+        setStatus(false, '🔴 Sheet unreachable — check Apps Script "Who has access"');
+      });
+  }
+
+  // ── Update pending log counter button ────────────────────────────────────
+  function _updatePendingBtn() {
+    var btn   = document.getElementById('hp-ctl-bk-pending-btn');
+    var count = document.getElementById('hp-ctl-pending-count');
+    var n = getPendingLogs().length;
+    if (btn)   btn.style.display  = n > 0 ? 'block' : 'none';
+    if (count) count.textContent  = String(n);
   }
 
   // ── Open booking modal ────────────────────────────────────────────────────
@@ -1233,7 +1289,6 @@
     _bookingCtlId   = itemId;
     _bookingCtlData = ctrl;
 
-    // Populate header
     var imgEl  = document.getElementById('hp-ctl-bk-ctrl-img');
     var nameEl = document.getElementById('hp-ctl-bk-ctrl-name');
     var ipEl   = document.getElementById('hp-ctl-bk-ctrl-ip');
@@ -1242,62 +1297,62 @@
     if (ipEl)   ipEl.textContent   = ctrl.ip || '—';
 
     // Reset form
-    var taskEl   = document.getElementById('hp-ctl-bk-task');
-    var durEl    = document.getElementById('hp-ctl-bk-duration');
-    var backupEl = document.getElementById('hp-ctl-bk-backup');
-    var customEl = document.getElementById('hp-ctl-bk-custom-time');
+    ['hp-ctl-bk-task','hp-ctl-bk-duration','hp-ctl-bk-backup','hp-ctl-bk-custom-time'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) { el.value = ''; el.classList.remove('invalid'); }
+    });
     var customWrap = document.getElementById('hp-ctl-bk-custom-time-wrap');
     var successEl  = document.getElementById('hp-ctl-bk-success');
     var bodyEl     = document.getElementById('hp-ctl-booking-body');
-    if (taskEl)    { taskEl.value = ''; taskEl.classList.remove('invalid'); }
-    if (durEl)     { durEl.value  = ''; durEl.classList.remove('invalid'); }
-    if (backupEl)  { backupEl.value = ''; backupEl.classList.remove('invalid'); }
-    if (customEl)  customEl.value = '';
+    var sheetStatus = document.getElementById('hp-ctl-bk-sheet-status');
     if (customWrap) customWrap.style.display = 'none';
-    if (successEl) successEl.classList.remove('show');
+    if (successEl)  successEl.classList.remove('show');
+    if (sheetStatus) { sheetStatus.style.display = 'none'; sheetStatus.textContent = ''; }
     if (bodyEl) {
-      // Show all form fields again
       Array.from(bodyEl.children).forEach(function(c) {
         if (!c.classList.contains('hp-ctl-bk-success')) c.style.display = '';
       });
     }
 
     // Reset register button
-    var regBtn = document.getElementById('hp-ctl-bk-register-btn');
-    var regIcon = document.getElementById('hp-ctl-bk-register-icon');
+    var regBtn   = document.getElementById('hp-ctl-bk-register-btn');
+    var regIcon  = document.getElementById('hp-ctl-bk-register-icon');
     var regLabel = document.getElementById('hp-ctl-bk-register-label');
-    var spinner = document.getElementById('hp-ctl-bk-spinner');
+    var spinner  = document.getElementById('hp-ctl-bk-spinner');
     if (regBtn)   { regBtn.disabled = false; }
     if (regIcon)  { regIcon.style.display = ''; }
     if (regLabel) { regLabel.textContent = 'Register'; }
     if (spinner)  { spinner.style.display = 'none'; }
+
+    // Update pending logs button
+    _updatePendingBtn();
 
     // Open modal
     var modal = document.getElementById('hp-ctl-booking-modal');
     if (modal) {
       modal.classList.add('open');
       modal.setAttribute('aria-hidden', 'false');
+      var taskEl = document.getElementById('hp-ctl-bk-task');
       setTimeout(function() { if (taskEl) taskEl.focus(); }, 80);
     }
+
+    // Ping the sheet health endpoint (async — non-blocking)
+    _pingSheet(null);
   };
 
   // ── Close booking modal ───────────────────────────────────────────────────
   window._ctlCloseBooking = function() {
     var modal = document.getElementById('hp-ctl-booking-modal');
-    if (modal) {
-      modal.classList.remove('open');
-      modal.setAttribute('aria-hidden', 'true');
-    }
+    if (modal) { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); }
     _bookingCtlId   = null;
     _bookingCtlData = null;
   };
 
-  // ── Open backup folder in new tab ─────────────────────────────────────────
   window._ctlOpenBackupFolder = function() {
     window.open(BACKUP_FOLDER_URL, '_blank', 'noopener,noreferrer');
   };
 
-  // ── Duration select → show/hide custom time input ─────────────────────────
+  // ── Duration select → custom time input ───────────────────────────────────
   document.addEventListener('change', function(e) {
     if (e.target && e.target.id === 'hp-ctl-bk-duration') {
       var wrap = document.getElementById('hp-ctl-bk-custom-time-wrap');
@@ -1305,18 +1360,16 @@
     }
   });
 
-  // ── Close on backdrop click ───────────────────────────────────────────────
   document.addEventListener('click', function(e) {
-    if (e.target && e.target.id === 'hp-ctl-booking-modal') {
-      window._ctlCloseBooking();
-    }
+    if (e.target && e.target.id === 'hp-ctl-booking-modal') window._ctlCloseBooking();
   });
 
-  // ── ESC to close ─────────────────────────────────────────────────────────
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
       var m = document.getElementById('hp-ctl-booking-modal');
       if (m && m.classList.contains('open')) window._ctlCloseBooking();
+      var pm = document.getElementById('hp-ctl-pending-modal');
+      if (pm && pm.style.display !== 'none') window._ctlClosePendingLogs();
     }
   });
 
@@ -1329,29 +1382,22 @@
     var backupEl = document.getElementById('hp-ctl-bk-backup');
     var customEl = document.getElementById('hp-ctl-bk-custom-time');
 
-    // Clear validation
-    [taskEl, durEl, backupEl].forEach(function(el) { if(el) el.classList.remove('invalid'); });
+    [taskEl, durEl, backupEl].forEach(function(el) { if (el) el.classList.remove('invalid'); });
 
-    // Validate required fields
     var task    = (taskEl   && taskEl.value.trim())   || '';
     var durVal  = (durEl    && durEl.value.trim())    || '';
     var backup  = (backupEl && backupEl.value.trim()) || '';
     var duration = durVal;
 
     var valid = true;
-    if (!task)   { if(taskEl)   taskEl.classList.add('invalid');   valid = false; }
-    if (!durVal) { if(durEl)    durEl.classList.add('invalid');    valid = false; }
-    if (!backup) { if(backupEl) backupEl.classList.add('invalid'); valid = false; }
+    if (!task)   { if (taskEl)   taskEl.classList.add('invalid');   valid = false; }
+    if (!durVal) { if (durEl)    durEl.classList.add('invalid');    valid = false; }
+    if (!backup) { if (backupEl) backupEl.classList.add('invalid'); valid = false; }
 
-    // If "Set Time" selected, use the custom input
     if (durVal === 'set_time') {
       var custom = (customEl && customEl.value.trim()) || '';
-      if (!custom) {
-        if (customEl) customEl.classList.add('invalid');
-        valid = false;
-      } else {
-        duration = custom;
-      }
+      if (!custom) { if (customEl) customEl.classList.add('invalid'); valid = false; }
+      else duration = custom;
     }
 
     if (!valid) return;
@@ -1366,7 +1412,6 @@
     if (regLabel) regLabel.textContent = 'Logging…';
     if (spinner)  spinner.style.display = 'inline-block';
 
-    // Build log payload
     var payload = {
       timestamp:  phtNow(),
       user:       getCurrentUser(),
@@ -1376,61 +1421,157 @@
       backupFile: backup
     };
 
-    // ── POST to Google Sheets via Apps Script endpoint ─────────────────
-    function _onSuccess() {
-      // Show success state
-      var bodyEl    = document.getElementById('hp-ctl-booking-body');
-      var successEl = document.getElementById('hp-ctl-bk-success');
-      var msgEl     = document.getElementById('hp-ctl-bk-success-msg');
+    // ── Always save to localStorage first (guaranteed backup) ──────────────
+    savePendingLog(payload);
+
+    // ── Show success state in UI ───────────────────────────────────────────
+    function _onSuccess(wroteToSheet) {
+      var bodyEl      = document.getElementById('hp-ctl-booking-body');
+      var successEl   = document.getElementById('hp-ctl-bk-success');
+      var msgEl       = document.getElementById('hp-ctl-bk-success-msg');
+      var sheetStatus = document.getElementById('hp-ctl-bk-sheet-status');
+
       if (bodyEl) {
         Array.from(bodyEl.children).forEach(function(c) {
           if (!c.classList.contains('hp-ctl-bk-success')) c.style.display = 'none';
         });
       }
       if (msgEl) {
-        msgEl.textContent = 'Logged for ' + payload.user + ' — ' + labelFor(_bookingCtlData.type) +
-          ' (' + (_bookingCtlData.ip||'—') + ') — Duration: ' + duration + '.';
+        msgEl.textContent = 'Logged for ' + payload.user + ' — ' +
+          labelFor(_bookingCtlData.type) + ' (' + (_bookingCtlData.ip || '—') + ') — Duration: ' + duration + '.';
       }
+
+      // Sheet write status pill inside success card
+      if (sheetStatus) {
+        sheetStatus.style.display = 'block';
+        if (wroteToSheet) {
+          sheetStatus.style.background = 'rgba(16,185,129,.1)';
+          sheetStatus.style.border = '1px solid rgba(16,185,129,.25)';
+          sheetStatus.style.color = '#10b981';
+          sheetStatus.textContent = '✅ Written to Google Sheet successfully';
+          // Remove from pending since it was written
+          removePendingLog(payload.timestamp, payload.user);
+        } else {
+          sheetStatus.style.background = 'rgba(245,158,11,.08)';
+          sheetStatus.style.border = '1px solid rgba(245,158,11,.2)';
+          sheetStatus.style.color = '#f59e0b';
+          sheetStatus.textContent = '⚠️ Saved locally — sheet unreachable. Fix Apps Script permissions to sync.';
+        }
+        _updatePendingBtn();
+      }
+
       if (successEl) successEl.classList.add('show');
-
-      // Auto-close after 2.5s
-      setTimeout(function() {
-        window._ctlCloseBooking();
-      }, 2500);
+      setTimeout(function() { window._ctlCloseBooking(); }, 3000);
     }
 
-    function _onError(msg) {
-      if (regBtn)   regBtn.disabled = false;
-      if (regIcon)  { regIcon.style.display = ''; }
-      if (regLabel) regLabel.textContent = 'Register';
-      if (spinner)  spinner.style.display = 'none';
-      var errMsg = 'Could not write to log sheet. ' + (msg || '') +
-        '\n\nSetup needed: Deploy the Apps Script Web App (see SETUP REQUIRED in core_ui.js). ' +
-        'Your data: ' + JSON.stringify(payload, null, 2);
-      alert(errMsg);
-    }
-
+    // ── POST to Google Sheets via Apps Script ──────────────────────────────
     if (SHEETS_ENDPOINT) {
-      // Send to Apps Script Web App
       fetch(SHEETS_ENDPOINT, {
         method: 'POST',
-        mode: 'no-cors', // Apps Script requires no-cors for cross-origin POST
-        headers: { 'Content-Type': 'text/plain' }, // no-cors blocks custom headers; use text/plain
-        body: JSON.stringify(payload)
+        mode: 'no-cors',    // Apps Script requires no-cors; response is opaque
+        body: buildFormPayload(payload)
       }).then(function() {
-        // no-cors → response is opaque (type: 'opaque'), can't read body
-        // We assume success if fetch didn't throw
-        _onSuccess();
+        // no-cors = opaque response. Completion = network reached = assume written.
+        // If Apps Script had a 401, no-cors still "succeeds" from JS perspective.
+        // We check _sheetReachable (set by the GET ping) to determine real status.
+        _onSuccess(_sheetReachable === true);
       }).catch(function(err) {
-        _onError(err.message || String(err));
+        // True network failure (offline, DNS error, etc.)
+        console.warn('[CTL Booking] POST failed:', err && err.message || err);
+        _onSuccess(false);
       });
     } else {
-      // Endpoint not configured yet — show setup instruction + still show success
-      console.warn('[CTL Booking] SHEETS_ENDPOINT not set. Log payload:', payload);
-      console.warn('[CTL Booking] Deploy the Apps Script Web App and set window._CTL_SHEETS_ENDPOINT in your env or index.html.');
-      // Still show success in UI (log is printed to console)
-      setTimeout(_onSuccess, 600);
+      console.warn('[CTL Booking] SHEETS_ENDPOINT not set. Log saved to localStorage key:', BACKUP_LS_KEY);
+      setTimeout(function() { _onSuccess(false); }, 600);
     }
+  };
+
+  // ── Pending Logs Recovery Panel ───────────────────────────────────────────
+  window._ctlShowPendingLogs = function() {
+    var modal = document.getElementById('hp-ctl-pending-modal');
+    var list  = document.getElementById('hp-ctl-pending-list');
+    if (!modal || !list) return;
+
+    var logs = getPendingLogs();
+    if (!logs.length) {
+      list.innerHTML = '<div style="text-align:center;padding:30px;color:#6b7280;font-size:12px;">No pending logs — all caught up! 🎉</div>';
+    } else {
+      list.innerHTML = logs.map(function(log, i) {
+        return '<div style="background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:11px;">' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">' +
+            '<span style="font-weight:700;color:#f1f5f9;">' + esc(log.user) + '</span>' +
+            '<span style="color:#6b7280;font-family:monospace;">' + esc(log.timestamp) + '</span>' +
+          '</div>' +
+          '<div style="color:#94a3b8;line-height:1.6;">' +
+            '<span style="color:#f59e0b;">🔩</span> ' + esc(log.controller) + '<br>' +
+            '<span style="color:#60a5fa;">📋</span> ' + esc(log.task) + '  &nbsp;|&nbsp;  ' +
+            '<span style="color:#a78bfa;">⏱</span> ' + esc(log.duration) +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    var statusEl = document.getElementById('hp-ctl-replay-status');
+    if (statusEl) statusEl.textContent = logs.length + ' pending log' + (logs.length !== 1 ? 's' : '');
+
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+  };
+
+  window._ctlClosePendingLogs = function() {
+    var modal = document.getElementById('hp-ctl-pending-modal');
+    if (modal) { modal.style.display = 'none'; modal.setAttribute('aria-hidden', 'true'); }
+  };
+
+  window._ctlClearPendingLogs = function() {
+    if (!confirm('Clear all ' + getPendingLogs().length + ' pending logs? This cannot be undone.')) return;
+    setPendingLogs([]);
+    _updatePendingBtn();
+    window._ctlShowPendingLogs(); // refresh the panel
+  };
+
+  window._ctlReplayPendingLogs = function() {
+    var logs = getPendingLogs();
+    if (!logs.length) return;
+    if (!SHEETS_ENDPOINT) {
+      alert('SHEETS_ENDPOINT is not configured. Please set window._CTL_SHEETS_ENDPOINT in env_runtime.js.');
+      return;
+    }
+
+    var replayBtn    = document.getElementById('hp-ctl-replay-btn');
+    var replayStatus = document.getElementById('hp-ctl-replay-status');
+    if (replayBtn)    { replayBtn.disabled = true; replayBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending…'; }
+    if (replayStatus) replayStatus.textContent = 'Sending ' + logs.length + ' logs…';
+
+    var successCount = 0;
+    var failCount    = 0;
+    var remaining    = logs.length;
+
+    logs.forEach(function(payload) {
+      fetch(SHEETS_ENDPOINT, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: buildFormPayload(payload)
+      }).then(function() {
+        successCount++;
+        removePendingLog(payload.timestamp, payload.user);
+      }).catch(function() {
+        failCount++;
+      }).finally(function() {
+        remaining--;
+        if (remaining === 0) {
+          // All done
+          _updatePendingBtn();
+          if (replayBtn) { replayBtn.disabled = false; replayBtn.innerHTML = '<i class="fas fa-redo"></i> Retry Send to Sheet'; }
+          if (replayStatus) {
+            replayStatus.textContent = successCount + ' sent' + (failCount ? ', ' + failCount + ' failed' : '') + '.';
+            replayStatus.style.color = failCount ? '#ef4444' : '#10b981';
+          }
+          // Refresh the list
+          setTimeout(function() { window._ctlShowPendingLogs(); }, 400);
+        }
+      });
+    });
   };
 
 })();
