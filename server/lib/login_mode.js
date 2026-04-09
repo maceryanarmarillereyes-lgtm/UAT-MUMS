@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 const { serviceSelect, serviceUpsert } = require('./supabase');
 
 const LOGIN_MODE_DOC_KEY = 'mums_login_mode_settings';

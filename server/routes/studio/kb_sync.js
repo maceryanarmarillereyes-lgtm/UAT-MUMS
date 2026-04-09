@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 const { getUserFromJwt, getProfileForUserId, serviceSelect, serviceUpsert } = require('../../lib/supabase');
 const { runKnowledgeBaseSync, readItems, KB_SETTINGS_KEY } = require('../../services/quickbaseSync');
 function sendJson(res,s,b){res.statusCode=s;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(b));}

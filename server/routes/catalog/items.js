@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // server/routes/catalog/items.js
 // GET    /api/catalog/items          — list all items (all auth users)
 // POST   /api/catalog/items          — create item (SUPER_ADMIN | SUPER_USER)

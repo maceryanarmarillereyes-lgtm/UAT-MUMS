@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // Theme Engine Controller
 // Enterprise-grade theme management with strict token-based theme isolation.
 (function(){

@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 const { getUserFromJwt, getProfileForUserId, serviceUpdate, serviceSelect } = require('../../lib/supabase');
 const { normalizeFilters } = require('../../lib/quickbase-utils');
 const { escapeQuickbaseValue } = require('../../lib/escape');

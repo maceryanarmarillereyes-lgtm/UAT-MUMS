@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // server/routes/settings/global_calendar.js
 // GET  /api/settings/global_calendar  — any authenticated user (token stripped)
 // POST /api/settings/global_calendar  — SUPER_ADMIN only

@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // public/js/pages/support_studio_patches.js
 // NON-INVASIVE patch for Support Studio — loaded AFTER all main scripts.
 // Fixes:

@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // public/js/components/leave_monitor.js
 // Leave Monitor — Right Sidebar Widget (Option B: Timeline Rail)
 // Shows who is on leave TODAY and TOMORROW, sourced from Manila Calendar QB data.

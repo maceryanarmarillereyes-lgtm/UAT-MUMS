@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 const { getUserFromJwt } = require('../../lib/supabase');
 const { readThemeAccessMeta } = require('../../lib/theme_access');
 

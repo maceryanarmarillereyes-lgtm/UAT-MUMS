@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 module.exports = async (req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store');

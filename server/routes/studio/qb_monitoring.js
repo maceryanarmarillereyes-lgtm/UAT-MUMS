@@ -6,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+
 // server/routes/studio/qb_monitoring.js
 // Proxy for /api/quickbase/monitoring using Studio QB Settings (per-user, isolated).
 // Injects studio token/config by patching req.query + profile before calling monitoring handler.
