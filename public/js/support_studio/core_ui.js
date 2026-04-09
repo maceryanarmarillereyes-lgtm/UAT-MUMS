@@ -855,9 +855,9 @@
     var STORAGE_KEY = 'mums_controller_lab_items_v1';
     var editingId = null;
     var CATALOG = {
-      'E2':             { img: '/Widget%20Images/E2_Widget.svg',             label: 'E2 Controller'    },
-      'E3':             { img: '/Widget%20Images/E3_Widget.svg',             label: 'E3 Gateway'       },
-      'Site Supervisor':{ img: '/Widget%20Images/Site%20Supervisor_Widget.svg', label: 'Site Supervisor' }
+      'E2':             { img: '/Widget%20Images/E2_Widget.jpeg',             label: 'E2 Controller'    },
+      'E3':             { img: '/Widget%20Images/E3_Widget.jpeg',             label: 'E3 Gateway'       },
+      'Site Supervisor':{ img: '/Widget%20Images/Site%20Supervisor_Widget.jpeg', label: 'Site Supervisor' }
     };
     var FALLBACK_IMG = '/Widget%20Images/quickbase_logo.png';
 
