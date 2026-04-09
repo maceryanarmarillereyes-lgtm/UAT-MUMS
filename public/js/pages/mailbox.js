@@ -995,7 +995,7 @@ function _mbxReadJwt(){
       try{
         if(window.Store && Store.getMailboxState && Store.getMailboxTable && Store.saveMailboxTable){
           const curKey = Store.getMailboxState().currentKey;
-          if(curKey && resolvedTeamMembers.length > 0){ // LOOP-GUARD: only push when we have real data
+          if(curKey && Array.isArray(fromApi) && fromApi.length > 0){ // LOOP-GUARD: only push when we have real data
             const t = Store.getMailboxTable(curKey);
             if(t) Store.saveMailboxTable(curKey, t); // triggers write → Realtime push
           }
