@@ -1421,24 +1421,16 @@
       backupFile: backup
     };
 
-    // Convert payload to URL-encoded form body for Apps Script compatibility
-    function buildFormPayload() {
-      return new URLSearchParams({
-        timestamp: payload.timestamp,
-        user: payload.user,
-        controller: payload.controller,
-        task: payload.task,
-        duration: payload.duration,
-        backupFile: payload.backupFile
-      });
-    }
+    // ── Always save to localStorage first (guaranteed backup) ──────────────
+    savePendingLog(payload);
 
-    // ── POST to Google Sheets via Apps Script endpoint ─────────────────
-    function _onSuccess() {
-      // Show success state
-      var bodyEl    = document.getElementById('hp-ctl-booking-body');
-      var successEl = document.getElementById('hp-ctl-bk-success');
-      var msgEl     = document.getElementById('hp-ctl-bk-success-msg');
+    // ── Show success state in UI ───────────────────────────────────────────
+    function _onSuccess(wroteToSheet) {
+      var bodyEl      = document.getElementById('hp-ctl-booking-body');
+      var successEl   = document.getElementById('hp-ctl-bk-success');
+      var msgEl       = document.getElementById('hp-ctl-bk-success-msg');
+      var sheetStatus = document.getElementById('hp-ctl-bk-sheet-status');
+
       if (bodyEl) {
         Array.from(bodyEl.children).forEach(function(c) {
           if (!c.classList.contains('hp-ctl-bk-success')) c.style.display = 'none';
@@ -1474,17 +1466,19 @@
 
     // ── POST to Google Sheets via Apps Script ──────────────────────────────
     if (SHEETS_ENDPOINT) {
-      // Send to Apps Script Web App.
-      // Keep URLSearchParams body, but use no-cors to avoid browser CORS read failures.
       fetch(SHEETS_ENDPOINT, {
         method: 'POST',
-        mode: 'no-cors',
-        body: buildFormPayload()
+        mode: 'no-cors',    // Apps Script requires no-cors; response is opaque
+        body: buildFormPayload(payload)
       }).then(function() {
-        // Opaque response is expected in no-cors mode; network success means submitted.
-        _onSuccess();
+        // no-cors = opaque response. Completion = network reached = assume written.
+        // If Apps Script had a 401, no-cors still "succeeds" from JS perspective.
+        // We check _sheetReachable (set by the GET ping) to determine real status.
+        _onSuccess(_sheetReachable === true);
       }).catch(function(err) {
-        _onError((err && err.message) || String(err));
+        // True network failure (offline, DNS error, etc.)
+        console.warn('[CTL Booking] POST failed:', err && err.message || err);
+        _onSuccess(false);
       });
     } else {
       console.warn('[CTL Booking] SHEETS_ENDPOINT not set. Log saved to localStorage key:', BACKUP_LS_KEY);
