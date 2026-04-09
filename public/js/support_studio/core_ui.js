@@ -1376,6 +1376,18 @@
       backupFile: backup
     };
 
+    // Convert payload to URL-encoded form body for Apps Script compatibility
+    function buildFormPayload() {
+      return new URLSearchParams({
+        timestamp: payload.timestamp,
+        user: payload.user,
+        controller: payload.controller,
+        task: payload.task,
+        duration: payload.duration,
+        backupFile: payload.backupFile
+      });
+    }
+
     // ── POST to Google Sheets via Apps Script endpoint ─────────────────
     function _onSuccess() {
       // Show success state
@@ -1411,18 +1423,17 @@
     }
 
     if (SHEETS_ENDPOINT) {
-      // Send to Apps Script Web App
+      // Send to Apps Script Web App.
+      // Keep URLSearchParams body, but use no-cors to avoid browser CORS read failures.
       fetch(SHEETS_ENDPOINT, {
         method: 'POST',
-        mode: 'no-cors', // Apps Script requires no-cors for cross-origin POST
-        headers: { 'Content-Type': 'text/plain' }, // no-cors blocks custom headers; use text/plain
-        body: JSON.stringify(payload)
+        mode: 'no-cors',
+        body: buildFormPayload()
       }).then(function() {
-        // no-cors → response is opaque (type: 'opaque'), can't read body
-        // We assume success if fetch didn't throw
+        // Opaque response is expected in no-cors mode; network success means submitted.
         _onSuccess();
       }).catch(function(err) {
-        _onError(err.message || String(err));
+        _onError((err && err.message) || String(err));
       });
     } else {
       // Endpoint not configured yet — show setup instruction + still show success
