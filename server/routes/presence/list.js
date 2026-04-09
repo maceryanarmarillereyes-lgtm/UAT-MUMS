@@ -100,30 +100,46 @@ for (const r of rowsRaw) {
 }
 const rows = Array.from(bestByKey.values()).sort((a, b) => toMs(b.last_seen || b.lastSeen) - toMs(a.last_seen || a.lastSeen));
 
-// Override presence role/team/name using mums_profiles (authoritative source of truth).
+// IO-OPT: Override presence role/team/name using mums_profiles.
     // This prevents older clients (or multiple tabs) from causing role/shift flicker.
-    // IMPORTANT: Some deployments may not yet have optional columns (team_override, avatar_url).
-    // We probe progressively so presence does not fail (or stall the dashboard) when schemas drift.
+    // FIX: Cache the working SELECT column string after the first successful probe.
+    // Original code re-tried up to 4 selects on EVERY list call (4x DB reads on old schemas).
+    // After fix: probe only on first call, cache result, reuse forever = 1 DB read per list call.
     try {
       const ids = rows.map((r) => String(r.user_id || '').trim()).filter(Boolean);
       if (ids.length) {
         const base = 'user_id,name,role,team_id';
-        const selects = [
-          base + ',team_override,avatar_url',
-          base + ',avatar_url',
-          base + ',team_override',
-          base
-        ];
+
+        // Use cached select string if available; otherwise probe once and cache result.
+        if (!module.exports._knownProfileSelect) {
+          const candidates = [
+            base + ',team_override,avatar_url',
+            base + ',avatar_url',
+            base + ',team_override',
+            base
+          ];
+          for (const sel of candidates) {
+            const q = `select=${sel}&user_id=in.(${ids.join(',')})`;
+            const probe = await serviceSelect('mums_profiles', q);
+            if (probe.ok && Array.isArray(probe.json)) {
+              module.exports._knownProfileSelect = sel; // cache for all future calls
+              break;
+            }
+            const msg = String((probe.json && (probe.json.message || probe.json.error)) || probe.text || '');
+            if (!((probe.status === 400) && /column .* does not exist/i.test(msg))) break;
+          }
+        }
 
         let profRows = null;
-        for (const sel of selects) {
-          const q = `select=${sel}&user_id=in.(${ids.join(',')})`;
+        if (module.exports._knownProfileSelect) {
+          const q = `select=${module.exports._knownProfileSelect}&user_id=in.(${ids.join(',')})`;
           const profOut = await serviceSelect('mums_profiles', q);
-          if (profOut.ok && Array.isArray(profOut.json)) { profRows = profOut.json; break; }
-
-          const msg = String((profOut.json && (profOut.json.message || profOut.json.error)) || profOut.text || '');
-          const missingCol = (profOut.status === 400) && /column .* does not exist/i.test(msg);
-          if (!missingCol) break;
+          if (profOut.ok && Array.isArray(profOut.json)) {
+            profRows = profOut.json;
+          } else {
+            // Column may have been dropped; reset cache so next call re-probes
+            module.exports._knownProfileSelect = null;
+          }
         }
 
         if (profRows) {

@@ -379,12 +379,18 @@ try {
     // Delay first poll until session is hydrated to avoid 401 flicker on cold loads.
     await waitForAppHydration();
 
-    var poll = Number(env.PRESENCE_POLL_MS || 5000);
+    // IO-OPT: Use separate intervals for heartbeat (write) vs roster list (read).
+    // PRESENCE_LIST_POLL_MS was already defined in env_runtime.js (90s) but was
+    // never wired up here — both calls wrongly used PRESENCE_POLL_MS (45s).
+    // Fix: heartbeat every 45s (minimum 30s), roster list every 90s (minimum 60s).
+    // Net result: ~50% fewer presence DB reads for 30-user teams.
+    var poll     = Number(env.PRESENCE_POLL_MS      || 45000);
+    var listPoll = Number(env.PRESENCE_LIST_POLL_MS || 90000);
     // Yield one tick so first paint / routing is not delayed by background presence calls.
     setTimeout(function(){ try{ heartbeat(); }catch(_){} try{ refreshRoster(); }catch(_){} }, 500);
 
-    setInterval(heartbeat, Math.max(1500, poll));
-    setInterval(refreshRoster, Math.max(1500, poll));
+    setInterval(heartbeat,     Math.max(30000, poll));
+    setInterval(refreshRoster, Math.max(60000, listPoll));
   }
 
   if (document.readyState === 'loading') {

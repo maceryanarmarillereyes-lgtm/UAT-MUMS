@@ -111,6 +111,9 @@
         env.MAILBOX_OVERRIDE_POLL_MS = safeParseInt(data.MAILBOX_OVERRIDE_POLL_MS, env.MAILBOX_OVERRIDE_POLL_MS);
         env.PRESENCE_TTL_SECONDS = safeParseInt(data.PRESENCE_TTL_SECONDS, env.PRESENCE_TTL_SECONDS);
         env.PRESENCE_POLL_MS = safeParseInt(data.PRESENCE_POLL_MS, env.PRESENCE_POLL_MS);
+        // IO-OPT: Wire up PRESENCE_LIST_POLL_MS — was defined in defaults (90s) but never
+        // loaded from the server /api/env response, so operators couldn't override it.
+        env.PRESENCE_LIST_POLL_MS = safeParseInt(data.PRESENCE_LIST_POLL_MS, env.PRESENCE_LIST_POLL_MS);
         env.SYNC_POLL_MS = safeParseInt(data.SYNC_POLL_MS, env.SYNC_POLL_MS);
         env.SYNC_ENABLE_SUPABASE_REALTIME = (String(data.SYNC_ENABLE_SUPABASE_REALTIME || 'true') !== 'false');
       }

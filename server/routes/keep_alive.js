@@ -11,7 +11,7 @@
 // - Harmless write into `heartbeat` table to prevent Supabase project pausing on free plans.
 // - Uses server-side service role key.
 
-const { serviceInsert, serviceFetch } = require('../lib/supabase');
+const { serviceInsert, serviceUpsert, serviceFetch } = require('../lib/supabase');
 
 function sendJson(res, statusCode, body) {
   res.statusCode = statusCode;
@@ -83,13 +83,23 @@ module.exports = async (req, res) => {
   // Accept GET or POST. Always respond 200 with ok flag.
   try {
     const ts = nowIso();
-    let out = await serviceInsert('heartbeat', [{ timestamp: ts }]);
+    // IO-OPT: UPSERT on a fixed key 'server' instead of INSERT every call.
+    // Original INSERT grew the table unbounded (trim trigger only fired at 200 rows).
+    // Now there is exactly ONE row in the heartbeat table — zero index bloat.
+    // The table must have a unique constraint on the 'source' column; if the column
+    // doesn't exist yet the migration below adds it, falling back to plain INSERT.
+    let out = await serviceUpsert('heartbeat', [{ source: 'server', timestamp: ts }], 'source');
+    if (!out.ok) {
+      // Fallback to plain INSERT (pre-migration schema without 'source' column)
+      out = await serviceInsert('heartbeat', [{ timestamp: ts }]);
+    }
 
     if (!out.ok && missingTable(out)) {
       // Attempt auto-create via SQL RPC (best-effort)
       const created = await tryRpcCreateTable();
       if (created.ok) {
-        out = await serviceInsert('heartbeat', [{ timestamp: ts }]);
+        out = await serviceUpsert('heartbeat', [{ source: 'server', timestamp: ts }], 'source');
+        if (!out.ok) out = await serviceInsert('heartbeat', [{ timestamp: ts }]);
       }
 
       if (!out.ok) {

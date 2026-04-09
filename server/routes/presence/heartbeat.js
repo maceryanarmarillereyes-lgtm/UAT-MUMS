@@ -24,7 +24,9 @@ function sendJson(res, statusCode, body) {
 // If the row exists and last_seen is within HB_DEDUP_MS, skip the write.
 // Cost: 1 READ (no WAL) instead of 1 UPSERT (WAL write) on cache hits.
 // Net: ~60% reduction in WAL writes for presence table.
-const HB_DEDUP_MS = 30000; // 30s — skip DB write if same client HB'd recently
+const HB_DEDUP_MS = 40000; // IO-OPT: 40s dedup window (was 30s). Client polls at 45s, so
+// a 40s window means we still accept a heartbeat on every client tick while
+// safely filtering any burst retries within the same tick cycle.
 
 async function _hbDedupDB(clientId) {
   try {
