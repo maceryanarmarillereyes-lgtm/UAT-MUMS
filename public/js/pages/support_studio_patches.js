@@ -14,6 +14,7 @@
 //   3. Deep search card click: _qbsOpenDeepResult + [data-action] fallback.
 //   4. Banner dismissal memory: banner stays hidden after dismiss (sessionStorage).
 //   5. Deep search card: remove Case View Details button + improve Assigned To.
+//   7. Connect+ tab: column alignment fix — header-keyed mapping, permanent.
 //
 // v3.0 FIX — Three permanent bug fixes:
 //
@@ -275,7 +276,7 @@
   // Falls back to Map lookup, then array scan, then bare recordId-only snap.
   function defineQbsOpenDeepResult() {
     window._qbsOpenDeepResult = function (caseNum, cardEl) {
-      if (!caseNum || String(caseNum) === '—') return;
+      if (!caseNum || String(caseNum) === '\u2014') return;
       var rid = String(caseNum);
       var snap = null;
 
@@ -517,9 +518,9 @@
 
     function styleAssignedToValue(el) {
       var name = (el.textContent || '').trim();
-      if (!name || name === '—' || name === '-') {
+      if (!name || name === '\u2014' || name === '-') {
         el.style.cssText += ';color:#484f58 !important;font-weight:600 !important;font-size:11px !important;';
-        if (el.textContent.trim() === '-') el.textContent = '—';
+        if (el.textContent.trim() === '-') el.textContent = '\u2014';
       } else {
         el.style.cssText += ';color:#e6edf3 !important;font-weight:700 !important;font-size:11px !important;';
         if (!el.querySelector('.fa-user')) {
@@ -632,6 +633,452 @@
     watchResults();
   }
 
+  // ── PATCH 7: Connect+ tab — column alignment permanent fix ───────────────
+  // ROOT CAUSE: The Connect+ table renderer uses positional index (data[0],
+  // data[1]...) instead of named CSV header keys, causing misalignment when
+  // the Google Sheet column order differs from the expected display order.
+  //
+  // FIX STRATEGY:
+  //   1. Intercept window.__cpRawRows / window.__cpHeaderMap after CSV load.
+  //   2. After the table renders, rebuild every <tr> using the DISPLAY_COLS map
+  //      which reads values by header name (not position).
+  //   3. Re-apply on every MutationObserver mutation (filter/sort/paginate).
+  //   4. STRICTLY scoped to [data-tab="connect_plus"] — zero impact elsewhere.
+  //
+  // BUG-FIX (v3.9.x): window.__cpRawRows now receives named-field objects from
+  // _cpLoad() (keys: site, directory, city, state, country, timezone,
+  // storeNumber, endUser, systems, url).  _cpGetRawRowObject and _cpGetRawValue
+  // handle both legacy Array rows and new named-field Object rows.
+  // Also added storeNumber to the normalisation alias map so STORE NUMBER
+  // column data is correctly resolved when the patch activates.
+  // ─────────────────────────────────────────────────────────────────────────
+  function patchConnectPlusColumns() {
+    var _lastCpHeaderFingerprint = '';
+
+    function _getCpRoot() {
+      return document.querySelector('[data-tab="connect_plus"]')
+          || document.querySelector('[data-page="connect_plus"]')
+          || document.getElementById('cp-tab-panel')
+          || document.getElementById('connectPlusPanel')
+          || null;
+    }
+
+    function _getCpTable(root) {
+      if (!root) return null;
+      var bodyWrap = root.querySelector('#cp-table-body');
+      if (bodyWrap) {
+        var bodyTable = bodyWrap.querySelector('table');
+        if (bodyTable) return bodyTable;
+      }
+      return root.querySelector('table')
+          || root.querySelector('[class*="cp-table"]')
+          || root.querySelector('[class*="connect-table"]')
+          || root.querySelector('[id*="cp-table"]')
+          || null;
+    }
+
+    function _getCpHeadTable(root) {
+      if (!root) return null;
+      var selectors = ['#cp-table-head table','#cp-table-head-wrap table',
+                       '#cp-table-head','#cp-table-head-wrap'];
+      for (var i = 0; i < selectors.length; i++) {
+        var el = root.querySelector(selectors[i]);
+        if (el && (el.tagName === 'TABLE' || el.querySelector('thead,tbody,tr'))) return el;
+      }
+      return null;
+    }
+
+    function _cpEscapeHtml(v) {
+      return String(v)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function _cpNormalizeHeaderKey(v) {
+      // Normalise to lowercase alphanumeric, then apply known aliases so that
+      // CSV header names (e.g. "STORE NUMBER", "END USER") resolve to the same
+      // key used in the named-field row objects produced by _cpLoad().
+      var norm = String(v == null ? '' : v)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '');
+      // Alias map: CSV header normalised → row object field name
+      var _aliases = {
+        'storenumber': 'storeNumber',
+        'storeno':     'storeNumber',
+        'store':       'storeNumber',
+        'enduser':     'endUser',
+        'enduser2':    'endUser2',
+        'urlconnectlink': 'url',
+        'connectlink':    'url',
+        'numberofcontrolsystems': 'systems',
+        'controlsystems':         'systems',
+        'stateprovinceregiont':   'state',
+        'stateprovinceregion':    'state',
+        'zippostalcode':          'zip',
+        'timezone':               'timezone',
+        'address1':               'address1',
+      };
+      return _aliases[norm] || norm;
+    }
+
+    // FIX-DYNAMIC: auto-discover headers from live CSV data — no hardcoded columns
+    function _cpDiscoverHeaders(bodyTable, headTable) {
+      var fromCpHeaders = Array.isArray(window.__cpHeaders)
+        ? window.__cpHeaders.filter(function (h) { return typeof h === 'string' && h.trim(); })
+        : [];
+      if (fromCpHeaders.length) return fromCpHeaders;
+
+      var rawRows = Array.isArray(window.__cpRawRows) ? window.__cpRawRows : [];
+      var firstRaw = rawRows.length ? rawRows[0] : null;
+
+      // ── Named-field objects from _cpLoad() ──────────────────────────────
+      // Row objects use camelCase keys (site, directory, city, storeNumber…).
+      // Map them back to the display-friendly header names used in the static
+      // HTML <thead> so the patch renders the same 9-column layout.
+      if (firstRaw && typeof firstRaw === 'object' && !Array.isArray(firstRaw)) {
+        // Preferred: read header labels directly from the static head table
+        var sourceTable = headTable || bodyTable;
+        if (sourceTable) {
+          var thCells = sourceTable.querySelectorAll('thead th');
+          var domLabels = [];
+          thCells.forEach(function (th) {
+            var label = (th.getAttribute('data-col-key') || th.textContent || '').trim();
+            // Skip the row-number "#" cell and empty cells
+            if (label && label !== '#') domLabels.push(label);
+          });
+          if (domLabels.length) return domLabels;
+        }
+        // Fallback: use the object's own keys (camelCase) as headers
+        var keys = Object.keys(firstRaw).filter(function (k) {
+          // Exclude internal _search field
+          return k && k !== '_search';
+        });
+        if (keys.length) return keys;
+      }
+
+      if (Array.isArray(firstRaw)) {
+        var firstArrayHeaders = firstRaw.filter(function (h) { return typeof h === 'string' && h.trim(); });
+        if (firstArrayHeaders.length) return firstArrayHeaders;
+      }
+
+      if (window.__cpHeaderMap && typeof window.__cpHeaderMap === 'object' && !Array.isArray(window.__cpHeaderMap)) {
+        var mapKeys = Object.keys(window.__cpHeaderMap).filter(function (h) { return String(h).trim(); });
+        if (mapKeys.length) return mapKeys;
+      }
+
+      var sourceTable2 = headTable || bodyTable;
+      if (sourceTable2) {
+        var domHeaders = [];
+        var headerCells = sourceTable2.querySelectorAll('thead th[data-col-key]');
+        headerCells.forEach(function (th) {
+          var key = (th.getAttribute('data-col-key') || '').trim();
+          if (key) domHeaders.push(key);
+        });
+        if (domHeaders.length) return domHeaders;
+      }
+
+      return [];
+    }
+
+    function _clearCpRewriteFlags(bodyTable, headTable) {
+      if (bodyTable) {
+        bodyTable.querySelectorAll('[data-cp-row-rewritten]').forEach(function (tr) {
+          delete tr.dataset.cpRowRewritten;
+        });
+      }
+      if (headTable) {
+        headTable.querySelectorAll('thead tr[data-cp-header-rewritten]').forEach(function (tr) {
+          delete tr.dataset.cpHeaderRewritten;
+        });
+      }
+    }
+
+    function _cpReadCurrentHeaderIndexMap(headTable) {
+      var map = {};
+      if (!headTable) return map;
+      var headerRow = headTable.querySelector('thead tr');
+      if (!headerRow) return map;
+      var headerCells = headerRow.querySelectorAll('th,td');
+      if (!headerCells.length) return map;
+      var firstKey = (headerCells[0].getAttribute('data-col-key') || headerCells[0].textContent || '').trim();
+      var firstNorm = _cpNormalizeHeaderKey(firstKey);
+      var hasRowNumberCell = firstNorm === '' || firstNorm === '#' || firstNorm === 'no' || firstNorm === 'index';
+      headerCells.forEach(function (cell, idx) {
+        if (hasRowNumberCell && idx === 0) return;
+        var key = (cell.getAttribute('data-col-key') || cell.textContent || '').trim();
+        if (!key) return;
+        var dataIdx = hasRowNumberCell ? (idx - 1) : idx;
+        if (map[key] === undefined) map[key] = dataIdx;
+        var normalized = _cpNormalizeHeaderKey(key);
+        if (normalized && map[normalized] === undefined) map[normalized] = dataIdx;
+      });
+      return map;
+    }
+
+    function _cpBuildRawHeaderIndex(headers) {
+      var map = {};
+      headers.forEach(function (h, idx) {
+        if (map[h] === undefined) map[h] = idx;
+        var normalized = _cpNormalizeHeaderKey(h);
+        if (normalized && map[normalized] === undefined) map[normalized] = idx;
+      });
+      return map;
+    }
+
+    function _cpBuildCsvColIndex(rawRows) {
+      var map = {};
+      if (!Array.isArray(rawRows) || !rawRows.length) return map;
+      var firstRaw = rawRows[0];
+      if (!Array.isArray(firstRaw)) return map;
+      firstRaw.forEach(function (h, idx) {
+        var key = String(h == null ? '' : h).trim();
+        if (!key) return;
+        if (map[key] === undefined) map[key] = idx;
+        var normalized = _cpNormalizeHeaderKey(key);
+        if (normalized && map[normalized] === undefined) map[normalized] = idx;
+      });
+      return map;
+    }
+
+    function _cpGetRawValue(rawRowObj, header) {
+      if (!rawRowObj || typeof rawRowObj !== 'object') return '';
+      if (Object.prototype.hasOwnProperty.call(rawRowObj, header)) {
+        return String(rawRowObj[header] == null ? '' : rawRowObj[header]).trim();
+      }
+      var target = _cpNormalizeHeaderKey(header);
+      if (!target) return '';
+      var keys = Object.keys(rawRowObj);
+      for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        if (_cpNormalizeHeaderKey(key) === target) {
+          return String(rawRowObj[key] == null ? '' : rawRowObj[key]).trim();
+        }
+      }
+      return '';
+    }
+
+    function _cpGetRawRowObject(rowIndex, headers, rawHeaderIndex) {
+      var rawRows = Array.isArray(window.__cpRawRows) ? window.__cpRawRows : [];
+      if (!rawRows.length) return null;
+
+      var firstRaw = rawRows[0];
+
+      // ── Named-field objects (produced by _cpLoad after BUG-FIX) ──────────
+      // _cpLoad() now stores rows as {site, directory, city, state, country,
+      // timezone, storeNumber, endUser, systems, url, ...} objects. When
+      // __cpRawRows contains these, _cpGetRawValue already handles them
+      // correctly via property lookup + normalised-key fallback.
+      if (firstRaw && typeof firstRaw === 'object' && !Array.isArray(firstRaw)) {
+        var namedRow = rawRows[rowIndex];
+        if (!namedRow) return null;
+        return namedRow; // already a named-field object — return as-is
+      }
+
+      // ── Legacy: raw CSV array rows (first row = header row) ──────────────
+      var csvColIndex = _cpBuildCsvColIndex(rawRows);
+      var rawRow = rawRows[rowIndex];
+      if (Array.isArray(firstRaw) && firstRaw.length && rawRows[rowIndex + 1]) {
+        rawRow = rawRows[rowIndex + 1];
+      }
+      if (!rawRow) return null;
+
+      if (rawRow && typeof rawRow === 'object' && !Array.isArray(rawRow)) return rawRow;
+
+      if (Array.isArray(rawRow)) {
+        var obj = {};
+        headers.forEach(function (h) {
+          var idx = csvColIndex[h];
+          if (idx === undefined) idx = csvColIndex[_cpNormalizeHeaderKey(h)];
+          if (idx === undefined) idx = rawHeaderIndex[h];
+          if (idx === undefined) idx = rawHeaderIndex[_cpNormalizeHeaderKey(h)];
+          obj[h] = idx === undefined ? '' : String(rawRow[idx] == null ? '' : rawRow[idx]);
+        });
+        return obj;
+      }
+
+      return null;
+    }
+
+    // FIX-URLDETECT: auto-detect URL cells and render as Open buttons
+    function _cpBuildCellHtml(value) {
+      var val = String(value == null ? '' : value).trim();
+      if (!val) return '<td>—</td>';
+      if (val.indexOf('http') === 0 || val.indexOf('//') === 0) {
+        var safeHref = _cpEscapeHtml(val);
+        return '<td><a href="' + safeHref + '" target="_blank" rel="noopener noreferrer"'
+          + ' style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;'
+          + 'background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.3);'
+          + 'border-radius:5px;color:#22d3ee;font-size:10px;font-weight:700;'
+          + 'text-decoration:none;white-space:nowrap;"'
+          + ' onclick="event.stopPropagation();">'
+          + '<i class="fas fa-external-link-alt" style="font-size:9px;"></i>Open</a></td>';
+      }
+      return '<td>' + _cpEscapeHtml(val) + '</td>';
+    }
+
+    function _cpRenderDynamic(bodyTable, headTable) {
+      if (!bodyTable) return;
+      var root = _getCpRoot();
+      if (!root || !root.contains(bodyTable)) return;
+
+      var headers = _cpDiscoverHeaders(bodyTable, headTable);
+      if (!headers.length) return;
+
+      var schemaFingerprint = JSON.stringify(headers);
+      // FIX-SCHEMA-CHANGE: detect CSV schema change and force full re-render
+      if (_lastCpHeaderFingerprint && _lastCpHeaderFingerprint !== schemaFingerprint) {
+        _clearCpRewriteFlags(bodyTable, headTable);
+      }
+      _lastCpHeaderFingerprint = schemaFingerprint;
+
+      var headerTarget = headTable || bodyTable;
+      var currentHeaderMap = _cpReadCurrentHeaderIndexMap(headerTarget);
+      var rawHeaderIndex = _cpBuildRawHeaderIndex(headers);
+
+      if (headerTarget) {
+        var thead = headerTarget.querySelector('thead');
+        if (!thead) {
+          try {
+            thead = document.createElement('thead');
+            headerTarget.insertBefore(thead, headerTarget.firstChild);
+          } catch (_) {
+            thead = null;
+          }
+        }
+
+        if (thead) {
+          var headerRow = thead.querySelector('tr');
+          if (!headerRow) {
+            try {
+              headerRow = document.createElement('tr');
+              thead.appendChild(headerRow);
+            } catch (_) {
+              headerRow = null;
+            }
+          }
+
+          if (headerRow) {
+            var headerHtml = '<th style="width:36px;text-align:center;">#</th>';
+            headers.forEach(function (header) {
+              var safeHeader = _cpEscapeHtml(header);
+              headerHtml += '<th data-col-key="' + safeHeader + '">' + safeHeader + '</th>';
+            });
+            try {
+              headerRow.innerHTML = headerHtml;
+              // FIX-FLAGPOS: set rewritten flag only after innerHTML succeeds
+              headerRow.dataset.cpHeaderRewritten = 'true';
+            } catch (_) {}
+          }
+        }
+      }
+
+      var tbody = bodyTable.querySelector('tbody');
+      if (!tbody) return;
+      var rows = tbody.querySelectorAll('tr');
+      if (!rows.length) return;
+
+      rows.forEach(function (tr, idx) {
+        var existingCells = tr.querySelectorAll('td');
+        var cpIdxRaw = tr.getAttribute('data-cp-idx');
+        var cpIdx = cpIdxRaw != null && cpIdxRaw !== '' ? Number(cpIdxRaw) : idx;
+        if (!isFinite(cpIdx) || cpIdx < 0) cpIdx = idx;
+
+        var rawRowObj = _cpGetRawRowObject(cpIdx, headers, rawHeaderIndex);
+        var rowHtml = '<td style="text-align:center;color:rgba(255,255,255,.3);font-size:10px;">' + (cpIdx + 1) + '</td>';
+
+        headers.forEach(function (header, headerIdx) {
+          var fromDom = '';
+          var cellIndex = currentHeaderMap[header];
+          if (cellIndex === undefined) cellIndex = currentHeaderMap[_cpNormalizeHeaderKey(header)];
+          if (cellIndex === undefined) cellIndex = headerIdx;
+          var domCell = existingCells[cellIndex];
+          if (domCell) fromDom = String(domCell.textContent || domCell.innerText || '').trim();
+
+          var fromRaw = _cpGetRawValue(rawRowObj, header);
+
+          var value = fromRaw || fromDom;
+          rowHtml += _cpBuildCellHtml(value);
+        });
+
+        try {
+          tr.innerHTML = rowHtml;
+          // FIX-FLAGPOS: set rewritten flag only after innerHTML succeeds
+          tr.dataset.cpRowRewritten = 'true';
+        } catch (_) {}
+      });
+    }
+
+    var _cpRenderInProgress = false;
+    var _cpMutDebounce = null;
+    function _queueCpRender() {
+      if (_cpRenderInProgress) return;
+      _cpRenderInProgress = true;
+      try {
+        var root = _getCpRoot();
+        var bodyTable = _getCpTable(root);
+        var headTable = _getCpHeadTable(root);
+        if (!root || !bodyTable || !root.contains(bodyTable)) return;
+        _clearCpRewriteFlags(bodyTable, headTable);
+        _cpRenderDynamic(bodyTable, headTable);
+      } finally {
+        _cpRenderInProgress = false;
+      }
+    }
+
+    function _watchCpTab() {
+      var root = _getCpRoot();
+      if (!root) {
+        setTimeout(_watchCpTab, 800);
+        return;
+      }
+      if (root.dataset.cpPatchAttached) return;
+      root.dataset.cpPatchAttached = 'true';
+
+      _queueCpRender();
+
+      var obs = new MutationObserver(function () {
+        clearTimeout(_cpMutDebounce);
+        _cpMutDebounce = setTimeout(_queueCpRender, 120);
+      });
+      try {
+        obs.observe(root, { childList: true, subtree: true });
+      } catch (_) {}
+    }
+
+    function _interceptCpRows() {
+      var _raw = window.__cpRawRows;
+      var _headers = window.__cpHeaders;
+
+      try {
+        Object.defineProperty(window, '__cpRawRows', {
+          configurable: true,
+          get: function () { return _raw; },
+          set: function (v) {
+            _raw = v;
+            setTimeout(_queueCpRender, 100);
+          }
+        });
+      } catch (_) {}
+
+      try {
+        Object.defineProperty(window, '__cpHeaders', {
+          configurable: true,
+          get: function () { return _headers; },
+          set: function (v) {
+            _headers = v;
+            setTimeout(_queueCpRender, 100);
+          }
+        });
+      } catch (_) {}
+    }
+
+    _interceptCpRows();
+    _watchCpTab();
+  }
+
   // ── BOOT ──────────────────────────────────────────────────────────────────
   function boot() {
     defineQbsOpenDeepResult();
@@ -640,6 +1087,7 @@
     patchDeepSearchActionBtn();
     patchBannerDismissal();
     patchDeepSearchCards();
+    patchConnectPlusColumns();
   }
 
   if (document.readyState === 'loading') {

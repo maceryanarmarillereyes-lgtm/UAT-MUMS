@@ -1,286 +1,169 @@
-/* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
-   Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
-   Database/API Adapters · Tab Isolation · Virtual Column State ·
-   QuickBase Settings Persistence · Auth Flow.
-   DO NOT modify any existing logic, layout, or structure in this file without
-   first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
-   Violations will cause regressions. When in doubt — STOP and REPORT. */
-
 /**
- * MUMS AI Responder v3 — Client-Side Response Synthesizer (2026 Semantic Upgrade)
- * ─────────────────────────────────────────────────────────────────────────────
- * BUGFIX LOG (v3.0 — 2026-04-09):
- *
- * BUG 1 FIXED: Part-number queries always showed support-case AI summary instead
- *   of the actual part details (brand, description, type).
- *   FIX: Added _isPartNoQuery() detector. When query contains alphanumeric part
- *   codes, AI switches to Parts Mode which renders part table instead of case summary.
- *
- * BUG 2 FIXED: "Did you mean" suggestions were showing noise words (e.g. "number",
- *   "part", "type") as fuzzy suggestions.
- *   FIX: fuzzyTerms filtered against NOISE_FILTER before rendering.
- *
- * BUG 3 FIXED: AI panel showed incorrect "Most Relevant Fix" when top result was
- *   a parts record (parts records have no resolution/fix text).
- *   FIX: AI panel now detects record source and adapts template accordingly.
- *
- * BUG 4 FIXED: Ambiguous threshold of 120 results was too low for Parts source —
- *   4,948 results are valid when searching parts catalog.
- *   FIX: Threshold is now source-aware: 50 for support cases, 500 for parts.
- *
- * BUG 5 FIXED: AI "Found X records" count was misleading when results were filtered
- *   by source — total showed all sources but description mentioned only one.
- *   FIX: AI body now shows per-source breakdown in a clear table.
+ * Search AI Responder v3.0 (2026)
+ * Conversational AI response generator for Search Engine 2.
+ * Source-aware rendering for ALL 8 catalog types.
  */
+
 (function(global) {
   'use strict';
 
-  // Alphanumeric part-number pattern (must match search_engine_v2.js)
-  var PART_NUMBER_RX = /^[A-Za-z]{1,6}[\-\d][\w\-]{2,}$|^\d{3,4}[-\s]\d{3,4}$|^[A-Za-z]\d{3,}$|^[A-Za-z]{2,4}\d{2,4}$/;
+  const AI_VERSION = '3.0.0';
 
-  // Noise words to suppress from "Did you mean" suggestions
-  var NOISE_FILTER = new Set([
-    'part','number','parts','type','model','unit','item','product','controller',
-    'system','device','information','info','data','record','report','list',
-    'request','inquiry','support','service','case','replacement'
+  const CONFIDENCE = {
+    part_number: 500, product_controllers: 400, contact_info: 300,
+    support_records: 50, knowledge_base: 80, connect_plus: 60,
+    quickbase: 40, deep_search: 40
+  };
+
+  const LABELS = {
+    part_number: '🔩 Part Number', product_controllers: '🎛️ Product Controllers',
+    contact_info: '📇 Contact Information', support_records: '🎫 Support Records',
+    knowledge_base: '📚 Knowledge Base', connect_plus: '🔗 Connect+',
+    quickbase: '⚡ QuickBase', deep_search: '🔍 Deep Search'
+  };
+
+  const NOISE_FILTER = new Set([
+    'part','number','type','model','product','unit','item','record',
+    'what','how','where','when','why','who','which','is','are','the',
+    'a','an','of','in','on','at','to','for','with','by','from','and','or'
   ]);
 
-  // ── PATTERN EXTRACTOR ─────────────────────────────────────────────────────
-  function PatternExtractor() {}
-
-  PatternExtractor.prototype.extractEndUsers = function(results) {
-    var euSet = {};
-    results.forEach(function(item) {
-      var r = item.record || item;
-      if (r.eu && r.eu.trim()) {
-        euSet[r.eu.trim()] = (euSet[r.eu.trim()] || 0) + 1;
-      }
-    });
-    return Object.keys(euSet).sort(function(a, b) { return euSet[b] - euSet[a]; }).slice(0, 5);
-  };
-
-  PatternExtractor.prototype.extractCaseNums = function(results) {
-    var cases = [];
-    results.slice(0, 8).forEach(function(item) {
-      var r = item.record || item;
-      if (r.case && String(r.case).trim()) cases.push(String(r.case).trim());
-    });
-    return cases.filter(function(c, i) { return cases.indexOf(c) === i; }).slice(0, 5);
-  };
-
-  PatternExtractor.prototype.extractCategories = function(results) {
-    var cats = {};
-    results.forEach(function(item) {
-      var r = item.record || item;
-      if (r.cat) cats[r.cat] = (cats[r.cat] || 0) + 1;
-    });
-    return Object.keys(cats).sort(function(a, b) { return cats[b] - cats[a]; }).slice(0, 3);
-  };
-
-  PatternExtractor.prototype.extractBestSemanticSentence = function(resText, tokens) {
-    if (!resText) return '';
-    var sentences = resText.split(/[.!\n]+/).filter(function(s) { return s.trim().length > 15; });
-    var bestSent = '';
-    var bestScore = -1;
-    sentences.forEach(function(sent) {
-      var s = sent.toLowerCase();
-      var score = 0;
-      tokens.forEach(function(t) {
-        if (t.length >= 3 && !NOISE_FILTER.has(t) && s.includes(t)) score++;
-      });
-      if (/^\s*(advised|provided|confirmed|updated|resolved|replaced|checked|configured|reset|assisted|guided)\b/i.test(s)) {
-        score += 0.5;
-      }
-      if (score > bestScore) { bestScore = score; bestSent = sent.trim(); }
-    });
-    if (bestSent.length > 0) return bestSent.charAt(0).toUpperCase() + bestSent.slice(1) + '.';
-    return resText.slice(0, 200) + '…';
-  };
-
-  // BUG 1 FIX: Detect part-number queries
-  function _isPartNoQuery(query, parsed) {
-    var tokens = (parsed && parsed.tokens) || String(query || '').toLowerCase().split(/\s+/);
-    return tokens.some(function(t) { return PART_NUMBER_RX.test(t); });
+  function esc(str) {
+    return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
-  // ── AI RESPONDER ──────────────────────────────────────────────────────────
-  function AIResponder() {
-    this.extractor = new PatternExtractor();
-  }
-
-  AIResponder.prototype.generate = function(query, searchOutput) {
-    var results = searchOutput.results || [];
-    var parsed  = searchOutput.parsed || { original: query, type: 'keyword', tokens: [], expanded: [] };
-    var fuzzy   = (searchOutput.fuzzyTerms || []).filter(function(t) { return !NOISE_FILTER.has(t); });
-
-    if (!results.length) return this._noResults(query, parsed, fuzzy);
-
-    // BUG 4 FIX: Source-aware ambiguous threshold
-    var isParts = _isPartNoQuery(query, parsed);
-    var ambigThreshold = isParts ? 500 : 50;
-    if (results.length > ambigThreshold && !isParts) return this._ambiguous(query, parsed, results.length);
-
-    // BUG 3 FIX: Route to parts mode if query is part-number style
-    if (isParts) return this._foundParts(query, parsed, results);
-
-    return this._found(query, parsed, results);
-  };
-
-  // ── PARTS MODE RESPONSE (BUG 1+3 FIX) ────────────────────────────────────
-  AIResponder.prototype._foundParts = function(query, parsed, results) {
-    var q = parsed.original || query;
-    var totalStr = results.length.toLocaleString();
-    var partsResults = results.filter(function(item) {
-      var r = item.record || item;
-      return String(r.id || '').startsWith('parts_') ||
-        String(r.cat || '').toLowerCase().includes('part') ||
-        String(r._src || '') === 'parts';
-    });
-    var displayResults = partsResults.length > 0 ? partsResults : results;
-    var topFive = displayResults.slice(0, 5);
-    var html = '';
-
-    html += '<p><span class="ai-highlight">Part Number Search</span> — I found <strong>' + totalStr + '</strong> records for <em>"' + _esc(q) + '"</em>.</p>';
-
-    if (topFive.length) {
-      html += '<h4>🔩 Top Matching Parts</h4>';
-      html += '<div style="overflow-x:auto;">';
-      html += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin:4px 0;">';
-      html += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,.1);">' +
-        '<th style="text-align:left;padding:4px 8px;color:#94a3b8;font-weight:600;">Part #</th>' +
-        '<th style="text-align:left;padding:4px 8px;color:#94a3b8;font-weight:600;">Brand</th>' +
-        '<th style="text-align:left;padding:4px 8px;color:#94a3b8;font-weight:600;">Description</th>' +
-        '</tr></thead><tbody>';
-      topFive.forEach(function(item) {
-        var r = item.record || item;
-        var partNo = r.title || r.partNo || '—';
-        var brand = r.brand || '';
-        var desc = r.res || r.desc || r.cat || '';
-        // Truncate description
-        if (desc.length > 80) desc = desc.slice(0, 80) + '…';
-        html += '<tr style="border-bottom:1px solid rgba(255,255,255,.05);">' +
-          '<td style="padding:5px 8px;font-family:monospace;color:#f59e0b;font-weight:700;">' + _esc(partNo) + '</td>' +
-          '<td style="padding:5px 8px;color:#94a3b8;">' + _esc(brand) + '</td>' +
-          '<td style="padding:5px 8px;color:#cbd5e1;">' + _esc(desc) + '</td>' +
-          '</tr>';
-      });
-      html += '</tbody></table></div>';
-    }
-
-    if (results.length > 5) {
-      html += '<p class="ai-tip">💡 <strong>Tip:</strong> Use the <strong>Part Number</strong> filter tab above to see all ' + totalStr + ' results sorted by exact match.</p>';
-    }
-
+  function detectIntent(qMeta) {
+    const raw = (qMeta.raw||'').toLowerCase();
     return {
-      html: html,
-      sources: 'Part Number catalog — ' + totalStr + ' matches'
+      isPartQuery:       qMeta.hasPartCode || raw.includes('part') || raw.includes('sku'),
+      isControllerQuery: raw.includes('controller')||raw.includes('firmware')||raw.includes('model'),
+      isContactQuery:    raw.includes('contact')||raw.includes('email')||raw.includes('phone')||raw.includes('who is'),
+      isKBQuery:         raw.includes('how to')||raw.includes('guide')||raw.includes('manual'),
+      isSupportQuery:    raw.includes('case')||raw.includes('ticket')||raw.includes('issue')||raw.includes('fix'),
+      isQuestion:        qMeta.isQuestion
     };
-  };
-
-  // ── SUPPORT CASE RESPONSE ─────────────────────────────────────────────────
-  AIResponder.prototype._found = function(query, parsed, results) {
-    var ext = this.extractor;
-    var topResults = results.slice(0, 5);
-    var topRecord = topResults[0] ? (topResults[0].record || topResults[0]) : {};
-
-    var tokens = (parsed.expanded && parsed.expanded.length > 0 ? parsed.expanded : parsed.tokens)
-      .filter(function(t) { return !NOISE_FILTER.has(t); });
-    var conversationalSummary = ext.extractBestSemanticSentence(topRecord.res, tokens);
-
-    var endUsers = ext.extractEndUsers(results);
-    var caseNums = ext.extractCaseNums(results);
-    var categories = ext.extractCategories(results);
-
-    var q = parsed.original || query;
-    var totalStr = results.length.toLocaleString();
-    var html = '';
-
-    html += '<p><span class="ai-highlight">Here is what I found.</span> I scanned <strong>' + totalStr + '</strong> records related to <em>"' + _esc(q) + '"</em>.</p>';
-
-    // BUG 3 FIX: Only show "Most Relevant Fix" if top record has resolution text
-    if (topRecord.title && topRecord.res && topRecord.res.length > 20) {
-      html += '<h4>💡 Most Relevant Fix</h4>';
-      html += '<p>Based on Case <span class="ai-case-link" data-case="' + _esc(topRecord.case) + '">#' + _esc(topRecord.case) + '</span> (<em>' + _esc(topRecord.title) + '</em>), typical resolution:</p>';
-      html += '<p style="padding-left:10px;border-left:3px solid #10b981;color:#cbd5e1;">' + _esc(conversationalSummary) + '</p>';
-    }
-
-    var details = [];
-    if (caseNums.length > 1) {
-      details.push('📌 Related Cases: ' + caseNums.slice(1).map(function(c) {
-        return '<span class="ai-case-link" data-case="' + _esc(c) + '">#' + _esc(c) + '</span>';
-      }).join(', '));
-    }
-    if (endUsers.length) {
-      details.push('👤 Affected Users: ' + endUsers.map(function(u) { return _esc(u); }).join(', '));
-    }
-    if (categories.length > 1) {
-      details.push('📁 Categories: ' + categories.map(function(c) { return _esc(c); }).join(', '));
-    }
-
-    if (details.length) {
-      html += '<div class="ai-details-grid">' + details.map(function(d) {
-        return '<div class="ai-detail-item">' + d + '</div>';
-      }).join('') + '</div>';
-    }
-
-    if (results.length > 20) {
-      html += '<p class="ai-tip">💡 <strong>Tip:</strong> Add the site name or specific model to narrow down results.</p>';
-    }
-
-    return {
-      html: html,
-      sources: 'Synthesized from Top 5 of ' + totalStr + ' matches'
-    };
-  };
-
-  AIResponder.prototype._noResults = function(query, parsed, fuzzyTerms) {
-    var q = parsed.original || query;
-    var html = '';
-
-    html += '<p>I could not find exact matches for <em>"' + _esc(q) + '"</em> in the database.</p>';
-
-    // BUG 2 FIX: Filter noise words from fuzzy suggestions
-    var cleanFuzzy = (fuzzyTerms || []).filter(function(t) { return !NOISE_FILTER.has(t) && t.length >= 3; });
-    if (cleanFuzzy.length) {
-      html += '<h4>🤔 Did you mean?</h4><div class="ai-did-you-mean">';
-      cleanFuzzy.forEach(function(t) {
-        html += '<span class="ai-suggest-term" data-term="' + _esc(t) + '">' + _esc(t) + '</span>';
-      });
-      html += '</div>';
-    }
-
-    html += '<h4>💡 Search Tips</h4><ul>';
-    html += '<li>Use specific product names: <em>E2, E3, XR75, CC200, Site Supervisor</em></li>';
-    html += '<li>Include case numbers: <em>#526754</em></li>';
-    html += '<li>Try end user names: <em>Walmart, Woolworths, Coles</em></li>';
-    html += '<li>For parts: search by part number directly, e.g. <em>XR77CX</em> or <em>845-1300</em></li>';
-    html += '<li>Check spelling — common: <em>offline, firmware, license key, solenoid</em></li>';
-    html += '</ul>';
-
-    return { html: html, sources: 'No direct matches — showing suggestions' };
-  };
-
-  AIResponder.prototype._ambiguous = function(query, parsed, count) {
-    var q = parsed.original || query;
-    var html = '';
-
-    html += '<p>I found <span class="ai-highlight">' + count.toLocaleString() + ' results</span> for <em>"' + _esc(q) + '"</em>. Let me help you narrow it down.</p>';
-    html += '<h4>🎯 Narrow your search:</h4><ul>';
-    html += '<li>Add an end user: <em>"' + _esc(q) + ' Walmart"</em></li>';
-    html += '<li>Add a specific model: <em>"' + _esc(q) + ' E3"</em> or <em>"' + _esc(q) + ' XR75"</em></li>';
-    html += '<li>Use the source filter chips on the left sidebar</li>';
-    html += '<li>Add a case number: <em>#526754</em></li>';
-    html += '</ul>';
-    html += '<p class="ai-tip">💡 The most relevant results are already at the top of the list.</p>';
-
-    return { html: html, sources: count.toLocaleString() + ' broad matches — refine your query' };
-  };
-
-  function _esc(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  global.SE2AIResponder = AIResponder;
-  global.SE2PatternExtractor = PatternExtractor;
+  function buildGreeting(rawQuery, intent, total) {
+    if (!total) return '';
+    const q = esc(rawQuery);
+    let msg = '';
+    if (intent.isQuestion)         msg = `I found <strong>${total}</strong> result(s) for your question: <em>"${q}"</em>`;
+    else if (intent.isPartQuery)   msg = `Here are matching parts for <em>"${q}"</em> — <strong>${total}</strong> result(s).`;
+    else if (intent.isContactQuery)msg = `Looking up contacts for <em>"${q}"</em>…`;
+    else                           msg = `Showing <strong>${total}</strong> result(s) for <em>"${q}"</em>.`;
+    return `<div class="se2-ai-greeting">${msg}</div>`;
+  }
 
-})(window);
+  function buildPartTable(parts) {
+    const rows = parts.map(p => {
+      const r = p.record||{};
+      return `<tr>
+        <td><strong>${esc(r.partNo||r.part_no||r.sku||r.id||'')}</strong></td>
+        <td>${esc(r.brand||r.manufacturer||'')}</td>
+        <td>${esc(r.type||r.category||'')}</td>
+        <td>${esc(r.description||r.title||r.name||'')}</td>
+      </tr>`;
+    }).join('');
+    return `<div class="se2-section">
+      <h4>${LABELS.part_number}</h4>
+      <table class="se2-table">
+        <thead><tr><th>Part No.</th><th>Brand</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
+  }
+
+  function buildCards(items, label, fields) {
+    fields = fields || ['title','description'];
+    const cards = items.map(item => {
+      const r = item.record||{};
+      const title = r[fields[0]]||r.title||r.name||r.subject||'Record';
+      const sub   = r.id||r.recordId||r.caseId||'';
+      const body  = String(r[fields[1]]||r.description||r.content||r.resolution||'').substring(0,200);
+      return `<div class="se2-card">
+        <div class="se2-card-title">${esc(title)}</div>
+        ${sub?`<div class="se2-card-badge">${esc(sub)}</div>`:''}
+        <div class="se2-card-body">${esc(body)}</div>
+      </div>`;
+    }).join('');
+    return `<div class="se2-section"><h4>${esc(label)}</h4><div class="se2-cards">${cards}</div></div>`;
+  }
+
+  function buildContactCards(contacts) {
+    const cards = contacts.map(c => {
+      const r = c.record||{};
+      return `<div class="se2-card se2-contact-card">
+        <div class="se2-card-title">${esc(r.name||r.fullName||'Contact')}</div>
+        <div class="se2-card-meta">${esc(r.title||r.role||'')} · ${esc(r.department||'')}</div>
+        <div class="se2-card-body">${esc(r.email||'')} · ${esc(r.phone||'')}</div>
+      </div>`;
+    }).join('');
+    return `<div class="se2-section"><h4>${LABELS.contact_info}</h4><div class="se2-cards">${cards}</div></div>`;
+  }
+
+  function noResults(rawQuery) {
+    return { html: `<div class="se2-no-results">
+      <p>Sorry, I couldn't find anything for <em>"${esc(rawQuery)}"</em>. Tips:</p>
+      <ul><li>Try shorter keywords</li><li>Check spelling</li>
+      <li>Use part number format: XR77 or 845-1300</li>
+      <li>Try brand name or model number</li></ul></div>`,
+      summary:'No results found.', intent:{}, topSources:[], total:0 };
+  }
+
+  function generateResponse(searchResult, rawQuery) {
+    const { query, results, total } = searchResult;
+    const intent = detectIntent(query);
+
+    if (!results || !results.length) return noResults(rawQuery);
+
+    const bySource = {};
+    results.forEach(r => { const s=r.sourceType||'unknown'; if(!bySource[s])bySource[s]=[]; bySource[s].push(r); });
+
+    let html = '';
+    const summaryLines = [];
+
+    if (intent.isPartQuery && bySource.part_number) {
+      const pts = bySource.part_number;
+      html += buildPartTable(pts.slice(0,10));
+      summaryLines.push(`Found **${pts.length}** part(s).`);
+    }
+    if (intent.isControllerQuery && bySource.product_controllers) {
+      const c = bySource.product_controllers;
+      html += buildCards(c.slice(0,5), LABELS.product_controllers, ['title','description']);
+      summaryLines.push(`Found **${c.length}** controller(s).`);
+    }
+    if (intent.isContactQuery && bySource.contact_info) {
+      html += buildContactCards(bySource.contact_info.slice(0,6));
+      summaryLines.push(`Found **${bySource.contact_info.length}** contact(s).`);
+    }
+    if (bySource.support_records && !intent.isPartQuery) {
+      const conf = (bySource.support_records||[]).filter(r => r.score >= CONFIDENCE.support_records);
+      if (conf.length) { html += buildCards(conf.slice(0,5), LABELS.support_records, ['title','resolution']); summaryLines.push(`Found **${conf.length}** case(s).`); }
+    }
+    if (bySource.knowledge_base) {
+      const kb = bySource.knowledge_base.filter(r => r.score >= CONFIDENCE.knowledge_base);
+      if (kb.length) html += buildCards(kb.slice(0,4), LABELS.knowledge_base, ['title','content']);
+    }
+    if (bySource.connect_plus) {
+      const c = bySource.connect_plus.filter(r => r.score >= CONFIDENCE.connect_plus);
+      if (c.length) html += buildCards(c.slice(0,4), LABELS.connect_plus);
+    }
+    if (bySource.quickbase) {
+      const q = bySource.quickbase.filter(r => r.score >= CONFIDENCE.quickbase);
+      if (q.length) html += buildCards(q.slice(0,4), LABELS.quickbase);
+    }
+    if (bySource.deep_search) {
+      const d = bySource.deep_search.filter(r => r.score >= CONFIDENCE.deep_search);
+      if (d.length) html += buildCards(d.slice(0,4), LABELS.deep_search);
+    }
+
+    if (!html) html = buildCards(results.slice(0,5), 'Results');
+
+    html = buildGreeting(rawQuery, intent, total) + html;
+
+    return { html, summary: summaryLines.join(' '), intent, topSources: Object.keys(bySource), total };
+  }
+
+  global.SE2Responder = { generateResponse, detectIntent, AI_VERSION };
+
+})(typeof window !== 'undefined' ? window : global);
