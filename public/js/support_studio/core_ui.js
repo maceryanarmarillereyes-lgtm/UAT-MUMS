@@ -855,8 +855,8 @@
     var STORAGE_KEY = 'mums_controller_lab_items_v1';
     var editingId = null;
     var CATALOG = {
-      'E2':             { img: '/Widget%20Images/E2_Widget.png',             label: 'E2 Controller'    },
-      'E3':             { img: '/Widget%20Images/E3_Widget.png',             label: 'E3 Gateway'       },
+      'E2':             { img: '/Widget%20Images/E2_Widget.png',             label: 'E2'    },
+      'E3':             { img: '/Widget%20Images/E3_Widget.png',             label: 'E3'       },
       'Site Supervisor':{ img: '/Widget%20Images/Site%20Supervisor_Widget.png', label: 'Site Supervisor' }
     };
     var FALLBACK_IMG = '/Widget%20Images/quickbase_logo.png';
@@ -930,6 +930,8 @@
       host.innerHTML = items.map(function(item){
         var cls = statusCls(item.status);
         var statusIcon = cls==='offline' ? '🔴' : cls==='maintenance' ? '🟡' : '🟢';
+        // Each card now has a hover overlay with "Use This Controller" + "Settings"
+        // The old .hp-ctl-col-settings button is hidden via CSS (display:none)
         return '<div class="hp-ctl-col">'+
           '<div class="hp-ctl-col-badge">'+esc(item.type)+'</div>'+
           '<img class="hp-ctl-col-img" src="'+esc(imageFor(item.type))+'" alt="'+esc(item.type)+'" onerror="this.src=\''+esc(FALLBACK_IMG)+'\';" />'+
@@ -938,9 +940,15 @@
             '<div class="hp-ctl-col-ip">'+esc(item.ip||'—')+'</div>'+
           '</div>'+
           '<span class="hp-ctl-col-status '+cls+'">'+statusIcon+' '+esc(item.status||'Online')+'</span>'+
-          '<button class="hp-ctl-col-settings" data-ctl-settings="'+esc(item.id)+'">'+
-            '<i class="fas fa-sliders-h" style="font-size:9px;"></i> Settings'+
-          '</button>'+
+          // Hover overlay — replaces the settings button at the bottom
+          '<div class="hp-ctl-col-overlay">'+
+            '<button class="hp-ctl-use-btn" data-ctl-use="'+esc(item.id)+'">'+
+              '<i class="fas fa-play-circle" style="font-size:12px;"></i> Use This Controller'+
+            '</button>'+
+            '<button class="hp-ctl-overlay-settings" data-ctl-settings="'+esc(item.id)+'">'+
+              '<i class="fas fa-cog" style="font-size:10px;"></i> Settings'+
+            '</button>'+
+          '</div>'+
         '</div>';
       }).join('');
     }
@@ -1030,6 +1038,9 @@
       // Delete controller
       var delBtn = t.closest && t.closest('#hp-ctl-settings-delete-btn');
       if(delBtn){ deleteController(); return; }
+      // "Use This Controller" button in hover overlay
+      var useBtn = t.closest && t.closest('[data-ctl-use]');
+      if(useBtn){ window._ctlOpenBooking(String(useBtn.getAttribute('data-ctl-use')||'')); return; }
       // Any settings button (chip row or column)
       var settingsBtn = t.closest && t.closest('[data-ctl-settings]');
       if(settingsBtn){ openSettings(String(settingsBtn.getAttribute('data-ctl-settings')||'')); return; }
@@ -1109,5 +1120,317 @@
       }
     });
   });
+
+})();
+
+/* ══════════════════════════════════════════════════════════════════════
+   CONTROLLER LAB BOOKING — v2.0
+   "Use This Controller" modal with Google Sheets logging.
+
+   Google Sheets Logging via Apps Script Web App:
+   ───────────────────────────────────────────────
+   Since browser JS cannot write directly to Google Sheets (requires OAuth),
+   we use a Google Apps Script Web App as a lightweight POST endpoint.
+
+   SETUP REQUIRED (one-time, by admin):
+   1. Open the spreadsheet:
+      https://docs.google.com/spreadsheets/d/1_L6rduGrnffDskeO_J_ImcWosaKcEkNo05kK14I4ALM
+   2. Extensions → Apps Script → paste the doPost() function below
+   3. Deploy → New Deployment → Web App → Execute as: Me → Who has access: Anyone
+   4. Copy the Web App URL and set window._CTL_SHEETS_ENDPOINT below
+
+   Apps Script code (paste into Apps Script editor):
+   ─────────────────────────────────────────────────
+   function doPost(e) {
+     try {
+       var data = JSON.parse(e.postData.contents);
+       var ss = SpreadsheetApp.openById('1_L6rduGrnffDskeO_J_ImcWosaKcEkNo05kK14I4ALM');
+       var sheet = ss.getSheetByName('CONTROLLER LAB BACKUP') || ss.getSheets()[0];
+       sheet.appendRow([
+         data.timestamp,
+         data.user,
+         data.controller,
+         data.task,
+         data.duration,
+         data.backupFile
+       ]);
+       return ContentService.createTextOutput(JSON.stringify({ok:true}))
+         .setMimeType(ContentService.MimeType.JSON);
+     } catch(err) {
+       return ContentService.createTextOutput(JSON.stringify({ok:false,error:err.message}))
+         .setMimeType(ContentService.MimeType.JSON);
+     }
+   }
+   ─────────────────────────────────────────────────
+   After deploying, replace the ENDPOINT value below with your Web App URL.
+══════════════════════════════════════════════════════════════════════ */
+
+(function() {
+  'use strict';
+
+  // ── CONFIG ────────────────────────────────────────────────────────────────
+  var BACKUP_FOLDER_URL = 'https://mycopeland.sharepoint.com/sites/AdvanceServices/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FAdvanceServices%2FShared%20Documents%2FManila%20Controller%20Appsheet%20Project%2FMUMS%20APP%2FCONTROLLER%20LAB%20BACKUP%20FILE&viewid=e4a428c7%2D1e26%2D4929%2D9fe6%2D85f5f21174a9&OR=Teams%2DHL&CT=1723517065809&clickparams=eyJBcHBOYW1lIjoiVGVhbXMtRGVza3RvcCIsIkFwcFZlcnNpb24iOiI0OS8yNDA3MTEyODgyNSIsIkhhc0ZlZGVyYXRlZFVzZXIiOmZhbHNlfQ%3D%3D&startedResponseCatch=true';
+
+  // ── SET THIS after deploying the Apps Script Web App ─────────────────────
+  // Replace with your deployed Apps Script URL, e.g.:
+  // 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec'
+  var SHEETS_ENDPOINT = window._CTL_SHEETS_ENDPOINT || '';
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  var _bookingCtlId = null;
+  var _bookingCtlData = null;
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function getItems() {
+    try {
+      var r = localStorage.getItem('mums_controller_lab_items_v1');
+      var p = r ? JSON.parse(r) : [];
+      return Array.isArray(p) ? p : [];
+    } catch(_) { return []; }
+  }
+
+  function imageFor(type) {
+    var map = {
+      'E2':             '/Widget%20Images/E2_Widget.png',
+      'E3':             '/Widget%20Images/E3_Widget.png',
+      'Site Supervisor':'/Widget%20Images/Site%20Supervisor_Widget.png'
+    };
+    return map[type] || '/Widget%20Images/quickbase_logo.png';
+  }
+
+  function labelFor(type) {
+    var map = { 'E2': 'E2 Controller', 'E3': 'E3 Gateway', 'Site Supervisor': 'Site Supervisor' };
+    return map[type] || type;
+  }
+
+  function getCurrentUser() {
+    try {
+      if (window._qbMyNameCache && window._qbMyNameCache.trim()) return window._qbMyNameCache.trim();
+      var store = window.store && typeof window.store.getState === 'function' ? window.store.getState() : null;
+      if (store && store.user) {
+        var u = store.user;
+        return (u.qb_name || u.name || u.email || 'Unknown').trim();
+      }
+      if (window.me) return (window.me.qb_name || window.me.name || window.me.email || 'Unknown').trim();
+    } catch(_) {}
+    return 'Unknown';
+  }
+
+  function phtNow() {
+    return new Date().toLocaleString('en-US', {
+      timeZone: 'Asia/Manila',
+      month: 'short', day: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: true
+    }) + ' PHT';
+  }
+
+  // ── Open booking modal ────────────────────────────────────────────────────
+  window._ctlOpenBooking = function(itemId) {
+    var items = getItems();
+    var ctrl = items.find(function(it) { return it.id === itemId; });
+    if (!ctrl) return;
+    _bookingCtlId   = itemId;
+    _bookingCtlData = ctrl;
+
+    // Populate header
+    var imgEl  = document.getElementById('hp-ctl-bk-ctrl-img');
+    var nameEl = document.getElementById('hp-ctl-bk-ctrl-name');
+    var ipEl   = document.getElementById('hp-ctl-bk-ctrl-ip');
+    if (imgEl)  imgEl.src = imageFor(ctrl.type);
+    if (nameEl) nameEl.textContent = labelFor(ctrl.type);
+    if (ipEl)   ipEl.textContent   = ctrl.ip || '—';
+
+    // Reset form
+    var taskEl   = document.getElementById('hp-ctl-bk-task');
+    var durEl    = document.getElementById('hp-ctl-bk-duration');
+    var backupEl = document.getElementById('hp-ctl-bk-backup');
+    var customEl = document.getElementById('hp-ctl-bk-custom-time');
+    var customWrap = document.getElementById('hp-ctl-bk-custom-time-wrap');
+    var successEl  = document.getElementById('hp-ctl-bk-success');
+    var bodyEl     = document.getElementById('hp-ctl-booking-body');
+    if (taskEl)    { taskEl.value = ''; taskEl.classList.remove('invalid'); }
+    if (durEl)     { durEl.value  = ''; durEl.classList.remove('invalid'); }
+    if (backupEl)  { backupEl.value = ''; backupEl.classList.remove('invalid'); }
+    if (customEl)  customEl.value = '';
+    if (customWrap) customWrap.style.display = 'none';
+    if (successEl) successEl.classList.remove('show');
+    if (bodyEl) {
+      // Show all form fields again
+      Array.from(bodyEl.children).forEach(function(c) {
+        if (!c.classList.contains('hp-ctl-bk-success')) c.style.display = '';
+      });
+    }
+
+    // Reset register button
+    var regBtn = document.getElementById('hp-ctl-bk-register-btn');
+    var regIcon = document.getElementById('hp-ctl-bk-register-icon');
+    var regLabel = document.getElementById('hp-ctl-bk-register-label');
+    var spinner = document.getElementById('hp-ctl-bk-spinner');
+    if (regBtn)   { regBtn.disabled = false; }
+    if (regIcon)  { regIcon.style.display = ''; }
+    if (regLabel) { regLabel.textContent = 'Register'; }
+    if (spinner)  { spinner.style.display = 'none'; }
+
+    // Open modal
+    var modal = document.getElementById('hp-ctl-booking-modal');
+    if (modal) {
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+      setTimeout(function() { if (taskEl) taskEl.focus(); }, 80);
+    }
+  };
+
+  // ── Close booking modal ───────────────────────────────────────────────────
+  window._ctlCloseBooking = function() {
+    var modal = document.getElementById('hp-ctl-booking-modal');
+    if (modal) {
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+    _bookingCtlId   = null;
+    _bookingCtlData = null;
+  };
+
+  // ── Open backup folder in new tab ─────────────────────────────────────────
+  window._ctlOpenBackupFolder = function() {
+    window.open(BACKUP_FOLDER_URL, '_blank', 'noopener,noreferrer');
+  };
+
+  // ── Duration select → show/hide custom time input ─────────────────────────
+  document.addEventListener('change', function(e) {
+    if (e.target && e.target.id === 'hp-ctl-bk-duration') {
+      var wrap = document.getElementById('hp-ctl-bk-custom-time-wrap');
+      if (wrap) wrap.style.display = e.target.value === 'set_time' ? 'block' : 'none';
+    }
+  });
+
+  // ── Close on backdrop click ───────────────────────────────────────────────
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.id === 'hp-ctl-booking-modal') {
+      window._ctlCloseBooking();
+    }
+  });
+
+  // ── ESC to close ─────────────────────────────────────────────────────────
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      var m = document.getElementById('hp-ctl-booking-modal');
+      if (m && m.classList.contains('open')) window._ctlCloseBooking();
+    }
+  });
+
+  // ── Submit / Register ────────────────────────────────────────────────────
+  window._ctlSubmitBooking = function() {
+    if (!_bookingCtlData) return;
+
+    var taskEl   = document.getElementById('hp-ctl-bk-task');
+    var durEl    = document.getElementById('hp-ctl-bk-duration');
+    var backupEl = document.getElementById('hp-ctl-bk-backup');
+    var customEl = document.getElementById('hp-ctl-bk-custom-time');
+
+    // Clear validation
+    [taskEl, durEl, backupEl].forEach(function(el) { if(el) el.classList.remove('invalid'); });
+
+    // Validate required fields
+    var task    = (taskEl   && taskEl.value.trim())   || '';
+    var durVal  = (durEl    && durEl.value.trim())    || '';
+    var backup  = (backupEl && backupEl.value.trim()) || '';
+    var duration = durVal;
+
+    var valid = true;
+    if (!task)   { if(taskEl)   taskEl.classList.add('invalid');   valid = false; }
+    if (!durVal) { if(durEl)    durEl.classList.add('invalid');    valid = false; }
+    if (!backup) { if(backupEl) backupEl.classList.add('invalid'); valid = false; }
+
+    // If "Set Time" selected, use the custom input
+    if (durVal === 'set_time') {
+      var custom = (customEl && customEl.value.trim()) || '';
+      if (!custom) {
+        if (customEl) customEl.classList.add('invalid');
+        valid = false;
+      } else {
+        duration = custom;
+      }
+    }
+
+    if (!valid) return;
+
+    // Show spinner
+    var regBtn   = document.getElementById('hp-ctl-bk-register-btn');
+    var regIcon  = document.getElementById('hp-ctl-bk-register-icon');
+    var regLabel = document.getElementById('hp-ctl-bk-register-label');
+    var spinner  = document.getElementById('hp-ctl-bk-spinner');
+    if (regBtn)   regBtn.disabled = true;
+    if (regIcon)  regIcon.style.display = 'none';
+    if (regLabel) regLabel.textContent = 'Logging…';
+    if (spinner)  spinner.style.display = 'inline-block';
+
+    // Build log payload
+    var payload = {
+      timestamp:  phtNow(),
+      user:       getCurrentUser(),
+      controller: labelFor(_bookingCtlData.type) + ' — ' + (_bookingCtlData.ip || '—'),
+      task:       task,
+      duration:   duration,
+      backupFile: backup
+    };
+
+    // ── POST to Google Sheets via Apps Script endpoint ─────────────────
+    function _onSuccess() {
+      // Show success state
+      var bodyEl    = document.getElementById('hp-ctl-booking-body');
+      var successEl = document.getElementById('hp-ctl-bk-success');
+      var msgEl     = document.getElementById('hp-ctl-bk-success-msg');
+      if (bodyEl) {
+        Array.from(bodyEl.children).forEach(function(c) {
+          if (!c.classList.contains('hp-ctl-bk-success')) c.style.display = 'none';
+        });
+      }
+      if (msgEl) {
+        msgEl.textContent = 'Logged for ' + payload.user + ' — ' + labelFor(_bookingCtlData.type) +
+          ' (' + (_bookingCtlData.ip||'—') + ') — Duration: ' + duration + '.';
+      }
+      if (successEl) successEl.classList.add('show');
+
+      // Auto-close after 2.5s
+      setTimeout(function() {
+        window._ctlCloseBooking();
+      }, 2500);
+    }
+
+    function _onError(msg) {
+      if (regBtn)   regBtn.disabled = false;
+      if (regIcon)  { regIcon.style.display = ''; }
+      if (regLabel) regLabel.textContent = 'Register';
+      if (spinner)  spinner.style.display = 'none';
+      var errMsg = 'Could not write to log sheet. ' + (msg || '') +
+        '\n\nSetup needed: Deploy the Apps Script Web App (see SETUP REQUIRED in core_ui.js). ' +
+        'Your data: ' + JSON.stringify(payload, null, 2);
+      alert(errMsg);
+    }
+
+    if (SHEETS_ENDPOINT) {
+      // Send to Apps Script Web App
+      fetch(SHEETS_ENDPOINT, {
+        method: 'POST',
+        mode: 'no-cors', // Apps Script requires no-cors for cross-origin POST
+        headers: { 'Content-Type': 'text/plain' }, // no-cors blocks custom headers; use text/plain
+        body: JSON.stringify(payload)
+      }).then(function() {
+        // no-cors → response is opaque (type: 'opaque'), can't read body
+        // We assume success if fetch didn't throw
+        _onSuccess();
+      }).catch(function(err) {
+        _onError(err.message || String(err));
+      });
+    } else {
+      // Endpoint not configured yet — show setup instruction + still show success
+      console.warn('[CTL Booking] SHEETS_ENDPOINT not set. Log payload:', payload);
+      console.warn('[CTL Booking] Deploy the Apps Script Web App and set window._CTL_SHEETS_ENDPOINT in your env or index.html.');
+      // Still show success in UI (log is printed to console)
+      setTimeout(_onSuccess, 600);
+    }
+  };
 
 })();

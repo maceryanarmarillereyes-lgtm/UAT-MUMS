@@ -936,6 +936,89 @@
                 </div>
               </div>
 
+
+              <!-- ═══ CONTROLLER LAB BOOKING MODAL ═══ -->
+              <div id="hp-ctl-booking-modal" aria-hidden="true">
+                <div id="hp-ctl-booking-dialog">
+                  <!-- Header -->
+                  <div id="hp-ctl-booking-head">
+                    <div class="hp-ctl-bk-icon">
+                      <img id="hp-ctl-bk-ctrl-img" src="/Widget%20Images/E2_Widget.png" alt="Controller" />
+                    </div>
+                    <div>
+                      <div class="hp-ctl-bk-title" id="hp-ctl-bk-ctrl-name">Use Controller</div>
+                      <div class="hp-ctl-bk-sub" id="hp-ctl-bk-ctrl-ip">192.168.123.1</div>
+                    </div>
+                    <button class="hp-ctl-bk-close" onclick="window._ctlCloseBooking()" title="Close">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
+
+                  <!-- Body — form -->
+                  <div id="hp-ctl-booking-body">
+                    <!-- Field 1: Task -->
+                    <div class="hp-ctl-bk-field">
+                      <label>Task <span class="hp-ctl-bk-req">*</span></label>
+                      <input id="hp-ctl-bk-task" class="hp-ctl-bk-input" type="text"
+                        placeholder="e.g. E2 Firmware Update, Protocol Test, Backup…"
+                        autocomplete="off" />
+                    </div>
+
+                    <!-- Field 2: Duration -->
+                    <div class="hp-ctl-bk-field">
+                      <label>Duration <span class="hp-ctl-bk-req">*</span></label>
+                      <select id="hp-ctl-bk-duration" class="hp-ctl-bk-select">
+                        <option value="">— Select duration —</option>
+                        <option value="5 minutes">5 minutes</option>
+                        <option value="10 minutes">10 minutes</option>
+                        <option value="15 minutes">15 minutes</option>
+                        <option value="30 minutes">30 minutes</option>
+                        <option value="1 hour">1 hour</option>
+                        <option value="set_time">Set Time…</option>
+                      </select>
+                      <!-- Custom time input shown when "Set Time" selected -->
+                      <div id="hp-ctl-bk-custom-time-wrap">
+                        <input id="hp-ctl-bk-custom-time" class="hp-ctl-bk-input"
+                          type="text" placeholder="e.g. 45 minutes, 2 hours…"
+                          autocomplete="off" />
+                      </div>
+                    </div>
+
+                    <!-- Field 3: Backup File Link -->
+                    <div class="hp-ctl-bk-field">
+                      <label>Existing Backup File Link <span class="hp-ctl-bk-req">*</span></label>
+                      <div class="hp-ctl-bk-link-row">
+                        <input id="hp-ctl-bk-backup" class="hp-ctl-bk-input" type="text"
+                          placeholder="Paste your backup file link here…"
+                          autocomplete="off" />
+                        <button class="hp-ctl-bk-upload-btn" onclick="window._ctlOpenBackupFolder()" title="Open backup folder in SharePoint">
+                          <i class="fas fa-cloud-upload-alt"></i> Click Here to Upload the Backup File then copy the link
+                        </button>
+                      </div>
+                      <div style="font-size:9px;color:#6b7280;margin-top:5px;line-height:1.5;">
+                        <i class="fas fa-info-circle" style="font-size:8px;margin-right:3px;"></i>
+                        Click the button above → upload your file → copy its link → paste it in the field.
+                      </div>
+                    </div>
+
+                    <!-- Register button -->
+                    <button class="hp-ctl-bk-register" id="hp-ctl-bk-register-btn"
+                      onclick="window._ctlSubmitBooking()">
+                      <span class="hp-ctl-bk-spinner" id="hp-ctl-bk-spinner"></span>
+                      <i class="fas fa-save" id="hp-ctl-bk-register-icon"></i>
+                      <span id="hp-ctl-bk-register-label">Register</span>
+                    </button>
+
+                    <!-- Success state -->
+                    <div class="hp-ctl-bk-success" id="hp-ctl-bk-success">
+                      <div class="hp-ctl-bk-success-icon">✅</div>
+                      <h3>Logged Successfully!</h3>
+                      <p id="hp-ctl-bk-success-msg">Your session has been recorded in the Controller Lab log.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <!-- Connect+ Updated Credential — 1 col, empty placeholder -->
               <div class="hp-card" id="hp-connect-credential-card">
                 <div class="hp-card-head">
