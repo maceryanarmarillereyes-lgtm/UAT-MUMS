@@ -644,6 +644,13 @@
   //      which reads values by header name (not position).
   //   3. Re-apply on every MutationObserver mutation (filter/sort/paginate).
   //   4. STRICTLY scoped to [data-tab="connect_plus"] — zero impact elsewhere.
+  //
+  // BUG-FIX (v3.9.x): window.__cpRawRows now receives named-field objects from
+  // _cpLoad() (keys: site, directory, city, state, country, timezone,
+  // storeNumber, endUser, systems, url).  _cpGetRawRowObject and _cpGetRawValue
+  // handle both legacy Array rows and new named-field Object rows.
+  // Also added storeNumber to the normalisation alias map so STORE NUMBER
+  // column data is correctly resolved when the patch activates.
   // ─────────────────────────────────────────────────────────────────────────
   function patchConnectPlusColumns() {
     var _lastCpHeaderFingerprint = '';
@@ -691,9 +698,30 @@
     }
 
     function _cpNormalizeHeaderKey(v) {
-      return String(v == null ? '' : v)
+      // Normalise to lowercase alphanumeric, then apply known aliases so that
+      // CSV header names (e.g. "STORE NUMBER", "END USER") resolve to the same
+      // key used in the named-field row objects produced by _cpLoad().
+      var norm = String(v == null ? '' : v)
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '');
+      // Alias map: CSV header normalised → row object field name
+      var _aliases = {
+        'storenumber': 'storeNumber',
+        'storeno':     'storeNumber',
+        'store':       'storeNumber',
+        'enduser':     'endUser',
+        'enduser2':    'endUser2',
+        'urlconnectlink': 'url',
+        'connectlink':    'url',
+        'numberofcontrolsystems': 'systems',
+        'controlsystems':         'systems',
+        'stateprovinceregiont':   'state',
+        'stateprovinceregion':    'state',
+        'zippostalcode':          'zip',
+        'timezone':               'timezone',
+        'address1':               'address1',
+      };
+      return _aliases[norm] || norm;
     }
 
     // FIX-DYNAMIC: auto-discover headers from live CSV data — no hardcoded columns
@@ -705,8 +733,29 @@
 
       var rawRows = Array.isArray(window.__cpRawRows) ? window.__cpRawRows : [];
       var firstRaw = rawRows.length ? rawRows[0] : null;
+
+      // ── Named-field objects from _cpLoad() ──────────────────────────────
+      // Row objects use camelCase keys (site, directory, city, storeNumber…).
+      // Map them back to the display-friendly header names used in the static
+      // HTML <thead> so the patch renders the same 9-column layout.
       if (firstRaw && typeof firstRaw === 'object' && !Array.isArray(firstRaw)) {
-        var keys = Object.keys(firstRaw).filter(function (h) { return String(h).trim(); });
+        // Preferred: read header labels directly from the static head table
+        var sourceTable = headTable || bodyTable;
+        if (sourceTable) {
+          var thCells = sourceTable.querySelectorAll('thead th');
+          var domLabels = [];
+          thCells.forEach(function (th) {
+            var label = (th.getAttribute('data-col-key') || th.textContent || '').trim();
+            // Skip the row-number "#" cell and empty cells
+            if (label && label !== '#') domLabels.push(label);
+          });
+          if (domLabels.length) return domLabels;
+        }
+        // Fallback: use the object's own keys (camelCase) as headers
+        var keys = Object.keys(firstRaw).filter(function (k) {
+          // Exclude internal _search field
+          return k && k !== '_search';
+        });
         if (keys.length) return keys;
       }
 
@@ -720,10 +769,10 @@
         if (mapKeys.length) return mapKeys;
       }
 
-      var sourceTable = headTable || bodyTable;
-      if (sourceTable) {
+      var sourceTable2 = headTable || bodyTable;
+      if (sourceTable2) {
         var domHeaders = [];
-        var headerCells = sourceTable.querySelectorAll('thead th[data-col-key]');
+        var headerCells = sourceTable2.querySelectorAll('thead th[data-col-key]');
         headerCells.forEach(function (th) {
           var key = (th.getAttribute('data-col-key') || '').trim();
           if (key) domHeaders.push(key);
@@ -816,6 +865,19 @@
       if (!rawRows.length) return null;
 
       var firstRaw = rawRows[0];
+
+      // ── Named-field objects (produced by _cpLoad after BUG-FIX) ──────────
+      // _cpLoad() now stores rows as {site, directory, city, state, country,
+      // timezone, storeNumber, endUser, systems, url, ...} objects. When
+      // __cpRawRows contains these, _cpGetRawValue already handles them
+      // correctly via property lookup + normalised-key fallback.
+      if (firstRaw && typeof firstRaw === 'object' && !Array.isArray(firstRaw)) {
+        var namedRow = rawRows[rowIndex];
+        if (!namedRow) return null;
+        return namedRow; // already a named-field object — return as-is
+      }
+
+      // ── Legacy: raw CSV array rows (first row = header row) ──────────────
       var csvColIndex = _cpBuildCsvColIndex(rawRows);
       var rawRow = rawRows[rowIndex];
       if (Array.isArray(firstRaw) && firstRaw.length && rawRows[rowIndex + 1]) {
