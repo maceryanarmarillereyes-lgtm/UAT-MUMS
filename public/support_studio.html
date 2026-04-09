@@ -37,7 +37,7 @@
   <script src="/js/pages/my_quickbase.js"></script>
 
   <!-- Supabase SDK — first-party proxy loader (required for ODP Realtime) -->
-  
+  <script src="/js/support_studio/supabase_loader.js"></script>
 
   <!-- Studio Cache Manager — IndexedDB-based persistent cache -->
   <script src="/js/studio_cache.js"></script>
@@ -2583,6 +2583,31 @@
             <input class="ss-input" type="text" id="ci-case-num" placeholder="e.g. 523714" oninput="window._ciCaseLookup(this.value)">
           </div>
 
+          <div class="ss-field-group">
+            <div class="ss-field-label">Issue</div>
+            <input class="ss-input" type="text" id="ci-issue" placeholder="Issue category…">
+          </div>
+
+          <div class="ss-field-group">
+            <div class="ss-field-label">Product</div>
+            <input class="ss-input" type="text" id="ci-product" placeholder="Product / model…">
+          </div>
+
+          <div class="ss-field-group">
+            <div class="ss-field-label">Status</div>
+            <input class="ss-input" type="text" id="ci-status" placeholder="Case status…">
+          </div>
+
+          <div class="ss-field-group">
+            <div class="ss-field-label">Ticket</div>
+            <input class="ss-input" type="text" id="ci-ticket" placeholder="Ticket reference…">
+          </div>
+
+          <div class="ss-field-group">
+            <div class="ss-field-label">Notes</div>
+            <textarea class="ss-input" id="ci-notes" placeholder="Additional notes…" style="resize:vertical;min-height:54px;"></textarea>
+          </div>
+
           <!-- Short Description * -->
           <div class="ss-field-group">
             <div class="ss-field-label">Short Description <span style="color:#f85149;">*</span></div>
@@ -2774,7 +2799,65 @@
     <div class="cat-ctx-item danger" id="ctx-delete"><i class="fas fa-trash-alt"></i> Delete Item</div>
   </div>
 
-<script src="/js/pages/support_studio_patches.js"></script>
+  <div id="cp-detail-modal" style="display:none;position:fixed;inset:0;z-index:9600;background:rgba(1,4,9,.78);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:20px;">
+    <div id="cp-detail-drawer" style="width:min(900px,96vw);max-height:min(88vh,900px);overflow:hidden;background:var(--ss-surface);border:1px solid var(--ss-border);border-radius:14px;display:flex;flex-direction:column;box-shadow:0 28px 70px rgba(0,0,0,.48);">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:16px 18px;border-bottom:1px solid var(--ss-border2);">
+        <div style="min-width:0;">
+          <div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:#22d3ee;text-transform:uppercase;">Connect+ Site Detail</div>
+          <div id="cp-modal-site" style="margin-top:4px;font-size:18px;font-weight:800;color:#e6edf3;line-height:1.25;">—</div>
+          <div id="cp-modal-address" style="margin-top:4px;font-size:11px;color:var(--ss-muted);line-height:1.45;">—</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+          <div id="cp-modal-pos" style="font-size:10px;color:var(--ss-muted);font-family:var(--ss-mono);">—</div>
+          <button type="button" onclick="window._cpCloseModal()" style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:var(--ss-muted);cursor:pointer;">✕</button>
+        </div>
+      </div>
+      <div style="padding:16px 18px;overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;">
+          <div style="font-size:9px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Country</div>
+          <div id="cp-modal-country" style="font-size:12px;color:#e6edf3;">—</div>
+        </div>
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;">
+          <div style="font-size:9px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Directory</div>
+          <div id="cp-modal-directory" style="font-size:12px;color:#e6edf3;">—</div>
+        </div>
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;">
+          <div style="font-size:9px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Time Zone</div>
+          <div id="cp-modal-timezone" style="font-size:12px;color:#e6edf3;">—</div>
+        </div>
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;">
+          <div style="font-size:9px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;"># Control Systems</div>
+          <div id="cp-modal-systems" style="font-size:12px;color:#e6edf3;">—</div>
+        </div>
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;">
+          <div style="font-size:9px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">City</div>
+          <div id="cp-modal-city" style="font-size:12px;color:#e6edf3;">—</div>
+        </div>
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;">
+          <div style="font-size:9px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">State / Province</div>
+          <div id="cp-modal-state" style="font-size:12px;color:#e6edf3;">—</div>
+        </div>
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;">
+          <div style="font-size:9px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">ZIP / Postal</div>
+          <div id="cp-modal-zip" style="font-size:12px;color:#e6edf3;">—</div>
+        </div>
+        <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;">
+          <div style="font-size:9px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Address 1</div>
+          <div id="cp-modal-addr1" style="font-size:12px;color:#e6edf3;">—</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px;border-top:1px solid var(--ss-border2);background:rgba(0,0,0,.16);">
+        <a id="cp-modal-url" href="#" target="_blank" rel="noopener" style="display:none;align-items:center;gap:8px;color:#79c0ff;text-decoration:none;font-size:11px;font-weight:700;max-width:65%;">
+          <i class="fas fa-up-right-from-square" style="font-size:10px;"></i>
+          <span id="cp-modal-url-text" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Open Connect+ link</span>
+        </a>
+        <div style="display:flex;gap:8px;margin-left:auto;">
+          <button id="cp-modal-prev" type="button" onclick="window._cpModalNav(-1)" style="padding:7px 12px;border-radius:7px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:var(--ss-text);font-size:11px;font-weight:700;cursor:pointer;"><i class="fas fa-chevron-left" style="margin-right:5px;"></i>Prev</button>
+          <button id="cp-modal-next" type="button" onclick="window._cpModalNav(1)" style="padding:7px 12px;border-radius:7px;border:1px solid rgba(34,211,238,.35);background:rgba(34,211,238,.12);color:#67e8f9;font-size:11px;font-weight:700;cursor:pointer;">Next<i class="fas fa-chevron-right" style="margin-left:5px;"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════
      QB CASE DETAIL MODAL
@@ -3069,6 +3152,7 @@
   <script src="/js/support_studio/features/cache_ui.js"></script>
   <script src="/js/support_studio/features/se2.js"></script>
   <script src="/js/support_studio/features/tab_connect_parts_contact.js"></script>
+  <script src="/js/pages/support_studio_patches.js"></script>
 </body>
 
 </html>

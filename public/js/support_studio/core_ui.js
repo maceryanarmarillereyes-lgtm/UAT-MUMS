@@ -253,6 +253,11 @@
       contactNumber: v('ci-contact-number'),
       endUser:       v('ci-end-user'),
       caseNum:       v('ci-case-num'),
+      issue:         v('ci-issue'),
+      notes:         v('ci-notes'),
+      product:       v('ci-product'),
+      status:        v('ci-status'),
+      ticket:        v('ci-ticket'),
       caseStatus:    (document.getElementById('ci-case-status-badge') || {}).textContent || '',
       shortDesc:     v('ci-short-desc'),
       detailDesc:    v('ci-detail-desc'),
@@ -268,6 +273,11 @@
     s('ci-contact-number', n.contactNumber);
     s('ci-end-user',       n.endUser);
     s('ci-case-num',       n.caseNum);
+    s('ci-issue',          n.issue);
+    s('ci-notes',          n.notes);
+    s('ci-product',        n.product);
+    s('ci-status',         n.status);
+    s('ci-ticket',         n.ticket);
     s('ci-short-desc',     n.shortDesc);
     s('ci-detail-desc',    n.detailDesc);
     s('ci-action-taken',   n.actionTaken);
@@ -420,6 +430,11 @@
       contactNumber: fields.contactNumber,
       endUser:       fields.endUser,
       caseNum:       fields.caseNum,
+      issue:         fields.issue,
+      notes:         fields.notes,
+      product:       fields.product,
+      status:        fields.status,
+      ticket:        fields.ticket,
       caseStatus:    fields.caseStatus,
       shortDesc:     fields.shortDesc,
       detailDesc:    fields.detailDesc,
@@ -465,7 +480,8 @@
 
   window._ciClearForm = function() {
     ['ci-caller-name','ci-company','ci-contact-number','ci-end-user',
-     'ci-case-num','ci-short-desc','ci-detail-desc','ci-action-taken'].forEach(function(id) {
+     'ci-case-num','ci-issue','ci-notes','ci-product','ci-status','ci-ticket',
+     'ci-short-desc','ci-detail-desc','ci-action-taken'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.value = '';
     });
@@ -496,6 +512,11 @@
       ['Contact #',    n.contactNumber],
       ['End User',     n.endUser],
       ['Case #',       n.caseNum ? (n.caseNum + (n.caseStatus ? '  ·  ' + n.caseStatus : '')) : ''],
+      ['Issue',        n.issue],
+      ['Notes',        n.notes],
+      ['Product',      n.product],
+      ['Status',       n.status],
+      ['Ticket',       n.ticket],
       ['Short Desc',   n.shortDesc],
       ['Details',      n.detailDesc],
       ['Action Taken', n.actionTaken],
@@ -560,6 +581,11 @@
              (n.endUser       ||'').toLowerCase().includes(q) ||
              (n.caseNum       ||'').toLowerCase().includes(q) ||
              (n.caseStatus    ||'').toLowerCase().includes(q) ||
+             (n.issue         ||'').toLowerCase().includes(q) ||
+             (n.notes         ||'').toLowerCase().includes(q) ||
+             (n.product       ||'').toLowerCase().includes(q) ||
+             (n.status        ||'').toLowerCase().includes(q) ||
+             (n.ticket        ||'').toLowerCase().includes(q) ||
              (n.shortDesc     ||'').toLowerCase().includes(q) ||
              (n.detailDesc    ||'').toLowerCase().includes(q) ||
              (n.actionTaken   ||'').toLowerCase().includes(q);
