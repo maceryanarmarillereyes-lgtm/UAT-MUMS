@@ -779,6 +779,21 @@
       return map;
     }
 
+    function _cpBuildCsvColIndex(rawRows) {
+      var map = {};
+      if (!Array.isArray(rawRows) || !rawRows.length) return map;
+      var firstRaw = rawRows[0];
+      if (!Array.isArray(firstRaw)) return map;
+      firstRaw.forEach(function (h, idx) {
+        var key = String(h == null ? '' : h).trim();
+        if (!key) return;
+        if (map[key] === undefined) map[key] = idx;
+        var normalized = _cpNormalizeHeaderKey(key);
+        if (normalized && map[normalized] === undefined) map[normalized] = idx;
+      });
+      return map;
+    }
+
     function _cpGetRawValue(rawRowObj, header) {
       if (!rawRowObj || typeof rawRowObj !== 'object') return '';
       if (Object.prototype.hasOwnProperty.call(rawRowObj, header)) {
@@ -801,6 +816,7 @@
       if (!rawRows.length) return null;
 
       var firstRaw = rawRows[0];
+      var csvColIndex = _cpBuildCsvColIndex(rawRows);
       var rawRow = rawRows[rowIndex];
       if (Array.isArray(firstRaw) && firstRaw.length && rawRows[rowIndex + 1]) {
         rawRow = rawRows[rowIndex + 1];
@@ -812,7 +828,10 @@
       if (Array.isArray(rawRow)) {
         var obj = {};
         headers.forEach(function (h) {
-          var idx = rawHeaderIndex[h];
+          var idx = csvColIndex[h];
+          if (idx === undefined) idx = csvColIndex[_cpNormalizeHeaderKey(h)];
+          if (idx === undefined) idx = rawHeaderIndex[h];
+          if (idx === undefined) idx = rawHeaderIndex[_cpNormalizeHeaderKey(h)];
           obj[h] = idx === undefined ? '' : String(rawRow[idx] == null ? '' : rawRow[idx]);
         });
         return obj;
