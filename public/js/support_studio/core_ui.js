@@ -1820,6 +1820,13 @@
     ['hp-ctl-bk-task','hp-ctl-bk-duration','hp-ctl-bk-backup','hp-ctl-bk-custom-time'].forEach(function(id){
       var el=document.getElementById(id);if(el){el.value='';el.classList.remove('invalid');}
     });
+    // Queue-turn notification preference belongs to queue flow only.
+    var notifyEl = document.getElementById('hp-ctl-bk-notify-alarm');
+    if (notifyEl) {
+      notifyEl.checked = false;
+      var notifyWrap = notifyEl.closest('.hp-ctl-bk-field');
+      if (notifyWrap) notifyWrap.style.display = 'none';
+    }
     document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.remove('selected','invalid-chip');});
     var customWrap=document.getElementById('hp-ctl-bk-custom-time-wrap');if(customWrap)customWrap.style.display='none';
 
@@ -2115,7 +2122,7 @@
     var pm=document.getElementById('hp-ctl-pending-modal');if(pm&&pm.style.display!=='none')window._ctlClosePendingLogs();
   });
   document.addEventListener('click',function(e){
-    if(e.target&&e.target.id==='hp-ctl-booking-modal')window._ctlCloseBooking();
+    // Booking modal should close only via dedicated close controls (X/Close button).
     if(e.target&&e.target.id==='hp-ctl-queue-modal')window._ctlCloseQueue();
     if(e.target&&e.target.id==='hp-ctl-override-modal')window._ctlCloseOverride();
   });
