@@ -4631,3 +4631,44 @@
 
     /* ── Suppress old countdown row (no longer rendered, just safety) ── */
     .hp-ctl-countdown { display: none !important; }
+
+    /* ── Responsive hardening: keep Controller Lab actions visible on small screens ── */
+    @media (max-width: 1366px), (max-height: 900px) {
+      .hp-ctl-list {
+        overflow-y: auto;
+      }
+
+      .hp-ctl-col {
+        padding: 10px 8px 8px;
+        gap: 6px;
+      }
+
+      .hp-ctl-col-img {
+        width: 74px;
+        height: 74px;
+        padding: 4px;
+      }
+
+      .hp-ctl-col-name { font-size: 10px; }
+      .hp-ctl-col-ip   { font-size: 8px; }
+      .hp-ctl-col-status { font-size: 8px; padding: 2px 8px; }
+
+      .hp-ctl-user-strip {
+        padding: 7px 10px;
+      }
+
+      .hp-ctl-col-actions {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+        gap: 4px;
+      }
+
+      .hp-ctl-book-btn,
+      .hp-ctl-overlay-settings,
+      .hp-ctl-queue-position-badge {
+        min-height: 30px;
+        padding: 6px 8px;
+        font-size: 9px;
+      }
+    }
