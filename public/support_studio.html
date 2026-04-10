@@ -1172,8 +1172,20 @@
                     <div id="hp-ctl-q-join-section">
                       <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">Join Queue</div>
                       <div class="hp-ctl-settings-field">
-                        <label>What will you be doing? (optional)</label>
+                        <label>Task Description <span style="color:#f85149;font-size:9px;">Required</span></label>
                         <input id="hp-ctl-q-task-input" class="hp-ctl-settings-input" type="text" placeholder="e.g. Firmware test, protocol config…" autocomplete="off"/>
+                      </div>
+                      <div class="hp-ctl-settings-field">
+                        <label>Session Duration <span style="color:#f85149;font-size:9px;">Required</span></label>
+                        <select id="hp-ctl-q-duration-select" class="hp-ctl-settings-select">
+                          <option value="">— Select duration —</option>
+                          <option value="5 minutes">5 minutes</option>
+                          <option value="10 minutes">10 minutes</option>
+                          <option value="15 minutes">15 minutes</option>
+                          <option value="30 minutes" selected>30 minutes</option>
+                          <option value="1 hour">1 hour</option>
+                          <option value="2 hours">2 hours</option>
+                        </select>
                       </div>
                       <!-- Urgent toggle -->
                       <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.18);border-radius:10px;margin-bottom:10px;">

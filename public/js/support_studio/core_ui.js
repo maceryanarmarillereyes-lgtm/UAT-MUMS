@@ -979,37 +979,62 @@
     }
 
     /* ── Vertical column display in main lab area ── */
-    /* ── Booking state helpers ── */
-    function getBooking(id) {
-      try { var r=localStorage.getItem('ctl_booking_'+id); return r?JSON.parse(r):null; } catch(_){ return null; }
+    /* ── Booking / Queue state helpers (shared with booking module) ── */
+    function _ctlLS(key) { try{var r=localStorage.getItem(key);return r?JSON.parse(r):null;}catch(_){return null;} }
+    function getBooking(id){ return _ctlLS('ctl_booking_'+id)||null; }
+    function setBooking(id,data){
+      try{if(data)localStorage.setItem('ctl_booking_'+id,JSON.stringify(data));else localStorage.removeItem('ctl_booking_'+id);}catch(_){}
+      _ctlBroadcast({type:'ctl_update',key:'ctl_booking_'+id});
     }
-    function setBooking(id, data) {
-      try { if(data) localStorage.setItem('ctl_booking_'+id, JSON.stringify(data)); else localStorage.removeItem('ctl_booking_'+id); } catch(_){}
+    function getQueue(id){ var r=_ctlLS('ctl_queue_'+id); return Array.isArray(r)?r:[]; }
+    function setQueue(id,arr){
+      try{localStorage.setItem('ctl_queue_'+id,JSON.stringify(arr||[]));}catch(_){}
+      _ctlBroadcast({type:'ctl_update',key:'ctl_queue_'+id});
     }
-    function getQueue(id) {
-      try { var r=localStorage.getItem('ctl_queue_'+id); return r?JSON.parse(r):[]; } catch(_){ return []; }
+
+    /* ── Cross-tab broadcast (BroadcastChannel + storage event fallback) ── */
+    var _ctlChannel=null;
+    try{ _ctlChannel=new BroadcastChannel('mums_ctl_v1'); }catch(_){}
+
+    function _ctlBroadcast(msg){
+      // BroadcastChannel for same-origin tabs
+      try{ if(_ctlChannel) _ctlChannel.postMessage(msg); }catch(_){}
+      // localStorage storage event fires in OTHER tabs automatically on write
+      // (we just need to trigger renderAll in THIS tab after any write)
+      setTimeout(renderAll, 0);
     }
-    function setQueue(id, arr) {
-      try { localStorage.setItem('ctl_queue_'+id, JSON.stringify(arr||[])); } catch(_){}
+
+    if(_ctlChannel){
+      _ctlChannel.addEventListener('message',function(e){
+        if(e.data&&e.data.type==='ctl_update') renderAll();
+      });
     }
-    function fmtRemaining(ms) {
+    // Also listen for storage events (other tabs writing localStorage)
+    window.addEventListener('storage', function(e){
+      if(e.key&&(e.key.startsWith('ctl_booking_')||e.key.startsWith('ctl_queue_'))){
+        renderAll();
+      }
+    });
+
+    /* ── Format ms → readable countdown ── */
+    function fmtMs(ms){
       if(ms<=0) return '00:00';
-      var s=Math.ceil(ms/1000), h=Math.floor(s/3600); s%=3600;
-      var m=Math.floor(s/60); s%=60;
-      if(h>0) return h+'h '+pad(m)+'m '+pad(s)+'s';
-      return pad(m)+':'+pad(s);
+      var s=Math.ceil(ms/1000),h=Math.floor(s/3600);s%=3600;var m=Math.floor(s/60);s%=60;
+      if(h>0) return h+'h '+pad2(m)+'m '+pad2(s)+'s';
+      return pad2(m)+':'+pad2(s);
     }
-    function pad(n){ return n<10?'0'+n:String(n); }
-    function parseDurMs(str) {
+    function pad2(n){return n<10?'0'+n:String(n);}
+    function parseDurMs(str){
       str=String(str||'').trim().toLowerCase(); var ms=0;
-      var h=str.match(/(\d+)\s*h/); if(h) ms+=parseInt(h[1])*3600000;
-      var m=str.match(/(\d+)\s*m(?:in)?/); if(m) ms+=parseInt(m[1])*60000;
-      var s=str.match(/(\d+)\s*s(?:ec)?/); if(s) ms+=parseInt(s[1])*1000;
-      if(!ms){ var only=str.match(/^(\d+)$/); if(only) ms=parseInt(only[1])*60000; }
+      var h=str.match(/(\d+)\s*h(?:our)?s?/);if(h)ms+=parseInt(h[1])*3600000;
+      var m=str.match(/(\d+)\s*m(?:in(?:ute)?s?)?/);if(m)ms+=parseInt(m[1])*60000;
+      var s=str.match(/(\d+)\s*s(?:ec(?:ond)?s?)?/);if(s)ms+=parseInt(s[1])*1000;
+      if(!ms){var only=str.match(/^(\d+)$/);if(only)ms=parseInt(only[1])*60000;}
       return ms||0;
     }
-    function _ctlGetCurrentUser() {
-      try {
+    function initials(n){return String(n||'').trim().split(/\s+/).map(function(w){return w[0]||'';}).join('').toUpperCase().slice(0,2)||'??';}
+    function _ctlGetCurrentUser(){
+      try{
         if(window._qbMyNameCache&&window._qbMyNameCache.trim()) return window._qbMyNameCache.trim();
         var store=window.store&&typeof window.store.getState==='function'?window.store.getState():null;
         if(store&&store.user){var u=store.user;return(u.qb_name||u.name||u.email||'Unknown').trim();}
@@ -1017,107 +1042,132 @@
       }catch(_){}
       return 'Unknown';
     }
-    function _ctlGetAvatar() {
-      try {
+    function _ctlGetAvatar(){
+      try{
         var store=window.store&&typeof window.store.getState==='function'?window.store.getState():null;
         if(store&&store.user&&store.user.avatar_url) return store.user.avatar_url;
         if(window.me&&window.me.avatar_url) return window.me.avatar_url;
       }catch(_){}
       return '';
     }
-    function initials(name){
-      return String(name||'').trim().split(/\s+/).map(function(w){return w[0]||'';}).join('').toUpperCase().slice(0,2)||'??';
-    }
 
-    /* ── Vertical column display in main lab area ── */
-    function renderMainList(items) {
-      var host = document.getElementById('hp-ctl-list'); if(!host) return;
-      if(!items.length) {
-        host.innerHTML = '<div class="hp-ctl-empty"><i class="fas fa-network-wired"></i><span>No controller configured yet</span><span style="font-size:9px;opacity:.5;">Click the cog icon above to add one</span></div>';
+    /* ── Render controller cards ── */
+    function renderMainList(items){
+      var host=document.getElementById('hp-ctl-list'); if(!host) return;
+      if(!items.length){
+        host.innerHTML='<div class="hp-ctl-empty"><i class="fas fa-network-wired"></i><span>No controller configured yet</span><span style="font-size:9px;opacity:.5;">Click the cog icon to add one</span></div>';
         return;
       }
-      if(window._ctlTimers){ Object.keys(window._ctlTimers).forEach(function(k){clearInterval(window._ctlTimers[k]);}); }
+      if(window._ctlTimers){Object.keys(window._ctlTimers).forEach(function(k){clearInterval(window._ctlTimers[k]);});}
       window._ctlTimers={};
-      host.innerHTML = items.map(function(item){
+
+      host.innerHTML=items.map(function(item){
         var cls=statusCls(item.status);
-        var statusIcon=cls==='offline'?'<span style="color:#f85149;">&#9679;</span>':cls==='maintenance'?'<span style="color:#fbbf24;">&#9679;</span>':'<span style="color:#10b981;">&#9679;</span>';
         var booking=getBooking(item.id);
         var queue=getQueue(item.id);
         var isActive=!!(booking&&booking.endMs>Date.now());
-        /* header badge — IN USE badge shows no name; name lives in user strip only */
+        var me=_ctlGetCurrentUser();
+
+        /* header badge */
         var headerBadge=isActive
-          ?'<div class="hp-ctl-col-header-badge in-use"><i class="fas fa-circle" style="font-size:6px;"></i> IN USE</div>'
-          :'<div class="hp-ctl-col-header-badge available"><i class="fas fa-check-circle" style="font-size:7px;"></i> AVAILABLE</div>';
-        /* user strip — avatar + name + task, clean enterprise style */
+          ?'<div class="hp-ctl-col-header-badge in-use"><i class="fas fa-user" style="font-size:7px;"></i> '+esc(booking.user)+'</div>'
+          :'<div class="hp-ctl-col-header-badge available"><i class="fas fa-check-circle" style="font-size:7px;"></i> Available</div>';
+
+        /* user strip */
         var userBadge='';
         if(isActive){
           var av=booking.avatarUrl||'';
-          var ini=initials(booking.user);
-          var avInner=av?'<img src="'+esc(av)+'" alt="" style="width:100%;height:100%;object-fit:cover;" />':
-            '<span class="hp-ctl-user-initials">'+esc(ini)+'</span>';
-          userBadge='<div class="hp-ctl-user-strip">'+
-            '<div class="hp-ctl-user-avatar">'+avInner+'</div>'+
-            '<div class="hp-ctl-user-info">'+
-              '<div class="hp-ctl-user-name">'+esc(booking.user)+'</div>'+
-              '<div class="hp-ctl-user-task">'+esc((booking.task||'').slice(0,40))+'</div>'+
-            '</div>'+
-          '</div>';
+          var avHtml=av
+            ?'<img src="'+esc(av)+'" alt="" onerror="this.style.display=\'none\'" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />'
+            :'<span style="width:26px;height:26px;border-radius:50%;background:rgba(162,93,220,.35);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#c084fc;flex-shrink:0;">'+esc(initials(booking.user))+'</span>';
+          userBadge='<div class="hp-ctl-user-strip"><div class="hp-ctl-user-avatar">'+avHtml+'</div>'
+            +'<div class="hp-ctl-user-info"><div class="hp-ctl-user-name">'+esc(booking.user)+'</div>'
+            +'<div class="hp-ctl-user-task">'+esc((booking.task||'').slice(0,30))+'</div></div></div>';
         }
-        /* countdown */
+
+        /* timer OVERLAY (centered on image) */
         var timerId='ctl-timer-'+item.id;
-        var timerHtml=isActive?'<div class="hp-ctl-countdown" id="'+timerId+'"><i class="fas fa-hourglass-half" style="font-size:8px;"></i><span class="hp-ctl-countdown-val" id="'+timerId+'-val">--:--</span><span class="hp-ctl-countdown-label">remaining</span></div>':'';
-        /* queue pill */
-        /* Queue pill — shows waiting user names */
-        var queuePill='';
-        if(queue.length>0){
-          var qUserItems=queue.slice(0,4).map(function(q,qi){
-            return '<div class="hp-ctl-queue-user-item">'+
-              '<span class="hp-ctl-queue-user-pos">'+(qi+1)+'</span>'+
-              '<span class="hp-ctl-queue-user-name">'+esc(q.user||'User')+'</span>'+
-            '</div>';
-          }).join('');
-          var moreLabel=queue.length>4?'<div style="font-size:8px;color:rgba(255,255,255,.3);padding:1px 4px;">+'+(queue.length-4)+' more</div>':'';
-          queuePill='<div class="hp-ctl-queue-pill">'+
-            '<div class="hp-ctl-queue-header"><i class="fas fa-users" style="font-size:7px;"></i> Waiting ('+queue.length+')</div>'+
-            '<div class="hp-ctl-queue-user-list">'+qUserItems+moreLabel+'</div>'+
-          '</div>';
+        var imgBlock='';
+        if(isActive){
+          imgBlock='<div class="hp-ctl-img-wrap">'
+            +'<img class="hp-ctl-col-img" src="'+esc(imageFor(item.type))+'" alt="'+esc(item.type)+'" onerror="this.src=\''+esc(FALLBACK_IMG)+'\';" />'
+            +'<div class="hp-ctl-timer-overlay" id="'+timerId+'">'
+              +'<div class="hp-ctl-timer-inner">'
+                +'<div class="hp-ctl-timer-label">REMAINING</div>'
+                +'<div class="hp-ctl-timer-val" id="'+timerId+'-val">--:--</div>'
+              +'</div>'
+            +'</div>'
+          +'</div>';
+        } else {
+          imgBlock='<div class="hp-ctl-img-wrap">'
+            +'<img class="hp-ctl-col-img" src="'+esc(imageFor(item.type))+'" alt="'+esc(item.type)+'" onerror="this.src=\''+esc(FALLBACK_IMG)+'\';" />'
+          +'</div>';
         }
-        /* action button */
-        var actionBtn=isActive
-          ?'<button class="hp-ctl-book-btn queue-mode" data-ctl-queue="'+esc(item.id)+'"><i class="fas fa-list-alt" style="font-size:10px;"></i> Join Queue</button>'
-          :'<button class="hp-ctl-book-btn" data-ctl-use="'+esc(item.id)+'"><i class="fas fa-calendar-check" style="font-size:10px;"></i> Book this Controller</button>';
-        return '<div class="hp-ctl-col'+(isActive?' in-use':'')+'" data-ctl-id="'+esc(item.id)+'">'+ 
-          headerBadge+userBadge+
-          '<img class="hp-ctl-col-img" src="'+esc(imageFor(item.type))+'" alt="'+esc(item.type)+'" onerror="this.src=\''+esc(FALLBACK_IMG)+'\';">'+
-          '<div class="hp-ctl-col-meta"><div class="hp-ctl-col-name">'+esc(labelFor(item.type))+'</div><div class="hp-ctl-col-ip">'+esc(item.ip||'--')+'</div></div>'+
-          '<span class="hp-ctl-col-status '+cls+'">'+statusIcon+' '+esc(item.status||'Online')+'</span>'+
-          timerHtml+queuePill+
-          '<div class="hp-ctl-col-actions">'+actionBtn+
-            '<button class="hp-ctl-overlay-settings" data-ctl-settings="'+esc(item.id)+'"><i class="fas fa-cog" style="font-size:10px;"></i> Settings</button>'+
-          '</div>'+
-        '</div>';
-            }).join('');
+
+        /* queue pill */
+        var queuePill=queue.length>0
+          ?'<div class="hp-ctl-queue-pill"><i class="fas fa-users" style="font-size:8px;"></i><span>'+queue.length+' waiting</span></div>':'' ;
+
+        /* action button — waiting status for current user if they're in queue */
+        var myQueuePos=queue.findIndex(function(q){return q.user===me;});
+        var actionBtn;
+        if(isActive){
+          if(myQueuePos>=0){
+            actionBtn='<div class="hp-ctl-queue-position-badge">'
+              +'<i class="fas fa-hourglass-half" style="font-size:9px;"></i>'
+              +' Queue position <strong>#'+(myQueuePos+1)+'</strong>'
+            +'</div>';
+          } else {
+            actionBtn='<button class="hp-ctl-book-btn queue-mode" data-ctl-queue="'+esc(item.id)+'">'
+              +'<i class="fas fa-list-alt" style="font-size:10px;"></i> Join Queue'
+            +'</button>';
+          }
+        } else {
+          actionBtn='<button class="hp-ctl-book-btn" data-ctl-use="'+esc(item.id)+'">'
+            +'<i class="fas fa-calendar-check" style="font-size:10px;"></i> Book this Controller'
+          +'</button>';
+        }
+
+        var statusIcon=cls==='offline'?'<span style="color:#f85149;">&#9679;</span>':cls==='maintenance'?'<span style="color:#fbbf24;">&#9679;</span>':'<span style="color:#10b981;">&#9679;</span>';
+
+        return '<div class="hp-ctl-col'+(isActive?' in-use':'')+'" data-ctl-id="'+esc(item.id)+'">'
+          +headerBadge+userBadge+imgBlock
+          +'<div class="hp-ctl-col-meta"><div class="hp-ctl-col-name">'+esc(labelFor(item.type))+'</div><div class="hp-ctl-col-ip">'+esc(item.ip||'--')+'</div></div>'
+          +'<span class="hp-ctl-col-status '+cls+'">'+statusIcon+' '+esc(item.status||'Online')+'</span>'
+          +queuePill
+          +'<div class="hp-ctl-col-actions">'+actionBtn
+          +'<button class="hp-ctl-overlay-settings" data-ctl-settings="'+esc(item.id)+'"><i class="fas fa-cog" style="font-size:10px;"></i> Settings</button>'
+          +'</div>'
+        +'</div>';
+      }).join('');
+
       /* start countdown intervals */
       items.forEach(function(item){
         var booking=getBooking(item.id);
         if(!booking||booking.endMs<=Date.now()) return;
         var valEl=document.getElementById('ctl-timer-'+item.id+'-val');
+        var wrapEl=document.getElementById('ctl-timer-'+item.id);
         if(!valEl) return;
-        valEl.textContent=fmtRemaining(booking.endMs-Date.now());
-        window._ctlTimers[item.id]=setInterval(function(){
+        function tick(){
           var rem=booking.endMs-Date.now();
           if(rem<=0){
             clearInterval(window._ctlTimers[item.id]);
             delete window._ctlTimers[item.id];
             setBooking(item.id,null);
-            window._ctlNotifyQueue&&window._ctlNotifyQueue(item.id);
-            renderAll(); return;
+            // Broadcast expiry to all tabs
+            _ctlBroadcast({type:'ctl_update',key:'ctl_booking_'+item.id});
+            if(window._ctlNotifyQueue) window._ctlNotifyQueue(item.id);
+            renderAll();
+            return;
           }
-          var vEl=document.getElementById('ctl-timer-'+item.id+'-val');
-          if(vEl) vEl.textContent=fmtRemaining(rem);
-          var wEl=document.getElementById('ctl-timer-'+item.id);
-          if(wEl){ if(rem<120000) wEl.classList.add('urgent'); else wEl.classList.remove('urgent'); }
-        },1000);
+          var el=document.getElementById('ctl-timer-'+item.id+'-val');
+          if(el) el.textContent=fmtMs(rem);
+          var w=document.getElementById('ctl-timer-'+item.id);
+          if(w){ if(rem<120000){w.classList.add('urgent');}else{w.classList.remove('urgent');}
+                  w.style.display=''; /* ensure visible */ }
+        }
+        tick();
+        window._ctlTimers[item.id]=setInterval(tick, 1000);
       });
     }
 
@@ -1310,16 +1360,16 @@
 })();
 
 /* ══════════════════════════════════════════════════════════════════════════
-   CONTROLLER LAB — Full Booking System v4.0
-   ══════════════════════════════════════════════════════════════════════════
-   Features:
-   • Book this Controller  — starts a timed session, stores in localStorage
-   • Countdown timer        — live visible on each card
-   • Queue system           — join queue when controller is in use
-   • Override system        — urgent override with audit log
-   • Alarm notification     — notify queued user when session ends
-   • Pending sheet logs     — retry offline submissions
-   ══════════════════════════════════════════════════════════════════════════ */
+   CONTROLLER LAB — Full Booking System v5.0
+   KEY CHANGES v5:
+   • BroadcastChannel realtime sync across all tabs/users
+   • localStorage 'storage' event for cross-tab updates
+   • Polling fallback every 3s
+   • .mp3 alert sound with loop-until-acknowledge
+   • Queue flow: task + duration on join; backup upload on turn
+   • Timer: centered overlay on image
+   • setBooking/setQueue broadcast to all open tabs instantly
+══════════════════════════════════════════════════════════════════════════ */
 
 (function() {
   'use strict';
@@ -1328,67 +1378,82 @@
   var BACKUP_FOLDER_URL = 'https://mycopeland.sharepoint.com/sites/AdvanceServices/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FAdvanceServices%2FShared%20Documents%2FManila%20Controller%20Appsheet%20Project%2FMUMS%20APP%2FCONTROLLER%20LAB%20BACKUP%20FILE&viewid=e4a428c7%2D1e26%2D4929%2D9fe6%2D85f5f21174a9';
   var BACKUP_LS_KEY   = 'mums_ctl_log_backup';
   var SHEETS_ENDPOINT = window._CTL_SHEETS_ENDPOINT || '';
+  var SOUND_URL       = '/sound_alert_queue.mp3';
 
   // ── State ─────────────────────────────────────────────────────────────────
   var _bookingCtlId   = null;
   var _bookingCtlData = null;
   var _queueCtlId     = null;
   var _sheetReachable = null;
+  var _alertAudio     = null;   // looping alert Audio object
+  var _alertInterval  = null;   // fallback interval to re-play
+  var _pollTimer      = null;
+
+  // ── Cross-tab realtime channel ────────────────────────────────────────────
+  var _channel = null;
+  try { _channel = new BroadcastChannel('mums_ctl_v1'); } catch(_) {}
+  if (_channel) {
+    _channel.addEventListener('message', function(e) {
+      if (e && e.data && e.data.type === 'ctl_update') {
+        if (window._ctlRenderAll) window._ctlRenderAll();
+        // If this is a queue-notify event and I'm the target user
+        if (e.data.subtype === 'queue_notify' && e.data.targetUser === _getCurrentUser()) {
+          _triggerQueueAlert(e.data.ctrlId, e.data.ctrlLabel);
+        }
+      }
+    });
+  }
+  // Polling fallback every 3 seconds
+  _pollTimer = setInterval(function() {
+    if (window._ctlRenderAll) window._ctlRenderAll();
+  }, 3000);
+
+  function _broadcast(msg) {
+    try { if (_channel) _channel.postMessage(msg); } catch(_) {}
+  }
 
   // ── Storage helpers ───────────────────────────────────────────────────────
+  function _ls(key) { try{var r=localStorage.getItem(key);return r?JSON.parse(r):null;}catch(_){return null;} }
   function getItems() {
-    try { var r=localStorage.getItem('mums_controller_lab_items_v1'); var p=r?JSON.parse(r):[]; return Array.isArray(p)?p:[]; } catch(_){ return []; }
+    var r=_ls('mums_controller_lab_items_v1'); return Array.isArray(r)?r:[];
   }
-  function getBooking(id) {
-    try { var r=localStorage.getItem('ctl_booking_'+id); return r?JSON.parse(r):null; } catch(_){ return null; }
+  function getBooking(id) { return _ls('ctl_booking_'+id); }
+  function setBooking(id,data) {
+    try{if(data)localStorage.setItem('ctl_booking_'+id,JSON.stringify(data));else localStorage.removeItem('ctl_booking_'+id);}catch(_){}
+    _broadcast({type:'ctl_update',key:'ctl_booking_'+id});
+    if(window._ctlRenderAll) window._ctlRenderAll();
   }
-  function setBooking(id, data) {
-    try { if(data) localStorage.setItem('ctl_booking_'+id,JSON.stringify(data)); else localStorage.removeItem('ctl_booking_'+id); } catch(_){}
+  function getQueue(id) { var r=_ls('ctl_queue_'+id); return Array.isArray(r)?r:[]; }
+  function setQueue(id,arr) {
+    try{localStorage.setItem('ctl_queue_'+id,JSON.stringify(arr||[]));}catch(_){}
+    _broadcast({type:'ctl_update',key:'ctl_queue_'+id});
+    if(window._ctlRenderAll) window._ctlRenderAll();
   }
-  function getQueue(id) {
-    try { var r=localStorage.getItem('ctl_queue_'+id); return r?JSON.parse(r):[]; } catch(_){ return []; }
-  }
-  function setQueue(id, arr) {
-    try { localStorage.setItem('ctl_queue_'+id, JSON.stringify(arr||[])); } catch(_){}
-  }
-  function getPendingLogs() {
-    try { var r=localStorage.getItem(BACKUP_LS_KEY); var p=r?JSON.parse(r):[]; return Array.isArray(p)?p:[]; } catch(_){ return []; }
-  }
-  function setPendingLogs(logs) {
-    try { localStorage.setItem(BACKUP_LS_KEY, JSON.stringify((logs||[]).slice(0,200))); } catch(_){}
-  }
-  function savePendingLog(payload) {
-    try {
-      var logs=getPendingLogs();
-      var isDup=logs.some(function(l){return l.timestamp===payload.timestamp&&l.user===payload.user;});
-      if(!isDup){ logs.unshift(payload); setPendingLogs(logs); }
-    } catch(_){}
+  function getPendingLogs() { var r=_ls(BACKUP_LS_KEY); return Array.isArray(r)?r:[]; }
+  function setPendingLogs(logs) { try{localStorage.setItem(BACKUP_LS_KEY,JSON.stringify((logs||[]).slice(0,200)));}catch(_){} }
+  function savePendingLog(p) {
+    try{var logs=getPendingLogs();var isDup=logs.some(function(l){return l.timestamp===p.timestamp&&l.user===p.user;});if(!isDup){logs.unshift(p);setPendingLogs(logs);}}catch(_){}
   }
   function removePendingLog(ts,user) {
-    try { setPendingLogs(getPendingLogs().filter(function(l){return!(l.timestamp===ts&&l.user===user);})); } catch(_){}
+    try{setPendingLogs(getPendingLogs().filter(function(l){return!(l.timestamp===ts&&l.user===user);}));}catch(_){}
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
-  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-  function imageFor(type){ var m={'E2':'/Widget%20Images/E2_Widget.png','E3':'/Widget%20Images/E3_Widget.png','Site Supervisor':'/Widget%20Images/Site%20Supervisor_Widget.png'}; return m[type]||'/Widget%20Images/quickbase_logo.png'; }
-  function labelFor(type){ var m={'E2':'E2 Controller','E3':'E3 Gateway','Site Supervisor':'Site Supervisor'}; return m[type]||type; }
-  function phtNow(){ return new Date().toLocaleString('en-US',{timeZone:'Asia/Manila',month:'short',day:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true})+' PHT'; }
-  function pad(n){ return n<10?'0'+n:String(n); }
-  function fmtMs(ms){
-    if(ms<=0) return '00:00';
-    var s=Math.ceil(ms/1000),h=Math.floor(s/3600); s%=3600; var m=Math.floor(s/60); s%=60;
-    if(h>0) return h+'h '+pad(m)+'m '+pad(s)+'s';
-    return pad(m)+':'+pad(s);
-  }
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function imageFor(type){var m={'E2':'/Widget%20Images/E2_Widget.png','E3':'/Widget%20Images/E3_Widget.png','Site Supervisor':'/Widget%20Images/Site%20Supervisor_Widget.png'};return m[type]||'/Widget%20Images/quickbase_logo.png';}
+  function labelFor(type){var m={'E2':'E2 Controller','E3':'E3 Gateway','Site Supervisor':'Site Supervisor'};return m[type]||type;}
+  function phtNow(){return new Date().toLocaleString('en-US',{timeZone:'Asia/Manila',month:'short',day:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true})+' PHT';}
+  function pad2(n){return n<10?'0'+n:String(n);}
+  function fmtMs(ms){if(ms<=0)return'00:00';var s=Math.ceil(ms/1000),h=Math.floor(s/3600);s%=3600;var m=Math.floor(s/60);s%=60;if(h>0)return h+'h '+pad2(m)+'m '+pad2(s)+'s';return pad2(m)+':'+pad2(s);}
   function parseDurMs(str){
-    str=String(str||'').trim().toLowerCase(); var ms=0;
-    var h=str.match(/(\d+)\s*h(?:our)?s?/); if(h) ms+=parseInt(h[1])*3600000;
-    var m=str.match(/(\d+)\s*m(?:in(?:ute)?s?)?/); if(m) ms+=parseInt(m[1])*60000;
-    var s=str.match(/(\d+)\s*s(?:ec(?:ond)?s?)?/); if(s) ms+=parseInt(s[1])*1000;
-    if(!ms){ var only=str.match(/^(\d+)$/); if(only) ms=parseInt(only[1])*60000; }
+    str=String(str||'').trim().toLowerCase();var ms=0;
+    var h=str.match(/(\d+)\s*h(?:our)?s?/);if(h)ms+=parseInt(h[1])*3600000;
+    var m=str.match(/(\d+)\s*m(?:in(?:ute)?s?)?/);if(m)ms+=parseInt(m[1])*60000;
+    var s=str.match(/(\d+)\s*s(?:ec(?:ond)?s?)?/);if(s)ms+=parseInt(s[1])*1000;
+    if(!ms){var only=str.match(/^(\d+)$/);if(only)ms=parseInt(only[1])*60000;}
     return ms||0;
   }
-  function getCurrentUser(){
+  function _getCurrentUser(){
     try{
       if(window._qbMyNameCache&&window._qbMyNameCache.trim()) return window._qbMyNameCache.trim();
       var store=window.store&&typeof window.store.getState==='function'?window.store.getState():null;
@@ -1397,121 +1462,268 @@
     }catch(_){}
     return 'Unknown';
   }
-  function getAvatarUrl(){
-    try{
-      var store=window.store&&typeof window.store.getState==='function'?window.store.getState():null;
-      if(store&&store.user&&store.user.avatar_url) return store.user.avatar_url;
-      if(window.me&&window.me.avatar_url) return window.me.avatar_url;
-    }catch(_){}
+  function _getAvatarUrl(){
+    try{var store=window.store&&typeof window.store.getState==='function'?window.store.getState():null;if(store&&store.user&&store.user.avatar_url)return store.user.avatar_url;if(window.me&&window.me.avatar_url)return window.me.avatar_url;}catch(_){}
     return '';
   }
   function buildFormPayload(p){
     return new URLSearchParams({timestamp:p.timestamp,user:p.user,controller:p.controller,task:p.task,duration:p.duration,backupFile:p.backupFile,note:p.note||''});
   }
 
-  // ── Sheet health check ────────────────────────────────────────────────────
+  // ── Sheet health ──────────────────────────────────────────────────────────
   function _pingSheet(cb){
     var dotIcon=document.getElementById('hp-ctl-sheet-dot-icon');
     var dotLabel=document.getElementById('hp-ctl-sheet-dot-label');
-    function setStatus(ok,label){
-      _sheetReachable=ok;
-      if(dotIcon){dotIcon.className='hp-ctl-status-dot '+(ok?'connected':'error');dotIcon.style.background=ok?'#10b981':'#ef4444';}
-      if(dotLabel){dotLabel.style.color=ok?'#10b981':'#ef4444';dotLabel.textContent=label;}
-      if(cb) cb(ok);
-    }
+    function setStatus(ok,label){_sheetReachable=ok;if(dotIcon){dotIcon.className='hp-ctl-status-dot '+(ok?'connected':'error');dotIcon.style.background=ok?'#10b981':'#ef4444';}if(dotLabel){dotLabel.style.color=ok?'#10b981':'#ef4444';dotLabel.textContent=label;}if(cb)cb(ok);}
     if(!SHEETS_ENDPOINT){setStatus(false,'No sheet configured');return;}
     if(dotLabel){dotLabel.style.color='#6b7280';dotLabel.textContent='Checking…';}
-    fetch(SHEETS_ENDPOINT,{method:'GET',mode:'cors',cache:'no-store'})
-      .then(function(r){r.ok||r.status===302?setStatus(true,'Sheet connected'):setStatus(false,'Sheet error '+r.status);})
-      .catch(function(){setStatus(false,'Sheet unreachable');});
+    fetch(SHEETS_ENDPOINT,{method:'GET',mode:'cors',cache:'no-store'}).then(function(r){r.ok||r.status===302?setStatus(true,'Sheet connected'):setStatus(false,'Sheet error '+r.status);}).catch(function(){setStatus(false,'Sheet unreachable');});
   }
   function _updatePendingBtn(){
-    var btn=document.getElementById('hp-ctl-bk-pending-btn');
-    var cnt=document.getElementById('hp-ctl-pending-count');
-    var n=getPendingLogs().length;
-    if(btn) btn.style.display=n>0?'flex':'none';
-    if(cnt) cnt.textContent=String(n);
+    var btn=document.getElementById('hp-ctl-bk-pending-btn');var cnt=document.getElementById('hp-ctl-pending-count');var n=getPendingLogs().length;
+    if(btn)btn.style.display=n>0?'flex':'none';if(cnt)cnt.textContent=String(n);
   }
 
-  // ── Render the booking modal card list ─────────────────────────────────────
-  function renderAll() {
-    if(typeof window._ctlRenderAll === 'function') window._ctlRenderAll();
+  // ── QUEUE ALERT SOUND (loops until acknowledged) ──────────────────────────
+  function _triggerQueueAlert(ctrlId, ctrlLabel) {
+    // Stop any existing alert first
+    _stopAlertSound();
+    // Show the big acknowledgement banner
+    _showQueueAlertBanner(ctrlId, ctrlLabel);
+    // Start playing the mp3 in a loop
+    _startAlertSound();
   }
 
-  // ── OPEN BOOKING MODAL (Book this Controller) ─────────────────────────────
+  function _startAlertSound() {
+    try {
+      _stopAlertSound();
+      _alertAudio = new Audio(SOUND_URL);
+      _alertAudio.loop = true;
+      _alertAudio.volume = 0.85;
+      _alertAudio.play().catch(function(err) {
+        // Autoplay blocked — set up a click listener to start on interaction
+        console.warn('[CTL Alert] Autoplay blocked, waiting for user interaction:', err);
+        var _startOnClick = function() {
+          if (_alertAudio) { _alertAudio.play().catch(function(){}); }
+          document.removeEventListener('click', _startOnClick);
+          document.removeEventListener('keydown', _startOnClick);
+        };
+        document.addEventListener('click', _startOnClick);
+        document.addEventListener('keydown', _startOnClick);
+      });
+    } catch(e) {
+      console.warn('[CTL Alert] Audio error:', e);
+    }
+  }
+
+  function _stopAlertSound() {
+    try {
+      if (_alertAudio) { _alertAudio.pause(); _alertAudio.currentTime = 0; _alertAudio = null; }
+      if (_alertInterval) { clearInterval(_alertInterval); _alertInterval = null; }
+    } catch(_) {}
+  }
+
+  function _showQueueAlertBanner(ctrlId, ctrlLabel) {
+    var existing = document.getElementById('hp-ctl-queue-alert-modal');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'hp-ctl-queue-alert-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(1,4,9,.88);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;animation:ctl-fadein .3s ease;';
+
+    overlay.innerHTML =
+      '<style>@keyframes ctl-fadein{from{opacity:0}to{opacity:1}}@keyframes ctl-ring{0%{transform:rotate(-15deg)}100%{transform:rotate(15deg)}}@keyframes ctl-pulse-ring{0%{transform:scale(1);opacity:.8}100%{transform:scale(1.5);opacity:0}}</style>'
+      +'<div style="background:linear-gradient(145deg,#0d1525,#0a0f1e);border:2px solid rgba(162,93,220,.5);border-radius:20px;padding:36px 40px;text-align:center;max-width:480px;width:90%;box-shadow:0 0 80px rgba(162,93,220,.3),0 20px 60px rgba(0,0,0,.8);">'
+        +'<div style="position:relative;width:80px;height:80px;margin:0 auto 24px;">'
+          +'<div style="position:absolute;inset:-10px;border:3px solid rgba(162,93,220,.4);border-radius:50%;animation:ctl-pulse-ring 1.2s ease-out infinite;"></div>'
+          +'<div style="position:absolute;inset:-20px;border:2px solid rgba(162,93,220,.2);border-radius:50%;animation:ctl-pulse-ring 1.2s ease-out infinite .3s;"></div>'
+          +'<div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,rgba(162,93,220,.3),rgba(109,40,217,.2));border:2px solid rgba(162,93,220,.6);display:flex;align-items:center;justify-content:center;">'
+            +'<i class="fas fa-bell" style="font-size:34px;color:#c084fc;animation:ctl-ring .35s ease infinite alternate;"></i>'
+          +'</div>'
+        +'</div>'
+        +'<div style="font-size:22px;font-weight:900;color:#fff;letter-spacing:-.01em;margin-bottom:8px;">It\'s Your Turn!</div>'
+        +'<div style="font-size:14px;color:rgba(255,255,255,.7);line-height:1.6;margin-bottom:10px;">The <strong style="color:#c084fc;">'+(ctrlLabel||'controller')+'</strong> is now available for your use.</div>'
+        +'<div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:28px;">Your booking will begin once you upload your backup file.</div>'
+        +'<button id="hp-ctl-qa-ack-btn" style="display:inline-flex;align-items:center;gap:10px;padding:14px 32px;border-radius:12px;background:linear-gradient(135deg,rgba(162,93,220,.35),rgba(109,40,217,.25));border:1.5px solid rgba(162,93,220,.55);color:#c084fc;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s;box-shadow:0 4px 20px rgba(162,93,220,.2);">'
+          +'<i class="fas fa-check-circle" style="font-size:16px;"></i> I\'m Ready — Upload Backup'
+        +'</button>'
+      +'</div>';
+
+    document.body.appendChild(overlay);
+
+    // Acknowledge button — stop sound + open backup upload step
+    document.getElementById('hp-ctl-qa-ack-btn').addEventListener('click', function() {
+      _stopAlertSound();
+      overlay.remove();
+      // Open the backup-upload modal for this controller
+      window._ctlOpenBackupUpload && window._ctlOpenBackupUpload(ctrlId);
+    });
+  }
+
+  // ── BACKUP UPLOAD MODAL (step after queue turn) ───────────────────────────
+  // Shows after the user acknowledges the queue alert.
+  // User uploads backup → timer starts.
+  window._ctlOpenBackupUpload = function(itemId) {
+    var items = getItems();
+    var ctrl  = items.find(function(it){return it.id===itemId;});
+    if (!ctrl) return;
+
+    // Find the queued entry for this user to get their pre-filled task + duration
+    var queue   = getQueue(itemId);
+    var me      = _getCurrentUser();
+    var qEntry  = queue.find(function(q){return q.user===me;}) || {};
+
+    var existing = document.getElementById('hp-ctl-backup-upload-modal');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'hp-ctl-backup-upload-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(1,4,9,.85);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;animation:ctl-fadein .3s ease;';
+    overlay.innerHTML =
+      '<div style="background:#0d1117;border:1px solid rgba(34,197,94,.25);border-radius:18px;padding:0;width:min(500px,95vw);max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.8);">'
+        +'<div style="padding:20px 22px 16px;background:linear-gradient(135deg,rgba(34,197,94,.07),transparent);border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;">'
+          +'<div style="display:flex;align-items:center;gap:12px;">'
+            +'<div style="width:36px;height:36px;border-radius:10px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+              +'<i class="fas fa-cloud-upload-alt" style="color:#4ade80;font-size:15px;"></i>'
+            +'</div>'
+            +'<div><div style="font-size:14px;font-weight:900;color:#e2e8f0;">Upload Backup File</div>'
+              +'<div style="font-size:10px;color:#6b7280;margin-top:2px;">'+esc(labelFor(ctrl.type))+' — Your session starts after upload</div>'
+            +'</div>'
+          +'</div>'
+          +'<button onclick="document.getElementById(\'hp-ctl-backup-upload-modal\').remove()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#6b7280;border-radius:7px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;font-family:inherit;">✕</button>'
+        +'</div>'
+        +'<div style="padding:20px 22px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;">'
+          +'<div style="padding:12px 14px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.18);border-radius:10px;font-size:11px;color:rgba(255,255,255,.7);line-height:1.6;">'
+            +'<strong style="color:#4ade80;">Your queued task:</strong> '+esc(qEntry.task||'—')
+            +'<br><strong style="color:#4ade80;">Duration:</strong> '+esc(qEntry.duration||'—')
+          +'</div>'
+          +'<div style="padding:12px;background:rgba(88,166,255,.06);border:1px dashed rgba(88,166,255,.2);border-radius:10px;text-align:center;cursor:pointer;" onclick="window._ctlOpenBackupFolder()">'
+            +'<i class="fas fa-cloud-upload-alt" style="font-size:20px;color:#58a6ff;display:block;margin-bottom:6px;"></i>'
+            +'<div style="font-size:11px;font-weight:700;color:#94a3b8;">Click to Upload Backup to SharePoint</div>'
+            +'<div style="font-size:9px;color:#4b5563;margin-top:3px;">Upload → copy the link → paste below</div>'
+          +'</div>'
+          +'<div style="position:relative;">'
+            +'<i class="fas fa-link" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#6b7280;font-size:12px;"></i>'
+            +'<input id="hp-ctl-bu-backup-link" style="width:100%;padding:10px 12px 10px 34px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:9px;color:#e2e8f0;font-size:12px;font-family:inherit;outline:none;" type="text" placeholder="Paste SharePoint backup link here…" autocomplete="off"/>'
+          +'</div>'
+          +'<div id="hp-ctl-bu-error" style="display:none;padding:8px 12px;background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);border-radius:8px;font-size:11px;color:#f85149;"></div>'
+          +'<button id="hp-ctl-bu-start-btn" onclick="window._ctlStartFromQueue(\''+esc(itemId)+'\')" style="padding:13px 20px;border-radius:10px;background:linear-gradient(135deg,rgba(34,197,94,.22),rgba(16,185,129,.14));border:1.5px solid rgba(34,197,94,.45);color:#4ade80;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;">'
+            +'<i class="fas fa-play-circle" style="font-size:14px;"></i> Start My Session'
+          +'</button>'
+        +'</div>'
+      +'</div>';
+
+    document.body.appendChild(overlay);
+  };
+
+  // ── START SESSION from queue (after backup upload) ────────────────────────
+  window._ctlStartFromQueue = function(itemId) {
+    var backupEl  = document.getElementById('hp-ctl-bu-backup-link');
+    var errorEl   = document.getElementById('hp-ctl-bu-error');
+    var backup    = (backupEl && backupEl.value.trim()) || '';
+    if (!backup) {
+      if (errorEl) { errorEl.textContent = 'Please upload your backup file and paste the link first.'; errorEl.style.display = 'block'; }
+      return;
+    }
+    if (errorEl) errorEl.style.display = 'none';
+
+    var queue  = getQueue(itemId);
+    var me     = _getCurrentUser();
+    var qEntry = queue.find(function(q){return q.user===me;}) || {};
+
+    // Remove this user from queue
+    var newQueue = queue.filter(function(q){return q.user!==me;});
+    setQueue(itemId, newQueue);
+
+    // Create the booking
+    var durMs = parseDurMs(qEntry.duration || '30 minutes');
+    var booking = {
+      user:      me,
+      avatarUrl: _getAvatarUrl(),
+      task:      qEntry.task || 'Queued session',
+      duration:  qEntry.duration || '30 minutes',
+      backupFile:backup,
+      startMs:   Date.now(),
+      endMs:     Date.now() + durMs,
+    };
+    setBooking(itemId, booking);
+
+    // Log to sheet
+    var items = getItems();
+    var ctrl  = items.find(function(it){return it.id===itemId;})||{};
+    var payload = {
+      timestamp:  phtNow(), user: me,
+      controller: labelFor(ctrl.type)+' — '+(ctrl.ip||'—'),
+      task:       booking.task, duration: booking.duration,
+      backupFile: backup, note: 'Started from queue'
+    };
+    savePendingLog(payload);
+    if (SHEETS_ENDPOINT) fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)}).catch(function(){});
+    _updatePendingBtn();
+
+    var modal = document.getElementById('hp-ctl-backup-upload-modal');
+    if (modal) modal.remove();
+
+    if (window._ctlRenderAll) window._ctlRenderAll();
+  };
+
+  // ── OPEN BOOKING MODAL ────────────────────────────────────────────────────
   window._ctlOpenBooking = function(itemId) {
-    var items=getItems();
-    var ctrl=items.find(function(it){return it.id===itemId;});
-    if(!ctrl) return;
-    _bookingCtlId=itemId;
-    _bookingCtlData=ctrl;
-    var booking=getBooking(itemId);
-    var isActive=!!(booking&&booking.endMs>Date.now());
+    var items = getItems();
+    var ctrl  = items.find(function(it){return it.id===itemId;});
+    if (!ctrl) return;
+    _bookingCtlId   = itemId;
+    _bookingCtlData = ctrl;
+    var booking     = getBooking(itemId);
+    var isActive    = !!(booking && booking.endMs > Date.now());
 
-    // Populate header
-    var imgEl =document.getElementById('hp-ctl-bk-ctrl-img');
-    var nameEl=document.getElementById('hp-ctl-bk-ctrl-name');
-    var ipEl  =document.getElementById('hp-ctl-bk-ctrl-ip');
-    if(imgEl)  imgEl.src  =imageFor(ctrl.type);
-    if(nameEl) nameEl.textContent=labelFor(ctrl.type);
-    if(ipEl)   ipEl.textContent=ctrl.ip||'—';
+    var imgEl  = document.getElementById('hp-ctl-bk-ctrl-img');
+    var nameEl = document.getElementById('hp-ctl-bk-ctrl-name');
+    var ipEl   = document.getElementById('hp-ctl-bk-ctrl-ip');
+    if (imgEl)  imgEl.src           = imageFor(ctrl.type);
+    if (nameEl) nameEl.textContent  = labelFor(ctrl.type);
+    if (ipEl)   ipEl.textContent    = ctrl.ip || '—';
 
-    // User strip
-    var userDisp=document.getElementById('hp-ctl-bk-user-display');
-    var dateDisp=document.getElementById('hp-ctl-bk-date-display');
-    if(userDisp) userDisp.textContent=getCurrentUser();
-    if(dateDisp) dateDisp.textContent=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+    var userDisp = document.getElementById('hp-ctl-bk-user-display');
+    var dateDisp = document.getElementById('hp-ctl-bk-date-display');
+    if (userDisp) userDisp.textContent = _getCurrentUser();
+    if (dateDisp) dateDisp.textContent = new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
 
-    // Reset form fields
     ['hp-ctl-bk-task','hp-ctl-bk-duration','hp-ctl-bk-backup','hp-ctl-bk-custom-time'].forEach(function(id){
-      var el=document.getElementById(id); if(el){el.value='';el.classList.remove('invalid');}
+      var el=document.getElementById(id);if(el){el.value='';el.classList.remove('invalid');}
     });
     document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.remove('selected','invalid-chip');});
-    var customWrap=document.getElementById('hp-ctl-bk-custom-time-wrap');
-    if(customWrap) customWrap.style.display='none';
+    var customWrap=document.getElementById('hp-ctl-bk-custom-time-wrap');if(customWrap)customWrap.style.display='none';
 
-    // Show/hide in-use notice
-    var inUseNotice=document.getElementById('hp-ctl-bk-inuse-notice');
-    var inUserName=document.getElementById('hp-ctl-bk-inuse-name');
-    var inUserEnd=document.getElementById('hp-ctl-bk-inuse-end');
-    if(inUseNotice) inUseNotice.style.display=isActive?'flex':'none';
-    if(isActive&&booking){
-      if(inUserName) inUserName.textContent=booking.user;
-      if(inUserEnd){
-        var remaining=booking.endMs-Date.now();
-        inUserEnd.textContent='Ends in approx. '+fmtMs(remaining)+' ('+labelFor(ctrl.type)+')';
-      }
+    var inUseNotice = document.getElementById('hp-ctl-bk-inuse-notice');
+    var inUserName  = document.getElementById('hp-ctl-bk-inuse-name');
+    var inUserEnd   = document.getElementById('hp-ctl-bk-inuse-end');
+    if (inUseNotice) inUseNotice.style.display = isActive ? 'flex' : 'none';
+    if (isActive && booking) {
+      if (inUserName) inUserName.textContent = booking.user;
+      if (inUserEnd)  inUserEnd.textContent  = 'Ends in approx. ' + fmtMs(booking.endMs - Date.now());
     }
 
-    // Reset success + register button
-    var successEl=document.getElementById('hp-ctl-bk-success');
-    var bodyEl=document.getElementById('hp-ctl-booking-body');
-    if(successEl) successEl.classList.remove('show');
-    if(bodyEl) Array.from(bodyEl.children).forEach(function(c){if(!c.classList.contains('hp-ctl-bk-success')) c.style.display='';});
-    var sheetStatus=document.getElementById('hp-ctl-bk-sheet-status');
-    if(sheetStatus){sheetStatus.style.display='none';sheetStatus.textContent='';}
-    var regBtn=document.getElementById('hp-ctl-bk-register-btn');
-    var regIcon=document.getElementById('hp-ctl-bk-register-icon');
-    var regLabel=document.getElementById('hp-ctl-bk-register-label');
-    var spinner=document.getElementById('hp-ctl-bk-spinner');
-    if(regBtn){regBtn.disabled=false;}
-    if(regIcon) regIcon.style.display='';
-    if(regLabel) regLabel.textContent='Book this Controller';
-    if(spinner) spinner.style.display='none';
+    var successEl  = document.getElementById('hp-ctl-bk-success');
+    var bodyEl     = document.getElementById('hp-ctl-booking-body');
+    var sheetSt    = document.getElementById('hp-ctl-bk-sheet-status');
+    if (successEl) successEl.classList.remove('show');
+    if (bodyEl)    Array.from(bodyEl.children).forEach(function(c){if(!c.classList.contains('hp-ctl-bk-success'))c.style.display='';});
+    if (sheetSt)   { sheetSt.style.display='none'; sheetSt.textContent=''; }
+    var regBtn=document.getElementById('hp-ctl-bk-register-btn');var regIcon=document.getElementById('hp-ctl-bk-register-icon');var regLabel=document.getElementById('hp-ctl-bk-register-label');var spinner=document.getElementById('hp-ctl-bk-spinner');
+    if(regBtn)regBtn.disabled=false;if(regIcon)regIcon.style.display='';if(regLabel)regLabel.textContent='Book this Controller';if(spinner)spinner.style.display='none';
 
     _updatePendingBtn();
     var modal=document.getElementById('hp-ctl-booking-modal');
     if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}
-    var taskEl=document.getElementById('hp-ctl-bk-task');
-    setTimeout(function(){if(taskEl) taskEl.focus();},80);
+    setTimeout(function(){var t=document.getElementById('hp-ctl-bk-task');if(t)t.focus();},80);
     _pingSheet(null);
   };
 
-  // ── CLOSE BOOKING MODAL ───────────────────────────────────────────────────
   window._ctlCloseBooking = function() {
     var modal=document.getElementById('hp-ctl-booking-modal');
     if(modal){modal.classList.remove('open');modal.setAttribute('aria-hidden','true');}
-    _bookingCtlId=null; _bookingCtlData=null;
+    _bookingCtlId=null;_bookingCtlData=null;
     document.querySelectorAll('.hp-ctl-bk-step').forEach(function(s){s.classList.remove('done');});
     document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.remove('selected','invalid-chip');});
   };
@@ -1522,161 +1734,74 @@
 
   // ── SUBMIT BOOKING ────────────────────────────────────────────────────────
   window._ctlSubmitBooking = function() {
-    if(!_bookingCtlData) return;
+    if (!_bookingCtlData) return;
     var taskEl  =document.getElementById('hp-ctl-bk-task');
     var durEl   =document.getElementById('hp-ctl-bk-duration');
     var backupEl=document.getElementById('hp-ctl-bk-backup');
     var customEl=document.getElementById('hp-ctl-bk-custom-time');
     var notifyEl=document.getElementById('hp-ctl-bk-notify-alarm');
 
-    [taskEl,durEl,backupEl].forEach(function(el){if(el) el.classList.remove('invalid');});
+    [taskEl,durEl,backupEl].forEach(function(el){if(el)el.classList.remove('invalid');});
     document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.remove('invalid-chip');});
 
     var task   =(taskEl   &&taskEl.value.trim())  ||'';
     var durVal =(durEl    &&durEl.value.trim())   ||'';
     var backup =(backupEl &&backupEl.value.trim())||'';
     var wantsAlarm=notifyEl&&notifyEl.checked;
-
     var valid=true;
-    if(!task)  {if(taskEl)   taskEl.classList.add('invalid');   valid=false;}
-    if(!durVal){if(durEl)    durEl.classList.add('invalid');
-                document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.add('invalid-chip');}); valid=false;}
-    if(!backup){if(backupEl) backupEl.classList.add('invalid'); valid=false;}
-
+    if(!task)  {if(taskEl)  taskEl.classList.add('invalid');   valid=false;}
+    if(!durVal){if(durEl)   durEl.classList.add('invalid');    document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.add('invalid-chip');}); valid=false;}
+    if(!backup){if(backupEl)backupEl.classList.add('invalid'); valid=false;}
     var duration=durVal;
-    if(durVal==='set_time'){
-      var custom=(customEl&&customEl.value.trim())||'';
-      if(!custom){if(customEl) customEl.classList.add('invalid'); valid=false;}
-      else duration=custom;
-    }
+    if(durVal==='set_time'){var custom=(customEl&&customEl.value.trim())||'';if(!custom){if(customEl)customEl.classList.add('invalid');valid=false;}else duration=custom;}
     if(!valid) return;
 
-    // Show spinner
-    var regBtn=document.getElementById('hp-ctl-bk-register-btn');
-    var regIcon=document.getElementById('hp-ctl-bk-register-icon');
-    var regLabel=document.getElementById('hp-ctl-bk-register-label');
-    var spinner=document.getElementById('hp-ctl-bk-spinner');
-    if(regBtn) regBtn.disabled=true;
-    if(regIcon) regIcon.style.display='none';
-    if(regLabel) regLabel.textContent='Booking…';
-    if(spinner) spinner.style.display='inline-block';
+    var regBtn=document.getElementById('hp-ctl-bk-register-btn');var regIcon=document.getElementById('hp-ctl-bk-register-icon');var regLabel=document.getElementById('hp-ctl-bk-register-label');var spinner=document.getElementById('hp-ctl-bk-spinner');
+    if(regBtn)regBtn.disabled=true;if(regIcon)regIcon.style.display='none';if(regLabel)regLabel.textContent='Booking…';if(spinner)spinner.style.display='inline-block';
 
-    var user=getCurrentUser();
-    var avatarUrl=getAvatarUrl();
-    var durMs=parseDurMs(duration);
-    var endMs=Date.now()+(durMs||30*60000);
-
-    // Store booking state
-    setBooking(_bookingCtlId,{
-      user:user, avatarUrl:avatarUrl,
-      task:task, duration:duration,
-      startMs:Date.now(), endMs:endMs,
-      wantsAlarm:wantsAlarm,
+    var me=_getCurrentUser(); var durMs=parseDurMs(duration);
+    setBooking(_bookingCtlId, {
+      user:me, avatarUrl:_getAvatarUrl(), task:task, duration:duration,
+      backupFile:backup, startMs:Date.now(), endMs:Date.now()+durMs
     });
 
-    var payload={
-      timestamp:phtNow(), user:user,
-      controller:labelFor(_bookingCtlData.type)+' — '+(_bookingCtlData.ip||'—'),
-      task:task, duration:duration, backupFile:backup,
-      note:'Booked via Controller Lab'
-    };
+    var payload={timestamp:phtNow(),user:me,controller:labelFor(_bookingCtlData.type)+' — '+(_bookingCtlData.ip||'—'),task:task,duration:duration,backupFile:backup,note:'Direct booking'};
     savePendingLog(payload);
 
-    // Re-render cards immediately so timer starts
-    if(typeof window._ctlRenderAll === 'function') window._ctlRenderAll();
-
-    function _onSuccess(wroteToSheet) {
-      var bodyEl=document.getElementById('hp-ctl-booking-body');
-      var successEl=document.getElementById('hp-ctl-bk-success');
-      var msgEl=document.getElementById('hp-ctl-bk-success-msg');
-      var sheetStatus=document.getElementById('hp-ctl-bk-sheet-status');
-      if(bodyEl) Array.from(bodyEl.children).forEach(function(c){if(!c.classList.contains('hp-ctl-bk-success')) c.style.display='none';});
-      if(msgEl) msgEl.textContent='Booked by '+user+' — '+labelFor(_bookingCtlData.type)+' — Duration: '+duration+(wantsAlarm?' (Alarm set for queue)':'');
-      if(sheetStatus){
-        sheetStatus.style.display='block';
-        if(wroteToSheet){
-          sheetStatus.style.background='rgba(16,185,129,.1)';sheetStatus.style.border='1px solid rgba(16,185,129,.25)';sheetStatus.style.color='#10b981';
-          sheetStatus.textContent='Written to Google Sheet';
-          removePendingLog(payload.timestamp,user);
-        } else {
-          sheetStatus.style.background='rgba(245,158,11,.08)';sheetStatus.style.border='1px solid rgba(245,158,11,.2)';sheetStatus.style.color='#f59e0b';
-          sheetStatus.textContent='Saved locally — sheet unreachable. Will retry.';
-        }
-        _updatePendingBtn();
-      }
-      if(successEl) successEl.classList.add('show');
-      setTimeout(function(){window._ctlCloseBooking();},2800);
+    function _onSuccess(wroteToSheet){
+      var bodyEl=document.getElementById('hp-ctl-booking-body');var successEl=document.getElementById('hp-ctl-bk-success');var msgEl=document.getElementById('hp-ctl-bk-success-msg');var sheetSt=document.getElementById('hp-ctl-bk-sheet-status');
+      if(bodyEl)Array.from(bodyEl.children).forEach(function(c){if(!c.classList.contains('hp-ctl-bk-success'))c.style.display='none';});
+      if(msgEl)msgEl.textContent='Booked by '+me+' — '+labelFor(_bookingCtlData.type)+' — Duration: '+duration;
+      if(sheetSt){sheetSt.style.display='block';if(wroteToSheet){sheetSt.style.background='rgba(16,185,129,.1)';sheetSt.style.border='1px solid rgba(16,185,129,.25)';sheetSt.style.color='#10b981';sheetSt.textContent='Written to sheet';removePendingLog(payload.timestamp,me);}else{sheetSt.style.background='rgba(245,158,11,.08)';sheetSt.style.border='1px solid rgba(245,158,11,.2)';sheetSt.style.color='#f59e0b';sheetSt.textContent='Saved locally — sheet unreachable.';}_updatePendingBtn();}
+      if(successEl)successEl.classList.add('show');
+      setTimeout(function(){window._ctlCloseBooking();},2400);
     }
-
-    if(SHEETS_ENDPOINT){
-      fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)})
-        .then(function(){_onSuccess(_sheetReachable===true);})
-        .catch(function(){_onSuccess(false);});
-    } else {
-      setTimeout(function(){_onSuccess(false);},600);
-    }
+    if(SHEETS_ENDPOINT){fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)}).then(function(){_onSuccess(_sheetReachable===true);}).catch(function(){_onSuccess(false);});}
+    else{setTimeout(function(){_onSuccess(false);},500);}
   };
 
-  // ── QUEUE MODAL ───────────────────────────────────────────────────────────
+  // ── OPEN QUEUE MODAL ──────────────────────────────────────────────────────
   window._ctlOpenQueue = function(itemId) {
-    var items=getItems();
-    var ctrl=items.find(function(it){return it.id===itemId;});
-    if(!ctrl) return;
+    var items=getItems();var ctrl=items.find(function(it){return it.id===itemId;});
+    if(!ctrl)return;
     _queueCtlId=itemId;
-    var booking=getBooking(itemId);
-    var queue=getQueue(itemId);
-    var me=getCurrentUser();
-
-    // Populate queue modal
-    var qNameEl=document.getElementById('hp-ctl-q-ctrl-name');
-    var qUserEl=document.getElementById('hp-ctl-q-current-user');
-    var qEndEl =document.getElementById('hp-ctl-q-end-time');
-    var qListEl=document.getElementById('hp-ctl-q-list');
-    var qImgEl =document.getElementById('hp-ctl-q-ctrl-img');
-    if(qNameEl) qNameEl.textContent=labelFor(ctrl.type);
-    if(qImgEl)  qImgEl.src=imageFor(ctrl.type);
-    if(booking){
-      if(qUserEl) qUserEl.textContent=booking.user;
-      if(qEndEl)  qEndEl.textContent='~'+fmtMs(booking.endMs-Date.now())+' remaining';
-    }
-
-    // Render queue list
+    var booking=getBooking(itemId);var queue=getQueue(itemId);var me=_getCurrentUser();
+    var qNameEl=document.getElementById('hp-ctl-q-ctrl-name');var qUserEl=document.getElementById('hp-ctl-q-current-user');var qEndEl=document.getElementById('hp-ctl-q-end-time');var qListEl=document.getElementById('hp-ctl-q-list');var qImgEl=document.getElementById('hp-ctl-q-ctrl-img');
+    if(qNameEl)qNameEl.textContent=labelFor(ctrl.type);if(qImgEl)qImgEl.src=imageFor(ctrl.type);
+    if(booking){if(qUserEl)qUserEl.textContent=booking.user;if(qEndEl)qEndEl.textContent='~'+fmtMs(booking.endMs-Date.now())+' remaining';}
     if(qListEl){
-      if(!queue.length){
-        qListEl.innerHTML='<div style="padding:12px 0;text-align:center;color:rgba(255,255,255,.3);font-size:11px;">No one in queue yet. Be first!</div>';
-      } else {
-        qListEl.innerHTML=queue.map(function(q,i){
-          var isMe=q.user===me;
-          return '<div class="hp-ctl-q-item'+(isMe?' is-me':'')+'">'+
-            '<div class="hp-ctl-q-pos">'+(i+1)+'</div>'+
-            '<div class="hp-ctl-q-meta"><div class="hp-ctl-q-name">'+(isMe?'You ('+esc(q.user)+')':esc(q.user))+'</div>'+
-            '<div class="hp-ctl-q-task">'+esc(q.task||'')+'</div></div>'+
-            (q.urgent?'<span class="hp-ctl-q-urgent-badge">URGENT</span>':'')+
-            (isMe?'<button class="hp-ctl-q-leave-btn" onclick="window._ctlLeaveQueue(\''+esc(itemId)+'\')">Leave</button>':'')+
-          '</div>';
-        }).join('');
-      }
+      if(!queue.length){qListEl.innerHTML='<div style="padding:12px 0;text-align:center;color:rgba(255,255,255,.3);font-size:11px;">No one in queue yet — be first!</div>';}
+      else{qListEl.innerHTML=queue.map(function(q,i){var isMe=q.user===me;return '<div class="hp-ctl-q-item'+(isMe?' is-me':'')+'"><div class="hp-ctl-q-pos">'+(i+1)+'</div><div class="hp-ctl-q-meta"><div class="hp-ctl-q-name">'+(isMe?'You ('+esc(q.user)+')':esc(q.user))+'</div><div class="hp-ctl-q-task">'+esc(q.task||'')+(q.duration?' · '+esc(q.duration):'')+'</div></div>'+(q.urgent?'<span class="hp-ctl-q-urgent-badge">URGENT</span>':'')+(isMe?'<button class="hp-ctl-q-leave-btn" onclick="window._ctlLeaveQueue(\''+esc(itemId)+'\')">Leave</button>':'')+'</div>';}).join('');}
     }
-
     var alreadyQueued=queue.some(function(q){return q.user===me;});
-    var joinSection=document.getElementById('hp-ctl-q-join-section');
-    if(joinSection) joinSection.style.display=alreadyQueued?'none':'block';
-    var alreadyMsg=document.getElementById('hp-ctl-q-already-msg');
-    if(alreadyMsg) alreadyMsg.style.display=alreadyQueued?'block':'none';
-
-    // Start live countdown in queue modal
-    if(window._ctlQueueTimer) clearInterval(window._ctlQueueTimer);
+    var joinSection=document.getElementById('hp-ctl-q-join-section');var alreadyMsg=document.getElementById('hp-ctl-q-already-msg');
+    if(joinSection)joinSection.style.display=alreadyQueued?'none':'block';
+    if(alreadyMsg){alreadyMsg.style.display=alreadyQueued?'block':'none';alreadyMsg.textContent='You are in queue — waiting for your turn.';}
+    if(window._ctlQueueTimer)clearInterval(window._ctlQueueTimer);
     if(booking&&booking.endMs>Date.now()){
-      window._ctlQueueTimer=setInterval(function(){
-        var rem=booking.endMs-Date.now();
-        if(rem<=0){clearInterval(window._ctlQueueTimer);}
-        var el=document.getElementById('hp-ctl-q-end-time');
-        if(el) el.textContent='~'+fmtMs(Math.max(0,rem))+' remaining';
-      },1000);
+      window._ctlQueueTimer=setInterval(function(){var rem=booking.endMs-Date.now();if(rem<=0){clearInterval(window._ctlQueueTimer);}var el=document.getElementById('hp-ctl-q-end-time');if(el)el.textContent='~'+fmtMs(Math.max(0,rem))+' remaining';},1000);
     }
-
-    var modal=document.getElementById('hp-ctl-queue-modal');
-    if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}
+    var modal=document.getElementById('hp-ctl-queue-modal');if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}
   };
 
   window._ctlCloseQueue = function() {
@@ -1686,361 +1811,176 @@
     _queueCtlId=null;
   };
 
+  // ── JOIN QUEUE (with task + duration pre-fill) ────────────────────────────
   window._ctlJoinQueue = function() {
-    if(!_queueCtlId) return;
-    var me=getCurrentUser();
-    var taskEl=document.getElementById('hp-ctl-q-task-input');
-    var urgentEl=document.getElementById('hp-ctl-q-urgent');
-    var alarmEl=document.getElementById('hp-ctl-q-alarm');
-    var task=(taskEl&&taskEl.value.trim())||'';
-    var isUrgent=!!(urgentEl&&urgentEl.checked);
-    var wantsAlarm=!!(alarmEl&&alarmEl.checked);
+    if (!_queueCtlId) return;
+    var me       = _getCurrentUser();
+    var taskEl   = document.getElementById('hp-ctl-q-task-input');
+    var durEl    = document.getElementById('hp-ctl-q-duration-select');
+    var urgentEl = document.getElementById('hp-ctl-q-urgent');
+    var alarmEl  = document.getElementById('hp-ctl-q-alarm');
 
-    var queue=getQueue(_queueCtlId);
-    var alreadyIn=queue.some(function(q){return q.user===me;});
-    if(alreadyIn){window._ctlCloseQueue();return;}
+    var task      = (taskEl  && taskEl.value.trim()) || '';
+    var duration  = (durEl   && durEl.value.trim())  || '30 minutes';
+    var isUrgent  = !!(urgentEl && urgentEl.checked);
+    var wantsAlarm= !!(alarmEl  && alarmEl.checked);
 
-    queue.push({user:me,avatarUrl:getAvatarUrl(),task:task,urgent:isUrgent,wantsAlarm:wantsAlarm,joinedAt:Date.now()});
-    setQueue(_queueCtlId,queue);
-
-    // Show confirmation
-    var joinSection=document.getElementById('hp-ctl-q-join-section');
-    var alreadyMsg=document.getElementById('hp-ctl-q-already-msg');
-    if(joinSection) joinSection.style.display='none';
-    if(alreadyMsg){alreadyMsg.style.display='block';alreadyMsg.textContent='You are in the queue! We\'ll notify you when it\'s your turn.'+(wantsAlarm?' Alarm is set.':'');}
-
-    if(isUrgent){
-      // Show urgent notice
-      window._ctlShowUrgentNotice(_queueCtlId, me);
-    }
-
-    if(typeof window._ctlRenderAll==='function') window._ctlRenderAll();
-    setTimeout(function(){window._ctlCloseQueue();},2000);
-  };
-
-  window._ctlLeaveQueue = function(itemId) {
-    var me=getCurrentUser();
-    var queue=getQueue(itemId).filter(function(q){return q.user!==me;});
-    setQueue(itemId,queue);
-    if(typeof window._ctlRenderAll==='function') window._ctlRenderAll();
-    window._ctlCloseQueue();
-  };
-
-  // ── NOTIFY QUEUE (called when session timer ends) ─────────────────────────
-  // ── QUEUE AUTO-ADVANCE — called when countdown reaches 0 ────────────────
-  // FIX v4.1: Automatically advances the queue.
-  // 1. Clears the expired booking so controller shows AVAILABLE
-  // 2. Shifts the first queue entry and logs them to the sheet automatically
-  // 3. If the next user is THIS browser's user, opens the booking modal
-  //    and fires browser + in-app notification
-  // 4. If a different user, shows an in-app banner + re-renders for them
-  window._ctlNotifyQueue = function(itemId) {
-    var queue=getQueue(itemId);
-    var me=getCurrentUser();
-    var items=getItems();
-    var ctrl=items.find(function(i){return i.id===itemId;})||{};
-    var ctrlLabel=labelFor(ctrl.type||'');
-
-    if(!queue.length){
-      // No queue — controller just becomes available, re-render
-      if(typeof window._ctlRenderAll==='function') window._ctlRenderAll();
+    if (!task) {
+      if (taskEl) { taskEl.style.borderColor='rgba(248,81,73,.6)'; taskEl.placeholder='Please describe your task first…'; setTimeout(function(){if(taskEl)taskEl.style.borderColor='';},2000); }
       return;
     }
 
-    var next=queue[0];
-    // Pop the next user from queue
+    var queue       = getQueue(_queueCtlId);
+    var alreadyIn   = queue.some(function(q){return q.user===me;});
+    if (alreadyIn)  { window._ctlCloseQueue(); return; }
+
+    queue.push({user:me, avatarUrl:_getAvatarUrl(), task:task, duration:duration, urgent:isUrgent, wantsAlarm:wantsAlarm, joinedAt:Date.now()});
+    setQueue(_queueCtlId, queue);
+
+    if (isUrgent) window._ctlShowUrgentNotice(_queueCtlId, me);
+
+    var joinSection = document.getElementById('hp-ctl-q-join-section');
+    var alreadyMsg  = document.getElementById('hp-ctl-q-already-msg');
+    if (joinSection) joinSection.style.display = 'none';
+    if (alreadyMsg)  { alreadyMsg.style.display='block'; alreadyMsg.textContent='You are in queue at position '+queue.length+'. We\'ll alert you when it\'s your turn.'+(wantsAlarm?' Alarm is set.':''); }
+
+    setTimeout(function() { window._ctlCloseQueue(); }, 1800);
+  };
+
+  window._ctlLeaveQueue = function(itemId) {
+    var me=_getCurrentUser();
+    setQueue(itemId, getQueue(itemId).filter(function(q){return q.user!==me;}));
+    window._ctlCloseQueue();
+  };
+
+  // ── NOTIFY QUEUE (when session timer expires) ─────────────────────────────
+  window._ctlNotifyQueue = function(itemId) {
+    var queue = getQueue(itemId);
+    if (!queue.length) { if(window._ctlRenderAll) window._ctlRenderAll(); return; }
+
+    var next  = queue[0];
+    var items = getItems();
+    var ctrl  = items.find(function(i){return i.id===itemId;})||{};
+    var ctrlLabel = labelFor(ctrl.type||'');
+    var me    = _getCurrentUser();
+
+    // Pop next from queue
     queue.shift();
     setQueue(itemId, queue);
 
-    // ── Auto-log the next user's session to Google Sheets ──────────────
-    // The next queue user's booking info was stored when they joined queue
+    // Log to sheet
     if(SHEETS_ENDPOINT && next.task){
-      var autoPayload={
-        timestamp: phtNow(),
-        user:      next.user,
-        controller:ctrlLabel+' — '+(ctrl.ip||'—'),
-        task:      next.task,
-        duration:  next.duration||'queued',
-        backupFile:next.backupFile||'N/A',
-        note:      'Auto-advanced from queue'
-      };
+      var autoPayload={timestamp:phtNow(),user:next.user,controller:ctrlLabel+' — '+(ctrl.ip||'—'),task:next.task,duration:next.duration||'queued',backupFile:'pending',note:'Auto-advanced from queue'};
       savePendingLog(autoPayload);
       fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(autoPayload)}).catch(function(){});
     }
 
-    // ── Browser Notification (fires for everyone; browser decides permission) ──
-    var notifBody='It is your turn to use '+ctrlLabel+'. The controller is now free.';
-    if(window.Notification){
-      if(Notification.permission==='granted'){
-        new Notification('Controller Available — Your Turn!',{
-          body: notifBody, icon:'/call_icon.png', tag:'ctl-queue-'+itemId
-        });
-      } else if(Notification.permission!=='denied'){
-        Notification.requestPermission().then(function(p){
-          if(p==='granted') new Notification('Controller Available!',{body:notifBody,icon:'/call_icon.png',tag:'ctl-queue-'+itemId});
-        });
-      }
-    }
+    // Broadcast queue-notify event to ALL tabs — each tab checks if it's the target user
+    _broadcast({
+      type:'ctl_update', subtype:'queue_notify',
+      ctrlId:itemId, ctrlLabel:ctrlLabel,
+      targetUser:next.user
+    });
 
-    // ── In-app banner for EVERYONE online ──────────────────────────────
-    _showAlarmBanner(next.user+'\'s turn! '+ctrlLabel+' is now available.', itemId);
-
-    // ── If next user === me: auto-start their booking session ──────────
-    if(next.user===me){
-      // Auto-book: set their session immediately using stored duration
-      var durationMs=parseDurMs(next.duration||'30 minutes');
-      var autoBooking={
-        user:me, avatarUrl:_ctlGetAvatar()||'',
-        task:next.task||'Queued session', duration:next.duration||'30 minutes',
-        startMs:Date.now(), endMs:Date.now()+durationMs,
-        backupFile:next.backupFile||''
-      };
-      setBooking(itemId, autoBooking);
-      if(typeof window._ctlRenderAll==='function') window._ctlRenderAll();
-      // Also show booking modal so they can confirm/adjust
-      setTimeout(function(){
-        if(typeof window._ctlOpenBooking==='function') window._ctlOpenBooking(itemId);
-      },600);
+    // If I'm the one: trigger alert sound + backup upload flow
+    if (next.user === me) {
+      _triggerQueueAlert(itemId, ctrlLabel);
     } else {
-      // Different user — just re-render so the controller shows as available for them
-      if(typeof window._ctlRenderAll==='function') window._ctlRenderAll();
+      // Show a softer banner for others
+      _showAlarmBanner(next.user + '\'s turn! ' + ctrlLabel + ' is now available.', itemId);
     }
+
+    if (window._ctlRenderAll) window._ctlRenderAll();
   };
 
+  // ── ALARM BANNER (for observers) ─────────────────────────────────────────
   function _showAlarmBanner(msg, itemId) {
-    var existing=document.getElementById('hp-ctl-alarm-banner');
-    if(existing) existing.remove();
-    var banner=document.createElement('div');
-    banner.id='hp-ctl-alarm-banner';
-    banner.className='hp-ctl-alarm-banner';
-    banner.innerHTML='<i class="fas fa-bell" style="font-size:18px;animation:bell-ring .4s ease infinite alternate;"></i>'+
-      '<div><div style="font-size:13px;font-weight:800;color:#fff;">Controller Available!</div>'+
-      '<div style="font-size:11px;opacity:.8;">'+esc(msg)+'</div></div>'+
-      '<button class="hp-ctl-alarm-dismiss" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>';
+    var existing = document.getElementById('hp-ctl-alarm-banner');
+    if (existing) existing.remove();
+    var banner = document.createElement('div');
+    banner.id='hp-ctl-alarm-banner'; banner.className='hp-ctl-alarm-banner';
+    banner.innerHTML='<i class="fas fa-bell" style="font-size:18px;animation:bell-ring .4s ease infinite alternate;"></i>'
+      +'<div><div style="font-size:13px;font-weight:800;color:#fff;">Controller Available!</div>'
+      +'<div style="font-size:11px;opacity:.8;">'+esc(msg)+'</div></div>'
+      +'<button class="hp-ctl-alarm-dismiss" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>';
     document.body.appendChild(banner);
-    // Play notification sound if possible
-    try{ var audio=new Audio('data:audio/wav;base64,UklGRl9vT2JXQVZF'); audio.volume=0.4; audio.play().catch(function(){}); }catch(_){}
-    setTimeout(function(){if(banner.parentElement) banner.remove();},15000);
+    setTimeout(function(){if(banner.parentElement)banner.remove();},10000);
   }
 
   // ── URGENT NOTICE ─────────────────────────────────────────────────────────
   window._ctlShowUrgentNotice = function(itemId, requester) {
-    var booking=getBooking(itemId);
-    if(!booking) return;
-    var items=getItems();
-    var ctrl=items.find(function(it){return it.id===itemId;});
-    var currentUser=booking.user;
-    var me=getCurrentUser();
-
-    // Only show to the current session holder
-    if(currentUser!==me) return;
-
-    var existing=document.getElementById('hp-ctl-urgent-banner');
-    if(existing) existing.remove();
-    var banner=document.createElement('div');
-    banner.id='hp-ctl-urgent-banner';
-    banner.className='hp-ctl-urgent-banner';
-    banner.innerHTML='<div style="display:flex;align-items:center;gap:12px;flex:1;">'+
-      '<i class="fas fa-exclamation-triangle" style="font-size:20px;color:#f59e0b;flex-shrink:0;"></i>'+
-      '<div>'+
-        '<div style="font-size:13px;font-weight:800;color:#fff;">Urgent Request</div>'+
-        '<div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;">'+esc(requester)+' has an urgent task and needs '+esc(ctrl?labelFor(ctrl.type):'this controller')+'. Please communicate with them directly.</div>'+
-        '<div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:4px;font-style:italic;">You can directly communicate with the requesting user for your urgent task.</div>'+
-      '</div>'+
-    '</div>'+
-    '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">'+
-      '<button class="hp-ctl-alarm-dismiss" onclick="document.getElementById(\'hp-ctl-urgent-banner\').remove()"><i class="fas fa-times"></i> Dismiss</button>'+
-    '</div>';
+    var booking=getBooking(itemId);if(!booking)return;
+    var items=getItems();var ctrl=items.find(function(it){return it.id===itemId;});
+    if(booking.user!==_getCurrentUser()) return;
+    var existing=document.getElementById('hp-ctl-urgent-banner');if(existing)existing.remove();
+    var banner=document.createElement('div');banner.id='hp-ctl-urgent-banner';banner.className='hp-ctl-urgent-banner';
+    banner.innerHTML='<div style="display:flex;align-items:center;gap:12px;flex:1;"><i class="fas fa-exclamation-triangle" style="font-size:20px;color:#f59e0b;flex-shrink:0;"></i><div><div style="font-size:13px;font-weight:800;color:#fff;">Urgent Request</div><div style="font-size:11px;color:rgba(255,255,255,.75);margin-top:2px;">'+esc(requester)+' has an urgent task and needs '+esc(ctrl?labelFor(ctrl.type):'this controller')+'. Communicate directly.</div><div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:4px;font-style:italic;">You can directly communicate with the requesting user for your urgent task.</div></div></div><button class="hp-ctl-alarm-dismiss" onclick="document.getElementById(\'hp-ctl-urgent-banner\').remove()"><i class="fas fa-times"></i> Dismiss</button>';
     document.body.appendChild(banner);
-    setTimeout(function(){if(banner.parentElement) banner.remove();},30000);
+    setTimeout(function(){if(banner.parentElement)banner.remove();},30000);
   };
 
-  // ── OVERRIDE SYSTEM ───────────────────────────────────────────────────────
+  // ── OVERRIDE ──────────────────────────────────────────────────────────────
   window._ctlOverride = function(itemId) {
-    var items=getItems();
-    var ctrl=items.find(function(it){return it.id===itemId;});
-    var booking=getBooking(itemId);
-    if(!ctrl||!booking) return;
-
-    // Show override confirmation modal
+    var items=getItems();var ctrl=items.find(function(it){return it.id===itemId;});var booking=getBooking(itemId);if(!ctrl||!booking)return;
     var modal=document.getElementById('hp-ctl-override-modal');
-    var ctrlNameEl=document.getElementById('hp-ctl-ov-ctrl-name');
-    var ownerEl=document.getElementById('hp-ctl-ov-owner');
-    var confirmBtn=document.getElementById('hp-ctl-ov-confirm-btn');
-    if(ctrlNameEl) ctrlNameEl.textContent=labelFor(ctrl.type);
-    if(ownerEl) ownerEl.textContent=booking.user;
-    if(confirmBtn){
-      confirmBtn.onclick=function(){
-        var reasonEl=document.getElementById('hp-ctl-ov-reason');
-        var reason=(reasonEl&&reasonEl.value.trim())||'Urgent task';
-        window._ctlExecuteOverride(itemId, reason);
-      };
-    }
+    var ctrlNameEl=document.getElementById('hp-ctl-ov-ctrl-name');var ownerEl=document.getElementById('hp-ctl-ov-owner');var confirmBtn=document.getElementById('hp-ctl-ov-confirm-btn');
+    if(ctrlNameEl)ctrlNameEl.textContent=labelFor(ctrl.type);if(ownerEl)ownerEl.textContent=booking.user;
+    if(confirmBtn){confirmBtn.onclick=function(){var reasonEl=document.getElementById('hp-ctl-ov-reason');var reason=(reasonEl&&reasonEl.value.trim())||'Urgent task';window._ctlExecuteOverride(itemId,reason);};}
     if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}
   };
-
   window._ctlCloseOverride = function() {
-    var modal=document.getElementById('hp-ctl-override-modal');
-    if(modal){modal.classList.remove('open');modal.setAttribute('aria-hidden','true');}
+    var modal=document.getElementById('hp-ctl-override-modal');if(modal){modal.classList.remove('open');modal.setAttribute('aria-hidden','true');}
   };
-
   window._ctlExecuteOverride = function(itemId, reason) {
-    var items=getItems();
-    var ctrl=items.find(function(it){return it.id===itemId;});
-    var booking=getBooking(itemId);
-    if(!ctrl||!booking) return;
-    var me=getCurrentUser();
-    var overriddenUser=booking.user;
-
-    // Log the override to sheet
-    var payload={
-      timestamp:phtNow(), user:me,
-      controller:labelFor(ctrl.type)+' — '+(ctrl.ip||'—'),
-      task:'[OVERRIDE] '+reason,
-      duration:'Session overridden',
-      backupFile:'N/A',
-      note:'Override of '+overriddenUser+' by '+me
-    };
-    savePendingLog(payload);
-    if(SHEETS_ENDPOINT){
-      fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)}).catch(function(){});
-    }
-
-    // Clear the existing booking
+    var items=getItems();var ctrl=items.find(function(it){return it.id===itemId;});var booking=getBooking(itemId);if(!ctrl||!booking)return;
+    var me=_getCurrentUser();var overriddenUser=booking.user;
+    var payload={timestamp:phtNow(),user:me,controller:labelFor(ctrl.type)+' — '+(ctrl.ip||'—'),task:'[OVERRIDE] '+reason,duration:'Session overridden',backupFile:'N/A',note:'Override of '+overriddenUser+' by '+me};
+    savePendingLog(payload);if(SHEETS_ENDPOINT)fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)}).catch(function(){});
     setBooking(itemId,null);
     window._ctlCloseOverride();
-
-    // Show override confirmation
-    _showAlarmBanner('Override executed. '+labelFor(ctrl.type)+' is now available for your urgent task.', itemId);
-
-    // Notify the overridden user (in-app only)
-    var noticeEl=document.createElement('div');
-    noticeEl.className='hp-ctl-urgent-banner';
-    noticeEl.style.background='rgba(248,81,73,.12)';
-    noticeEl.style.borderColor='rgba(248,81,73,.35)';
-    noticeEl.innerHTML='<i class="fas fa-exclamation-circle" style="font-size:18px;color:#f85149;flex-shrink:0;"></i>'+
-      '<div style="flex:1;"><div style="font-size:13px;font-weight:800;color:#fff;">Session Overridden</div>'+
-      '<div style="font-size:11px;color:rgba(255,255,255,.7);">Your session on '+esc(labelFor(ctrl.type))+' was overridden by '+esc(me)+' for: '+esc(reason)+'</div></div>'+
-      '<button class="hp-ctl-alarm-dismiss" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>';
-    document.body.appendChild(noticeEl);
-
-    // Reopen booking modal for the override user
-    setTimeout(function(){
-      window._ctlOpenBooking(itemId);
-      if(typeof window._ctlRenderAll==='function') window._ctlRenderAll();
-    },400);
+    _showAlarmBanner('Override executed. '+labelFor(ctrl.type)+' is now available.',itemId);
+    setTimeout(function(){window._ctlOpenBooking&&window._ctlOpenBooking(itemId);},400);
   };
 
   // ── DURATION CHIP WIRING ──────────────────────────────────────────────────
-  document.addEventListener('click', function(e) {
-    var chip=e.target.closest('.hp-ctl-dur-chip'); if(!chip) return;
+  document.addEventListener('click',function(e){
+    var chip=e.target.closest('.hp-ctl-dur-chip');if(!chip)return;
     document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.remove('selected');});
-    chip.classList.add('selected');
-    var dur=chip.getAttribute('data-dur')||'';
-    var sel=document.getElementById('hp-ctl-bk-duration');
-    if(sel){sel.value=dur;sel.dispatchEvent(new Event('change'));}
-    var s2=document.querySelector('.hp-ctl-bk-step[data-step="2"]');
-    if(s2&&dur&&dur!=='set_time') s2.classList.add('done');
+    chip.classList.add('selected');var dur=chip.getAttribute('data-dur')||'';
+    var sel=document.getElementById('hp-ctl-bk-duration');if(sel){sel.value=dur;sel.dispatchEvent(new Event('change'));}
+    var s2=document.querySelector('.hp-ctl-bk-step[data-step="2"]');if(s2&&dur&&dur!=='set_time')s2.classList.add('done');
   });
-  document.addEventListener('change', function(e) {
-    if(e.target&&e.target.id==='hp-ctl-bk-duration'){
-      var wrap=document.getElementById('hp-ctl-bk-custom-time-wrap');
-      if(wrap) wrap.style.display=e.target.value==='set_time'?'block':'none';
-    }
+  document.addEventListener('change',function(e){
+    if(e.target&&e.target.id==='hp-ctl-bk-duration'){var wrap=document.getElementById('hp-ctl-bk-custom-time-wrap');if(wrap)wrap.style.display=e.target.value==='set_time'?'block':'none';}
   });
-  document.addEventListener('input', function(e) {
-    if(e.target&&e.target.id==='hp-ctl-bk-task'){
-      var s1=document.querySelector('.hp-ctl-bk-step[data-step="1"]');
-      if(s1) s1.classList.toggle('done',e.target.value.trim().length>2);
-    }
-    if(e.target&&e.target.id==='hp-ctl-bk-backup'){
-      var s3=document.querySelector('.hp-ctl-bk-step[data-step="3"]');
-      if(s3) s3.classList.toggle('done',e.target.value.trim().length>5);
-    }
+  document.addEventListener('input',function(e){
+    if(e.target&&e.target.id==='hp-ctl-bk-task'){var s1=document.querySelector('.hp-ctl-bk-step[data-step="1"]');if(s1)s1.classList.toggle('done',e.target.value.trim().length>2);}
+    if(e.target&&e.target.id==='hp-ctl-bk-backup'){var s3=document.querySelector('.hp-ctl-bk-step[data-step="3"]');if(s3)s3.classList.toggle('done',e.target.value.trim().length>5);}
   });
-  document.addEventListener('keydown', function(e) {
-    if(e.key!=='Escape') return;
-    var m=document.getElementById('hp-ctl-booking-modal');
-    if(m&&m.classList.contains('open')){window._ctlCloseBooking();return;}
-    var qm=document.getElementById('hp-ctl-queue-modal');
-    if(qm&&qm.classList.contains('open')){window._ctlCloseQueue();return;}
-    var om=document.getElementById('hp-ctl-override-modal');
-    if(om&&om.classList.contains('open')){window._ctlCloseOverride();}
-    var pm=document.getElementById('hp-ctl-pending-modal');
-    if(pm&&pm.style.display!=='none') window._ctlClosePendingLogs();
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Escape')return;
+    var m=document.getElementById('hp-ctl-booking-modal');if(m&&m.classList.contains('open')){window._ctlCloseBooking();return;}
+    var qm=document.getElementById('hp-ctl-queue-modal');if(qm&&qm.classList.contains('open')){window._ctlCloseQueue();return;}
+    var om=document.getElementById('hp-ctl-override-modal');if(om&&om.classList.contains('open')){window._ctlCloseOverride();}
+    var pm=document.getElementById('hp-ctl-pending-modal');if(pm&&pm.style.display!=='none')window._ctlClosePendingLogs();
   });
-  document.addEventListener('click', function(e) {
-    if(e.target&&e.target.id==='hp-ctl-booking-modal') window._ctlCloseBooking();
-    if(e.target&&e.target.id==='hp-ctl-queue-modal')   window._ctlCloseQueue();
-    if(e.target&&e.target.id==='hp-ctl-override-modal') window._ctlCloseOverride();
+  document.addEventListener('click',function(e){
+    if(e.target&&e.target.id==='hp-ctl-booking-modal')window._ctlCloseBooking();
+    if(e.target&&e.target.id==='hp-ctl-queue-modal')window._ctlCloseQueue();
+    if(e.target&&e.target.id==='hp-ctl-override-modal')window._ctlCloseOverride();
   });
 
-  // ── PENDING LOGS PANEL ────────────────────────────────────────────────────
-  window._ctlShowPendingLogs = function() {
-    var modal=document.getElementById('hp-ctl-pending-modal');
-    var list=document.getElementById('hp-ctl-pending-list');
-    if(!modal||!list) return;
-    var logs=getPendingLogs();
-    list.innerHTML=!logs.length
-      ?'<div style="text-align:center;padding:30px;color:#6b7280;font-size:12px;">No pending logs</div>'
-      :logs.map(function(log){
-        return '<div style="background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:11px;">'+
-          '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">'+
-            '<span style="font-weight:700;color:#f1f5f9;">'+esc(log.user)+'</span>'+
-            '<span style="color:#6b7280;font-family:monospace;font-size:9px;">'+esc(log.timestamp)+'</span>'+
-          '</div>'+
-          '<div style="color:#94a3b8;line-height:1.6;">'+esc(log.controller)+' | '+esc(log.task)+' | '+esc(log.duration)+(log.note?'<br><span style="font-size:9px;color:#6b7280;">'+esc(log.note)+'</span>':'')+'</div>'+
-        '</div>';
-      }).join('');
-    var statusEl=document.getElementById('hp-ctl-replay-status');
-    if(statusEl) statusEl.textContent=logs.length+' pending log'+(logs.length!==1?'s':'');
-    modal.style.display='flex'; modal.setAttribute('aria-hidden','false');
-  };
-  window._ctlClosePendingLogs = function() {
-    var modal=document.getElementById('hp-ctl-pending-modal');
-    if(modal){modal.style.display='none';modal.setAttribute('aria-hidden','true');}
-  };
-  window._ctlClearPendingLogs = function() {
-    if(!confirm('Clear all '+getPendingLogs().length+' pending logs?')) return;
-    setPendingLogs([]); _updatePendingBtn(); window._ctlShowPendingLogs();
-  };
-  window._ctlReplayPendingLogs = function() {
-    var logs=getPendingLogs();
-    if(!logs.length) return;
-    if(!SHEETS_ENDPOINT){alert('SHEETS_ENDPOINT not configured.');return;}
-    var replayBtn=document.getElementById('hp-ctl-replay-btn');
-    var replayStatus=document.getElementById('hp-ctl-replay-status');
-    if(replayBtn){replayBtn.disabled=true;replayBtn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Sending…';}
-    var success=0,fail=0,remaining=logs.length;
-    logs.forEach(function(payload){
-      fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)})
-        .then(function(){success++;removePendingLog(payload.timestamp,payload.user);})
-        .catch(function(){fail++;})
-        .finally(function(){
-          remaining--;
-          if(remaining===0){
-            _updatePendingBtn();
-            if(replayBtn){replayBtn.disabled=false;replayBtn.innerHTML='<i class="fas fa-redo"></i> Retry Send';}
-            if(replayStatus){replayStatus.textContent=success+' sent'+(fail?', '+fail+' failed':'');replayStatus.style.color=fail?'#ef4444':'#10b981';}
-            setTimeout(function(){window._ctlShowPendingLogs();},400);
-          }
-        });
-    });
-  };
+  // ── PENDING LOGS ──────────────────────────────────────────────────────────
+  window._ctlShowPendingLogs=function(){var modal=document.getElementById('hp-ctl-pending-modal');var list=document.getElementById('hp-ctl-pending-list');if(!modal||!list)return;var logs=getPendingLogs();list.innerHTML=!logs.length?'<div style="text-align:center;padding:30px;color:#6b7280;font-size:12px;">No pending logs</div>':logs.map(function(log){return'<div style="background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:11px;"><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-weight:700;color:#f1f5f9;">'+esc(log.user)+'</span><span style="color:#6b7280;font-family:monospace;font-size:9px;">'+esc(log.timestamp)+'</span></div><div style="color:#94a3b8;line-height:1.6;">'+esc(log.controller)+' | '+esc(log.task)+' | '+esc(log.duration)+'</div></div>';}).join('');var statusEl=document.getElementById('hp-ctl-replay-status');if(statusEl)statusEl.textContent=logs.length+' pending log'+(logs.length!==1?'s':'');modal.style.display='flex';modal.setAttribute('aria-hidden','false');};
+  window._ctlClosePendingLogs=function(){var modal=document.getElementById('hp-ctl-pending-modal');if(modal){modal.style.display='none';modal.setAttribute('aria-hidden','true');}};
+  window._ctlClearPendingLogs=function(){if(!confirm('Clear all '+getPendingLogs().length+' pending logs?'))return;setPendingLogs([]);_updatePendingBtn();window._ctlShowPendingLogs();};
+  window._ctlReplayPendingLogs=function(){var logs=getPendingLogs();if(!logs.length)return;if(!SHEETS_ENDPOINT){alert('SHEETS_ENDPOINT not configured.');return;}var replayBtn=document.getElementById('hp-ctl-replay-btn');var replayStatus=document.getElementById('hp-ctl-replay-status');if(replayBtn){replayBtn.disabled=true;replayBtn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Sending…';}var success=0,fail=0,remaining=logs.length;logs.forEach(function(payload){fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)}).then(function(){success++;removePendingLog(payload.timestamp,payload.user);}).catch(function(){fail++;}).finally(function(){remaining--;if(remaining===0){_updatePendingBtn();if(replayBtn){replayBtn.disabled=false;replayBtn.innerHTML='<i class="fas fa-redo"></i> Retry Send';}if(replayStatus){replayStatus.textContent=success+' sent'+(fail?', '+fail+' failed':'');replayStatus.style.color=fail?'#ef4444':'#10b981';}setTimeout(function(){window._ctlShowPendingLogs();},400);}});});};
 
-  // Expose renderAll so booking system can trigger card re-render
-  window._ctlRenderAll = function() {
-    try {
-      var items; try{var r=localStorage.getItem('mums_controller_lab_items_v1');var p=r?JSON.parse(r):[];items=Array.isArray(p)?p:[];}catch(_){items=[];}
-      // Trigger the inner renderAll from the controller IIFE (already bound to window._ctlRenderAll)
-      // We need to call the chip row + main list re-render
-      // Use a custom event to trigger the IIFE's renderAll safely
-      document.dispatchEvent(new CustomEvent('ctl:rerender'));
-    }catch(_){}
-  };
+  // Expose renderAll so the IIFE can call it
   document.addEventListener('ctl:rerender', function() {
-    // The controller IIFE listens for this and calls its internal renderAll
+    if(window._ctlRenderAll) window._ctlRenderAll();
   });
 
 })();
+
 

@@ -4503,3 +4503,67 @@
 
     /* ── Col: remove border-right on last child when in-use state set ────── */
     .hp-ctl-col.in-use:last-child { border-right: none; }
+
+    /* ══════════════════════════════════════════════════════════════════
+       CONTROLLER LAB v5.0 — Timer overlay + Queue position badge
+    ══════════════════════════════════════════════════════════════════ */
+
+    /* ── Image wrapper (relative position for timer overlay) ───────── */
+    .hp-ctl-img-wrap {
+      position: relative;
+      width: 100%; display: flex; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ── Centered timer overlay on controller image ─────────────────── */
+    .hp-ctl-timer-overlay {
+      position: absolute;
+      bottom: 6px; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none; z-index: 2;
+    }
+    .hp-ctl-timer-inner {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 5px 12px 6px;
+      background: rgba(7, 13, 24, 0.88);
+      backdrop-filter: blur(6px);
+      border: 1.5px solid rgba(251,191,36,.6);
+      border-radius: 10px;
+      box-shadow: 0 0 18px rgba(251,191,36,.3), 0 4px 16px rgba(0,0,0,.6);
+      min-width: 82px;
+    }
+    .hp-ctl-timer-label {
+      font-size: 7px; font-weight: 900; letter-spacing: .12em;
+      text-transform: uppercase; color: rgba(251,191,36,.7);
+      margin-bottom: 1px;
+    }
+    .hp-ctl-timer-val {
+      font-size: 18px; font-weight: 900; color: #fbbf24;
+      font-family: 'JetBrains Mono', monospace; letter-spacing: .04em;
+      line-height: 1.1;
+      text-shadow: 0 0 12px rgba(251,191,36,.6);
+    }
+    /* urgent: red + pulse */
+    .hp-ctl-timer-overlay.urgent .hp-ctl-timer-inner {
+      border-color: rgba(248,81,73,.7);
+      box-shadow: 0 0 22px rgba(248,81,73,.4), 0 4px 16px rgba(0,0,0,.6);
+      animation: ctl-timer-pulse 1s ease-in-out infinite;
+    }
+    .hp-ctl-timer-overlay.urgent .hp-ctl-timer-val { color: #f87171; text-shadow: 0 0 12px rgba(248,81,73,.6); }
+    .hp-ctl-timer-overlay.urgent .hp-ctl-timer-label { color: rgba(248,81,73,.8); }
+    @keyframes ctl-timer-pulse {
+      0%,100% { transform: translateX(-50%) scale(1); }
+      50%      { transform: translateX(-50%) scale(1.04); }
+    }
+
+    /* ── Queue position badge (for current user who's already in queue) ── */
+    .hp-ctl-queue-position-badge {
+      width: 100%; padding: 8px 10px; border-radius: 9px;
+      background: rgba(162,93,220,.1); border: 1px solid rgba(162,93,220,.3);
+      color: #c084fc; font-size: 10px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      text-align: center;
+    }
+
+    /* ── Suppress old countdown row (no longer rendered, just safety) ── */
+    .hp-ctl-countdown { display: none !important; }
