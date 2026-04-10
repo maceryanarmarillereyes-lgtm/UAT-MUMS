@@ -981,13 +981,21 @@
     /* ── Vertical column display in main lab area ── */
     /* ── Booking / Queue state helpers (shared with booking module) ── */
     function _ctlLS(key) { try{var r=localStorage.getItem(key);return r?JSON.parse(r):null;}catch(_){return null;} }
-    function getBooking(id){ return _ctlLS('ctl_booking_'+id)||null; }
+    function getBooking(id){
+      if (typeof window._ctlSharedStateGetBooking === 'function') return window._ctlSharedStateGetBooking(id);
+      return _ctlLS('ctl_booking_'+id)||null;
+    }
     function setBooking(id,data){
+      if (typeof window._ctlSetSharedBooking === 'function') { window._ctlSetSharedBooking(id, data); return; }
       try{if(data)localStorage.setItem('ctl_booking_'+id,JSON.stringify(data));else localStorage.removeItem('ctl_booking_'+id);}catch(_){}
       _ctlBroadcast({type:'ctl_update',key:'ctl_booking_'+id});
     }
-    function getQueue(id){ var r=_ctlLS('ctl_queue_'+id); return Array.isArray(r)?r:[]; }
+    function getQueue(id){
+      if (typeof window._ctlSharedStateGetQueue === 'function') return window._ctlSharedStateGetQueue(id);
+      var r=_ctlLS('ctl_queue_'+id); return Array.isArray(r)?r:[];
+    }
     function setQueue(id,arr){
+      if (typeof window._ctlSetSharedQueue === 'function') { window._ctlSetSharedQueue(id, arr); return; }
       try{localStorage.setItem('ctl_queue_'+id,JSON.stringify(arr||[]));}catch(_){}
       _ctlBroadcast({type:'ctl_update',key:'ctl_queue_'+id});
     }
@@ -1388,6 +1396,8 @@
   var _alertAudio     = null;   // looping alert Audio object
   var _alertInterval  = null;   // fallback interval to re-play
   var _pollTimer      = null;
+  var _stateCache     = { bookings: {}, queues: {} };
+  var _stateReqBusy   = false;
 
   // ── Cross-tab realtime channel ────────────────────────────────────────────
   var _channel = null;
@@ -1403,9 +1413,11 @@
       }
     });
   }
-  // Polling fallback every 3 seconds
+  // Polling fallback every 3 seconds (cross-user sync)
   _pollTimer = setInterval(function() {
-    if (window._ctlRenderAll) window._ctlRenderAll();
+    _loadSharedStateFromServer(function(){
+      if (window._ctlRenderAll) window._ctlRenderAll();
+    });
   }, 3000);
 
   function _broadcast(msg) {
@@ -1414,18 +1426,88 @@
 
   // ── Storage helpers ───────────────────────────────────────────────────────
   function _ls(key) { try{var r=localStorage.getItem(key);return r?JSON.parse(r):null;}catch(_){return null;} }
+  function _setLs(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch(_) {} }
+  function _ctlGetToken() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) {
+        var p = JSON.parse(raw);
+        var t = p && (p.access_token || (p.session && p.session.access_token));
+        if (t) return String(t);
+      }
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') {
+        var t2 = window.CloudAuth.accessToken();
+        if (t2) return String(t2);
+      }
+    } catch(_) {}
+    return '';
+  }
+  function _loadStateCache() {
+    var s = _ls('mums_ctl_lab_state_v1');
+    if (s && typeof s === 'object') {
+      _stateCache = {
+        bookings: s.bookings && typeof s.bookings === 'object' ? s.bookings : {},
+        queues: s.queues && typeof s.queues === 'object' ? s.queues : {},
+      };
+    }
+  }
+  function _saveStateCache() {
+    _setLs('mums_ctl_lab_state_v1', _stateCache);
+  }
+  function _applySharedState(data) {
+    if (!data || typeof data !== 'object') return;
+    _stateCache = {
+      bookings: data.bookings && typeof data.bookings === 'object' ? data.bookings : {},
+      queues: data.queues && typeof data.queues === 'object' ? data.queues : {},
+    };
+    _saveStateCache();
+  }
+  function _loadSharedStateFromServer(cb) {
+    if (_stateReqBusy) return;
+    var tok = _ctlGetToken();
+    if (!tok) { if (cb) cb(); return; }
+    _stateReqBusy = true;
+    fetch('/api/studio/ctl_lab_state', {
+      headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-store' }
+    })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if (d && d.ok) _applySharedState(d); })
+      .catch(function(){})
+      .finally(function(){ _stateReqBusy = false; if (cb) cb(); });
+  }
+  function _pushSharedPatch(body) {
+    var tok = _ctlGetToken();
+    if (!tok) return;
+    fetch('/api/studio/ctl_lab_state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+      body: JSON.stringify(body || {})
+    }).then(function(r){ return r.ok ? r.json() : null; }).then(function(d){ if (d && d.ok) _applySharedState(d); }).catch(function(){});
+  }
   function getItems() {
     var r=_ls('mums_controller_lab_items_v1'); return Array.isArray(r)?r:[];
   }
-  function getBooking(id) { return _ls('ctl_booking_'+id); }
+  function getBooking(id) { return _stateCache.bookings && _stateCache.bookings[id] ? _stateCache.bookings[id] : null; }
   function setBooking(id,data) {
-    try{if(data)localStorage.setItem('ctl_booking_'+id,JSON.stringify(data));else localStorage.removeItem('ctl_booking_'+id);}catch(_){}
+    if (!_stateCache.bookings || typeof _stateCache.bookings !== 'object') _stateCache.bookings = {};
+    if (data) _stateCache.bookings[id] = data;
+    else delete _stateCache.bookings[id];
+    _saveStateCache();
+    _pushSharedPatch({ booking: { id: id, data: data || null } });
     _broadcast({type:'ctl_update',key:'ctl_booking_'+id});
     if(window._ctlRenderAll) window._ctlRenderAll();
   }
-  function getQueue(id) { var r=_ls('ctl_queue_'+id); return Array.isArray(r)?r:[]; }
+  function getQueue(id) {
+    var r = _stateCache.queues && Array.isArray(_stateCache.queues[id]) ? _stateCache.queues[id] : [];
+    return Array.isArray(r) ? r : [];
+  }
   function setQueue(id,arr) {
-    try{localStorage.setItem('ctl_queue_'+id,JSON.stringify(arr||[]));}catch(_){}
+    if (!_stateCache.queues || typeof _stateCache.queues !== 'object') _stateCache.queues = {};
+    var next = Array.isArray(arr) ? arr : [];
+    if (next.length) _stateCache.queues[id] = next;
+    else delete _stateCache.queues[id];
+    _saveStateCache();
+    _pushSharedPatch({ queue: { id: id, items: next } });
     _broadcast({type:'ctl_update',key:'ctl_queue_'+id});
     if(window._ctlRenderAll) window._ctlRenderAll();
   }
@@ -1437,6 +1519,9 @@
   function removePendingLog(ts,user) {
     try{setPendingLogs(getPendingLogs().filter(function(l){return!(l.timestamp===ts&&l.user===user);}));}catch(_){}
   }
+
+  _loadStateCache();
+  _loadSharedStateFromServer(function(){ if (window._ctlRenderAll) window._ctlRenderAll(); });
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -1941,6 +2026,11 @@
     _showAlarmBanner('Override executed. '+labelFor(ctrl.type)+' is now available.',itemId);
     setTimeout(function(){window._ctlOpenBooking&&window._ctlOpenBooking(itemId);},400);
   };
+
+  window._ctlSharedStateGetBooking = getBooking;
+  window._ctlSharedStateGetQueue = getQueue;
+  window._ctlSetSharedBooking = setBooking;
+  window._ctlSetSharedQueue = setQueue;
 
   // ── DURATION CHIP WIRING ──────────────────────────────────────────────────
   document.addEventListener('click',function(e){
