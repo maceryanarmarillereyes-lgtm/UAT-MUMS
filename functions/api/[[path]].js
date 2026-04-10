@@ -44,6 +44,9 @@ async function getRoutes(env) {
     health: unwrapCjs(await import('../../server/routes/health.js')),
 
     // Vendor bundles served as first-party scripts (avoid 3rd-party storage blocks)
+    // FIX v3.9.30: Add alias without .js extension — support_studio.html loads /api/vendor/supabase
+    // (no extension) which was hitting a 404 because only 'vendor/supabase.js' was registered.
+    'vendor/supabase':    unwrapCjs(await import('../../server/routes/vendor/supabase.js')),
     'vendor/supabase.js': unwrapCjs(await import('../../server/routes/vendor/supabase.js')),
     keep_alive: unwrapCjs(await import('../../server/routes/keep_alive.js')),
     'keep_alive.js': unwrapCjs(await import('../../server/routes/keep_alive.js')),
@@ -138,6 +141,7 @@ async function getRoutes(env) {
 
     // ── Controller Testing Lab — shared config (all users see same controllers) ──
     'studio/ctl_lab_config':      unwrapCjs(await import('../../server/routes/studio/ctl_lab_config.js')),
+    'studio/ctl_lab_state':       unwrapCjs(await import('../../server/routes/studio/ctl_lab_state.js')),
 
     // ── ICare Oncall Tech — QB On-Call Schedule ──────────────────────────────
     'studio/oncall_settings':     unwrapCjs(await import('../../server/routes/studio/oncall_settings.js')),

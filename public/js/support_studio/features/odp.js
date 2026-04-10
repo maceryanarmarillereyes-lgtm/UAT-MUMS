@@ -484,6 +484,16 @@
         global: { headers: token ? { Authorization: 'Bearer ' + token } : {} }
       });
 
+      // FIX v3.9.30: Authorize the Realtime WebSocket socket explicitly.
+      // Without setAuth(), the WS connection uses the anon key only — Supabase Realtime
+      // rejects postgres_changes subscriptions on RLS-protected tables for anon role,
+      // causing CHANNEL_ERROR. setAuth() passes the user JWT over the WS handshake.
+      try {
+        if (_odpState.sbClient.realtime && typeof _odpState.sbClient.realtime.setAuth === 'function') {
+          _odpState.sbClient.realtime.setAuth(token);
+        }
+      } catch(_setAuthErr) {}
+
       _odpState.rtChannel = _odpState.sbClient
         .channel('odp-daily-passwords-v2')
         .on('postgres_changes', {

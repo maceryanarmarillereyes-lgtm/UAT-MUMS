@@ -981,13 +981,21 @@
     /* ── Vertical column display in main lab area ── */
     /* ── Booking / Queue state helpers (shared with booking module) ── */
     function _ctlLS(key) { try{var r=localStorage.getItem(key);return r?JSON.parse(r):null;}catch(_){return null;} }
-    function getBooking(id){ return _ctlLS('ctl_booking_'+id)||null; }
+    function getBooking(id){
+      if (typeof window._ctlSharedStateGetBooking === 'function') return window._ctlSharedStateGetBooking(id);
+      return _ctlLS('ctl_booking_'+id)||null;
+    }
     function setBooking(id,data){
+      if (typeof window._ctlSetSharedBooking === 'function') { window._ctlSetSharedBooking(id, data); return; }
       try{if(data)localStorage.setItem('ctl_booking_'+id,JSON.stringify(data));else localStorage.removeItem('ctl_booking_'+id);}catch(_){}
       _ctlBroadcast({type:'ctl_update',key:'ctl_booking_'+id});
     }
-    function getQueue(id){ var r=_ctlLS('ctl_queue_'+id); return Array.isArray(r)?r:[]; }
+    function getQueue(id){
+      if (typeof window._ctlSharedStateGetQueue === 'function') return window._ctlSharedStateGetQueue(id);
+      var r=_ctlLS('ctl_queue_'+id); return Array.isArray(r)?r:[];
+    }
     function setQueue(id,arr){
+      if (typeof window._ctlSetSharedQueue === 'function') { window._ctlSetSharedQueue(id, arr); return; }
       try{localStorage.setItem('ctl_queue_'+id,JSON.stringify(arr||[]));}catch(_){}
       _ctlBroadcast({type:'ctl_update',key:'ctl_queue_'+id});
     }
@@ -1070,7 +1078,7 @@
 
         /* header badge */
         var headerBadge=isActive
-          ?'<div class="hp-ctl-col-header-badge in-use"><i class="fas fa-user" style="font-size:7px;"></i> '+esc(booking.user)+'</div>'
+          ?'<div class="hp-ctl-col-header-badge in-use"><i class="fas fa-user-clock" style="font-size:7px;"></i> IN USED</div>'
           :'<div class="hp-ctl-col-header-badge available"><i class="fas fa-check-circle" style="font-size:7px;"></i> Available</div>';
 
         /* user strip */
@@ -1105,8 +1113,16 @@
         }
 
         /* queue pill */
+        var queueNames = queue.slice(0, 8).map(function(q, i){
+          var uname = q && q.user ? q.user : 'Unknown';
+          return '<div class="hp-ctl-queue-tip-item"><span class="hp-ctl-queue-tip-pos">#'+(i+1)+'</span><span class="hp-ctl-queue-tip-name">'+esc(uname)+'</span></div>';
+        }).join('');
+        if (queue.length > 8) queueNames += '<div class="hp-ctl-queue-tip-more">+'+(queue.length-8)+' more</div>';
         var queuePill=queue.length>0
-          ?'<div class="hp-ctl-queue-pill"><i class="fas fa-users" style="font-size:8px;"></i><span>'+queue.length+' waiting</span></div>':'' ;
+          ?'<div class="hp-ctl-queue-pill" tabindex="0" aria-label="'+queue.length+' waiting users">'
+            +'<div class="hp-ctl-queue-pill-main"><i class="fas fa-users" style="font-size:8px;"></i><span>'+queue.length+' waiting</span></div>'
+            +'<div class="hp-ctl-queue-tooltip">'+queueNames+'</div>'
+          +'</div>':'' ;
 
         /* action button — waiting status for current user if they're in queue */
         var myQueuePos=queue.findIndex(function(q){return q.user===me;});
@@ -1388,6 +1404,8 @@
   var _alertAudio     = null;   // looping alert Audio object
   var _alertInterval  = null;   // fallback interval to re-play
   var _pollTimer      = null;
+  var _stateCache     = { bookings: {}, queues: {} };
+  var _stateReqBusy   = false;
 
   // ── Cross-tab realtime channel ────────────────────────────────────────────
   var _channel = null;
@@ -1403,9 +1421,11 @@
       }
     });
   }
-  // Polling fallback every 3 seconds
+  // Polling fallback every 3 seconds (cross-user sync)
   _pollTimer = setInterval(function() {
-    if (window._ctlRenderAll) window._ctlRenderAll();
+    _loadSharedStateFromServer(function(){
+      if (window._ctlRenderAll) window._ctlRenderAll();
+    });
   }, 3000);
 
   function _broadcast(msg) {
@@ -1414,18 +1434,88 @@
 
   // ── Storage helpers ───────────────────────────────────────────────────────
   function _ls(key) { try{var r=localStorage.getItem(key);return r?JSON.parse(r):null;}catch(_){return null;} }
+  function _setLs(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch(_) {} }
+  function _ctlGetToken() {
+    try {
+      var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+      if (raw) {
+        var p = JSON.parse(raw);
+        var t = p && (p.access_token || (p.session && p.session.access_token));
+        if (t) return String(t);
+      }
+      if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') {
+        var t2 = window.CloudAuth.accessToken();
+        if (t2) return String(t2);
+      }
+    } catch(_) {}
+    return '';
+  }
+  function _loadStateCache() {
+    var s = _ls('mums_ctl_lab_state_v1');
+    if (s && typeof s === 'object') {
+      _stateCache = {
+        bookings: s.bookings && typeof s.bookings === 'object' ? s.bookings : {},
+        queues: s.queues && typeof s.queues === 'object' ? s.queues : {},
+      };
+    }
+  }
+  function _saveStateCache() {
+    _setLs('mums_ctl_lab_state_v1', _stateCache);
+  }
+  function _applySharedState(data) {
+    if (!data || typeof data !== 'object') return;
+    _stateCache = {
+      bookings: data.bookings && typeof data.bookings === 'object' ? data.bookings : {},
+      queues: data.queues && typeof data.queues === 'object' ? data.queues : {},
+    };
+    _saveStateCache();
+  }
+  function _loadSharedStateFromServer(cb) {
+    if (_stateReqBusy) return;
+    var tok = _ctlGetToken();
+    if (!tok) { if (cb) cb(); return; }
+    _stateReqBusy = true;
+    fetch('/api/studio/ctl_lab_state', {
+      headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-store' }
+    })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if (d && d.ok) _applySharedState(d); })
+      .catch(function(){})
+      .finally(function(){ _stateReqBusy = false; if (cb) cb(); });
+  }
+  function _pushSharedPatch(body) {
+    var tok = _ctlGetToken();
+    if (!tok) return;
+    fetch('/api/studio/ctl_lab_state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+      body: JSON.stringify(body || {})
+    }).then(function(r){ return r.ok ? r.json() : null; }).then(function(d){ if (d && d.ok) _applySharedState(d); }).catch(function(){});
+  }
   function getItems() {
     var r=_ls('mums_controller_lab_items_v1'); return Array.isArray(r)?r:[];
   }
-  function getBooking(id) { return _ls('ctl_booking_'+id); }
+  function getBooking(id) { return _stateCache.bookings && _stateCache.bookings[id] ? _stateCache.bookings[id] : null; }
   function setBooking(id,data) {
-    try{if(data)localStorage.setItem('ctl_booking_'+id,JSON.stringify(data));else localStorage.removeItem('ctl_booking_'+id);}catch(_){}
+    if (!_stateCache.bookings || typeof _stateCache.bookings !== 'object') _stateCache.bookings = {};
+    if (data) _stateCache.bookings[id] = data;
+    else delete _stateCache.bookings[id];
+    _saveStateCache();
+    _pushSharedPatch({ booking: { id: id, data: data || null } });
     _broadcast({type:'ctl_update',key:'ctl_booking_'+id});
     if(window._ctlRenderAll) window._ctlRenderAll();
   }
-  function getQueue(id) { var r=_ls('ctl_queue_'+id); return Array.isArray(r)?r:[]; }
+  function getQueue(id) {
+    var r = _stateCache.queues && Array.isArray(_stateCache.queues[id]) ? _stateCache.queues[id] : [];
+    return Array.isArray(r) ? r : [];
+  }
   function setQueue(id,arr) {
-    try{localStorage.setItem('ctl_queue_'+id,JSON.stringify(arr||[]));}catch(_){}
+    if (!_stateCache.queues || typeof _stateCache.queues !== 'object') _stateCache.queues = {};
+    var next = Array.isArray(arr) ? arr : [];
+    if (next.length) _stateCache.queues[id] = next;
+    else delete _stateCache.queues[id];
+    _saveStateCache();
+    _pushSharedPatch({ queue: { id: id, items: next } });
     _broadcast({type:'ctl_update',key:'ctl_queue_'+id});
     if(window._ctlRenderAll) window._ctlRenderAll();
   }
@@ -1437,6 +1527,9 @@
   function removePendingLog(ts,user) {
     try{setPendingLogs(getPendingLogs().filter(function(l){return!(l.timestamp===ts&&l.user===user);}));}catch(_){}
   }
+
+  _loadStateCache();
+  _loadSharedStateFromServer(function(){ if (window._ctlRenderAll) window._ctlRenderAll(); });
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -1858,19 +1951,24 @@
     var queue = getQueue(itemId);
     if (!queue.length) { if(window._ctlRenderAll) window._ctlRenderAll(); return; }
 
-    var next  = queue[0];
+    var next  = queue[0] || {};
     var items = getItems();
     var ctrl  = items.find(function(i){return i.id===itemId;})||{};
     var ctrlLabel = labelFor(ctrl.type||'');
     var me    = _getCurrentUser();
 
-    // Pop next from queue
-    queue.shift();
-    setQueue(itemId, queue);
+    // Keep queued form details until the target user starts session.
+    // We only stamp notifiedAt once to avoid repeated alert spam.
+    var firstNotify = !next.notifiedAt;
+    if (firstNotify) {
+      next.notifiedAt = Date.now();
+      queue[0] = next;
+      setQueue(itemId, queue);
+    }
 
-    // Log to sheet
-    if(SHEETS_ENDPOINT && next.task){
-      var autoPayload={timestamp:phtNow(),user:next.user,controller:ctrlLabel+' — '+(ctrl.ip||'—'),task:next.task,duration:next.duration||'queued',backupFile:'pending',note:'Auto-advanced from queue'};
+    // Log to sheet once at first queue notification.
+    if(firstNotify && SHEETS_ENDPOINT && next.task){
+      var autoPayload={timestamp:phtNow(),user:next.user,controller:ctrlLabel+' — '+(ctrl.ip||'—'),task:next.task,duration:next.duration||'queued',backupFile:'pending',note:'Queue turn notified'};
       savePendingLog(autoPayload);
       fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(autoPayload)}).catch(function(){});
     }
@@ -1879,14 +1977,15 @@
     _broadcast({
       type:'ctl_update', subtype:'queue_notify',
       ctrlId:itemId, ctrlLabel:ctrlLabel,
-      targetUser:next.user
+      targetUser:next.user,
+      queueEntry:{ task: next.task || '', duration: next.duration || '', joinedAt: next.joinedAt || 0 }
     });
 
     // If I'm the one: trigger alert sound + backup upload flow
     if (next.user === me) {
       _triggerQueueAlert(itemId, ctrlLabel);
     } else {
-      // Show a softer banner for others
+      // Show a softer banner for observers
       _showAlarmBanner(next.user + '\'s turn! ' + ctrlLabel + ' is now available.', itemId);
     }
 
@@ -1942,6 +2041,11 @@
     setTimeout(function(){window._ctlOpenBooking&&window._ctlOpenBooking(itemId);},400);
   };
 
+  window._ctlSharedStateGetBooking = getBooking;
+  window._ctlSharedStateGetQueue = getQueue;
+  window._ctlSetSharedBooking = setBooking;
+  window._ctlSetSharedQueue = setQueue;
+
   // ── DURATION CHIP WIRING ──────────────────────────────────────────────────
   document.addEventListener('click',function(e){
     var chip=e.target.closest('.hp-ctl-dur-chip');if(!chip)return;
@@ -1982,5 +2086,4 @@
   });
 
 })();
-
 

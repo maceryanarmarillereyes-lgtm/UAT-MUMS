@@ -7,9 +7,13 @@
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
 (function(){
+  // FIX v3.9.30: Source order updated.
+  // 1. /api/vendor/supabase  — CF Pages catch-all + Vercel (no .js, now aliased in route map)
+  // 2. /functions/vendor/supabase.js — CF Pages file-based route (fallback)
+  // 3. jsDelivr CDN — last resort if both server-side proxies fail
   var sources = [
+    '/api/vendor/supabase',
     '/functions/vendor/supabase.js',
-    '/api/vendor/supabase.js',
     'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.0/dist/umd/supabase.min.js'
   ];
   function loadAt(i) {

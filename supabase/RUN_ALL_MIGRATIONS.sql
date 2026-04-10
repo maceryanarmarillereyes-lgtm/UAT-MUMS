@@ -1170,6 +1170,25 @@ execute function public.mums_link_auth_user_to_profile();
 
 
 -- ===========================================================================
+-- 2026-04-10: Free Tier IO Rescue + RLS Security Fix
+-- Run: supabase/migrations/20260410_01_free_tier_io_rescue.sql
+--      supabase/migrations/20260410_02_rls_security_fix.sql
+-- ===========================================================================
+-- mums_presence + heartbeat UNLOGGED, heartbeat single-row UPSERT
+-- mums_documents + mums_sync_log REPLICA IDENTITY DEFAULT
+-- RLS enabled on mums_presence, mums_sync_log, task_distributions, task_items
+
+
+-- ===========================================================================
+-- 2026-04-11: daily_passwords Free Tier Fix (v3.9.30)
+-- Run: supabase/migrations/20260411_01_daily_passwords_free_tier_fix.sql
+-- ===========================================================================
+-- daily_passwords REPLICA IDENTITY DEFAULT (was FULL — doubled WAL per UPDATE)
+-- RLS policy updated: auth.uid() IS NOT NULL (eliminates schema cache probe)
+-- Realtime publication registration verified (idempotent)
+
+
+-- ===========================================================================
 -- END: Reload PostgREST schema cache
 -- ===========================================================================
 NOTIFY pgrst, 'reload schema';

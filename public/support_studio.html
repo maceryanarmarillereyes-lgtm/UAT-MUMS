@@ -37,23 +37,13 @@
   <script src="/js/pages/my_quickbase.js"></script>
 
   <!-- Supabase SDK — first-party proxy loader (required for ODP Realtime) -->
+  <!-- FIX v3.9.30: Removed duplicate inline SDK injection. supabase_loader.js already
+       handles multi-source fallback loading AND fires window mums:supabase_ready.
+       The old inline block was: (1) loading a second copy of the SDK, (2) firing
+       mums:supabase_ready on `document` instead of `window` which ODP never receives. -->
   <script src="/js/support_studio/supabase_loader.js"></script>
 
   <!-- Studio Cache Manager — IndexedDB-based persistent cache -->
-  <!-- Supabase SDK — loaded via first-party proxy for ODP Realtime -->
-  <script>
-    (function() {
-      var s = document.createElement('script');
-      s.src = '/api/vendor/supabase';
-      s.onload = function() {
-        document.dispatchEvent(new CustomEvent('mums:supabase_ready'));
-      };
-      s.onerror = function() {
-        console.warn('[MUMS] Supabase SDK load failed via proxy — Realtime disabled');
-      };
-      document.head.appendChild(s);
-    })();
-  </script>
 
   <script src="/js/studio_cache.js"></script>
   
