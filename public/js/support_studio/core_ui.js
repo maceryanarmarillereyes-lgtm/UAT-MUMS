@@ -1404,6 +1404,7 @@
   var _alertAudio     = null;   // looping alert Audio object
   var _alertInterval  = null;   // fallback interval to re-play
   var _pollTimer      = null;
+  var _queueSweepBusy = false;
   var _stateCache     = { bookings: {}, queues: {} };
   var _stateReqBusy   = false;
 
@@ -1424,6 +1425,7 @@
   // Polling fallback every 3 seconds (cross-user sync)
   _pollTimer = setInterval(function() {
     _loadSharedStateFromServer(function(){
+      if (window._ctlSweepQueueTimeouts) window._ctlSweepQueueTimeouts();
       if (window._ctlRenderAll) window._ctlRenderAll();
     });
   }, 3000);
@@ -1527,6 +1529,39 @@
   function removePendingLog(ts,user) {
     try{setPendingLogs(getPendingLogs().filter(function(l){return!(l.timestamp===ts&&l.user===user);}));}catch(_){}
   }
+
+  // ── Queue sweeper: auto-void unacknowledged queue turns (3 minutes) ───────
+  window._ctlSweepQueueTimeouts = function() {
+    if (_queueSweepBusy) return;
+    _queueSweepBusy = true;
+    try {
+      var now = Date.now();
+      var items = getItems();
+      items.forEach(function(item) {
+        var id = item && item.id ? item.id : '';
+        if (!id) return;
+        var booking = getBooking(id);
+        var queue = getQueue(id);
+        if (!queue.length) return;
+
+        // If controller is available and the first queued user timed out, void them.
+        if (!booking || booking.endMs <= now) {
+          var head = queue[0] || {};
+          var expiresAt = Number(head.notifyExpiresAt || 0);
+          if (expiresAt && expiresAt <= now) {
+            queue.shift();
+            setQueue(id, queue);
+            // If next user exists, notify their turn immediately.
+            if (queue.length && window._ctlNotifyQueue) window._ctlNotifyQueue(id);
+            return;
+          }
+          // If available and no notification has been sent yet, start turn notification flow.
+          if (!head.notifiedAt && window._ctlNotifyQueue) window._ctlNotifyQueue(id);
+        }
+      });
+    } catch(_) {}
+    _queueSweepBusy = false;
+  };
 
   _loadStateCache();
   _loadSharedStateFromServer(function(){ if (window._ctlRenderAll) window._ctlRenderAll(); });
@@ -1785,6 +1820,13 @@
     ['hp-ctl-bk-task','hp-ctl-bk-duration','hp-ctl-bk-backup','hp-ctl-bk-custom-time'].forEach(function(id){
       var el=document.getElementById(id);if(el){el.value='';el.classList.remove('invalid');}
     });
+    // Queue-turn notification preference belongs to queue flow only.
+    var notifyEl = document.getElementById('hp-ctl-bk-notify-alarm');
+    if (notifyEl) {
+      notifyEl.checked = false;
+      var notifyWrap = notifyEl.closest('.hp-ctl-bk-field');
+      if (notifyWrap) notifyWrap.style.display = 'none';
+    }
     document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.remove('selected','invalid-chip');});
     var customWrap=document.getElementById('hp-ctl-bk-custom-time-wrap');if(customWrap)customWrap.style.display='none';
 
@@ -1962,8 +2004,19 @@
     var firstNotify = !next.notifiedAt;
     if (firstNotify) {
       next.notifiedAt = Date.now();
+      next.notifyExpiresAt = Date.now() + (3 * 60 * 1000); // auto-void after 3 minutes if unacknowledged
       queue[0] = next;
       setQueue(itemId, queue);
+    } else {
+      // If already notified and grace window expired, auto-void and notify next.
+      var exp = Number(next.notifyExpiresAt || 0);
+      if (exp && exp <= Date.now()) {
+        queue.shift();
+        setQueue(itemId, queue);
+        if (queue.length) window._ctlNotifyQueue(itemId);
+        return;
+      }
+      return;
     }
 
     // Log to sheet once at first queue notification.
@@ -2069,7 +2122,7 @@
     var pm=document.getElementById('hp-ctl-pending-modal');if(pm&&pm.style.display!=='none')window._ctlClosePendingLogs();
   });
   document.addEventListener('click',function(e){
-    if(e.target&&e.target.id==='hp-ctl-booking-modal')window._ctlCloseBooking();
+    // Booking modal should close only via dedicated close controls (X/Close button).
     if(e.target&&e.target.id==='hp-ctl-queue-modal')window._ctlCloseQueue();
     if(e.target&&e.target.id==='hp-ctl-override-modal')window._ctlCloseOverride();
   });
@@ -2086,4 +2139,3 @@
   });
 
 })();
-
