@@ -854,6 +854,8 @@
   (function(){
     var STORAGE_KEY = 'mums_controller_lab_items_v1';
     var editingId = null;
+    var _ctlSavePending = false;
+    var _ctlSaveTimer = null;
     var CATALOG = {
       'E2':             { img: '/Widget%20Images/E2_Widget.png',             label: 'E2'    },
       'E3':             { img: '/Widget%20Images/E3_Widget.png',             label: 'E3'       },
@@ -865,12 +867,68 @@
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       .replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
+    // ── Auth token helper for API calls ───────────────────────────────────
+    function _ctlGetToken() {
+      try {
+        var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+        if (raw) { var p = JSON.parse(raw); var t = p && (p.access_token || (p.session && p.session.access_token)); if (t) return String(t); }
+        if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') { var t2 = window.CloudAuth.accessToken(); if (t2) return t2; }
+      } catch(_) {}
+      return '';
+    }
+
+    // ── BUG-FIX: Shared storage via Supabase ─────────────────────────────
+    // ROOT CAUSE: Items were stored ONLY in localStorage, so each user/browser
+    // had its own empty list — other users saw "No controller configured yet."
+    // FIX: items are now persisted in mums_documents via /api/studio/ctl_lab_config
+    // and shared across ALL authenticated users. localStorage = fast local cache.
+
     function getItems() {
+      // Read from localStorage cache for instant render (no async blocking)
       try { var r=localStorage.getItem(STORAGE_KEY); var p=r?JSON.parse(r):[]; return Array.isArray(p)?p:[]; }
       catch(_){ return []; }
     }
+
     function setItems(items) {
+      // Write to local cache immediately for instant UI update
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items||[])); } catch(_) {}
+      // Debounce Supabase write — coalesce rapid edits into a single API call
+      if (_ctlSaveTimer) clearTimeout(_ctlSaveTimer);
+      _ctlSaveTimer = setTimeout(function() { _ctlPushToServer(items||[]); }, 400);
+    }
+
+    function _ctlPushToServer(items) {
+      if (_ctlSavePending) return;
+      var tok = _ctlGetToken();
+      if (!tok) return;
+      _ctlSavePending = true;
+      fetch('/api/studio/ctl_lab_config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+        body: JSON.stringify({ items: items })
+      }).catch(function(){}).finally(function(){ _ctlSavePending = false; });
+    }
+
+    // Called once on mount — fetches the authoritative shared list from Supabase
+    function _ctlLoadFromServer() {
+      var tok = _ctlGetToken();
+      if (!tok) { setTimeout(_ctlLoadFromServer, 1200); return; }
+      fetch('/api/studio/ctl_lab_config', {
+        headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-store' }
+      })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d) {
+        if (!d || !d.ok || !Array.isArray(d.items)) return;
+        var serverItems = d.items;
+        var localItems = getItems();
+        // If server has more items (another user added controllers), adopt server list.
+        // If local has more (admin added while offline/logged-out), keep local and push.
+        var useItems = serverItems.length >= localItems.length ? serverItems : localItems;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(useItems)); } catch(_) {}
+        if (localItems.length > serverItems.length) _ctlPushToServer(localItems);
+        renderAll();
+      })
+      .catch(function(){});
     }
     function imageFor(type) {
       var hit = CATALOG[type]; return hit && hit.img ? hit.img : FALLBACK_IMG;
@@ -1173,8 +1231,15 @@
     renderPreview();
     renderAll();
 
-    // Expose internal renderAll for booking system
+    // BUG 1 FIX: On mount, fetch the shared controller list from Supabase.
+    // This ensures ALL users see the same controllers regardless of their browser's
+    // localStorage state. renderAll() above shows the local cache instantly while
+    // _ctlLoadFromServer() fetches the authoritative list in the background.
+    _ctlLoadFromServer();
+
+    // Expose internal renderAll + server refresh for booking system
     window._ctlRenderAll = renderAll;
+    window._ctlRefreshFromServer = _ctlLoadFromServer;
   })();
 
   // ── Settings nav switching ──────────────────────────────────────

@@ -524,6 +524,7 @@
       flex: 1; overflow: hidden; padding: 12px;
       display: flex;
       flex-direction: column;
+      min-height: 0;
     }
     .home-panels-area::-webkit-scrollbar { width: 3px; }
     .home-panels-area::-webkit-scrollbar-track { background: transparent; }
@@ -556,10 +557,18 @@
       flex: 1;
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      grid-template-rows: auto auto minmax(0, 1fr);
+      /* BUG 2 FIX: auto rows prevent the grid from expanding past viewport.
+         The CTL card (3rd row) now stays within the available height. */
+      grid-template-rows: auto auto auto;
       gap: 10px;
       min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,.1) transparent;
     }
+    .hp-grid::-webkit-scrollbar { width: 3px; }
+    .hp-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 99px; }
     .hp-grid > .hp-card { grid-column: span 2; min-width: 0; min-height: 0; }
     /* First row (ODP + Oncall) — equal height, fill each other */
     .hp-grid > .hp-card:nth-child(1),
@@ -593,7 +602,21 @@
       height: auto;
       min-height: 0;
     }
-    #hp-controller-testing-lab-card { grid-column: span 3; }
+    /* BUG 2 FIX: CTL card — cap height so it never overflows the viewport bottom.
+       The hp-ctl-list inside uses overflow-x:auto so controllers stay scrollable. */
+    #hp-controller-testing-lab-card {
+      grid-column: span 3;
+      max-height: 420px;
+      display: flex;
+      flex-direction: column;
+    }
+    #hp-controller-testing-lab-card .hp-body {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
     #hp-connect-credential-card { grid-column: span 1; }
 
     .hp-apps-manage-btn {
@@ -721,13 +744,17 @@
     }
 
     /* ── Main lab display area — vertical columns ── */
+    /* BUG 2 FIX: flex:1 + min-height:0 ensures the list fills the card body
+       without causing the card to grow past the viewport bottom. */
     .hp-ctl-list {
-      height: 100%;
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
       display: flex;
       flex-direction: row;
       gap: 0;
       overflow-x: auto;
-      overflow-y: hidden;
+      overflow-y: auto;
       background: transparent;
       border: none;
       border-radius: 0;

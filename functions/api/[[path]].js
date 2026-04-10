@@ -136,6 +136,9 @@ async function getRoutes(env) {
     'studio/kb_download':         unwrapCjs(await import('../../server/routes/studio/kb_download.js')),
     'studio/daily_passwords':     unwrapCjs(await import('../../server/routes/studio/daily_passwords.js')),
 
+    // ── Controller Testing Lab — shared config (all users see same controllers) ──
+    'studio/ctl_lab_config':      unwrapCjs(await import('../../server/routes/studio/ctl_lab_config.js')),
+
     // ── ICare Oncall Tech — QB On-Call Schedule ──────────────────────────────
     'studio/oncall_settings':     unwrapCjs(await import('../../server/routes/studio/oncall_settings.js')),
     'studio/oncall_schedule':     unwrapCjs(await import('../../server/routes/studio/oncall_schedule.js')),
