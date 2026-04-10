@@ -986,31 +986,51 @@
         var booking=getBooking(item.id);
         var queue=getQueue(item.id);
         var isActive=!!(booking&&booking.endMs>Date.now());
-        /* header badge */
+        /* header badge — IN USE badge shows no name; name lives in user strip only */
         var headerBadge=isActive
-          ?'<div class="hp-ctl-col-header-badge in-use"><i class="fas fa-user" style="font-size:7px;"></i> '+esc(booking.user)+'</div>'
-          :'<div class="hp-ctl-col-header-badge available"><i class="fas fa-check-circle" style="font-size:7px;"></i> Available</div>';
-        /* user strip */
+          ?'<div class="hp-ctl-col-header-badge in-use"><i class="fas fa-circle" style="font-size:6px;"></i> IN USE</div>'
+          :'<div class="hp-ctl-col-header-badge available"><i class="fas fa-check-circle" style="font-size:7px;"></i> AVAILABLE</div>';
+        /* user strip — avatar + name + task, clean enterprise style */
         var userBadge='';
         if(isActive){
           var av=booking.avatarUrl||'';
-          var avHtml=av
-            ?'<img src="'+esc(av)+'" alt="" onerror="this.style.display=\'none\'" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />'
-            :'<span style="width:26px;height:26px;border-radius:50%;background:rgba(162,93,220,.35);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#c084fc;flex-shrink:0;">'+esc(initials(booking.user))+'</span>';
-          userBadge='<div class="hp-ctl-user-strip"><div class="hp-ctl-user-avatar">'+avHtml+'</div><div class="hp-ctl-user-info"><div class="hp-ctl-user-name">'+esc(booking.user)+'</div><div class="hp-ctl-user-task">'+esc((booking.task||'').slice(0,32))+'</div></div></div>';
+          var ini=initials(booking.user);
+          var avInner=av?'<img src="'+esc(av)+'" alt="" style="width:100%;height:100%;object-fit:cover;" />':
+            '<span class="hp-ctl-user-initials">'+esc(ini)+'</span>';
+          userBadge='<div class="hp-ctl-user-strip">'+
+            '<div class="hp-ctl-user-avatar">'+avInner+'</div>'+
+            '<div class="hp-ctl-user-info">'+
+              '<div class="hp-ctl-user-name">'+esc(booking.user)+'</div>'+
+              '<div class="hp-ctl-user-task">'+esc((booking.task||'').slice(0,40))+'</div>'+
+            '</div>'+
+          '</div>';
         }
         /* countdown */
         var timerId='ctl-timer-'+item.id;
         var timerHtml=isActive?'<div class="hp-ctl-countdown" id="'+timerId+'"><i class="fas fa-hourglass-half" style="font-size:8px;"></i><span class="hp-ctl-countdown-val" id="'+timerId+'-val">--:--</span><span class="hp-ctl-countdown-label">remaining</span></div>':'';
         /* queue pill */
-        var queuePill=queue.length>0?'<div class="hp-ctl-queue-pill"><i class="fas fa-users" style="font-size:8px;"></i><span>'+queue.length+' waiting</span></div>':'';
+        /* Queue pill — shows waiting user names */
+        var queuePill='';
+        if(queue.length>0){
+          var qUserItems=queue.slice(0,4).map(function(q,qi){
+            return '<div class="hp-ctl-queue-user-item">'+
+              '<span class="hp-ctl-queue-user-pos">'+(qi+1)+'</span>'+
+              '<span class="hp-ctl-queue-user-name">'+esc(q.user||'User')+'</span>'+
+            '</div>';
+          }).join('');
+          var moreLabel=queue.length>4?'<div style="font-size:8px;color:rgba(255,255,255,.3);padding:1px 4px;">+'+(queue.length-4)+' more</div>':'';
+          queuePill='<div class="hp-ctl-queue-pill">'+
+            '<div class="hp-ctl-queue-header"><i class="fas fa-users" style="font-size:7px;"></i> Waiting ('+queue.length+')</div>'+
+            '<div class="hp-ctl-queue-user-list">'+qUserItems+moreLabel+'</div>'+
+          '</div>';
+        }
         /* action button */
         var actionBtn=isActive
           ?'<button class="hp-ctl-book-btn queue-mode" data-ctl-queue="'+esc(item.id)+'"><i class="fas fa-list-alt" style="font-size:10px;"></i> Join Queue</button>'
           :'<button class="hp-ctl-book-btn" data-ctl-use="'+esc(item.id)+'"><i class="fas fa-calendar-check" style="font-size:10px;"></i> Book this Controller</button>';
-        return '<div class="hp-ctl-col'+(isActive?' in-use':'')+'" data-ctl-id="'+esc(item.id)+'">'+
+        return '<div class="hp-ctl-col'+(isActive?' in-use':'')+'" data-ctl-id="'+esc(item.id)+'">'+ 
           headerBadge+userBadge+
-          '<img class="hp-ctl-col-img" src="'+esc(imageFor(item.type))+'" alt="'+esc(item.type)+'" onerror="this.src=\''+esc(FALLBACK_IMG)+'\';" />'+
+          '<img class="hp-ctl-col-img" src="'+esc(imageFor(item.type))+'" alt="'+esc(item.type)+'" onerror="this.src=\''+esc(FALLBACK_IMG)+'\';">'+
           '<div class="hp-ctl-col-meta"><div class="hp-ctl-col-name">'+esc(labelFor(item.type))+'</div><div class="hp-ctl-col-ip">'+esc(item.ip||'--')+'</div></div>'+
           '<span class="hp-ctl-col-status '+cls+'">'+statusIcon+' '+esc(item.status||'Online')+'</span>'+
           timerHtml+queuePill+
@@ -1018,7 +1038,7 @@
             '<button class="hp-ctl-overlay-settings" data-ctl-settings="'+esc(item.id)+'"><i class="fas fa-cog" style="font-size:10px;"></i> Settings</button>'+
           '</div>'+
         '</div>';
-      }).join('');
+            }).join('');
       /* start countdown intervals */
       items.forEach(function(item){
         var booking=getBooking(item.id);
@@ -1642,40 +1662,84 @@
   };
 
   // ── NOTIFY QUEUE (called when session timer ends) ─────────────────────────
+  // ── QUEUE AUTO-ADVANCE — called when countdown reaches 0 ────────────────
+  // FIX v4.1: Automatically advances the queue.
+  // 1. Clears the expired booking so controller shows AVAILABLE
+  // 2. Shifts the first queue entry and logs them to the sheet automatically
+  // 3. If the next user is THIS browser's user, opens the booking modal
+  //    and fires browser + in-app notification
+  // 4. If a different user, shows an in-app banner + re-renders for them
   window._ctlNotifyQueue = function(itemId) {
     var queue=getQueue(itemId);
-    if(!queue.length) return;
-    var next=queue[0];
     var me=getCurrentUser();
+    var items=getItems();
+    var ctrl=items.find(function(i){return i.id===itemId;})||{};
+    var ctrlLabel=labelFor(ctrl.type||'');
 
-    // Only fire alarm if the next person in queue is the current user
-    if(next.wantsAlarm && next.user===me) {
-      // Browser Notification API
-      if(window.Notification){
-        if(Notification.permission==='granted'){
-          new Notification('Controller Available!',{
-            body:'It is your turn to use '+labelFor((getItems().find(function(i){return i.id===itemId;})||{}).type||'')+'. You are next in queue.',
-            icon:'/call_icon.png',
-            tag:'ctl-queue-'+itemId
-          });
-        } else if(Notification.permission!=='denied'){
-          Notification.requestPermission().then(function(p){
-            if(p==='granted'){
-              new Notification('Controller Available!',{
-                body:'It\'s your turn! Queue position 1.',
-                icon:'/call_icon.png',
-                tag:'ctl-queue-'+itemId
-              });
-            }
-          });
-        }
-      }
-      // In-app alarm banner
-      _showAlarmBanner('Your turn! '+labelFor((getItems().find(function(i){return i.id===itemId;})||{}).type||'')+' is now available.',itemId);
+    if(!queue.length){
+      // No queue — controller just becomes available, re-render
+      if(typeof window._ctlRenderAll==='function') window._ctlRenderAll();
+      return;
     }
-    // Remove the first item from queue (session ended)
+
+    var next=queue[0];
+    // Pop the next user from queue
     queue.shift();
-    setQueue(itemId,queue);
+    setQueue(itemId, queue);
+
+    // ── Auto-log the next user's session to Google Sheets ──────────────
+    // The next queue user's booking info was stored when they joined queue
+    if(SHEETS_ENDPOINT && next.task){
+      var autoPayload={
+        timestamp: phtNow(),
+        user:      next.user,
+        controller:ctrlLabel+' — '+(ctrl.ip||'—'),
+        task:      next.task,
+        duration:  next.duration||'queued',
+        backupFile:next.backupFile||'N/A',
+        note:      'Auto-advanced from queue'
+      };
+      savePendingLog(autoPayload);
+      fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(autoPayload)}).catch(function(){});
+    }
+
+    // ── Browser Notification (fires for everyone; browser decides permission) ──
+    var notifBody='It is your turn to use '+ctrlLabel+'. The controller is now free.';
+    if(window.Notification){
+      if(Notification.permission==='granted'){
+        new Notification('Controller Available — Your Turn!',{
+          body: notifBody, icon:'/call_icon.png', tag:'ctl-queue-'+itemId
+        });
+      } else if(Notification.permission!=='denied'){
+        Notification.requestPermission().then(function(p){
+          if(p==='granted') new Notification('Controller Available!',{body:notifBody,icon:'/call_icon.png',tag:'ctl-queue-'+itemId});
+        });
+      }
+    }
+
+    // ── In-app banner for EVERYONE online ──────────────────────────────
+    _showAlarmBanner(next.user+'\'s turn! '+ctrlLabel+' is now available.', itemId);
+
+    // ── If next user === me: auto-start their booking session ──────────
+    if(next.user===me){
+      // Auto-book: set their session immediately using stored duration
+      var durationMs=parseDurMs(next.duration||'30 minutes');
+      var autoBooking={
+        user:me, avatarUrl:_ctlGetAvatar()||'',
+        task:next.task||'Queued session', duration:next.duration||'30 minutes',
+        startMs:Date.now(), endMs:Date.now()+durationMs,
+        backupFile:next.backupFile||''
+      };
+      setBooking(itemId, autoBooking);
+      if(typeof window._ctlRenderAll==='function') window._ctlRenderAll();
+      // Also show booking modal so they can confirm/adjust
+      setTimeout(function(){
+        if(typeof window._ctlOpenBooking==='function') window._ctlOpenBooking(itemId);
+      },600);
+    } else {
+      // Different user — just re-render so the controller shows as available for them
+      if(typeof window._ctlRenderAll==='function') window._ctlRenderAll();
+    }
   };
 
   function _showAlarmBanner(msg, itemId) {
