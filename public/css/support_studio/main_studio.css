@@ -755,7 +755,7 @@
       flex-wrap: nowrap;
       align-items: stretch;
       gap: 0;
-      overflow-x: hidden;
+      overflow-x: auto;
       overflow-y: hidden;
       background: transparent;
       border: none;
@@ -782,10 +782,10 @@
       display: flex; flex-direction: column;
       align-items: center; justify-content: flex-start;
       padding: 14px 12px 12px;
-      min-width: 0;
-      width: auto;
-      flex: 1 1 0;
-      max-width: none;
+      min-width: 170px;
+      width: 170px;
+      flex: 0 0 170px;
+      max-width: 170px;
       border-right: 1px solid rgba(255,255,255,.07);
       border-bottom: 1px solid rgba(255,255,255,.06);
       position: relative; gap: 10px;
@@ -4641,6 +4641,10 @@
       .hp-ctl-col {
         padding: 10px 8px 8px;
         gap: 6px;
+        min-width: 150px;
+        width: 150px;
+        flex: 0 0 150px;
+        max-width: 150px;
       }
 
       .hp-ctl-col-img {
