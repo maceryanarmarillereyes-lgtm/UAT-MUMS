@@ -750,8 +750,9 @@
       flex: 1;
       min-height: 0;
       min-width: 0;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
       align-items: stretch;
       gap: 0;
       overflow-x: hidden;
@@ -782,7 +783,8 @@
       align-items: center; justify-content: flex-start;
       padding: 14px 12px 12px;
       min-width: 0;
-      width: 100%;
+      width: auto;
+      flex: 1 1 0;
       max-width: none;
       border-right: 1px solid rgba(255,255,255,.07);
       border-bottom: 1px solid rgba(255,255,255,.06);
