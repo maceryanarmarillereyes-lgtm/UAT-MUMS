@@ -1078,7 +1078,7 @@
 
         /* header badge */
         var headerBadge=isActive
-          ?'<div class="hp-ctl-col-header-badge in-use"><i class="fas fa-user" style="font-size:7px;"></i> '+esc(booking.user)+'</div>'
+          ?'<div class="hp-ctl-col-header-badge in-use"><i class="fas fa-user-clock" style="font-size:7px;"></i> IN USED</div>'
           :'<div class="hp-ctl-col-header-badge available"><i class="fas fa-check-circle" style="font-size:7px;"></i> Available</div>';
 
         /* user strip */
@@ -1113,8 +1113,16 @@
         }
 
         /* queue pill */
+        var queueNames = queue.slice(0, 8).map(function(q, i){
+          var uname = q && q.user ? q.user : 'Unknown';
+          return '<div class="hp-ctl-queue-tip-item"><span class="hp-ctl-queue-tip-pos">#'+(i+1)+'</span><span class="hp-ctl-queue-tip-name">'+esc(uname)+'</span></div>';
+        }).join('');
+        if (queue.length > 8) queueNames += '<div class="hp-ctl-queue-tip-more">+'+(queue.length-8)+' more</div>';
         var queuePill=queue.length>0
-          ?'<div class="hp-ctl-queue-pill"><i class="fas fa-users" style="font-size:8px;"></i><span>'+queue.length+' waiting</span></div>':'' ;
+          ?'<div class="hp-ctl-queue-pill" tabindex="0" aria-label="'+queue.length+' waiting users">'
+            +'<div class="hp-ctl-queue-pill-main"><i class="fas fa-users" style="font-size:8px;"></i><span>'+queue.length+' waiting</span></div>'
+            +'<div class="hp-ctl-queue-tooltip">'+queueNames+'</div>'
+          +'</div>':'' ;
 
         /* action button — waiting status for current user if they're in queue */
         var myQueuePos=queue.findIndex(function(q){return q.user===me;});
@@ -1943,19 +1951,24 @@
     var queue = getQueue(itemId);
     if (!queue.length) { if(window._ctlRenderAll) window._ctlRenderAll(); return; }
 
-    var next  = queue[0];
+    var next  = queue[0] || {};
     var items = getItems();
     var ctrl  = items.find(function(i){return i.id===itemId;})||{};
     var ctrlLabel = labelFor(ctrl.type||'');
     var me    = _getCurrentUser();
 
-    // Pop next from queue
-    queue.shift();
-    setQueue(itemId, queue);
+    // Keep queued form details until the target user starts session.
+    // We only stamp notifiedAt once to avoid repeated alert spam.
+    var firstNotify = !next.notifiedAt;
+    if (firstNotify) {
+      next.notifiedAt = Date.now();
+      queue[0] = next;
+      setQueue(itemId, queue);
+    }
 
-    // Log to sheet
-    if(SHEETS_ENDPOINT && next.task){
-      var autoPayload={timestamp:phtNow(),user:next.user,controller:ctrlLabel+' — '+(ctrl.ip||'—'),task:next.task,duration:next.duration||'queued',backupFile:'pending',note:'Auto-advanced from queue'};
+    // Log to sheet once at first queue notification.
+    if(firstNotify && SHEETS_ENDPOINT && next.task){
+      var autoPayload={timestamp:phtNow(),user:next.user,controller:ctrlLabel+' — '+(ctrl.ip||'—'),task:next.task,duration:next.duration||'queued',backupFile:'pending',note:'Queue turn notified'};
       savePendingLog(autoPayload);
       fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(autoPayload)}).catch(function(){});
     }
@@ -1964,14 +1977,15 @@
     _broadcast({
       type:'ctl_update', subtype:'queue_notify',
       ctrlId:itemId, ctrlLabel:ctrlLabel,
-      targetUser:next.user
+      targetUser:next.user,
+      queueEntry:{ task: next.task || '', duration: next.duration || '', joinedAt: next.joinedAt || 0 }
     });
 
     // If I'm the one: trigger alert sound + backup upload flow
     if (next.user === me) {
       _triggerQueueAlert(itemId, ctrlLabel);
     } else {
-      // Show a softer banner for others
+      // Show a softer banner for observers
       _showAlarmBanner(next.user + '\'s turn! ' + ctrlLabel + ' is now available.', itemId);
     }
 
@@ -2072,5 +2086,4 @@
   });
 
 })();
-
 
