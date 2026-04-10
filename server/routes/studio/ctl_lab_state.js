@@ -55,8 +55,10 @@ function normalizeState(value) {
   const src = value && typeof value === 'object' ? value : {};
   const inBookings = src.bookings && typeof src.bookings === 'object' ? src.bookings : {};
   const inQueues = src.queues && typeof src.queues === 'object' ? src.queues : {};
+  const inParticipants = Array.isArray(src.participants) ? src.participants : [];
   const bookings = {};
   const queues = {};
+  const participants = [];
 
   Object.keys(inBookings).forEach((id) => {
     const key = safeStr(id, 80);
@@ -73,7 +75,44 @@ function normalizeState(value) {
     if (normalized.length) queues[key] = normalized;
   });
 
-  return { bookings, queues };
+  inParticipants.forEach((name) => {
+    const n = safeStr(name, 160);
+    if (n) participants.push(n);
+  });
+
+  return { bookings, queues, participants };
+}
+
+function collectUsersFromState(state) {
+  const out = [];
+  const s = state && typeof state === 'object' ? state : {};
+  const bookings = s.bookings && typeof s.bookings === 'object' ? s.bookings : {};
+  const queues = s.queues && typeof s.queues === 'object' ? s.queues : {};
+  Object.keys(bookings).forEach((id) => {
+    const b = bookings[id];
+    const n = safeStr(b && b.user, 160);
+    if (n) out.push(n);
+  });
+  Object.keys(queues).forEach((id) => {
+    const arr = Array.isArray(queues[id]) ? queues[id] : [];
+    arr.forEach((q) => {
+      const n = safeStr(q && q.user, 160);
+      if (n) out.push(n);
+    });
+  });
+  return out;
+}
+
+function mergeParticipants(existing, derived, actor) {
+  const uniq = new Set();
+  const add = (name) => {
+    const n = safeStr(name, 160);
+    if (n) uniq.add(n);
+  };
+  (Array.isArray(existing) ? existing : []).forEach(add);
+  (Array.isArray(derived) ? derived : []).forEach(add);
+  add(actor);
+  return Array.from(uniq).slice(0, 500);
 }
 
 async function readStateDoc() {
@@ -102,6 +141,7 @@ module.exports = async (req, res) => {
         ok: true,
         bookings: current.state.bookings,
         queues: current.state.queues,
+        participants: current.state.participants,
         updatedAt: current.updatedAt,
       });
     }
@@ -151,6 +191,8 @@ module.exports = async (req, res) => {
         next.bookings = full.bookings;
         next.queues = full.queues;
       }
+      const derivedUsers = collectUsersFromState(next);
+      next.participants = mergeParticipants(current.state.participants, derivedUsers, String(user.email || ''));
 
       const nowIso = new Date().toISOString();
       const doc = {
@@ -174,6 +216,7 @@ module.exports = async (req, res) => {
         ok: true,
         bookings: next.bookings,
         queues: next.queues,
+        participants: next.participants,
         updatedAt: nowIso,
       });
     }
