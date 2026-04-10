@@ -40,6 +40,10 @@ function normalizeBooking(raw) {
 
 function normalizeQueueEntry(raw) {
   if (!raw || typeof raw !== 'object') return null;
+  const notifiedAt = safeNum(raw.notifiedAt);
+  const notifyExpiresAt = safeNum(raw.notifyExpiresAt);
+  const now = Date.now();
+  if (notifyExpiresAt && notifyExpiresAt <= now) return null;
   return {
     user: safeStr(raw.user, 160) || 'Unknown',
     avatarUrl: safeStr(raw.avatarUrl, 500),
@@ -48,6 +52,8 @@ function normalizeQueueEntry(raw) {
     urgent: !!raw.urgent,
     wantsAlarm: !!raw.wantsAlarm,
     joinedAt: safeNum(raw.joinedAt) || Date.now(),
+    notifiedAt: notifiedAt || 0,
+    notifyExpiresAt: notifyExpiresAt || 0,
   };
 }
 
