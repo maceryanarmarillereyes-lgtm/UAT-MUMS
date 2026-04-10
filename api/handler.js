@@ -108,6 +108,8 @@ const ROUTES = {
   'studio/kb_sync':            require('../server/routes/studio/kb_sync'),
   'studio/kb_download':        require('../server/routes/studio/kb_download'),
   'studio/daily_passwords':    require('../server/routes/studio/daily_passwords'),
+  'studio/ctl_lab_config':    require('../server/routes/studio/ctl_lab_config'),
+  'studio/ctl_lab_state':     require('../server/routes/studio/ctl_lab_state'),
   'studio/oncall_settings':   require('../server/routes/studio/oncall_settings'),
   'studio/oncall_schedule':   require('../server/routes/studio/oncall_schedule'),
 };
