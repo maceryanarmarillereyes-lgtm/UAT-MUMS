@@ -1404,6 +1404,8 @@
   var _alertAudio     = null;   // looping alert Audio object
   var _alertInterval  = null;   // fallback interval to re-play
   var _pollTimer      = null;
+  var _queueSweepBusy = false;
+  var _pendingRetryBusy = false;
   var _stateCache     = { bookings: {}, queues: {} };
   var _stateReqBusy   = false;
 
@@ -1416,7 +1418,8 @@
         if (window._ctlRenderAll) window._ctlRenderAll();
         // If this is a queue-notify event and I'm the target user
         if (e.data.subtype === 'queue_notify' && e.data.targetUser === _getCurrentUser()) {
-          _triggerQueueAlert(e.data.ctrlId, e.data.ctrlLabel);
+          var exp = e.data.queueEntry && e.data.queueEntry.notifyExpiresAt ? Number(e.data.queueEntry.notifyExpiresAt) : 0;
+          _triggerQueueAlert(e.data.ctrlId, e.data.ctrlLabel, exp);
         }
       }
     });
@@ -1424,6 +1427,7 @@
   // Polling fallback every 3 seconds (cross-user sync)
   _pollTimer = setInterval(function() {
     _loadSharedStateFromServer(function(){
+      if (window._ctlSweepQueueTimeouts) window._ctlSweepQueueTimeouts();
       if (window._ctlRenderAll) window._ctlRenderAll();
     });
   }, 3000);
@@ -1528,6 +1532,47 @@
     try{setPendingLogs(getPendingLogs().filter(function(l){return!(l.timestamp===ts&&l.user===user);}));}catch(_){}
   }
 
+  // ── Queue sweeper: auto-void unacknowledged queue turns (3 minutes) ───────
+  window._ctlSweepQueueTimeouts = function() {
+    if (_queueSweepBusy) return;
+    _queueSweepBusy = true;
+    try {
+      var now = Date.now();
+      var items = getItems();
+      items.forEach(function(item) {
+        var id = item && item.id ? item.id : '';
+        if (!id) return;
+        var booking = getBooking(id);
+        var queue = getQueue(id);
+        if (!queue.length) return;
+
+        // If controller is available and the first queued user timed out, void them.
+        if (!booking || booking.endMs <= now) {
+          var head = queue[0] || {};
+          var expiresAt = Number(head.notifyExpiresAt || 0);
+          var notifiedAt = Number(head.notifiedAt || 0);
+          if (expiresAt && expiresAt <= now) {
+            // Guard: if this entry was just notified, avoid instant discard due stale/late clocks.
+            if (notifiedAt && (now - notifiedAt) < 15000) {
+              head.notifyExpiresAt = now + (3 * 60 * 1000);
+              queue[0] = head;
+              setQueue(id, queue);
+              return;
+            }
+            queue.shift();
+            setQueue(id, queue);
+            // If next user exists, notify their turn immediately.
+            if (queue.length && window._ctlNotifyQueue) window._ctlNotifyQueue(id);
+            return;
+          }
+          // If available and no notification has been sent yet, start turn notification flow.
+          if (!head.notifiedAt && window._ctlNotifyQueue) window._ctlNotifyQueue(id);
+        }
+      });
+    } catch(_) {}
+    _queueSweepBusy = false;
+  };
+
   _loadStateCache();
   _loadSharedStateFromServer(function(){ if (window._ctlRenderAll) window._ctlRenderAll(); });
 
@@ -1576,13 +1621,34 @@
     var btn=document.getElementById('hp-ctl-bk-pending-btn');var cnt=document.getElementById('hp-ctl-pending-count');var n=getPendingLogs().length;
     if(btn)btn.style.display=n>0?'flex':'none';if(cnt)cnt.textContent=String(n);
   }
+  function _autoRetryPendingLogs() {
+    if (_pendingRetryBusy) return;
+    var logs = getPendingLogs();
+    if (!logs.length || !SHEETS_ENDPOINT) return;
+    _pendingRetryBusy = true;
+    var done = 0;
+    logs.forEach(function(payload){
+      fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)})
+        .then(function(){ removePendingLog(payload.timestamp,payload.user); })
+        .catch(function(){})
+        .finally(function(){
+          done++;
+          if (done === logs.length) {
+            _pendingRetryBusy = false;
+            _updatePendingBtn();
+            var pm = document.getElementById('hp-ctl-pending-modal');
+            if (pm && pm.style.display !== 'none' && window._ctlShowPendingLogs) window._ctlShowPendingLogs();
+          }
+        });
+    });
+  }
 
   // ── QUEUE ALERT SOUND (loops until acknowledged) ──────────────────────────
-  function _triggerQueueAlert(ctrlId, ctrlLabel) {
+  function _triggerQueueAlert(ctrlId, ctrlLabel, notifyExpiresAt) {
     // Stop any existing alert first
     _stopAlertSound();
     // Show the big acknowledgement banner
-    _showQueueAlertBanner(ctrlId, ctrlLabel);
+    _showQueueAlertBanner(ctrlId, ctrlLabel, notifyExpiresAt);
     // Start playing the mp3 in a loop
     _startAlertSound();
   }
@@ -1616,7 +1682,7 @@
     } catch(_) {}
   }
 
-  function _showQueueAlertBanner(ctrlId, ctrlLabel) {
+  function _showQueueAlertBanner(ctrlId, ctrlLabel, notifyExpiresAt) {
     var existing = document.getElementById('hp-ctl-queue-alert-modal');
     if (existing) existing.remove();
 
@@ -1636,7 +1702,8 @@
         +'</div>'
         +'<div style="font-size:22px;font-weight:900;color:#fff;letter-spacing:-.01em;margin-bottom:8px;">It\'s Your Turn!</div>'
         +'<div style="font-size:14px;color:rgba(255,255,255,.7);line-height:1.6;margin-bottom:10px;">The <strong style="color:#c084fc;">'+(ctrlLabel||'controller')+'</strong> is now available for your use.</div>'
-        +'<div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:28px;">Your booking will begin once you upload your backup file.</div>'
+        +'<div id="hp-ctl-qa-countdown" style="display:inline-flex;align-items:center;justify-content:center;min-width:120px;padding:6px 12px;border-radius:10px;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.35);color:#fda4af;font-size:15px;font-weight:900;font-family:JetBrains Mono,monospace;margin-bottom:10px;">03:00</div>'
+        +'<div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:28px;">Acknowledge before timer ends or your queue entry will be disregarded.</div>'
         +'<button id="hp-ctl-qa-ack-btn" style="display:inline-flex;align-items:center;gap:10px;padding:14px 32px;border-radius:12px;background:linear-gradient(135deg,rgba(162,93,220,.35),rgba(109,40,217,.25));border:1.5px solid rgba(162,93,220,.55);color:#c084fc;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s;box-shadow:0 4px 20px rgba(162,93,220,.2);">'
           +'<i class="fas fa-check-circle" style="font-size:16px;"></i> I\'m Ready — Upload Backup'
         +'</button>'
@@ -1644,8 +1711,40 @@
 
     document.body.appendChild(overlay);
 
+    var cdEl = document.getElementById('hp-ctl-qa-countdown');
+    var expMs = Number(notifyExpiresAt || 0);
+    if (!expMs || expMs <= Date.now()) {
+      expMs = Date.now() + (3 * 60 * 1000);
+      var rq = getQueue(ctrlId);
+      var rme = _getCurrentUser();
+      if (rq.length && rq[0] && rq[0].user === rme) {
+        rq[0].notifiedAt = Date.now();
+        rq[0].notifyExpiresAt = expMs;
+        setQueue(ctrlId, rq);
+      }
+    }
+    var cdTimer = setInterval(function(){
+      var rem = expMs - Date.now();
+      if (rem <= 0) {
+        clearInterval(cdTimer);
+        _stopAlertSound();
+        if (overlay && overlay.parentElement) overlay.remove();
+        var q = getQueue(ctrlId);
+        var me = _getCurrentUser();
+        if (q.length && q[0] && q[0].user === me) {
+          q.shift();
+          setQueue(ctrlId, q);
+          if (q.length) window._ctlNotifyQueue(ctrlId);
+        }
+        alert('Time is up (3:00). Your queue turn was disregarded. Please queue again.');
+        return;
+      }
+      if (cdEl) cdEl.textContent = fmtMs(rem);
+    }, 1000);
+
     // Acknowledge button — stop sound + open backup upload step
     document.getElementById('hp-ctl-qa-ack-btn').addEventListener('click', function() {
+      clearInterval(cdTimer);
       _stopAlertSound();
       overlay.remove();
       // Open the backup-upload modal for this controller
@@ -1802,11 +1901,19 @@
     var sheetSt    = document.getElementById('hp-ctl-bk-sheet-status');
     if (successEl) successEl.classList.remove('show');
     if (bodyEl)    Array.from(bodyEl.children).forEach(function(c){if(!c.classList.contains('hp-ctl-bk-success'))c.style.display='';});
+    // Queue-turn notification preference belongs to queue flow only.
+    var notifyEl = document.getElementById('hp-ctl-bk-notify-alarm');
+    if (notifyEl) {
+      notifyEl.checked = false;
+      var notifyWrap = notifyEl.closest('.hp-ctl-bk-field');
+      if (notifyWrap) notifyWrap.style.display = 'none';
+    }
     if (sheetSt)   { sheetSt.style.display='none'; sheetSt.textContent=''; }
     var regBtn=document.getElementById('hp-ctl-bk-register-btn');var regIcon=document.getElementById('hp-ctl-bk-register-icon');var regLabel=document.getElementById('hp-ctl-bk-register-label');var spinner=document.getElementById('hp-ctl-bk-spinner');
     if(regBtn)regBtn.disabled=false;if(regIcon)regIcon.style.display='';if(regLabel)regLabel.textContent='Book this Controller';if(spinner)spinner.style.display='none';
 
     _updatePendingBtn();
+    _autoRetryPendingLogs();
     var modal=document.getElementById('hp-ctl-booking-modal');
     if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}
     setTimeout(function(){var t=document.getElementById('hp-ctl-bk-task');if(t)t.focus();},80);
@@ -1869,7 +1976,7 @@
       if(successEl)successEl.classList.add('show');
       setTimeout(function(){window._ctlCloseBooking();},2400);
     }
-    if(SHEETS_ENDPOINT){fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)}).then(function(){_onSuccess(_sheetReachable===true);}).catch(function(){_onSuccess(false);});}
+    if(SHEETS_ENDPOINT){fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)}).then(function(){_onSuccess(true);}).catch(function(){_onSuccess(false);});}
     else{setTimeout(function(){_onSuccess(false);},500);}
   };
 
@@ -1962,8 +2069,27 @@
     var firstNotify = !next.notifiedAt;
     if (firstNotify) {
       next.notifiedAt = Date.now();
+      next.notifyExpiresAt = Date.now() + (3 * 60 * 1000); // auto-void after 3 minutes if unacknowledged
       queue[0] = next;
       setQueue(itemId, queue);
+    } else {
+      // If already notified and grace window expired, auto-void and notify next.
+      var exp = Number(next.notifyExpiresAt || 0);
+      var nAt = Number(next.notifiedAt || 0);
+      if (exp && exp <= Date.now()) {
+        // Guard: if just-notified, refresh the expiry instead of instant removal.
+        if (nAt && (Date.now() - nAt) < 15000) {
+          next.notifyExpiresAt = Date.now() + (3 * 60 * 1000);
+          queue[0] = next;
+          setQueue(itemId, queue);
+          return;
+        }
+        queue.shift();
+        setQueue(itemId, queue);
+        if (queue.length) window._ctlNotifyQueue(itemId);
+        return;
+      }
+      return;
     }
 
     // Log to sheet once at first queue notification.
@@ -1978,12 +2104,12 @@
       type:'ctl_update', subtype:'queue_notify',
       ctrlId:itemId, ctrlLabel:ctrlLabel,
       targetUser:next.user,
-      queueEntry:{ task: next.task || '', duration: next.duration || '', joinedAt: next.joinedAt || 0 }
+      queueEntry:{ task: next.task || '', duration: next.duration || '', joinedAt: next.joinedAt || 0, notifyExpiresAt: next.notifyExpiresAt || 0 }
     });
 
     // If I'm the one: trigger alert sound + backup upload flow
     if (next.user === me) {
-      _triggerQueueAlert(itemId, ctrlLabel);
+      _triggerQueueAlert(itemId, ctrlLabel, next.notifyExpiresAt || 0);
     } else {
       // Show a softer banner for observers
       _showAlarmBanner(next.user + '\'s turn! ' + ctrlLabel + ' is now available.', itemId);
@@ -2069,7 +2195,7 @@
     var pm=document.getElementById('hp-ctl-pending-modal');if(pm&&pm.style.display!=='none')window._ctlClosePendingLogs();
   });
   document.addEventListener('click',function(e){
-    if(e.target&&e.target.id==='hp-ctl-booking-modal')window._ctlCloseBooking();
+    // Booking modal should close only via dedicated close controls (X/Close button).
     if(e.target&&e.target.id==='hp-ctl-queue-modal')window._ctlCloseQueue();
     if(e.target&&e.target.id==='hp-ctl-override-modal')window._ctlCloseOverride();
   });
@@ -2086,4 +2212,3 @@
   });
 
 })();
-
