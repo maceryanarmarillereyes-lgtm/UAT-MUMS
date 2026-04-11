@@ -1461,14 +1461,14 @@
           backupCell = '<a href="' + _ctlEscHtml(row.backupFile) + '" target="_blank" rel="noopener noreferrer" '
             + 'style="display:inline-flex;align-items:center;gap:5px;color:#60a5fa;font-size:10px;font-weight:700;text-decoration:none;'
             + 'background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.25);border-radius:5px;padding:3px 9px;transition:all .15s;" '
-            + 'onmouseover="this.style.background='rgba(96,165,250,.18)'" onmouseout="this.style.background='rgba(96,165,250,.1)'">'
+            + '>'
             + '<i class="fas fa-download" style="font-size:8px;"></i>Backup File</a>';
         } else {
           backupCell = '<span style="font-size:10px;color:#6b7280;">' + _ctlEscHtml(row.backupFile || '—') + '</span>';
         }
         var rowBg = idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.015)';
         return '<tr style="background:' + rowBg + ';transition:background .12s;" '
-          + 'onmouseover="this.style.background='rgba(96,165,250,.04)'" onmouseout="this.style.background='' + rowBg + ''">'
+          + '>'
           + '<td style="padding:10px 14px;font-size:9px;color:rgba(255,255,255,.4);font-family:monospace;white-space:nowrap;">' + _ctlEscHtml(row.timestamp || '—') + '</td>'
           + '<td style="padding:10px 14px;">' + userBadge + '</td>'
           + '<td style="padding:10px 14px;font-size:10px;color:#94a3b8;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + _ctlEscHtml(row.task || '') + '">' + _ctlEscHtml(row.task || '—') + '</td>'
@@ -1514,12 +1514,12 @@
             '<div style="font-size:14px;font-weight:900;color:#e2e8f0;letter-spacing:-.01em;">Backup File Log</div>',
             '<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:2px;">' + _ctlEscHtml(ctrlLabel) + ' &nbsp;·&nbsp; ' + log.length + ' entr' + (log.length === 1 ? 'y' : 'ies') + '</div>',
           '</div>',
-          '<button onclick="document.getElementById('hp-ctl-backup-log-modal').remove()" style="',
+          '<button onclick="document.getElementById(\'hp-ctl-backup-log-modal\').remove()" style="',
             'width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.1);',
             'background:rgba(255,255,255,.04);color:#6b7280;cursor:pointer;',
             'display:flex;align-items:center;justify-content:center;font-size:14px;',
             'transition:all .15s;flex-shrink:0;',
-          '" onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='#e2e8f0'" onmouseout="this.style.background='rgba(255,255,255,.04)';this.style.color='#6b7280'">✕</button>',
+          '">✕</button>',
         '</div>',
 
         /* ── Legend ── */
@@ -1528,8 +1528,8 @@
             '<i class="fas fa-info-circle" style="color:#f59e0b;margin-right:5px;"></i>',
             '<strong style="color:#fbbf24;">How this works:</strong> ',
             'When a new user books a controller, they upload a backup file (downloaded from the controller). ',
-            'This backup goes to the <strong style="color:#fbbf24;">SYSTEM</strong> slot (first booking) or the <strong style="color:#c084fc;">previous user's</strong> row. ',
-            'The current user's backup slot stays empty until the next user books and uploads.',
+            'This backup goes to the <strong style="color:#fbbf24;">SYSTEM</strong> slot (first booking) or the <strong style="color:#c084fc;">previous user\'s</strong> row. ',
+            'The current user\'s backup slot stays empty until the next user books and uploads.',
           '</div>',
         '</div>',
 
@@ -1557,11 +1557,11 @@
           'background:rgba(255,255,255,.015);',
         '">',
           '<span style="font-size:9px;color:rgba(255,255,255,.3);">Sorted newest to oldest &nbsp;·&nbsp; ' + log.length + ' total entr' + (log.length === 1 ? 'y' : 'ies') + '</span>',
-          '<button onclick="if(confirm('Clear all backup logs for this controller?')){ window._ctlClearBackupLog('' + itemId + ''); }" style="',
+          '<button onclick="if(confirm(\'Clear all backup logs for this controller?\')){ window._ctlClearBackupLog(\'' + itemId + '\'); }" style="',
             'margin-left:auto;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);',
             'color:#f87171;border-radius:7px;padding:5px 12px;font-size:9px;font-weight:700;',
             'cursor:pointer;font-family:inherit;transition:all .15s;',
-          '" onmouseover="this.style.background='rgba(239,68,68,.15)'" onmouseout="this.style.background='rgba(239,68,68,.08)'">',
+          '">',
             '<i class="fas fa-trash" style="margin-right:4px;font-size:8px;"></i>Clear Log',
           '</button>',
         '</div>',
@@ -1751,6 +1751,7 @@
   var _stateReqBusy     = false;
   var _lastServerWrite  = 0;      // BUG 1 FIX: optimistic lock timestamp
   var _notifyLocks      = {};     // BUG 5 FIX: { ctrlId: timestampMs }
+  var _queueAlertState  = { activeKey: '', acked: {} };
 
   /* BUG 6 FIX: keyed timer registry { itemId: { interval, endMs } } */
   window._ctlTimers = window._ctlTimers || {};
@@ -1859,7 +1860,7 @@
   }
 
   /* BUG 1 FIX: server push now includes lockedSince for optimistic locking */
-  function _pushSharedPatch(body, onSuccess, onConflict) {
+  function _pushSharedPatch(body, onSuccess, onConflict, onError) {
     var tok = _ctlGetToken();
     if (!tok) return;
     var payload = Object.assign({ lockedSince: _lastServerWrite }, body);
@@ -1880,9 +1881,11 @@
             if (window._ctlRenderAll) window._ctlRenderAll();
             if (onConflict) onConflict();
           });
+        } else {
+          if (onError) onError(res);
         }
       })
-      .catch(function () {});
+      .catch(function (err) { if (onError) onError(err); });
   }
 
   /* ── Booking / Queue accessors (BUG 2 FIX: always reads _stateCache) ────── */
@@ -1896,7 +1899,8 @@
     return b;
   }
 
-  function setBooking(id, data, onSuccess, onConflict) {
+  function setBooking(id, data, onSuccess, onConflict, onError) {
+    var prevBooking = _stateCache.bookings && _stateCache.bookings[id] ? _stateCache.bookings[id] : null;
     if (!_stateCache.bookings || typeof _stateCache.bookings !== 'object') _stateCache.bookings = {};
     if (data) _stateCache.bookings[id] = data;
     else       delete _stateCache.bookings[id];
@@ -1918,6 +1922,17 @@
       /* BUG 1 FIX: conflict — revert local optimistic update */
       var serverBooking = _stateCache.bookings && _stateCache.bookings[id] ? _stateCache.bookings[id] : null;
       if (onConflict) onConflict(serverBooking);
+    }, function (err) {
+      /* Network/server error (non-409): rollback optimistic write */
+      if (prevBooking) _stateCache.bookings[id] = prevBooking;
+      else delete _stateCache.bookings[id];
+      try {
+        if (prevBooking) localStorage.setItem('ctl_booking_' + id, JSON.stringify(prevBooking));
+        else localStorage.removeItem('ctl_booking_' + id);
+      } catch (_) {}
+      _saveStateCache();
+      if (window._ctlRenderAll) window._ctlRenderAll();
+      if (onError) onError(err);
     });
     if (window._ctlRenderAll) window._ctlRenderAll();
   }
@@ -2206,6 +2221,7 @@
   _injectTimeUpCSS();
 
   var _timeUpState = { audio: null, stopTimer: null, barTimer: null, key: '' };
+  var _timeUpDismissed = {};
 
   function _stopTimeUpAlert() {
     try {
@@ -2263,7 +2279,7 @@
     document.body.appendChild(modal);
 
     document.getElementById('hp-ctl-timeup-ok-btn').addEventListener('click', function () {
-      _timeUpState.key = '';
+      _timeUpDismissed[_timeUpState.key] = Date.now();
       _stopTimeUpAlert();
     });
 
@@ -2283,13 +2299,17 @@
     audio.volume = 0.92;
     _timeUpState.audio = audio;
     _playAudio(audio, [TIMEUP_SOUND_URL, '/sound alert/Alert_Yourtimeisup.mp3', SOUND_FALLBACK], 0);
-    _timeUpState.stopTimer = setTimeout(function () { _timeUpState.key = ''; _stopTimeUpAlert(); }, ALARM_MS);
+    _timeUpState.stopTimer = setTimeout(function () {
+      _timeUpDismissed[_timeUpState.key] = Date.now();
+      _stopTimeUpAlert();
+    }, ALARM_MS);
   }
 
   function _maybeTimeUpAlert(item, booking) {
     if (!item || !booking) return;
     if (!_sameUser(booking.user, _getCurrentUser())) return;
     var alertKey = [item.id, booking.user || '', booking.startMs || '', booking.endMs || ''].join('|');
+    if (_timeUpDismissed[alertKey]) return;
     if (_timeUpState.key === alertKey) return;
     _timeUpState.key = alertKey;
     _showTimeUpAlert(item, booking);
@@ -2307,7 +2327,19 @@
     _playAudio(_queueAudio, [QUEUE_SOUND_URL, '/sound alert/Alert_Yourturntousethecontroller.mp3', SOUND_FALLBACK], 0);
   }
 
+  function _queueTurnKey(ctrlId, user, notifyExpiresAt) {
+    return [ctrlId || '', String(user || '').trim().toLowerCase(), Number(notifyExpiresAt || 0)].join('|');
+  }
+
   function _triggerQueueAlert(ctrlId, ctrlLabel, notifyExpiresAt) {
+    var queue = getQueue(ctrlId);
+    var me = _getCurrentUser();
+    var head = queue[0] || {};
+    if (!head.user || !_sameUser(head.user, me)) return;
+    var turnKey = _queueTurnKey(ctrlId, head.user, notifyExpiresAt || head.notifyExpiresAt || 0);
+    if (_queueAlertState.acked[turnKey]) return;
+    if (_queueAlertState.activeKey === turnKey && document.getElementById('hp-ctl-queue-alert-modal')) return;
+    _queueAlertState.activeKey = turnKey;
     _stopQueueSound();
     _showQueueAlertBanner(ctrlId, ctrlLabel, notifyExpiresAt);
     _startQueueSound();
@@ -2360,6 +2392,7 @@
       if (rem <= 0) {
         clearInterval(cdTimer);
         _stopQueueSound();
+        _queueAlertState.activeKey = '';
         if (overlay && overlay.parentElement) overlay.remove();
         /* Auto-void this user's queue turn */
         var q  = getQueue(ctrlId);
@@ -2380,6 +2413,16 @@
     document.getElementById('hp-ctl-qa-ack-btn').addEventListener('click', function () {
       clearInterval(cdTimer);
       _stopQueueSound();
+      var me = _getCurrentUser();
+      var q = getQueue(ctrlId);
+      var head = q[0] || {};
+      if (head.user && _sameUser(head.user, me)) {
+        head.acknowledgedAt = Date.now();
+        q[0] = head;
+        setQueue(ctrlId, q);
+      }
+      _queueAlertState.acked[_queueTurnKey(ctrlId, me, expMs)] = Date.now();
+      _queueAlertState.activeKey = '';
       overlay.remove();
       window._ctlOpenBackupUpload && window._ctlOpenBackupUpload(ctrlId);
     });
@@ -2460,12 +2503,6 @@
       return;
     }
 
-    /* Remove user from queue */
-    var lockKey = itemId + '|' + me;
-    delete _notifyLocks[lockKey];
-    var newQueue = queue.filter(function (q) { return !_sameUser(q && q.user, me); });
-    setQueue(itemId, newQueue);
-
     var durMs   = parseDurMs(qEntry.duration || '30 minutes');
     var booking = {
       user: me, avatarUrl: _getAvatarUrl(),
@@ -2481,6 +2518,13 @@
 
     setBooking(itemId, booking, function () {
       /* success */
+      /* Remove user from queue only after booking is committed */
+      var lockKey = itemId + '|' + me;
+      delete _notifyLocks[lockKey];
+      var latestQueue = getQueue(itemId);
+      var newQueue = latestQueue.filter(function (q) { return !_sameUser(q && q.user, me); });
+      setQueue(itemId, newQueue);
+
       var items  = getItems();
       var ctrl   = items.find(function (it) { return it.id === itemId; }) || {};
       var payload = { timestamp: phtNow(), user: me, controller: labelFor(ctrl.type) + ' — ' + (ctrl.ip || '—'), task: booking.task, duration: booking.duration, backupFile: backup, note: 'Started from queue' };
@@ -2500,6 +2544,13 @@
       if (errorEl) {
         var who = existingBooking ? existingBooking.user : 'someone else';
         errorEl.textContent = 'Controller was just booked by ' + esc(who) + '. Please wait for their session to end.';
+        errorEl.style.display = 'block';
+      }
+    }, function () {
+      /* Server/network error: allow retry and keep queue position */
+      if (startBtn) { startBtn.disabled = false; startBtn.innerHTML = '<i class="fas fa-play-circle" style="font-size:14px;"></i> Start My Session'; }
+      if (errorEl) {
+        errorEl.textContent = 'Unable to start session right now (server unavailable). Your queue slot is preserved. Please retry.';
         errorEl.style.display = 'block';
       }
     });
