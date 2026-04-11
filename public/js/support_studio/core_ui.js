@@ -1744,6 +1744,7 @@
   var _sheetReachable   = null;
   var _timeUpAudio      = null;   // looping time-up Audio
   var _queueAudio       = null;   // looping queue-turn Audio
+  var _backupUploadTimer = null;
   var _pollTimer        = null;
   var _pollInterval     = 8000;
   var _queueSweepBusy   = false;
@@ -2327,6 +2328,13 @@
     _playAudio(_queueAudio, [QUEUE_SOUND_URL, '/sound alert/Alert_Yourturntousethecontroller.mp3', SOUND_FALLBACK], 0);
   }
 
+  function _clearBackupUploadTimer() {
+    if (_backupUploadTimer) {
+      clearInterval(_backupUploadTimer);
+      _backupUploadTimer = null;
+    }
+  }
+
   function _queueTurnKey(ctrlId, user, notifyExpiresAt) {
     return [ctrlId || '', String(user || '').trim().toLowerCase(), Number(notifyExpiresAt || 0)].join('|');
   }
@@ -2439,6 +2447,17 @@
 
     var existing = document.getElementById('hp-ctl-backup-upload-modal');
     if (existing) existing.remove();
+    _clearBackupUploadTimer();
+
+    var expireAt = Number(qEntry.notifyExpiresAt || 0);
+    if (!expireAt || expireAt <= Date.now()) {
+      expireAt = Date.now() + (3 * 60 * 1000);
+      if (queue.length && queue[0] && _sameUser(queue[0].user, me)) {
+        queue[0].notifyExpiresAt = expireAt;
+        if (!queue[0].notifiedAt) queue[0].notifiedAt = Date.now();
+        setQueue(itemId, queue);
+      }
+    }
 
     var overlay = document.createElement('div');
     overlay.id  = 'hp-ctl-backup-upload-modal';
@@ -2477,6 +2496,24 @@
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
+
+    _backupUploadTimer = setInterval(function () {
+      var rem = expireAt - Date.now();
+      if (rem > 0) return;
+      _clearBackupUploadTimer();
+      var latest = getQueue(itemId);
+      var meNow = _getCurrentUser();
+      if (latest.length && latest[0] && _sameUser(latest[0].user, meNow)) {
+        var lockKey = itemId + '|' + (latest[0].user || '');
+        delete _notifyLocks[lockKey];
+        latest.shift();
+        setQueue(itemId, latest);
+        if (latest.length) _ctlNotifyQueue(itemId);
+      }
+      var modalNow = document.getElementById('hp-ctl-backup-upload-modal');
+      if (modalNow) modalNow.remove();
+      alert('Queue turn expired (3:00). Slot was auto-cleared because backup/start was not completed.');
+    }, 1000);
   };
 
   /* ── Start session from queue ──────────────────────────────────────────── */
@@ -2537,6 +2574,7 @@
       _updatePendingBtn();
       var modal = document.getElementById('hp-ctl-backup-upload-modal');
       if (modal) modal.remove();
+      _clearBackupUploadTimer();
       if (window._ctlRenderAll) window._ctlRenderAll();
     }, function (existingBooking) {
       /* BUG 1 FIX: conflict — another user booked between our checks */
