@@ -1405,6 +1405,7 @@
   var _alertInterval  = null;   // fallback interval to re-play
   var _pollTimer      = null;
   var _queueSweepBusy = false;
+  var _pendingRetryBusy = false;
   var _stateCache     = { bookings: {}, queues: {} };
   var _stateReqBusy   = false;
 
@@ -1417,7 +1418,8 @@
         if (window._ctlRenderAll) window._ctlRenderAll();
         // If this is a queue-notify event and I'm the target user
         if (e.data.subtype === 'queue_notify' && e.data.targetUser === _getCurrentUser()) {
-          _triggerQueueAlert(e.data.ctrlId, e.data.ctrlLabel);
+          var exp = e.data.queueEntry && e.data.queueEntry.notifyExpiresAt ? Number(e.data.queueEntry.notifyExpiresAt) : 0;
+          _triggerQueueAlert(e.data.ctrlId, e.data.ctrlLabel, exp);
         }
       }
     });
@@ -1611,13 +1613,34 @@
     var btn=document.getElementById('hp-ctl-bk-pending-btn');var cnt=document.getElementById('hp-ctl-pending-count');var n=getPendingLogs().length;
     if(btn)btn.style.display=n>0?'flex':'none';if(cnt)cnt.textContent=String(n);
   }
+  function _autoRetryPendingLogs() {
+    if (_pendingRetryBusy) return;
+    var logs = getPendingLogs();
+    if (!logs.length || !SHEETS_ENDPOINT) return;
+    _pendingRetryBusy = true;
+    var done = 0;
+    logs.forEach(function(payload){
+      fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)})
+        .then(function(){ removePendingLog(payload.timestamp,payload.user); })
+        .catch(function(){})
+        .finally(function(){
+          done++;
+          if (done === logs.length) {
+            _pendingRetryBusy = false;
+            _updatePendingBtn();
+            var pm = document.getElementById('hp-ctl-pending-modal');
+            if (pm && pm.style.display !== 'none' && window._ctlShowPendingLogs) window._ctlShowPendingLogs();
+          }
+        });
+    });
+  }
 
   // ── QUEUE ALERT SOUND (loops until acknowledged) ──────────────────────────
-  function _triggerQueueAlert(ctrlId, ctrlLabel) {
+  function _triggerQueueAlert(ctrlId, ctrlLabel, notifyExpiresAt) {
     // Stop any existing alert first
     _stopAlertSound();
     // Show the big acknowledgement banner
-    _showQueueAlertBanner(ctrlId, ctrlLabel);
+    _showQueueAlertBanner(ctrlId, ctrlLabel, notifyExpiresAt);
     // Start playing the mp3 in a loop
     _startAlertSound();
   }
@@ -1651,7 +1674,7 @@
     } catch(_) {}
   }
 
-  function _showQueueAlertBanner(ctrlId, ctrlLabel) {
+  function _showQueueAlertBanner(ctrlId, ctrlLabel, notifyExpiresAt) {
     var existing = document.getElementById('hp-ctl-queue-alert-modal');
     if (existing) existing.remove();
 
@@ -1671,7 +1694,8 @@
         +'</div>'
         +'<div style="font-size:22px;font-weight:900;color:#fff;letter-spacing:-.01em;margin-bottom:8px;">It\'s Your Turn!</div>'
         +'<div style="font-size:14px;color:rgba(255,255,255,.7);line-height:1.6;margin-bottom:10px;">The <strong style="color:#c084fc;">'+(ctrlLabel||'controller')+'</strong> is now available for your use.</div>'
-        +'<div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:28px;">Your booking will begin once you upload your backup file.</div>'
+        +'<div id="hp-ctl-qa-countdown" style="display:inline-flex;align-items:center;justify-content:center;min-width:120px;padding:6px 12px;border-radius:10px;background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.35);color:#fda4af;font-size:15px;font-weight:900;font-family:JetBrains Mono,monospace;margin-bottom:10px;">03:00</div>'
+        +'<div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:28px;">Acknowledge before timer ends or your queue entry will be disregarded.</div>'
         +'<button id="hp-ctl-qa-ack-btn" style="display:inline-flex;align-items:center;gap:10px;padding:14px 32px;border-radius:12px;background:linear-gradient(135deg,rgba(162,93,220,.35),rgba(109,40,217,.25));border:1.5px solid rgba(162,93,220,.55);color:#c084fc;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s;box-shadow:0 4px 20px rgba(162,93,220,.2);">'
           +'<i class="fas fa-check-circle" style="font-size:16px;"></i> I\'m Ready — Upload Backup'
         +'</button>'
@@ -1679,8 +1703,31 @@
 
     document.body.appendChild(overlay);
 
+    var cdEl = document.getElementById('hp-ctl-qa-countdown');
+    var expMs = Number(notifyExpiresAt || 0);
+    if (!expMs) expMs = Date.now() + (3 * 60 * 1000);
+    var cdTimer = setInterval(function(){
+      var rem = expMs - Date.now();
+      if (rem <= 0) {
+        clearInterval(cdTimer);
+        _stopAlertSound();
+        if (overlay && overlay.parentElement) overlay.remove();
+        var q = getQueue(ctrlId);
+        var me = _getCurrentUser();
+        if (q.length && q[0] && q[0].user === me) {
+          q.shift();
+          setQueue(ctrlId, q);
+          if (q.length) window._ctlNotifyQueue(ctrlId);
+        }
+        alert('Time is up (3:00). Your queue turn was disregarded. Please queue again.');
+        return;
+      }
+      if (cdEl) cdEl.textContent = fmtMs(rem);
+    }, 1000);
+
     // Acknowledge button — stop sound + open backup upload step
     document.getElementById('hp-ctl-qa-ack-btn').addEventListener('click', function() {
+      clearInterval(cdTimer);
       _stopAlertSound();
       overlay.remove();
       // Open the backup-upload modal for this controller
@@ -1856,6 +1903,7 @@
     if(regBtn)regBtn.disabled=false;if(regIcon)regIcon.style.display='';if(regLabel)regLabel.textContent='Book this Controller';if(spinner)spinner.style.display='none';
 
     _updatePendingBtn();
+    _autoRetryPendingLogs();
     var modal=document.getElementById('hp-ctl-booking-modal');
     if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}
     setTimeout(function(){var t=document.getElementById('hp-ctl-bk-task');if(t)t.focus();},80);
@@ -1918,7 +1966,7 @@
       if(successEl)successEl.classList.add('show');
       setTimeout(function(){window._ctlCloseBooking();},2400);
     }
-    if(SHEETS_ENDPOINT){fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)}).then(function(){_onSuccess(_sheetReachable===true);}).catch(function(){_onSuccess(false);});}
+    if(SHEETS_ENDPOINT){fetch(SHEETS_ENDPOINT,{method:'POST',mode:'no-cors',body:buildFormPayload(payload)}).then(function(){_onSuccess(true);}).catch(function(){_onSuccess(false);});}
     else{setTimeout(function(){_onSuccess(false);},500);}
   };
 
@@ -2038,12 +2086,12 @@
       type:'ctl_update', subtype:'queue_notify',
       ctrlId:itemId, ctrlLabel:ctrlLabel,
       targetUser:next.user,
-      queueEntry:{ task: next.task || '', duration: next.duration || '', joinedAt: next.joinedAt || 0 }
+      queueEntry:{ task: next.task || '', duration: next.duration || '', joinedAt: next.joinedAt || 0, notifyExpiresAt: next.notifyExpiresAt || 0 }
     });
 
     // If I'm the one: trigger alert sound + backup upload flow
     if (next.user === me) {
-      _triggerQueueAlert(itemId, ctrlLabel);
+      _triggerQueueAlert(itemId, ctrlLabel, next.notifyExpiresAt || 0);
     } else {
       // Show a softer banner for observers
       _showAlarmBanner(next.user + '\'s turn! ' + ctrlLabel + ' is now available.', itemId);
