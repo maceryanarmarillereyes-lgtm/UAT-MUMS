@@ -4621,8 +4621,8 @@
     .hp-ctl-timer-overlay.urgent .hp-ctl-timer-val { color: #f87171; text-shadow: 0 0 12px rgba(248,81,73,.6); }
     .hp-ctl-timer-overlay.urgent .hp-ctl-timer-label { color: rgba(248,81,73,.8); }
     @keyframes ctl-timer-pulse {
-      0%,100% { transform: translateX(-50%) scale(1); }
-      50%      { transform: translateX(-50%) scale(1.04); }
+      0%,100% { transform: scale(1); }
+      50%      { transform: scale(1.04); }
     }
 
     /* ── Queue position badge (for current user who's already in queue) ── */

@@ -1003,6 +1003,7 @@
     /* ── Cross-tab broadcast (BroadcastChannel + storage event fallback) ── */
     var _ctlChannel=null;
     try{ _ctlChannel=new BroadcastChannel('mums_ctl_v1'); }catch(_){}
+    var _ctlTimeUpAlert = { audio: null, stopTimer: null, key: '' };
 
     function _ctlBroadcast(msg){
       // BroadcastChannel for same-origin tabs
@@ -1057,6 +1058,74 @@
         if(window.me&&window.me.avatar_url) return window.me.avatar_url;
       }catch(_){}
       return '';
+    }
+    function _sameUserLite(a,b){
+      return String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
+    }
+    function _stopTimeUpAlert(){
+      try{
+        if(_ctlTimeUpAlert.stopTimer){ clearTimeout(_ctlTimeUpAlert.stopTimer); _ctlTimeUpAlert.stopTimer=null; }
+        if(_ctlTimeUpAlert.audio){ _ctlTimeUpAlert.audio.pause(); _ctlTimeUpAlert.audio.currentTime=0; _ctlTimeUpAlert.audio=null; }
+      }catch(_){}
+      var modal=document.getElementById('hp-ctl-timeup-modal');
+      if(modal&&modal.parentElement) modal.remove();
+    }
+    function _playTimeUpAudio(audio, sources, idx){
+      if(!audio||!sources||idx>=sources.length) return;
+      audio.src=sources[idx];
+      audio.onended=null;
+      audio.onerror=function(){ _playTimeUpAudio(audio, sources, idx+1); };
+      var p=audio.play();
+      if(p&&typeof p.catch==='function'){ p.catch(function(){ _playTimeUpAudio(audio, sources, idx+1); }); }
+    }
+    function _showTimeUpAlert(item, booking){
+      var modal=document.getElementById('hp-ctl-timeup-modal');
+      if(modal&&modal.parentElement) modal.remove();
+      modal=document.createElement('div');
+      modal.id='hp-ctl-timeup-modal';
+      modal.style.cssText='position:fixed;inset:0;z-index:99998;background:rgba(1,4,9,.84);display:flex;align-items:center;justify-content:center;padding:14px;';
+      modal.innerHTML=
+        '<div style="width:min(420px,94vw);border-radius:16px;padding:20px;background:linear-gradient(160deg,#131b2b,#0d1322);border:1px solid rgba(248,81,73,.35);box-shadow:0 20px 60px rgba(0,0,0,.7);text-align:center;">'
+          +'<div style="font-size:18px;font-weight:900;color:#fda4af;margin-bottom:8px;">Time is up</div>'
+          +'<div style="font-size:12px;color:#cbd5e1;line-height:1.6;margin-bottom:14px;">Your booking session has ended for <strong style="color:#fff;">'+esc(labelFor(item.type||''))+'</strong>.</div>'
+          +'<div style="font-size:11px;color:#94a3b8;margin-bottom:16px;">Sound alert plays for up to 30 seconds unless acknowledged.</div>'
+          +'<button id="hp-ctl-timeup-ok-btn" style="min-width:110px;padding:10px 14px;border-radius:10px;border:1px solid rgba(248,81,73,.55);background:rgba(248,81,73,.18);color:#fecaca;font-size:12px;font-weight:800;cursor:pointer;">OK</button>'
+        +'</div>';
+      document.body.appendChild(modal);
+
+      var btn=document.getElementById('hp-ctl-timeup-ok-btn');
+      if(btn){
+        btn.addEventListener('click', function(){
+          _ctlTimeUpAlert.key='';
+          _stopTimeUpAlert();
+        });
+      }
+
+      var audio=new Audio();
+      audio.loop=true;
+      audio.volume=0.9;
+      _ctlTimeUpAlert.audio=audio;
+      _playTimeUpAudio(audio, [
+        '/sound%20alert/Alert_Yourtimeisup.mp3',
+        '/sound alert/Alert_Yourtimeisup.mp3',
+        '/sound%20alert/Alert_Yourturntousethecontroller.mp3',
+        '/sound alert/Alert_Yourturntousethecontroller.mp3'
+      ], 0);
+      _ctlTimeUpAlert.stopTimer=setTimeout(function(){
+        _ctlTimeUpAlert.key='';
+        _stopTimeUpAlert();
+      }, 30000);
+    }
+    function _maybeTimeUpAlert(item, booking){
+      if(!item||!booking) return;
+      var me=_ctlGetCurrentUser();
+      if(!_sameUserLite(booking.user, me)) return;
+      var alertKey=[item.id, booking.user||'', booking.startMs||'', booking.endMs||''].join('|');
+      if(_ctlTimeUpAlert.key===alertKey) return;
+      _ctlTimeUpAlert.key=alertKey;
+      _stopTimeUpAlert();
+      _ctlTimeUpAlert.key=alertKey;
+      _showTimeUpAlert(item, booking);
     }
 
     /* ── Render controller cards ── */
@@ -1125,7 +1194,9 @@
           +'</div>':'' ;
 
         /* action button — waiting status for current user if they're in queue */
-        var myQueuePos=queue.findIndex(function(q){return q.user===me;});
+        var myQueuePos=queue.findIndex(function(q){
+          return String((q&&q.user)||'').trim().toLowerCase()===String(me||'').trim().toLowerCase();
+        });
         var actionBtn;
         if(isActive){
           if(myQueuePos>=0){
@@ -1167,6 +1238,7 @@
         function tick(){
           var rem=booking.endMs-Date.now();
           if(rem<=0){
+            _maybeTimeUpAlert(item, booking);
             clearInterval(window._ctlTimers[item.id]);
             delete window._ctlTimers[item.id];
             setBooking(item.id,null);
@@ -1417,7 +1489,10 @@
       if (e && e.data && e.data.type === 'ctl_update') {
         if (window._ctlRenderAll) window._ctlRenderAll();
         // If this is a queue-notify event and I'm the target user
-        if (e.data.subtype === 'queue_notify' && e.data.targetUser === _getCurrentUser()) {
+        if (
+          e.data.subtype === 'queue_notify' &&
+          String(e.data.targetUser || '').trim().toLowerCase() === String(_getCurrentUser() || '').trim().toLowerCase()
+        ) {
           var exp = e.data.queueEntry && e.data.queueEntry.notifyExpiresAt ? Number(e.data.queueEntry.notifyExpiresAt) : 0;
           _triggerQueueAlert(e.data.ctrlId, e.data.ctrlLabel, exp);
         }
@@ -1504,6 +1579,10 @@
     if (!_stateCache.bookings || typeof _stateCache.bookings !== 'object') _stateCache.bookings = {};
     if (data) _stateCache.bookings[id] = data;
     else delete _stateCache.bookings[id];
+    try {
+      if (data) localStorage.setItem('ctl_booking_' + id, JSON.stringify(data));
+      else localStorage.removeItem('ctl_booking_' + id);
+    } catch(_) {}
     _saveStateCache();
     _pushSharedPatch({ booking: { id: id, data: data || null } });
     _broadcast({type:'ctl_update',key:'ctl_booking_'+id});
@@ -1518,6 +1597,10 @@
     var next = Array.isArray(arr) ? arr : [];
     if (next.length) _stateCache.queues[id] = next;
     else delete _stateCache.queues[id];
+    try {
+      if (next.length) localStorage.setItem('ctl_queue_' + id, JSON.stringify(next));
+      else localStorage.removeItem('ctl_queue_' + id);
+    } catch(_) {}
     _saveStateCache();
     _pushSharedPatch({ queue: { id: id, items: next } });
     _broadcast({type:'ctl_update',key:'ctl_queue_'+id});
@@ -1599,6 +1682,11 @@
       if(window.me) return(window.me.qb_name||window.me.name||window.me.email||'Unknown').trim();
     }catch(_){}
     return 'Unknown';
+  }
+  function _sameUser(a, b){
+    var left = String(a || '').trim().toLowerCase();
+    var right = String(b || '').trim().toLowerCase();
+    return !!left && !!right && left === right;
   }
   function _getAvatarUrl(){
     try{var store=window.store&&typeof window.store.getState==='function'?window.store.getState():null;if(store&&store.user&&store.user.avatar_url)return store.user.avatar_url;if(window.me&&window.me.avatar_url)return window.me.avatar_url;}catch(_){}
@@ -1763,7 +1851,7 @@
     // Find the queued entry for this user to get their pre-filled task + duration
     var queue   = getQueue(itemId);
     var me      = _getCurrentUser();
-    var qEntry  = queue.find(function(q){return q.user===me;}) || {};
+    var qEntry  = queue.find(function(q){ return _sameUser(q && q.user, me); }) || {};
 
     var existing = document.getElementById('hp-ctl-backup-upload-modal');
     if (existing) existing.remove();
@@ -1821,10 +1909,10 @@
 
     var queue  = getQueue(itemId);
     var me     = _getCurrentUser();
-    var qEntry = queue.find(function(q){return q.user===me;}) || {};
+    var qEntry = queue.find(function(q){ return _sameUser(q && q.user, me); }) || {};
 
     // Remove this user from queue
-    var newQueue = queue.filter(function(q){return q.user!==me;});
+    var newQueue = queue.filter(function(q){ return !_sameUser(q && q.user, me); });
     setQueue(itemId, newQueue);
 
     // Create the booking
@@ -1998,9 +2086,9 @@
     if(booking){if(qUserEl)qUserEl.textContent=booking.user;if(qEndEl)qEndEl.textContent='~'+fmtMs(booking.endMs-Date.now())+' remaining';}
     if(qListEl){
       if(!queue.length){qListEl.innerHTML='<div style="padding:12px 0;text-align:center;color:rgba(255,255,255,.3);font-size:11px;">No one in queue yet — be first!</div>';}
-      else{qListEl.innerHTML=queue.map(function(q,i){var isMe=q.user===me;return '<div class="hp-ctl-q-item'+(isMe?' is-me':'')+'"><div class="hp-ctl-q-pos">'+(i+1)+'</div><div class="hp-ctl-q-meta"><div class="hp-ctl-q-name">'+(isMe?'You ('+esc(q.user)+')':esc(q.user))+'</div><div class="hp-ctl-q-task">'+esc(q.task||'')+(q.duration?' · '+esc(q.duration):'')+'</div></div>'+(q.urgent?'<span class="hp-ctl-q-urgent-badge">URGENT</span>':'')+(isMe?'<button class="hp-ctl-q-leave-btn" onclick="window._ctlLeaveQueue(\''+esc(itemId)+'\')">Leave</button>':'')+'</div>';}).join('');}
+      else{qListEl.innerHTML=queue.map(function(q,i){var isMe=_sameUser(q && q.user, me);return '<div class="hp-ctl-q-item'+(isMe?' is-me':'')+'"><div class="hp-ctl-q-pos">'+(i+1)+'</div><div class="hp-ctl-q-meta"><div class="hp-ctl-q-name">'+(isMe?'You ('+esc(q.user)+')':esc(q.user))+'</div><div class="hp-ctl-q-task">'+esc(q.task||'')+(q.duration?' · '+esc(q.duration):'')+'</div></div>'+(q.urgent?'<span class="hp-ctl-q-urgent-badge">URGENT</span>':'')+(isMe?'<button class="hp-ctl-q-leave-btn" onclick="window._ctlLeaveQueue(\''+esc(itemId)+'\')">Leave</button>':'')+'</div>';}).join('');}
     }
-    var alreadyQueued=queue.some(function(q){return q.user===me;});
+    var alreadyQueued=queue.some(function(q){ return _sameUser(q && q.user, me); });
     var joinSection=document.getElementById('hp-ctl-q-join-section');var alreadyMsg=document.getElementById('hp-ctl-q-already-msg');
     if(joinSection)joinSection.style.display=alreadyQueued?'none':'block';
     if(alreadyMsg){alreadyMsg.style.display=alreadyQueued?'block':'none';alreadyMsg.textContent='You are in queue — waiting for your turn.';}
@@ -2038,7 +2126,7 @@
     }
 
     var queue       = getQueue(_queueCtlId);
-    var alreadyIn   = queue.some(function(q){return q.user===me;});
+    var alreadyIn   = queue.some(function(q){ return _sameUser(q && q.user, me); });
     if (alreadyIn)  { window._ctlCloseQueue(); return; }
 
     queue.push({user:me, avatarUrl:_getAvatarUrl(), task:task, duration:duration, urgent:isUrgent, wantsAlarm:wantsAlarm, joinedAt:Date.now()});
@@ -2056,7 +2144,7 @@
 
   window._ctlLeaveQueue = function(itemId) {
     var me=_getCurrentUser();
-    setQueue(itemId, getQueue(itemId).filter(function(q){return q.user!==me;}));
+    setQueue(itemId, getQueue(itemId).filter(function(q){ return !_sameUser(q && q.user, me); }));
     window._ctlCloseQueue();
   };
 
@@ -2115,7 +2203,7 @@
     });
 
     // If I'm the one: trigger alert sound + backup upload flow
-    if (next.user === me) {
+    if (_sameUser(next.user, me)) {
       _triggerQueueAlert(itemId, ctrlLabel, next.notifyExpiresAt || 0);
     } else {
       // Show a softer banner for observers
