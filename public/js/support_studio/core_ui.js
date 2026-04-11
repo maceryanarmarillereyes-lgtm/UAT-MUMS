@@ -1884,6 +1884,13 @@
     ['hp-ctl-bk-task','hp-ctl-bk-duration','hp-ctl-bk-backup','hp-ctl-bk-custom-time'].forEach(function(id){
       var el=document.getElementById(id);if(el){el.value='';el.classList.remove('invalid');}
     });
+    // Queue-turn notification preference belongs to queue flow only.
+    var notifyEl = document.getElementById('hp-ctl-bk-notify-alarm');
+    if (notifyEl) {
+      notifyEl.checked = false;
+      var notifyWrap = notifyEl.closest('.hp-ctl-bk-field');
+      if (notifyWrap) notifyWrap.style.display = 'none';
+    }
     document.querySelectorAll('.hp-ctl-dur-chip').forEach(function(c){c.classList.remove('selected','invalid-chip');});
     var customWrap=document.getElementById('hp-ctl-bk-custom-time-wrap');if(customWrap)customWrap.style.display='none';
 
