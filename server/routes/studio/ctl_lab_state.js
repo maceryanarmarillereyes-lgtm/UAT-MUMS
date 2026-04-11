@@ -77,8 +77,15 @@ function normalizeState(value) {
     const key = safeStr(id, 80);
     if (!key) return;
     const arr = Array.isArray(inQueues[id]) ? inQueues[id] : [];
-    const normalized = arr.map(normalizeQueueEntry).filter(Boolean).slice(0, 30);
-    if (normalized.length) queues[key] = normalized;
+    const normalized = arr.map(normalizeQueueEntry).filter(Boolean);
+    // BUG 4 FIX: Server-side deduplication — keep last entry per user (case-insensitive)
+    const seen = new Map();
+    for (let i = normalized.length - 1; i >= 0; i--) {
+      const userKey = String(normalized[i].user || '').trim().toLowerCase();
+      if (!seen.has(userKey)) seen.set(userKey, normalized[i]);
+    }
+    const deduped = Array.from(seen.values()).reverse().slice(0, 30);
+    if (deduped.length) queues[key] = deduped;
   });
 
   inParticipants.forEach((name) => {
@@ -165,6 +172,25 @@ module.exports = async (req, res) => {
 
       const current = await readStateDoc();
       if (!current.ok) return sendJson(res, 500, { ok: false, error: current.error });
+
+      // BUG 1 FIX: Optimistic lock check.
+      // If the client sent lockedSince and the server doc was written after that
+      // timestamp AND the conflicting controller is being booked, reject with 409.
+      const lockedSince = body && body.lockedSince ? Number(body.lockedSince) : 0;
+      if (lockedSince && body && body.booking && body.booking.data && body.booking.id) {
+        const serverId  = safeStr(body.booking.id, 80);
+        const serverBook = current.state.bookings[serverId];
+        const serverUpdatedAt = current.updatedAt ? Date.parse(current.updatedAt) : 0;
+        // If server has a booking that was written AFTER our last read, reject
+        if (serverBook && serverUpdatedAt > lockedSince) {
+          return sendJson(res, 409, {
+            ok: false,
+            error: 'booking_conflict',
+            booking: serverBook,
+            message: 'Controller was just booked by ' + serverBook.user,
+          });
+        }
+      }
 
       const next = {
         bookings: Object.assign({}, current.state.bookings),
