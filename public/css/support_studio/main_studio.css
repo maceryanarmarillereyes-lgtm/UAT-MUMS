@@ -755,8 +755,8 @@
       flex-wrap: nowrap;
       align-items: stretch;
       gap: 0;
-      overflow-x: hidden;
-      overflow-y: hidden;
+      overflow-x: auto;
+      overflow-y: auto;
       background: transparent;
       border: none;
       border-radius: 0;
@@ -781,14 +781,14 @@
     .hp-ctl-col {
       display: flex; flex-direction: column;
       align-items: center; justify-content: flex-start;
-      padding: 14px 12px 12px;
-      min-width: 0;
-      width: auto;
-      flex: 1 1 0;
-      max-width: none;
+      padding: 12px 10px 10px;
+      min-width: 170px;
+      width: 170px;
+      flex: 0 0 170px;
+      max-width: 170px;
       border-right: 1px solid rgba(255,255,255,.07);
       border-bottom: 1px solid rgba(255,255,255,.06);
-      position: relative; gap: 10px;
+      position: relative; gap: 8px;
       transition: background .2s;
     }
     .hp-ctl-col:last-child { border-right: none; }
@@ -3874,7 +3874,8 @@
     /* Settings button inside overlay */
     .hp-ctl-overlay-settings {
       width: 100%;
-      padding: 7px 0;
+      min-height: 32px;
+      padding: 6px 0;
       border-radius: 9px;
       border: 1px solid rgba(255,255,255,.12);
       background: rgba(255,255,255,.05);
@@ -4431,12 +4432,12 @@
 
     /* ── Actions row (replaces old overlay) ─────────────────────────────── */
     .hp-ctl-col-actions {
-      width: 100%; display: flex; flex-direction: column; gap: 5px; margin-top: auto;
+      width: 100%; display: flex; flex-direction: column; gap: 4px; margin-top: auto;
     }
 
     /* ── Book / Queue button ────────────────────────────────────────────── */
     .hp-ctl-book-btn {
-      width: 100%; padding: 8px 10px; border-radius: 9px;
+      width: 100%; min-height: 32px; padding: 7px 9px; border-radius: 9px;
       font-size: 10px; font-weight: 800; letter-spacing: .04em;
       cursor: pointer; font-family: inherit;
       display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -4575,14 +4576,18 @@
     /* ── Image wrapper (relative position for timer overlay) ───────── */
     .hp-ctl-img-wrap {
       position: relative;
-      width: 100%; display: flex; justify-content: center;
+      width: auto;
+      display: inline-flex;
+      justify-content: center;
+      margin: 0 auto;
       flex-shrink: 0;
     }
 
     /* ── Centered timer overlay on controller image ─────────────────── */
     .hp-ctl-timer-overlay {
       position: absolute;
-      bottom: 6px; left: 50%; transform: translateX(-50%);
+      bottom: 6px; left: 50%; right: auto;
+      transform: translateX(-50%) !important;
       display: flex; align-items: center; justify-content: center;
       pointer-events: none; z-index: 2;
     }
@@ -4622,7 +4627,7 @@
 
     /* ── Queue position badge (for current user who's already in queue) ── */
     .hp-ctl-queue-position-badge {
-      width: 100%; padding: 8px 10px; border-radius: 9px;
+      width: 100%; min-height: 32px; padding: 7px 9px; border-radius: 9px;
       background: rgba(162,93,220,.1); border: 1px solid rgba(162,93,220,.3);
       color: #c084fc; font-size: 10px; font-weight: 700;
       display: flex; align-items: center; justify-content: center; gap: 7px;
@@ -4631,3 +4636,48 @@
 
     /* ── Suppress old countdown row (no longer rendered, just safety) ── */
     .hp-ctl-countdown { display: none !important; }
+
+    /* ── Responsive hardening: keep Controller Lab actions visible on small screens ── */
+    @media (max-width: 1366px), (max-height: 900px) {
+      .hp-ctl-list {
+        overflow-y: auto;
+      }
+
+      .hp-ctl-col {
+        padding: 10px 8px 8px;
+        gap: 6px;
+        min-width: 150px;
+        width: 150px;
+        flex: 0 0 150px;
+        max-width: 150px;
+      }
+
+      .hp-ctl-col-img {
+        width: 74px;
+        height: 74px;
+        padding: 4px;
+      }
+
+      .hp-ctl-col-name { font-size: 10px; }
+      .hp-ctl-col-ip   { font-size: 8px; }
+      .hp-ctl-col-status { font-size: 8px; padding: 2px 8px; }
+
+      .hp-ctl-user-strip {
+        padding: 7px 10px;
+      }
+
+      .hp-ctl-col-actions {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+        gap: 4px;
+      }
+
+      .hp-ctl-book-btn,
+      .hp-ctl-overlay-settings,
+      .hp-ctl-queue-position-badge {
+        min-height: 30px;
+        padding: 6px 8px;
+        font-size: 9px;
+      }
+    }
