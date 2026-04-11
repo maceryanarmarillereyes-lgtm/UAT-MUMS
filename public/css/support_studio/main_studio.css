@@ -756,7 +756,7 @@
       align-items: stretch;
       gap: 0;
       overflow-x: auto;
-      overflow-y: hidden;
+      overflow-y: auto;
       background: transparent;
       border: none;
       border-radius: 0;
@@ -781,14 +781,14 @@
     .hp-ctl-col {
       display: flex; flex-direction: column;
       align-items: center; justify-content: flex-start;
-      padding: 14px 12px 12px;
+      padding: 12px 10px 10px;
       min-width: 170px;
       width: 170px;
       flex: 0 0 170px;
       max-width: 170px;
       border-right: 1px solid rgba(255,255,255,.07);
       border-bottom: 1px solid rgba(255,255,255,.06);
-      position: relative; gap: 10px;
+      position: relative; gap: 8px;
       transition: background .2s;
     }
     .hp-ctl-col:last-child { border-right: none; }
@@ -3874,7 +3874,8 @@
     /* Settings button inside overlay */
     .hp-ctl-overlay-settings {
       width: 100%;
-      padding: 7px 0;
+      min-height: 32px;
+      padding: 6px 0;
       border-radius: 9px;
       border: 1px solid rgba(255,255,255,.12);
       background: rgba(255,255,255,.05);
@@ -4431,12 +4432,12 @@
 
     /* ── Actions row (replaces old overlay) ─────────────────────────────── */
     .hp-ctl-col-actions {
-      width: 100%; display: flex; flex-direction: column; gap: 5px; margin-top: auto;
+      width: 100%; display: flex; flex-direction: column; gap: 4px; margin-top: auto;
     }
 
     /* ── Book / Queue button ────────────────────────────────────────────── */
     .hp-ctl-book-btn {
-      width: 100%; padding: 8px 10px; border-radius: 9px;
+      width: 100%; min-height: 32px; padding: 7px 9px; border-radius: 9px;
       font-size: 10px; font-weight: 800; letter-spacing: .04em;
       cursor: pointer; font-family: inherit;
       display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -4626,7 +4627,7 @@
 
     /* ── Queue position badge (for current user who's already in queue) ── */
     .hp-ctl-queue-position-badge {
-      width: 100%; padding: 8px 10px; border-radius: 9px;
+      width: 100%; min-height: 32px; padding: 7px 9px; border-radius: 9px;
       background: rgba(162,93,220,.1); border: 1px solid rgba(162,93,220,.3);
       color: #c084fc; font-size: 10px; font-weight: 700;
       display: flex; align-items: center; justify-content: center; gap: 7px;
