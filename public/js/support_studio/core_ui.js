@@ -1003,7 +1003,7 @@
     /* ── Cross-tab broadcast (BroadcastChannel + storage event fallback) ── */
     var _ctlChannel=null;
     try{ _ctlChannel=new BroadcastChannel('mums_ctl_v1'); }catch(_){}
-    var _ctlTimeUpAlert = { audio: null, stopTimer: null, key: '' };
+    /* _ctlTimeUpAlert state is managed by Booking System v6 */
 
     function _ctlBroadcast(msg){
       // BroadcastChannel for same-origin tabs
@@ -1062,70 +1062,20 @@
     function _sameUserLite(a,b){
       return String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
     }
-    function _stopTimeUpAlert(){
-      try{
-        if(_ctlTimeUpAlert.stopTimer){ clearTimeout(_ctlTimeUpAlert.stopTimer); _ctlTimeUpAlert.stopTimer=null; }
-        if(_ctlTimeUpAlert.audio){ _ctlTimeUpAlert.audio.pause(); _ctlTimeUpAlert.audio.currentTime=0; _ctlTimeUpAlert.audio=null; }
-      }catch(_){}
-      var modal=document.getElementById('hp-ctl-timeup-modal');
-      if(modal&&modal.parentElement) modal.remove();
-    }
-    function _playTimeUpAudio(audio, sources, idx){
-      if(!audio||!sources||idx>=sources.length) return;
-      audio.src=sources[idx];
-      audio.onended=null;
-      audio.onerror=function(){ _playTimeUpAudio(audio, sources, idx+1); };
-      var p=audio.play();
-      if(p&&typeof p.catch==='function'){ p.catch(function(){ _playTimeUpAudio(audio, sources, idx+1); }); }
-    }
-    function _showTimeUpAlert(item, booking){
-      var modal=document.getElementById('hp-ctl-timeup-modal');
-      if(modal&&modal.parentElement) modal.remove();
-      modal=document.createElement('div');
-      modal.id='hp-ctl-timeup-modal';
-      modal.style.cssText='position:fixed;inset:0;z-index:99998;background:rgba(1,4,9,.84);display:flex;align-items:center;justify-content:center;padding:14px;';
-      modal.innerHTML=
-        '<div style="width:min(420px,94vw);border-radius:16px;padding:20px;background:linear-gradient(160deg,#131b2b,#0d1322);border:1px solid rgba(248,81,73,.35);box-shadow:0 20px 60px rgba(0,0,0,.7);text-align:center;">'
-          +'<div style="font-size:18px;font-weight:900;color:#fda4af;margin-bottom:8px;">Time is up</div>'
-          +'<div style="font-size:12px;color:#cbd5e1;line-height:1.6;margin-bottom:14px;">Your booking session has ended for <strong style="color:#fff;">'+esc(labelFor(item.type||''))+'</strong>.</div>'
-          +'<div style="font-size:11px;color:#94a3b8;margin-bottom:16px;">Sound alert plays for up to 30 seconds unless acknowledged.</div>'
-          +'<button id="hp-ctl-timeup-ok-btn" style="min-width:110px;padding:10px 14px;border-radius:10px;border:1px solid rgba(248,81,73,.55);background:rgba(248,81,73,.18);color:#fecaca;font-size:12px;font-weight:800;cursor:pointer;">OK</button>'
-        +'</div>';
-      document.body.appendChild(modal);
-
-      var btn=document.getElementById('hp-ctl-timeup-ok-btn');
-      if(btn){
-        btn.addEventListener('click', function(){
-          _ctlTimeUpAlert.key='';
-          _stopTimeUpAlert();
-        });
-      }
-
-      var audio=new Audio();
-      audio.loop=true;
-      audio.volume=0.9;
-      _ctlTimeUpAlert.audio=audio;
-      _playTimeUpAudio(audio, [
-        '/sound%20alert/Alert_Yourtimeisup.mp3',
-        '/sound alert/Alert_Yourtimeisup.mp3',
-        '/sound%20alert/Alert_Yourturntousethecontroller.mp3',
-        '/sound alert/Alert_Yourturntousethecontroller.mp3'
-      ], 0);
-      _ctlTimeUpAlert.stopTimer=setTimeout(function(){
-        _ctlTimeUpAlert.key='';
-        _stopTimeUpAlert();
-      }, 30000);
-    }
+    /* Time-up alert delegated to Booking System v6 (bottom of file).
+       _maybeTimeUpAlert, _showTimeUpAlert, _stopTimeUpAlert are all defined there.
+       Stub wrappers so the config IIFE can still call them before the booking
+       module initialises (call order safety). */
     function _maybeTimeUpAlert(item, booking){
+      /* Delegates to booking system v6 once loaded */
+      if(window._ctlMaybeTimeUpAlert) { window._ctlMaybeTimeUpAlert(item, booking); return; }
+      /* Inline minimal fallback (booking module still loading) */
       if(!item||!booking) return;
-      var me=_ctlGetCurrentUser();
-      if(!_sameUserLite(booking.user, me)) return;
-      var alertKey=[item.id, booking.user||'', booking.startMs||'', booking.endMs||''].join('|');
-      if(_ctlTimeUpAlert.key===alertKey) return;
-      _ctlTimeUpAlert.key=alertKey;
-      _stopTimeUpAlert();
-      _ctlTimeUpAlert.key=alertKey;
-      _showTimeUpAlert(item, booking);
+      var me = window._qbMyNameCache || 'Unknown';
+      if(String(booking.user||'').trim().toLowerCase()!==String(me||'').trim().toLowerCase()) return;
+      var modal=document.getElementById('hp-ctl-timeup-modal');
+      if(modal) return; /* already showing */
+      alert('Time is up! Your session on '+esc(labelFor(item.type||''))+' has ended.');
     }
 
     /* ── Render controller cards ── */
@@ -1228,35 +1178,14 @@
         +'</div>';
       }).join('');
 
-      /* start countdown intervals */
-      items.forEach(function(item){
-        var booking=getBooking(item.id);
-        if(!booking||booking.endMs<=Date.now()) return;
-        var valEl=document.getElementById('ctl-timer-'+item.id+'-val');
-        var wrapEl=document.getElementById('ctl-timer-'+item.id);
-        if(!valEl) return;
-        function tick(){
-          var rem=booking.endMs-Date.now();
-          if(rem<=0){
-            _maybeTimeUpAlert(item, booking);
-            clearInterval(window._ctlTimers[item.id]);
-            delete window._ctlTimers[item.id];
-            setBooking(item.id,null);
-            // Broadcast expiry to all tabs
-            _ctlBroadcast({type:'ctl_update',key:'ctl_booking_'+item.id});
-            if(window._ctlNotifyQueue) window._ctlNotifyQueue(item.id);
-            renderAll();
-            return;
-          }
-          var el=document.getElementById('ctl-timer-'+item.id+'-val');
-          if(el) el.textContent=fmtMs(rem);
-          var w=document.getElementById('ctl-timer-'+item.id);
-          if(w){ if(rem<120000){w.classList.add('urgent');}else{w.classList.remove('urgent');}
-                  w.style.display=''; /* ensure visible */ }
-        }
-        tick();
-        window._ctlTimers[item.id]=setInterval(tick, 1000);
-      });
+      /* BUG 6 FIX: Use smart syncTimers — only starts/restarts timers when booking
+         endMs changed. Prevents frozen countdowns on storage-event re-renders. */
+      if (window._ctlSyncTimers) {
+        window._ctlSyncTimers(items);
+      } else {
+        if(window._ctlTimers){Object.keys(window._ctlTimers).forEach(function(k){var t=window._ctlTimers[k];clearInterval(t&&t.interval?t.interval:t);});}
+        window._ctlTimers={};
+      }
     }
 
     function renderAll() {
