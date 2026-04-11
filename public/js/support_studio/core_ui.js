@@ -1169,11 +1169,17 @@
 
         return '<div class="hp-ctl-col'+(isActive?' in-use':'')+'" data-ctl-id="'+esc(item.id)+'">'
           +headerBadge+userBadge+imgBlock
-          +'<div class="hp-ctl-col-meta"><div class="hp-ctl-col-name">'+esc(labelFor(item.type))+'</div><div class="hp-ctl-col-ip">'+esc(item.ip||'--')+'</div></div>'
+          +'<div class="hp-ctl-col-meta">'+'<div class="hp-ctl-col-name">'+esc(labelFor(item.type))+'</div>'+'<div class="hp-ctl-ip-chip">'+'<i class="fas fa-network-wired hp-ctl-ip-chip-icon"></i>'+'<span class="hp-ctl-ip-chip-val" id="hp-ctl-ip-val-'+esc(item.id)+'">'+esc(item.ip||'--')+'</span>'+'<button class="hp-ctl-ip-copy-btn" title="Copy IP address" onclick="event.stopPropagation();window._ctlCopyIp(\''+esc(item.id)+'\',\''+esc(item.ip||'')+'\')" >'+'<i class="fas fa-copy"></i>'+'</button>'+'<div class="hp-ctl-ip-copy-toast" id="hp-ctl-copy-toast-'+esc(item.id)+'">Copied!</div>'+'</div>'+'</div>'
           +'<span class="hp-ctl-col-status '+cls+'">'+statusIcon+' '+esc(item.status||'Online')+'</span>'
           +queuePill
           +'<div class="hp-ctl-col-actions">'+actionBtn
+          +'<div class="hp-ctl-col-action-row">'
+          +'<button class="hp-ctl-folder-btn" title="Backup File Log" onclick="event.stopPropagation();window._ctlOpenBackupLog(\''+esc(item.id)+'\')">'  
+          +'<i class="fas fa-folder-open"></i>'  
+          +'<span>Backup Log</span>'  
+          +'</button>'  
           +'<button class="hp-ctl-overlay-settings" data-ctl-settings="'+esc(item.id)+'"><i class="fas fa-cog" style="font-size:10px;"></i> Settings</button>'
+          +'</div>'
           +'</div>'
         +'</div>';
       }).join('');
@@ -1308,6 +1314,280 @@
     window._ctlRenderAll = renderAll;
     window._ctlRefreshFromServer = _ctlLoadFromServer;
   })();
+
+  /* ── FEATURE 1: Copy IP address to clipboard ──────────────────────────── */
+  window._ctlCopyIp = function(itemId, ip) {
+    if (!ip || ip === '--') return;
+    var toastEl = document.getElementById('hp-ctl-copy-toast-' + itemId);
+    function _showToast() {
+      if (toastEl) { toastEl.classList.add('show'); setTimeout(function(){ toastEl.classList.remove('show'); }, 1800); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ip).then(_showToast).catch(function() { _fallback(ip); });
+    } else { _fallback(ip); }
+    function _fallback(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0,99999);
+      try { document.execCommand('copy'); } catch(_) {}
+      document.body.removeChild(ta);
+      _showToast();
+    }
+  };
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     FEATURE 2: Backup File Log System
+     ──────────────────────────────────────────────────────────────────────────
+     Logic:
+       • Each controller has its own log list stored in localStorage.
+       • Key: 'ctl_backup_log_<itemId>'
+       • Each entry: { timestamp, user, task, backupFile, status }
+       • When User1 books with a backupFile link, a SYSTEM entry is appended
+         to represent the "receiver" of that backup (the previous state).
+       • The very first entry per controller is always SYSTEM / DEFAULT.
+       • On every new booking, the submitted backupFile link populates the
+         PREVIOUS row's backupFile (the "current user" row from the last booking),
+         and a new empty row is inserted for the current user.
+       • Sort: newest timestamp first (index 0 = newest).
+  ══════════════════════════════════════════════════════════════════════════ */
+
+  var CTL_BACKUP_LOG_PREFIX = 'ctl_backup_log_';
+
+  function _ctlGetBackupLog(itemId) {
+    try {
+      var raw = localStorage.getItem(CTL_BACKUP_LOG_PREFIX + itemId);
+      var parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch(_) { return []; }
+  }
+
+  function _ctlSetBackupLog(itemId, log) {
+    try { localStorage.setItem(CTL_BACKUP_LOG_PREFIX + itemId, JSON.stringify((log||[]).slice(0, 500))); } catch(_) {}
+  }
+
+  /* Called when a booking is submitted with a backup file link.
+     Rules:
+       1. If log is empty → seed with SYSTEM/DEFAULT row then add user row.
+       2. Find the most recent row that has backupFile === '' or 'No files uploaded yet from next user'
+          (that is the PREVIOUS booking's "waiting" row) and fill its backupFile with the new link.
+       3. Append a new row for the current user with backupFile = '' (waiting for next user's upload).
+  */
+  window._ctlAppendBackupLog = function(itemId, entry) {
+    /* entry = { timestamp, user, task, backupFile } */
+    var log = _ctlGetBackupLog(itemId);
+
+    /* Seed SYSTEM row if this is the very first booking ever */
+    if (log.length === 0) {
+      log.unshift({
+        timestamp: entry.timestamp,
+        user: 'SYSTEM',
+        task: 'DEFAULT',
+        backupFile: entry.backupFile   /* first user's backup goes to SYSTEM */
+      });
+      /* Add the current user's row — their backup slot is empty until next user uploads */
+      log.unshift({
+        timestamp: entry.timestamp,
+        user: entry.user,
+        task: entry.task,
+        backupFile: 'No files uploaded yet from next user'
+      });
+      _ctlSetBackupLog(itemId, log);
+      return;
+    }
+
+    /* Fill the most recent "waiting" row (the current user from last booking)
+       with the backup link submitted by the new user (who downloaded the backup
+       FROM the controller, which represents the previous user's state). */
+    var waitingIdx = -1;
+    for (var i = 0; i < log.length; i++) {
+      var bf = String(log[i].backupFile || '');
+      if (bf === '' || bf === 'No files uploaded yet from next user') {
+        waitingIdx = i;
+        break;
+      }
+    }
+    if (waitingIdx >= 0) {
+      log[waitingIdx].backupFile = entry.backupFile;
+    }
+
+    /* Add a new empty row for the current user (their backup waiting for next user) */
+    log.unshift({
+      timestamp: entry.timestamp,
+      user: entry.user,
+      task: entry.task,
+      backupFile: 'No files uploaded yet from next user'
+    });
+
+    _ctlSetBackupLog(itemId, log);
+  };
+
+  /* ── Open Backup Log Modal ─────────────────────────────────────────────── */
+  window._ctlOpenBackupLog = function(itemId) {
+    var items = (typeof getItems === 'function') ? [] : [];
+    /* Resolve item label from config IIFE storage */
+    try {
+      var raw = localStorage.getItem('mums_controller_lab_items_v1');
+      var parsed = raw ? JSON.parse(raw) : [];
+      items = Array.isArray(parsed) ? parsed : [];
+    } catch(_) {}
+    var ctrl = items.find(function(it){ return it.id === itemId; }) || {};
+    var ctrlLabel = ctrl.type ? (ctrl.type + (ctrl.ip ? ' — ' + ctrl.ip : '')) : ('Controller ' + itemId.slice(0,8));
+
+    var log = _ctlGetBackupLog(itemId);
+
+    /* Remove existing modal if any */
+    var existing = document.getElementById('hp-ctl-backup-log-modal');
+    if (existing) existing.remove();
+
+    function renderRows(entries) {
+      if (!entries.length) {
+        return '<tr><td colspan="4" style="text-align:center;padding:28px 16px;color:rgba(255,255,255,.25);font-size:11px;">'
+          + '<i class="fas fa-folder-open" style="font-size:20px;opacity:.3;display:block;margin-bottom:8px;"></i>'
+          + 'No backup logs yet for this controller.</td></tr>';
+      }
+      return entries.map(function(row, idx) {
+        var isSystem = row.user === 'SYSTEM';
+        var isWaiting = row.backupFile === 'No files uploaded yet from next user' || !row.backupFile;
+        var userBadge = isSystem
+          ? '<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:#fbbf24;border-radius:5px;padding:2px 8px;font-size:9px;font-weight:800;letter-spacing:.06em;">'
+            + '<i class="fas fa-server" style="font-size:7px;"></i>SYSTEM</span>'
+          : '<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(162,93,220,.12);border:1px solid rgba(162,93,220,.25);color:#c084fc;border-radius:5px;padding:2px 8px;font-size:9px;font-weight:700;">'
+            + '<i class="fas fa-user" style="font-size:7px;"></i>' + _ctlEscHtml(row.user) + '</span>';
+        var backupCell;
+        if (isWaiting) {
+          backupCell = '<span style="font-size:9px;color:rgba(255,255,255,.25);font-style:italic;">'
+            + '<i class="fas fa-clock" style="margin-right:4px;opacity:.5;"></i>No files uploaded yet from next user</span>';
+        } else if (row.backupFile && (row.backupFile.startsWith('http') || row.backupFile.startsWith('//'))) {
+          backupCell = '<a href="' + _ctlEscHtml(row.backupFile) + '" target="_blank" rel="noopener noreferrer" '
+            + 'style="display:inline-flex;align-items:center;gap:5px;color:#60a5fa;font-size:10px;font-weight:700;text-decoration:none;'
+            + 'background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.25);border-radius:5px;padding:3px 9px;transition:all .15s;" '
+            + 'onmouseover="this.style.background='rgba(96,165,250,.18)'" onmouseout="this.style.background='rgba(96,165,250,.1)'">'
+            + '<i class="fas fa-download" style="font-size:8px;"></i>Backup File</a>';
+        } else {
+          backupCell = '<span style="font-size:10px;color:#6b7280;">' + _ctlEscHtml(row.backupFile || '—') + '</span>';
+        }
+        var rowBg = idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.015)';
+        return '<tr style="background:' + rowBg + ';transition:background .12s;" '
+          + 'onmouseover="this.style.background='rgba(96,165,250,.04)'" onmouseout="this.style.background='' + rowBg + ''">'
+          + '<td style="padding:10px 14px;font-size:9px;color:rgba(255,255,255,.4);font-family:monospace;white-space:nowrap;">' + _ctlEscHtml(row.timestamp || '—') + '</td>'
+          + '<td style="padding:10px 14px;">' + userBadge + '</td>'
+          + '<td style="padding:10px 14px;font-size:10px;color:#94a3b8;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + _ctlEscHtml(row.task || '') + '">' + _ctlEscHtml(row.task || '—') + '</td>'
+          + '<td style="padding:10px 14px;">' + backupCell + '</td>'
+          + '</tr>';
+      }).join('');
+    }
+
+    var modal = document.createElement('div');
+    modal.id = 'hp-ctl-backup-log-modal';
+    modal.style.cssText = [
+      'position:fixed;inset:0;z-index:9999;',
+      'display:flex;align-items:center;justify-content:center;',
+      'background:rgba(0,0,0,.65);backdrop-filter:blur(6px);',
+      'animation:ctl-fade-in .18s ease;padding:16px;'
+    ].join('');
+
+    modal.innerHTML = [
+      '<div style="',
+        'background:linear-gradient(160deg,#0f1623 0%,#0a0f1a 100%);',
+        'border:1px solid rgba(96,165,250,.2);',
+        'border-radius:16px;width:100%;max-width:760px;max-height:80vh;',
+        'display:flex;flex-direction:column;',
+        'box-shadow:0 24px 80px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.04) inset;',
+        'overflow:hidden;',
+      '">',
+
+        /* ── Header ── */
+        '<div style="',
+          'padding:18px 22px 16px;',
+          'background:linear-gradient(135deg,rgba(96,165,250,.1),rgba(96,165,250,.04));',
+          'border-bottom:1px solid rgba(96,165,250,.18);',
+          'display:flex;align-items:center;gap:14px;flex-shrink:0;',
+        '">',
+          '<div style="',
+            'width:40px;height:40px;border-radius:11px;flex-shrink:0;',
+            'background:rgba(96,165,250,.15);border:1px solid rgba(96,165,250,.3);',
+            'display:flex;align-items:center;justify-content:center;',
+          '">',
+            '<i class="fas fa-folder-open" style="color:#60a5fa;font-size:16px;"></i>',
+          '</div>',
+          '<div style="flex:1;min-width:0;">',
+            '<div style="font-size:14px;font-weight:900;color:#e2e8f0;letter-spacing:-.01em;">Backup File Log</div>',
+            '<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:2px;">' + _ctlEscHtml(ctrlLabel) + ' &nbsp;·&nbsp; ' + log.length + ' entr' + (log.length === 1 ? 'y' : 'ies') + '</div>',
+          '</div>',
+          '<button onclick="document.getElementById('hp-ctl-backup-log-modal').remove()" style="',
+            'width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.1);',
+            'background:rgba(255,255,255,.04);color:#6b7280;cursor:pointer;',
+            'display:flex;align-items:center;justify-content:center;font-size:14px;',
+            'transition:all .15s;flex-shrink:0;',
+          '" onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='#e2e8f0'" onmouseout="this.style.background='rgba(255,255,255,.04)';this.style.color='#6b7280'">✕</button>',
+        '</div>',
+
+        /* ── Legend ── */
+        '<div style="padding:10px 22px;background:rgba(245,158,11,.05);border-bottom:1px solid rgba(245,158,11,.1);flex-shrink:0;">',
+          '<div style="font-size:9px;color:rgba(255,255,255,.4);line-height:1.6;">',
+            '<i class="fas fa-info-circle" style="color:#f59e0b;margin-right:5px;"></i>',
+            '<strong style="color:#fbbf24;">How this works:</strong> ',
+            'When a new user books a controller, they upload a backup file (downloaded from the controller). ',
+            'This backup goes to the <strong style="color:#fbbf24;">SYSTEM</strong> slot (first booking) or the <strong style="color:#c084fc;">previous user's</strong> row. ',
+            'The current user's backup slot stays empty until the next user books and uploads.',
+          '</div>',
+        '</div>',
+
+        /* ── Table ── */
+        '<div style="flex:1;overflow-y:auto;min-height:0;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.1) transparent;">',
+          '<table style="width:100%;border-collapse:collapse;">',
+            '<thead>',
+              '<tr style="border-bottom:1px solid rgba(255,255,255,.07);">',
+                '<th style="padding:10px 14px;text-align:left;font-size:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.3);">Timestamp</th>',
+                '<th style="padding:10px 14px;text-align:left;font-size:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.3);">User</th>',
+                '<th style="padding:10px 14px;text-align:left;font-size:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.3);">Task</th>',
+                '<th style="padding:10px 14px;text-align:left;font-size:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.3);">Backup File Link</th>',
+              '</tr>',
+            '</thead>',
+            '<tbody id="hp-ctl-bklog-tbody">',
+              renderRows(log),
+            '</tbody>',
+          '</table>',
+        '</div>',
+
+        /* ── Footer ── */
+        '<div style="',
+          'padding:12px 22px;border-top:1px solid rgba(255,255,255,.06);',
+          'display:flex;align-items:center;gap:10px;flex-shrink:0;',
+          'background:rgba(255,255,255,.015);',
+        '">',
+          '<span style="font-size:9px;color:rgba(255,255,255,.3);">Sorted newest to oldest &nbsp;·&nbsp; ' + log.length + ' total entr' + (log.length === 1 ? 'y' : 'ies') + '</span>',
+          '<button onclick="if(confirm('Clear all backup logs for this controller?')){ window._ctlClearBackupLog('' + itemId + ''); }" style="',
+            'margin-left:auto;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);',
+            'color:#f87171;border-radius:7px;padding:5px 12px;font-size:9px;font-weight:700;',
+            'cursor:pointer;font-family:inherit;transition:all .15s;',
+          '" onmouseover="this.style.background='rgba(239,68,68,.15)'" onmouseout="this.style.background='rgba(239,68,68,.08)'">',
+            '<i class="fas fa-trash" style="margin-right:4px;font-size:8px;"></i>Clear Log',
+          '</button>',
+        '</div>',
+      '</div>'
+    ].join('');
+
+    document.body.appendChild(modal);
+
+    /* Close on backdrop click */
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) modal.remove();
+    });
+  };
+
+  window._ctlClearBackupLog = function(itemId) {
+    try { localStorage.removeItem(CTL_BACKUP_LOG_PREFIX + itemId); } catch(_) {}
+    var modal = document.getElementById('hp-ctl-backup-log-modal');
+    if (modal) modal.remove();
+  };
+
+  function _ctlEscHtml(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
 
   // ── Settings nav switching ──────────────────────────────────────
   // NOTE FOR AI: Each settings section has its own accent color.
@@ -2206,6 +2486,10 @@
       var payload = { timestamp: phtNow(), user: me, controller: labelFor(ctrl.type) + ' — ' + (ctrl.ip || '—'), task: booking.task, duration: booking.duration, backupFile: backup, note: 'Started from queue' };
       savePendingLog(payload);
       if (SHEETS_ENDPOINT) fetch(SHEETS_ENDPOINT, { method: 'POST', mode: 'no-cors', body: buildFormPayload(payload) }).catch(function () {});
+      /* FEATURE 2: Append to per-controller backup log (queue path) */
+      if (typeof window._ctlAppendBackupLog === 'function') {
+        window._ctlAppendBackupLog(itemId, { timestamp: phtNow(), user: me, task: booking.task, backupFile: backup });
+      }
       _updatePendingBtn();
       var modal = document.getElementById('hp-ctl-backup-upload-modal');
       if (modal) modal.remove();
@@ -2363,6 +2647,11 @@
 
     var payload = { timestamp: phtNow(), user: me, controller: labelFor(_bookingCtlData.type) + ' — ' + (_bookingCtlData.ip || '—'), task: task, duration: duration, backupFile: backup, note: 'Direct booking' };
     savePendingLog(payload);
+
+    /* FEATURE 2: Append to per-controller backup log */
+    if (typeof window._ctlAppendBackupLog === 'function') {
+      window._ctlAppendBackupLog(_bookingCtlId, { timestamp: phtNow(), user: me, task: task, backupFile: backup });
+    }
 
     setBooking(_bookingCtlId, booking, function () {
       /* success */

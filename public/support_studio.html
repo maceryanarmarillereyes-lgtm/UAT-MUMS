@@ -972,6 +972,10 @@
                         <div class="hp-ctl-bk-ip-row">
                           <span class="hp-ctl-bk-ip-dot"></span>
                           <span id="hp-ctl-bk-ctrl-ip" class="hp-ctl-bk-ip">192.168.123.1</span>
+                          <button class="hp-ctl-bk-ip-copy" title="Copy IP" id="hp-ctl-bk-ip-copy-btn"
+                            onclick="var ip=document.getElementById('hp-ctl-bk-ctrl-ip').textContent;if(ip&&ip!=='—'){window._ctlCopyIp('__modal__',ip);this.innerHTML='<i class=\'fas fa-check\'></i>';setTimeout(function(){document.getElementById('hp-ctl-bk-ip-copy-btn').innerHTML='<i class=\'fas fa-copy\'></i>';},1800);}">
+                            <i class="fas fa-copy"></i>
+                          </button>
                           <span class="hp-ctl-bk-online-badge">ONLINE</span>
                         </div>
                       </div>
@@ -1078,11 +1082,15 @@
 
                     <!-- Field 3: Backup File -->
                     <div class="hp-ctl-bk-field">
-                      <label class="hp-ctl-bk-label">
-                        <i class="fas fa-cloud-upload-alt hp-ctl-bk-label-icon"></i>
-                        Backup File Link
+                      <label class="hp-ctl-bk-label hp-ctl-bk-label--backup">
+                        <i class="fas fa-cloud-upload-alt hp-ctl-bk-label-icon" style="color:#60a5fa;font-size:12px;"></i>
+                        <span style="font-size:12px;font-weight:900;color:#93c5fd;letter-spacing:.04em;">BACKUP FILE LINK</span>
                         <span class="hp-ctl-bk-req">Required</span>
                       </label>
+                      <div class="hp-ctl-bk-backup-instruction">
+                        <i class="fas fa-info-circle" style="color:#f59e0b;flex-shrink:0;"></i>
+                        <span>Download the backup file from the controller first, upload it to SharePoint, then paste the link below. This backup will be attributed to the <strong style="color:#fbbf24;">previous user's log entry</strong>.</span>
+                      </div>
                       <div class="hp-ctl-bk-backup-block">
                         <div class="hp-ctl-bk-backup-upload-zone" onclick="window._ctlOpenBackupFolder()">
                           <i class="fas fa-cloud-upload-alt" style="font-size:18px;color:#6b7280;margin-bottom:6px;display:block;"></i>

@@ -820,16 +820,100 @@
 
     /* Name and IP in column */
     .hp-ctl-col-meta {
-      width: 100%; display: flex; flex-direction: column; gap: 3px; align-items: center;
+      width: 100%; display: flex; flex-direction: column; gap: 6px; align-items: center;
     }
     .hp-ctl-col-name {
-      font-size: 11px; font-weight: 800; color: #e2e8f0;
+      font-size: 12px; font-weight: 800; color: #e2e8f0;
       letter-spacing: .03em; text-align: center;
     }
-    .hp-ctl-col-ip {
-      font-size: 9px; color: rgba(255,255,255,.38);
-      font-family: 'JetBrains Mono', monospace; text-align: center;
+    /* ── FEATURE 1: Premium IP chip ── */
+    .hp-ctl-ip-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(96,165,250,.1);
+      border: 1px solid rgba(96,165,250,.28);
+      border-radius: 8px; padding: 5px 10px 5px 8px;
+      position: relative; max-width: 100%;
     }
+    .hp-ctl-ip-chip-icon {
+      font-size: 9px; color: #60a5fa; flex-shrink: 0; opacity: .8;
+    }
+    .hp-ctl-ip-chip-val {
+      font-size: 11.5px; font-weight: 700; color: #93c5fd;
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+      letter-spacing: .03em; white-space: nowrap;
+    }
+    .hp-ctl-ip-copy-btn {
+      width: 22px; height: 22px; border-radius: 5px; flex-shrink: 0;
+      background: rgba(96,165,250,.12); border: 1px solid rgba(96,165,250,.25);
+      color: #60a5fa; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; font-size: 9px;
+      transition: background .15s, transform .1s;
+      padding: 0;
+    }
+    .hp-ctl-ip-copy-btn:hover {
+      background: rgba(96,165,250,.25); transform: scale(1.08);
+    }
+    .hp-ctl-ip-copy-btn:active { transform: scale(.94); }
+    /* Copy toast */
+    .hp-ctl-ip-copy-toast {
+      position: absolute; bottom: calc(100% + 6px); left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      background: #10b981; color: #fff; font-size: 9px; font-weight: 700;
+      padding: 3px 10px; border-radius: 5px; white-space: nowrap;
+      pointer-events: none; opacity: 0; transition: opacity .18s, transform .18s;
+      letter-spacing: .04em;
+    }
+    .hp-ctl-ip-copy-toast.show {
+      opacity: 1; transform: translateX(-50%) translateY(0);
+    }
+    /* FEATURE 1: IP row in booking modal — enhanced */
+    .hp-ctl-bk-ip-row {
+      display: flex; align-items: center; gap: 8px; margin-top: 6px;
+    }
+    .hp-ctl-bk-ip-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #10b981; flex-shrink: 0;
+      box-shadow: 0 0 8px rgba(16,185,129,.7);
+      animation: ctl-pulse-green 2s ease-in-out infinite;
+    }
+    .hp-ctl-bk-ip {
+      font-size: 14px; font-weight: 700; color: #93c5fd;
+      font-family: var(--ss-mono, monospace); letter-spacing: .04em;
+    }
+    .hp-ctl-bk-ip-copy {
+      width: 24px; height: 24px; border-radius: 6px; cursor: pointer;
+      background: rgba(96,165,250,.1); border: 1px solid rgba(96,165,250,.25);
+      color: #60a5fa; display: inline-flex; align-items: center;
+      justify-content: center; font-size: 10px;
+      transition: background .15s;
+    }
+    .hp-ctl-bk-ip-copy:hover { background: rgba(96,165,250,.22); }
+    .hp-ctl-bk-online-badge {
+      font-size: 8px; font-weight: 800; letter-spacing: .12em;
+      color: #10b981; background: rgba(16,185,129,.12);
+      border: 1px solid rgba(16,185,129,.28);
+      border-radius: 5px; padding: 2px 7px;
+    }
+    /* ── FEATURE 2: Action row + folder button in controller column ── */
+    .hp-ctl-col-action-row {
+      display: flex; flex-direction: column; gap: 6px; width: 100%;
+    }
+    .hp-ctl-folder-btn {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; padding: 7px 10px; border-radius: 8px; cursor: pointer;
+      background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.22);
+      color: #fbbf24; font-size: 10px; font-weight: 700;
+      font-family: var(--ss-font, inherit);
+      transition: background .15s, transform .1s, box-shadow .15s;
+      letter-spacing: .02em;
+    }
+    .hp-ctl-folder-btn:hover {
+      background: rgba(245,158,11,.16);
+      box-shadow: 0 2px 12px rgba(245,158,11,.18);
+      transform: translateY(-1px);
+    }
+    .hp-ctl-folder-btn:active { transform: translateY(0); }
+    .hp-ctl-folder-btn i { font-size: 11px; }
 
     /* Status pill in column */
     .hp-ctl-col-status {
@@ -3926,6 +4010,10 @@
       overflow: hidden;
       animation: ctl-modal-in .22s cubic-bezier(.34,1.56,.64,1) both;
     }
+    @keyframes ctl-fade-in {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
     @keyframes ctl-modal-in {
       from { opacity:0; transform: scale(.94) translateY(10px); }
       to   { opacity:1; transform: scale(1) translateY(0); }
@@ -4173,16 +4261,28 @@
     .hp-ctl-bk-backup-block {
       display: flex; flex-direction: column; gap: 8px;
     }
+    /* FEATURE 1 + 2: Backup label and instruction */
+    .hp-ctl-bk-label--backup {
+      margin-bottom: 6px !important;
+    }
+    .hp-ctl-bk-backup-instruction {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 9px 12px; border-radius: 8px;
+      background: rgba(245,158,11,.06); border: 1px solid rgba(245,158,11,.18);
+      font-size: 9.5px; color: rgba(255,255,255,.5); line-height: 1.55;
+      margin-bottom: 8px;
+    }
+    .hp-ctl-bk-backup-instruction i { margin-top: 1px; }
     .hp-ctl-bk-backup-upload-zone {
-      border: 1px dashed rgba(255,255,255,.1);
+      border: 1px dashed rgba(96,165,250,.22);
       border-radius: 10px; padding: 14px 16px;
       text-align: center; cursor: pointer;
-      background: rgba(255,255,255,.02);
+      background: rgba(96,165,250,.03);
       transition: all .2s;
     }
     .hp-ctl-bk-backup-upload-zone:hover {
-      border-color: rgba(59,130,246,.4);
-      background: rgba(59,130,246,.04);
+      border-color: rgba(96,165,250,.45);
+      background: rgba(96,165,250,.07);
     }
     .hp-ctl-bk-backup-input-wrap {
       position: relative; display: flex; align-items: center;
@@ -4659,7 +4759,8 @@
       }
 
       .hp-ctl-col-name { font-size: 10px; }
-      .hp-ctl-col-ip   { font-size: 8px; }
+      .hp-ctl-ip-chip-val { font-size: 10px; }
+      .hp-ctl-ip-chip { padding: 4px 8px; }
       .hp-ctl-col-status { font-size: 8px; padding: 2px 8px; }
 
       .hp-ctl-user-strip {
