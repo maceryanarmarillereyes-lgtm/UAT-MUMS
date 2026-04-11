@@ -1860,7 +1860,7 @@
   }
 
   /* BUG 1 FIX: server push now includes lockedSince for optimistic locking */
-  function _pushSharedPatch(body, onSuccess, onConflict) {
+  function _pushSharedPatch(body, onSuccess, onConflict, onError) {
     var tok = _ctlGetToken();
     if (!tok) return;
     var payload = Object.assign({ lockedSince: _lastServerWrite }, body);
@@ -1881,9 +1881,11 @@
             if (window._ctlRenderAll) window._ctlRenderAll();
             if (onConflict) onConflict();
           });
+        } else {
+          if (onError) onError(res);
         }
       })
-      .catch(function () {});
+      .catch(function (err) { if (onError) onError(err); });
   }
 
   /* ── Booking / Queue accessors (BUG 2 FIX: always reads _stateCache) ────── */
@@ -1897,7 +1899,8 @@
     return b;
   }
 
-  function setBooking(id, data, onSuccess, onConflict) {
+  function setBooking(id, data, onSuccess, onConflict, onError) {
+    var prevBooking = _stateCache.bookings && _stateCache.bookings[id] ? _stateCache.bookings[id] : null;
     if (!_stateCache.bookings || typeof _stateCache.bookings !== 'object') _stateCache.bookings = {};
     if (data) _stateCache.bookings[id] = data;
     else       delete _stateCache.bookings[id];
@@ -1919,6 +1922,17 @@
       /* BUG 1 FIX: conflict — revert local optimistic update */
       var serverBooking = _stateCache.bookings && _stateCache.bookings[id] ? _stateCache.bookings[id] : null;
       if (onConflict) onConflict(serverBooking);
+    }, function (err) {
+      /* Network/server error (non-409): rollback optimistic write */
+      if (prevBooking) _stateCache.bookings[id] = prevBooking;
+      else delete _stateCache.bookings[id];
+      try {
+        if (prevBooking) localStorage.setItem('ctl_booking_' + id, JSON.stringify(prevBooking));
+        else localStorage.removeItem('ctl_booking_' + id);
+      } catch (_) {}
+      _saveStateCache();
+      if (window._ctlRenderAll) window._ctlRenderAll();
+      if (onError) onError(err);
     });
     if (window._ctlRenderAll) window._ctlRenderAll();
   }
@@ -2489,12 +2503,6 @@
       return;
     }
 
-    /* Remove user from queue */
-    var lockKey = itemId + '|' + me;
-    delete _notifyLocks[lockKey];
-    var newQueue = queue.filter(function (q) { return !_sameUser(q && q.user, me); });
-    setQueue(itemId, newQueue);
-
     var durMs   = parseDurMs(qEntry.duration || '30 minutes');
     var booking = {
       user: me, avatarUrl: _getAvatarUrl(),
@@ -2510,6 +2518,13 @@
 
     setBooking(itemId, booking, function () {
       /* success */
+      /* Remove user from queue only after booking is committed */
+      var lockKey = itemId + '|' + me;
+      delete _notifyLocks[lockKey];
+      var latestQueue = getQueue(itemId);
+      var newQueue = latestQueue.filter(function (q) { return !_sameUser(q && q.user, me); });
+      setQueue(itemId, newQueue);
+
       var items  = getItems();
       var ctrl   = items.find(function (it) { return it.id === itemId; }) || {};
       var payload = { timestamp: phtNow(), user: me, controller: labelFor(ctrl.type) + ' — ' + (ctrl.ip || '—'), task: booking.task, duration: booking.duration, backupFile: backup, note: 'Started from queue' };
@@ -2529,6 +2544,13 @@
       if (errorEl) {
         var who = existingBooking ? existingBooking.user : 'someone else';
         errorEl.textContent = 'Controller was just booked by ' + esc(who) + '. Please wait for their session to end.';
+        errorEl.style.display = 'block';
+      }
+    }, function () {
+      /* Server/network error: allow retry and keep queue position */
+      if (startBtn) { startBtn.disabled = false; startBtn.innerHTML = '<i class="fas fa-play-circle" style="font-size:14px;"></i> Start My Session'; }
+      if (errorEl) {
+        errorEl.textContent = 'Unable to start session right now (server unavailable). Your queue slot is preserved. Please retry.';
         errorEl.style.display = 'block';
       }
     });
