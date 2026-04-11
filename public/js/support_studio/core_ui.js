@@ -1550,7 +1550,15 @@
         if (!booking || booking.endMs <= now) {
           var head = queue[0] || {};
           var expiresAt = Number(head.notifyExpiresAt || 0);
+          var notifiedAt = Number(head.notifiedAt || 0);
           if (expiresAt && expiresAt <= now) {
+            // Guard: if this entry was just notified, avoid instant discard due stale/late clocks.
+            if (notifiedAt && (now - notifiedAt) < 15000) {
+              head.notifyExpiresAt = now + (3 * 60 * 1000);
+              queue[0] = head;
+              setQueue(id, queue);
+              return;
+            }
             queue.shift();
             setQueue(id, queue);
             // If next user exists, notify their turn immediately.
@@ -1705,7 +1713,16 @@
 
     var cdEl = document.getElementById('hp-ctl-qa-countdown');
     var expMs = Number(notifyExpiresAt || 0);
-    if (!expMs) expMs = Date.now() + (3 * 60 * 1000);
+    if (!expMs || expMs <= Date.now()) {
+      expMs = Date.now() + (3 * 60 * 1000);
+      var rq = getQueue(ctrlId);
+      var rme = _getCurrentUser();
+      if (rq.length && rq[0] && rq[0].user === rme) {
+        rq[0].notifiedAt = Date.now();
+        rq[0].notifyExpiresAt = expMs;
+        setQueue(ctrlId, rq);
+      }
+    }
     var cdTimer = setInterval(function(){
       var rem = expMs - Date.now();
       if (rem <= 0) {
@@ -2065,7 +2082,15 @@
     } else {
       // If already notified and grace window expired, auto-void and notify next.
       var exp = Number(next.notifyExpiresAt || 0);
+      var nAt = Number(next.notifiedAt || 0);
       if (exp && exp <= Date.now()) {
+        // Guard: if just-notified, refresh the expiry instead of instant removal.
+        if (nAt && (Date.now() - nAt) < 15000) {
+          next.notifyExpiresAt = Date.now() + (3 * 60 * 1000);
+          queue[0] = next;
+          setQueue(itemId, queue);
+          return;
+        }
         queue.shift();
         setQueue(itemId, queue);
         if (queue.length) window._ctlNotifyQueue(itemId);
