@@ -1751,6 +1751,7 @@
   var _stateReqBusy     = false;
   var _lastServerWrite  = 0;      // BUG 1 FIX: optimistic lock timestamp
   var _notifyLocks      = {};     // BUG 5 FIX: { ctrlId: timestampMs }
+  var _queueAlertState  = { activeKey: '', acked: {} };
 
   /* BUG 6 FIX: keyed timer registry { itemId: { interval, endMs } } */
   window._ctlTimers = window._ctlTimers || {};
@@ -2206,6 +2207,7 @@
   _injectTimeUpCSS();
 
   var _timeUpState = { audio: null, stopTimer: null, barTimer: null, key: '' };
+  var _timeUpDismissed = {};
 
   function _stopTimeUpAlert() {
     try {
@@ -2263,7 +2265,7 @@
     document.body.appendChild(modal);
 
     document.getElementById('hp-ctl-timeup-ok-btn').addEventListener('click', function () {
-      _timeUpState.key = '';
+      _timeUpDismissed[_timeUpState.key] = Date.now();
       _stopTimeUpAlert();
     });
 
@@ -2283,13 +2285,17 @@
     audio.volume = 0.92;
     _timeUpState.audio = audio;
     _playAudio(audio, [TIMEUP_SOUND_URL, '/sound alert/Alert_Yourtimeisup.mp3', SOUND_FALLBACK], 0);
-    _timeUpState.stopTimer = setTimeout(function () { _timeUpState.key = ''; _stopTimeUpAlert(); }, ALARM_MS);
+    _timeUpState.stopTimer = setTimeout(function () {
+      _timeUpDismissed[_timeUpState.key] = Date.now();
+      _stopTimeUpAlert();
+    }, ALARM_MS);
   }
 
   function _maybeTimeUpAlert(item, booking) {
     if (!item || !booking) return;
     if (!_sameUser(booking.user, _getCurrentUser())) return;
     var alertKey = [item.id, booking.user || '', booking.startMs || '', booking.endMs || ''].join('|');
+    if (_timeUpDismissed[alertKey]) return;
     if (_timeUpState.key === alertKey) return;
     _timeUpState.key = alertKey;
     _showTimeUpAlert(item, booking);
@@ -2307,7 +2313,19 @@
     _playAudio(_queueAudio, [QUEUE_SOUND_URL, '/sound alert/Alert_Yourturntousethecontroller.mp3', SOUND_FALLBACK], 0);
   }
 
+  function _queueTurnKey(ctrlId, user, notifyExpiresAt) {
+    return [ctrlId || '', String(user || '').trim().toLowerCase(), Number(notifyExpiresAt || 0)].join('|');
+  }
+
   function _triggerQueueAlert(ctrlId, ctrlLabel, notifyExpiresAt) {
+    var queue = getQueue(ctrlId);
+    var me = _getCurrentUser();
+    var head = queue[0] || {};
+    if (!head.user || !_sameUser(head.user, me)) return;
+    var turnKey = _queueTurnKey(ctrlId, head.user, notifyExpiresAt || head.notifyExpiresAt || 0);
+    if (_queueAlertState.acked[turnKey]) return;
+    if (_queueAlertState.activeKey === turnKey && document.getElementById('hp-ctl-queue-alert-modal')) return;
+    _queueAlertState.activeKey = turnKey;
     _stopQueueSound();
     _showQueueAlertBanner(ctrlId, ctrlLabel, notifyExpiresAt);
     _startQueueSound();
@@ -2360,6 +2378,7 @@
       if (rem <= 0) {
         clearInterval(cdTimer);
         _stopQueueSound();
+        _queueAlertState.activeKey = '';
         if (overlay && overlay.parentElement) overlay.remove();
         /* Auto-void this user's queue turn */
         var q  = getQueue(ctrlId);
@@ -2380,6 +2399,16 @@
     document.getElementById('hp-ctl-qa-ack-btn').addEventListener('click', function () {
       clearInterval(cdTimer);
       _stopQueueSound();
+      var me = _getCurrentUser();
+      var q = getQueue(ctrlId);
+      var head = q[0] || {};
+      if (head.user && _sameUser(head.user, me)) {
+        head.acknowledgedAt = Date.now();
+        q[0] = head;
+        setQueue(ctrlId, q);
+      }
+      _queueAlertState.acked[_queueTurnKey(ctrlId, me, expMs)] = Date.now();
+      _queueAlertState.activeKey = '';
       overlay.remove();
       window._ctlOpenBackupUpload && window._ctlOpenBackupUpload(ctrlId);
     });
