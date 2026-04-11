@@ -1844,6 +1844,13 @@
     var sheetSt    = document.getElementById('hp-ctl-bk-sheet-status');
     if (successEl) successEl.classList.remove('show');
     if (bodyEl)    Array.from(bodyEl.children).forEach(function(c){if(!c.classList.contains('hp-ctl-bk-success'))c.style.display='';});
+    // Queue-turn notification preference belongs to queue flow only.
+    var notifyEl = document.getElementById('hp-ctl-bk-notify-alarm');
+    if (notifyEl) {
+      notifyEl.checked = false;
+      var notifyWrap = notifyEl.closest('.hp-ctl-bk-field');
+      if (notifyWrap) notifyWrap.style.display = 'none';
+    }
     if (sheetSt)   { sheetSt.style.display='none'; sheetSt.textContent=''; }
     var regBtn=document.getElementById('hp-ctl-bk-register-btn');var regIcon=document.getElementById('hp-ctl-bk-register-icon');var regLabel=document.getElementById('hp-ctl-bk-register-label');var spinner=document.getElementById('hp-ctl-bk-spinner');
     if(regBtn)regBtn.disabled=false;if(regIcon)regIcon.style.display='';if(regLabel)regLabel.textContent='Book this Controller';if(spinner)spinner.style.display='none';
