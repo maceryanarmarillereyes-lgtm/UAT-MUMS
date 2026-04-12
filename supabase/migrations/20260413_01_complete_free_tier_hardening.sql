@@ -1,0 +1,20 @@
+-- =============================================================================
+-- 2026-04-13: COMPLETE FREE TIER HARDENING — Consolidates all IO + Auth fixes
+-- =============================================================================
+-- Root causes resolved:
+--   AUTH:  getUserFromJwt() called on every heartbeat → 2,400 Auth API hits/hr
+--          Fix: Server-side JWT cache (4min TTL) in server/lib/supabase.js
+--   IO:    mums_presence LOGGED → 57,600 WAL writes/day
+--          Fix: SET UNLOGGED (already in 20260410 but re-asserted here)
+--   IO:    REPLICA IDENTITY FULL on multiple tables → 2× WAL per update
+--          Fix: REPLICA IDENTITY DEFAULT on all real-time subscribed tables
+--   IO:    heartbeat growing unbounded → index bloat
+--          Fix: Single-row UPSERT on source='server'
+--   POLL:  MAILBOX_OVERRIDE_POLL_MS=10000 → 10,800 DB reads/hr when active
+--          Fix: Changed to 60000 (60s) in api/env.js + functions/api/env.js
+-- =============================================================================
+-- See: server/lib/supabase.js — JWT cache + profile cache (JS-side fixes)
+-- See: supabase/FREE_TIER_APPLY_NOW.sql — run in dashboard SQL editor
+-- All SQL idempotent. Zero downtime.
+-- =============================================================================
+SELECT 'See FREE_TIER_APPLY_NOW.sql — run that file in the Supabase SQL editor for all DB-side fixes.' AS instruction;

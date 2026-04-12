@@ -218,6 +218,39 @@ async function serviceUpdate(table, arg2, arg3) {
   });
 }
 
+// ── JWT VALIDATION CACHE ────────────────────────────────────────────────────
+// FREE TIER FIX 2026-04-13: Cache auth/v1/user results server-side.
+// Root cause: every heartbeat (45s × 30 users) called getUserFromJwt()
+// → 2,400 Supabase Auth API hits/hour → matches the 2,072 seen in dashboard.
+// Fix: cache by JWT signature (last 40 chars are unique per token).
+// TTL = 4 min (well under the 1-hour JWT expiry — safe to cache).
+// Max 100 entries prevents unbounded memory growth on Workers/serverless.
+// ────────────────────────────────────────────────────────────────────────────
+const _jwtCache = new Map(); // sig → { user, exp }
+const JWT_CACHE_TTL_MS  = 4 * 60 * 1000; // 4 minutes
+const JWT_CACHE_MAX     = 100;
+
+function _jwtCacheKey(token) {
+  // Last 40 chars of a JWT are unique per-token (signature bytes).
+  return token.length > 40 ? token.slice(-40) : token;
+}
+
+function _jwtCacheGet(token) {
+  const entry = _jwtCache.get(_jwtCacheKey(token));
+  if (!entry) return null;
+  if (entry.exp < Date.now()) { _jwtCache.delete(_jwtCacheKey(token)); return null; }
+  return entry.user;
+}
+
+function _jwtCacheSet(token, user) {
+  if (!user) return;
+  // Evict oldest entry when at capacity (simple FIFO)
+  if (_jwtCache.size >= JWT_CACHE_MAX) {
+    _jwtCache.delete(_jwtCache.keys().next().value);
+  }
+  _jwtCache.set(_jwtCacheKey(token), { user, exp: Date.now() + JWT_CACHE_TTL_MS });
+}
+
 async function getUserFromJwt(jwt) {
   const base = supabaseUrl();
   const anon = supabaseAnonKey();
@@ -226,6 +259,10 @@ async function getUserFromJwt(jwt) {
 
   const token = String(jwt || '').trim();
   if (!token) return null;
+
+  // ── Cache hit: skip Auth API call entirely ──
+  const cached = _jwtCacheGet(token);
+  if (cached) return cached;
 
   const url = `${base}/auth/v1/user`;
   const out = await fetchJson(url, {
@@ -236,15 +273,36 @@ async function getUserFromJwt(jwt) {
   });
 
   if (!out.ok) return null;
+
+  // ── Cache the validated user for 4 minutes ──
+  _jwtCacheSet(token, out.json);
   return out.json;
 }
+
+// ── PROFILE CACHE ──────────────────────────────────────────────────────────
+// FREE TIER FIX: Cache profile rows for 5 min — profiles rarely change mid-session.
+// Reduces DB reads on every presence/list call (was: 1 DB read per online user).
+const _profileCache = new Map(); // userId → { profile, exp }
+const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 async function getProfileForUserId(userId) {
   const uid = String(userId || '').trim();
   if (!uid) return null;
+
+  const cached = _profileCache.get(uid);
+  if (cached && cached.exp > Date.now()) return cached.profile;
+
   const out = await serviceSelect('mums_profiles', `select=*&user_id=eq.${encodeURIComponent(uid)}&limit=1`);
   if (!out.ok) return null;
-  return out.json && out.json[0] ? out.json[0] : null;
+  const profile = out.json && out.json[0] ? out.json[0] : null;
+
+  if (_profileCache.size >= 200) _profileCache.delete(_profileCache.keys().next().value);
+  _profileCache.set(uid, { profile, exp: Date.now() + PROFILE_CACHE_TTL_MS });
+  return profile;
+}
+
+function invalidateProfileCache(userId) {
+  if (userId) _profileCache.delete(String(userId));
 }
 
 
@@ -288,5 +346,6 @@ module.exports = {
   serviceDelete,
   getUserFromJwt,
   getProfileForUserId,
+  invalidateProfileCache,
   updateProfileQuickbaseSettings
 };
