@@ -1869,19 +1869,6 @@
   }
 
   /* BUG 1 FIX: server push now includes lockedSince for optimistic locking */
-  /* BUG B FIX: Inflight guard + exponential backoff to prevent the
-     ERR_INSUFFICIENT_RESOURCES infinite POST storm.
-     - _pushInFlight prevents concurrent identical pushes
-     - _pushFailCount tracks consecutive server failures
-     - After 3 consecutive failures, pushes are suppressed for 30 seconds
-       to allow the server to recover without flooding it with requests.
-     - The guard resets on any successful response. */
-  var _pushInFlight    = false;
-  var _pushFailCount   = 0;
-  var _pushBackoffUntil = 0;
-  var MAX_PUSH_FAILS   = 3;
-  var PUSH_BACKOFF_MS  = 30000; // 30s cooldown after 3 consecutive failures
-
   function _pushSharedPatch(body, onSuccess, onConflict, onError) {
     var tok = _ctlGetToken();
     if (!tok) { if (onError) onError({ reason: 'no_token' }); return; }
@@ -1926,24 +1913,10 @@
             if (onConflict) onConflict();
           });
         } else {
-          // BUG B FIX: Count failures, enter backoff after threshold
-          _pushFailCount++;
-          if (_pushFailCount >= MAX_PUSH_FAILS) {
-            _pushBackoffUntil = Date.now() + PUSH_BACKOFF_MS;
-            console.warn('[CTL] Push failed ' + _pushFailCount + 'x — backing off for ' + (PUSH_BACKOFF_MS/1000) + 's');
-          }
           if (onError) onError(res);
         }
       })
-      .catch(function (err) {
-        _pushInFlight = false;
-        _pushFailCount++;
-        if (_pushFailCount >= MAX_PUSH_FAILS) {
-          _pushBackoffUntil = Date.now() + PUSH_BACKOFF_MS;
-          console.warn('[CTL] Push error ' + _pushFailCount + 'x — backing off for ' + (PUSH_BACKOFF_MS/1000) + 's');
-        }
-        if (onError) onError(err);
-      });
+      .catch(function (err) { if (onError) onError(err); });
   }
 
   /* ── Booking / Queue accessors (BUG 2 FIX: always reads _stateCache) ────── */
@@ -1982,20 +1955,14 @@
       if (onConflict) onConflict(serverBooking);
     }, function (err) {
       /* Network/server error (non-409): rollback optimistic write */
-      /* BUG D FIX: Only rollback the optimistic update if this was a real
-         server/network failure. In_flight / backoff rejections mean the booking
-         state is still locally correct — don't revert it. */
-      var reason = err && err.reason;
-      if (reason !== 'in_flight' && reason !== 'backoff') {
-        if (prevBooking) _stateCache.bookings[id] = prevBooking;
-        else delete _stateCache.bookings[id];
-        try {
-          if (prevBooking) localStorage.setItem('ctl_booking_' + id, JSON.stringify(prevBooking));
-          else localStorage.removeItem('ctl_booking_' + id);
-        } catch (_) {}
-        _saveStateCache();
-        if (window._ctlRenderAll) window._ctlRenderAll();
-      }
+      if (prevBooking) _stateCache.bookings[id] = prevBooking;
+      else delete _stateCache.bookings[id];
+      try {
+        if (prevBooking) localStorage.setItem('ctl_booking_' + id, JSON.stringify(prevBooking));
+        else localStorage.removeItem('ctl_booking_' + id);
+      } catch (_) {}
+      _saveStateCache();
+      if (window._ctlRenderAll) window._ctlRenderAll();
       if (onError) onError(err);
     });
     if (window._ctlRenderAll) window._ctlRenderAll();
@@ -2579,10 +2546,6 @@
       }
       var modalNow = document.getElementById('hp-ctl-backup-upload-modal');
       if (modalNow) modalNow.remove();
-      // BUG G FIX: Reset _pushInFlight on expiry so next queue cycle is not blocked
-      _pushInFlight = false;
-      _pushFailCount = 0;
-      _pushBackoffUntil = 0;
       alert('Queue turn expired (3:00). Slot was auto-cleared because backup/start was not completed.');
     }, 1000);
   };
@@ -2655,20 +2618,11 @@
         errorEl.textContent = 'Controller was just booked by ' + esc(who) + '. Please wait for their session to end.';
         errorEl.style.display = 'block';
       }
-    }, function (errRes) {
-      /* BUG C FIX: Server/network error (including backoff/in_flight rejections)
-         ALWAYS re-enable the button so the user is never permanently stuck.
-         Distinguish between a real server error and a local throttle response. */
+    }, function () {
+      /* Server/network error: allow retry and keep queue position */
       if (startBtn) { startBtn.disabled = false; startBtn.innerHTML = '<i class="fas fa-play-circle" style="font-size:14px;"></i> Start My Session'; }
       if (errorEl) {
-        var reason = errRes && errRes.reason;
-        if (reason === 'in_flight') {
-          errorEl.textContent = 'Please wait — a request is already in progress. Tap "Start My Session" again in a moment.';
-        } else if (reason === 'backoff') {
-          errorEl.textContent = 'Server is temporarily unavailable. Your queue slot is preserved. Please retry in 30 seconds.';
-        } else {
-          errorEl.textContent = 'Unable to start session right now (server unavailable). Your queue slot is preserved. Please retry.';
-        }
+        errorEl.textContent = 'Unable to start session right now (server unavailable). Your queue slot is preserved. Please retry.';
         errorEl.style.display = 'block';
       }
     });
