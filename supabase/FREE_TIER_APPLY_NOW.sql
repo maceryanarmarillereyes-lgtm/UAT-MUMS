@@ -265,7 +265,10 @@ END $$;
 -- STEP 7: Reload PostgREST schema cache (clears bloated cache = less memory)
 -- =============================================================================
 NOTIFY pgrst, 'reload schema';
-RAISE NOTICE '✅ PostgREST schema cache reloaded';
+DO $$
+BEGIN
+  RAISE NOTICE '✅ PostgREST schema cache reloaded';
+END $$;
 
 
 -- =============================================================================
