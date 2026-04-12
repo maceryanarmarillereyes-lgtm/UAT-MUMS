@@ -1788,6 +1788,14 @@
   function _startPoll() {
     if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
     _pollTimer = setInterval(function () {
+      // BUG F FIX: During backoff, use a slower poll (30s) to let the server breathe.
+      // After backoff expires, _pushFailCount is reset on next successful push.
+      var effectiveInterval = (_pushBackoffUntil && Date.now() < _pushBackoffUntil) ? 30000 : _pollInterval;
+      if (effectiveInterval > _pollInterval) {
+        // Re-schedule with the correct slower interval
+        _startPoll();
+        return;
+      }
       _loadSharedStateFromServer(function () {
         _ctlSweepQueueTimeouts();
         if (window._ctlRenderAll) window._ctlRenderAll();
@@ -1884,8 +1892,16 @@
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
       body: JSON.stringify(payload)
     })
-      .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+      .then(function (r) {
+        // BUG C FIX: Always attempt JSON parse; fall back to error object on failure
+        // (a 500 HTML error page would throw in r.json() and skip all .then handlers,
+        //  leaving startBtn permanently disabled — now we always reach the handler)
+        return r.json()
+          .then(function (d) { return { status: r.status, data: d }; })
+          .catch(function () { return { status: r.status, data: { ok: false, error: 'bad_json', status: r.status } }; });
+      })
       .then(function (res) {
+        _pushInFlight = false;
         if (res.data && res.data.ok) {
           clearTimeout(reqTimeout);
           _patchFailCount = 0;
@@ -2200,6 +2216,10 @@
   /* ── Queue sweeper ───────────────────────────────────────────────────────── */
   function _ctlSweepQueueTimeouts() {
     if (_queueSweepBusy) return;
+    // BUG E FIX: Do not mutate queue state during backoff — the sweep would
+    // call setQueue → _pushSharedPatch → 500 → increment failCount again,
+    // extending the outage. Just wait for backoff to expire.
+    if (_pushBackoffUntil && Date.now() < _pushBackoffUntil) return;
     _queueSweepBusy = true;
     try {
       var now = Date.now();
