@@ -1082,12 +1082,11 @@
     function renderMainList(items){
       var host=document.getElementById('hp-ctl-list'); if(!host) return;
       if(!items.length){
+        if(window._ctlTimers){Object.keys(window._ctlTimers).forEach(function(k){var t=window._ctlTimers[k];clearInterval(t&&t.interval?t.interval:t);});}
+        window._ctlTimers={};
         host.innerHTML='<div class="hp-ctl-empty"><i class="fas fa-network-wired"></i><span>No controller configured yet</span><span style="font-size:9px;opacity:.5;">Click the cog icon to add one</span></div>';
         return;
       }
-      if(window._ctlTimers){Object.keys(window._ctlTimers).forEach(function(k){clearInterval(window._ctlTimers[k]);});}
-      window._ctlTimers={};
-
       host.innerHTML=items.map(function(item){
         var cls=statusCls(item.status);
         var booking=getBooking(item.id);
