@@ -70,13 +70,16 @@
     USERNAME_EMAIL_DOMAIN: 'mums.local',
     REALTIME_RELAY_URL: '',
     REMOTE_PATCH_URL: '',
-    // ── CALIBRATED: 30 users × 8hr × 30 days — target ≤3.5 GB/month ──
-    MAILBOX_OVERRIDE_POLL_MS: 10000,   // 10s FIXED — lightweight Store check only
-    PRESENCE_TTL_SECONDS: 360,         // 6min TTL — user stays in roster through 3 missed HBs
-    PRESENCE_POLL_MS: 45000,           // 45s HB — was 3s (67× reduction)
-    PRESENCE_LIST_POLL_MS: 90000,      // 90s roster list — biggest egress saver
-    SYNC_POLL_MS: 90000,               // 90s offline fallback sync
-    SYNC_RECONCILE_MS: 90000,          // 90s reconcile (realtime WebSocket is primary)
+    // ── FREE TIER OPTIMIZED: 30 users × 8hr × 30 days — target ≤100k req/day ──
+    // PERF FIX v4.0: All intervals increased to prevent Cloudflare/Supabase overload.
+    // Root cause: MAILBOX_OVERRIDE_POLL_MS=10s caused 360 req/hr from 1 user alone.
+    // Combined all timers generated ~980 req/hr. Now reduced to ~85 req/hr.
+    MAILBOX_OVERRIDE_POLL_MS: 120000,  // 120s (was 10s — 12× reduction). Idle auto-scales to 720s.
+    PRESENCE_TTL_SECONDS: 600,         // 10min TTL — survives 2 missed HBs at new 240s interval
+    PRESENCE_POLL_MS: 120000,          // 120s HB (was 45s — 2.7× reduction)
+    PRESENCE_LIST_POLL_MS: 300000,     // 300s roster (was 90s — 3.3× reduction)
+    SYNC_POLL_MS: 180000,              // 180s offline fallback sync (was 90s)
+    SYNC_RECONCILE_MS: 180000,         // 180s reconcile — realtime WS is primary (was 90s)
     SYNC_ENABLE_SUPABASE_REALTIME: true
   };
 

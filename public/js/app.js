@@ -1823,7 +1823,15 @@ function updateClocksPreviewTimes(){
         my_attendance: 'schedule',
         my_schedule: 'schedule',
         my_case: 'mailbox',
-        my_task: 'tasks'
+        my_task: 'tasks',
+        system: 'dashboard',
+        system_overview: 'dashboard',
+        system_requests: 'dashboard',
+        system_realtime: 'dashboard',
+        system_timers: 'dashboard',
+        system_supabase: 'dashboard',
+        system_cloudflare: 'dashboard',
+        system_queue: 'dashboard',
       };
       return map[id] || 'dashboard';
     };
@@ -1877,13 +1885,15 @@ function updateClocksPreviewTimes(){
       const id = String(item && item.id || '');
       if(id === 'my_record') return 'records';
       if(id === 'my_reminders' || id === 'team_reminders') return 'notifications';
+      if(id === 'system') return 'system';
       return 'main';
     }
 
     const sectionLabel = {
       main: 'MAIN',
       records: 'RECORDS',
-      notifications: 'NOTIFICATIONS'
+      notifications: 'NOTIFICATIONS',
+      system: 'SYSTEM'
     };
 
     const navItems = Array.isArray(Config.NAV) ? [...Config.NAV] : [];
@@ -2852,6 +2862,7 @@ function updateClocksPreviewTimes(){
   function startAnnouncementRotation(){
     if(annTimer) return;
     updateAnnouncementBar();
+    // PERF FIX v4.0: Increased from 3s to 8s — 3s caused unnecessary DOM thrashing.
     annTimer = setInterval(()=>{
       try{
       const bar = UI.el('#announceBar');
@@ -2861,7 +2872,7 @@ function updateClocksPreviewTimes(){
       updateAnnouncementBar();
     
       }catch(e){ console.error('Announcement interval error', e); }
-    }, 3000);
+    }, 8000);
   }
 
   
@@ -2891,6 +2902,8 @@ function updateClocksPreviewTimes(){
     try{
       const rp = String(routePath||'').trim().toLowerCase();
       if(rp === 'distribution/monitoring') return 'distribution_monitoring';
+      // System sub-pages all resolve to main 'system' page (tab driven internally)
+      if(rp.startsWith('system/') || rp === 'system') return 'system';
       return String(routePath||'').split('/')[0] || '';
     }catch(_){ return ''; }
   }
@@ -2899,6 +2912,7 @@ function updateClocksPreviewTimes(){
     try{
       const id = String(pageId||'').trim();
       if(id === 'distribution_monitoring') return '/distribution/monitoring';
+      if(id.startsWith('system_')) return '/system';
       return '/' + id;
     }catch(_){ return '/' + String(pageId||''); }
   }

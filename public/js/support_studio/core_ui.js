@@ -901,18 +901,25 @@
       if (_ctlSavePending) return;
       var tok = _ctlGetToken();
       if (!tok) return;
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        setTimeout(function(){ _ctlPushToServer(items); }, 1500);
+        return;
+      }
       _ctlSavePending = true;
       fetch('/api/studio/ctl_lab_config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
         body: JSON.stringify({ items: items })
-      }).catch(function(){}).finally(function(){ _ctlSavePending = false; });
+      }).catch(function(){
+        setTimeout(function(){ _ctlPushToServer(items); }, 1500);
+      }).finally(function(){ _ctlSavePending = false; });
     }
 
     // Called once on mount — fetches the authoritative shared list from Supabase
     function _ctlLoadFromServer() {
       var tok = _ctlGetToken();
       if (!tok) { setTimeout(_ctlLoadFromServer, 1200); return; }
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) { setTimeout(_ctlLoadFromServer, 1500); return; }
       fetch('/api/studio/ctl_lab_config', {
         headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-store' }
       })
@@ -928,7 +935,7 @@
         if (localItems.length > serverItems.length) _ctlPushToServer(localItems);
         renderAll();
       })
-      .catch(function(){});
+      .catch(function(){ setTimeout(_ctlLoadFromServer, 1800); });
     }
     function imageFor(type) {
       var hit = CATALOG[type]; return hit && hit.img ? hit.img : FALLBACK_IMG;
@@ -1082,12 +1089,11 @@
     function renderMainList(items){
       var host=document.getElementById('hp-ctl-list'); if(!host) return;
       if(!items.length){
+        if(window._ctlTimers){Object.keys(window._ctlTimers).forEach(function(k){var t=window._ctlTimers[k];clearInterval(t&&t.interval?t.interval:t);});}
+        window._ctlTimers={};
         host.innerHTML='<div class="hp-ctl-empty"><i class="fas fa-network-wired"></i><span>No controller configured yet</span><span style="font-size:9px;opacity:.5;">Click the cog icon to add one</span></div>';
         return;
       }
-      if(window._ctlTimers){Object.keys(window._ctlTimers).forEach(function(k){clearInterval(window._ctlTimers[k]);});}
-      window._ctlTimers={};
-
       host.innerHTML=items.map(function(item){
         var cls=statusCls(item.status);
         var booking=getBooking(item.id);

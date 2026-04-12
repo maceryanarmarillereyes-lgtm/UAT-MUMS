@@ -46,9 +46,14 @@
   // Watchdog fires HB only — roster fetch stays with presence_client (90s)
   // Gap threshold = 1.5× main HB interval: fires immediately if 67s+ since last beat
   // This ensures user never misses more than 1 HB before watchdog recovers it
-  var WATCHDOG_POLL_MS     = 45000;  // 45s — matches main HB interval (backup only)
-  var WATCHDOG_GAP_MS      = 67000;  // Fire if >67s since last beat (1.5× 45s interval)
-  var ACTIVITY_DEBOUNCE_MS = 90000;  // Activity-triggered HB max 1 per 90s
+  // ── PERF FIX v4.0: FREE TIER OPTIMIZED INTERVALS ──────────────────────────
+  // Watchdog POLL increased from 45s → 150s (backup only; presence_client is primary).
+  // Gap threshold matches 2× new HB interval (240s) → 300s.
+  // Activity debounce: 180s (was 90s) — prevents mouse-move storms.
+  // With 30 users: watchdog HB = 30 × (3600/150) = 720 req/hr (was 2,400/hr).
+  var WATCHDOG_POLL_MS     = 150000; // 150s backup poll (was 45s — 3.3× reduction)
+  var WATCHDOG_GAP_MS      = 300000; // Fire if >300s since last beat (2× 150s interval)
+  var ACTIVITY_DEBOUNCE_MS = 180000; // Activity-triggered HB max 1 per 180s (was 90s)
   var STORAGE_KEY          = 'mums_watchdog_last_hb';
   var CLIENT_ID_KEY        = 'mums_client_id';
 

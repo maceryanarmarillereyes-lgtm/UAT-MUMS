@@ -292,12 +292,29 @@ THEMES: [
 
       { id: 'my_reminders', label: 'My Reminders', icon: '⏰', perm: 'view_my_reminders' },
       { id: 'team_reminders', label: 'Team Reminders', icon: '🚨', perm: 'view_team_reminders' },
+
+      // SYSTEM MENU — Super Admin only (infrastructure monitoring & diagnostics)
+      {
+        id: 'system',
+        label: 'System',
+        icon: '⚙️',
+        perm: 'system_monitor',
+        children: [
+          { id: 'system_overview',    label: 'Overview',             icon: '📊', perm: 'system_monitor' },
+          { id: 'system_requests',    label: 'Request Analyzer',     icon: '🔬', perm: 'system_monitor' },
+          { id: 'system_realtime',    label: 'Realtime Health',      icon: '📡', perm: 'system_monitor' },
+          { id: 'system_timers',      label: 'Timer & Poll Monitor', icon: '⏱️', perm: 'system_monitor' },
+          { id: 'system_supabase',    label: 'Supabase Diagnostics', icon: '🗄️', perm: 'system_monitor' },
+          { id: 'system_cloudflare',  label: 'Cloudflare Usage',     icon: '☁️', perm: 'system_monitor' },
+          { id: 'system_queue',       label: 'Sync Queue Inspector', icon: '🔁', perm: 'system_monitor' },
+        ]
+      },
     ],
 
     // Permissions are intentionally flat strings to keep the app usable without a backend.
     // New: manage_release_notes (grants Add/Import/Export/Delete release notes).
 	    PERMS: {
-	      SUPER_ADMIN: ['*','create_users','view_logs','view_my_record','view_gmt_overview','view_distribution_monitoring'],
+	      SUPER_ADMIN: ['*','create_users','view_logs','view_my_record','view_gmt_overview','view_distribution_monitoring','system_monitor'],
 	      SUPER_USER: ['view_dashboard','view_mailbox','view_members','manage_release_notes','view_master_schedule','view_my_record','view_my_reminders','view_team_reminders','manage_team_reminders','create_users','view_logs','view_gmt_overview','view_distribution_monitoring'],
 	      ADMIN: ['view_dashboard','view_mailbox','view_members','manage_users','manage_announcements','manage_release_notes','manage_members_scheduling','view_master_schedule','view_my_record','view_logs','view_gmt_overview','view_distribution_monitoring'],
 	      TEAM_LEAD: ['view_dashboard','view_mailbox','view_members','manage_members_scheduling','manage_announcements','view_master_schedule','view_my_record','view_my_reminders','view_team_reminders','manage_team_reminders','create_users','manage_team_config','view_logs','view_gmt_overview','view_distribution_monitoring'],
