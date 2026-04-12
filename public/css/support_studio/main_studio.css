@@ -1192,7 +1192,7 @@
       border-color: rgba(88,166,255,.55);
       box-shadow: 0 0 0 3px rgba(88,166,255,.1);
     }
-    .hp-ctl-settings-select option { background: #0f172a; }
+    .hp-ctl-settings-select option { background: #0f172a; color: #e2e8f0; }
     .hp-ctl-save-btn {
       width: 100%;
       border: none;
