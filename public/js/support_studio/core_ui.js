@@ -1819,6 +1819,17 @@
       var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
       if (raw) { var p = JSON.parse(raw); var t = p && (p.access_token || (p.session && p.session.access_token)); if (t) return String(t); }
       if (window.CloudAuth && typeof window.CloudAuth.accessToken === 'function') { var t2 = window.CloudAuth.accessToken(); if (t2) return String(t2); }
+      if (window.Auth && typeof window.Auth.getSession === 'function') {
+        var s = window.Auth.getSession(); var t3 = s && s.access_token; if (t3) return String(t3);
+      }
+      var legacyKeys = ['mums_access_token', 'sb-access-token', 'supabase.auth.token'];
+      for (var i = 0; i < legacyKeys.length; i++) {
+        var v = localStorage.getItem(legacyKeys[i]) || sessionStorage.getItem(legacyKeys[i]);
+        if (v) return String(v);
+      }
+      if (window.opener && window.opener.CloudAuth && typeof window.opener.CloudAuth.accessToken === 'function') {
+        var t4 = window.opener.CloudAuth.accessToken(); if (t4) return String(t4);
+      }
     } catch (_) {}
     return '';
   }
@@ -1858,22 +1869,42 @@
   }
 
   /* ── Server I/O ─────────────────────────────────────────────────────────── */
-  function _loadSharedStateFromServer(cb) {
+  function _loadSharedStateFromServer(cb, _retried401) {
     if (_stateReqBusy) { if (cb) cb(); return; }
     var tok = _ctlGetToken();
     if (!tok) { if (cb) cb(); return; }
+    var _didRetry = false;
     _stateReqBusy = true;
     fetch('/api/studio/ctl_lab_state', {
       headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-store' }
     })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) { if (d && d.ok) { _applySharedState(d); _lastServerWrite = Date.now(); } })
+      .then(function (r) {
+        if (r && r.status === 401 && !_retried401 &&
+            window.CloudAuth && typeof window.CloudAuth.ensureFreshSession === 'function') {
+          return window.CloudAuth.ensureFreshSession({ tryRefresh: true, clearOnFail: false, leewaySec: 60 })
+            .then(function (fresh) {
+              if (fresh && fresh.ok) {
+                _didRetry = true;
+                _stateReqBusy = false;
+                _loadSharedStateFromServer(cb, true);
+                return { __retrying: true };
+              }
+              return null;
+            })
+            .catch(function () { return null; });
+        }
+        return r.ok ? r.json() : null;
+      })
+      .then(function (d) {
+        if (d && d.__retrying) return;
+        if (d && d.ok) { _applySharedState(d); _lastServerWrite = Date.now(); }
+      })
       .catch(function () {})
-      .finally(function () { _stateReqBusy = false; if (cb) cb(); });
+      .finally(function () { _stateReqBusy = false; if (!_didRetry && cb) cb(); });
   }
 
   /* BUG 1 FIX: server push now includes lockedSince for optimistic locking */
-  function _pushSharedPatch(body, onSuccess, onConflict, onError) {
+  function _pushSharedPatch(body, onSuccess, onConflict, onError, _retried401) {
     var now = Date.now();
     if (_patchBackoffUntil > now) { if (onError) onError({ code: 'PATCH_BACKOFF' }); return; }
     var tok = _ctlGetToken();
@@ -1894,6 +1925,19 @@
       body: JSON.stringify(payload)
     })
       .then(function (r) {
+        if (r && r.status === 401 && !_retried401 &&
+            window.CloudAuth && typeof window.CloudAuth.ensureFreshSession === 'function') {
+          return window.CloudAuth.ensureFreshSession({ tryRefresh: true, clearOnFail: false, leewaySec: 60 })
+            .then(function (fresh) {
+              if (fresh && fresh.ok) {
+                clearTimeout(reqTimeout);
+                _pushSharedPatch(body, onSuccess, onConflict, onError, true);
+                return { __retrying: true };
+              }
+              return { status: 401, data: { ok: false, error: 'unauthorized' } };
+            })
+            .catch(function () { return { status: 401, data: { ok: false, error: 'unauthorized' } }; });
+        }
         // BUG C FIX: Always attempt JSON parse; fall back to error object on failure
         // (a 500 HTML error page would throw in r.json() and skip all .then handlers,
         //  leaving startBtn permanently disabled — now we always reach the handler)
@@ -1902,6 +1946,7 @@
           .catch(function () { return { status: r.status, data: { ok: false, error: 'bad_json', status: r.status } }; });
       })
       .then(function (res) {
+        if (res && res.__retrying) return;
         _pushInFlight = false;
         if (res.data && res.data.ok) {
           clearTimeout(reqTimeout);
@@ -2669,16 +2714,7 @@
     _bookingCtlData = ctrl;
 
     /* BUG 7 FIX: fresh server fetch before opening modal */
-    var tok = _ctlGetToken();
-    if (tok) {
-      fetch('/api/studio/ctl_lab_state', { headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-store' } })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) { if (d && d.ok) { _applySharedState(d); _lastServerWrite = Date.now(); } })
-        .catch(function () {})
-        .finally(function () { _renderBookingModal(itemId, ctrl); });
-    } else {
-      _renderBookingModal(itemId, ctrl);
-    }
+    _loadSharedStateFromServer(function () { _renderBookingModal(itemId, ctrl); });
   };
 
   function _renderBookingModal(itemId, ctrl) {
