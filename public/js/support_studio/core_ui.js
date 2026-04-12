@@ -1461,14 +1461,14 @@
           backupCell = '<a href="' + _ctlEscHtml(row.backupFile) + '" target="_blank" rel="noopener noreferrer" '
             + 'style="display:inline-flex;align-items:center;gap:5px;color:#60a5fa;font-size:10px;font-weight:700;text-decoration:none;'
             + 'background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.25);border-radius:5px;padding:3px 9px;transition:all .15s;" '
-            + 'onmouseover="this.style.background='rgba(96,165,250,.18)'" onmouseout="this.style.background='rgba(96,165,250,.1)'">'
+            + '>'
             + '<i class="fas fa-download" style="font-size:8px;"></i>Backup File</a>';
         } else {
           backupCell = '<span style="font-size:10px;color:#6b7280;">' + _ctlEscHtml(row.backupFile || '—') + '</span>';
         }
         var rowBg = idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,.015)';
         return '<tr style="background:' + rowBg + ';transition:background .12s;" '
-          + 'onmouseover="this.style.background='rgba(96,165,250,.04)'" onmouseout="this.style.background='' + rowBg + ''">'
+          + '>'
           + '<td style="padding:10px 14px;font-size:9px;color:rgba(255,255,255,.4);font-family:monospace;white-space:nowrap;">' + _ctlEscHtml(row.timestamp || '—') + '</td>'
           + '<td style="padding:10px 14px;">' + userBadge + '</td>'
           + '<td style="padding:10px 14px;font-size:10px;color:#94a3b8;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + _ctlEscHtml(row.task || '') + '">' + _ctlEscHtml(row.task || '—') + '</td>'
@@ -1514,12 +1514,12 @@
             '<div style="font-size:14px;font-weight:900;color:#e2e8f0;letter-spacing:-.01em;">Backup File Log</div>',
             '<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:2px;">' + _ctlEscHtml(ctrlLabel) + ' &nbsp;·&nbsp; ' + log.length + ' entr' + (log.length === 1 ? 'y' : 'ies') + '</div>',
           '</div>',
-          '<button onclick="document.getElementById('hp-ctl-backup-log-modal').remove()" style="',
+          '<button onclick="document.getElementById(\'hp-ctl-backup-log-modal\').remove()" style="',
             'width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.1);',
             'background:rgba(255,255,255,.04);color:#6b7280;cursor:pointer;',
             'display:flex;align-items:center;justify-content:center;font-size:14px;',
             'transition:all .15s;flex-shrink:0;',
-          '" onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='#e2e8f0'" onmouseout="this.style.background='rgba(255,255,255,.04)';this.style.color='#6b7280'">✕</button>',
+          '">✕</button>',
         '</div>',
 
         /* ── Legend ── */
@@ -1528,8 +1528,8 @@
             '<i class="fas fa-info-circle" style="color:#f59e0b;margin-right:5px;"></i>',
             '<strong style="color:#fbbf24;">How this works:</strong> ',
             'When a new user books a controller, they upload a backup file (downloaded from the controller). ',
-            'This backup goes to the <strong style="color:#fbbf24;">SYSTEM</strong> slot (first booking) or the <strong style="color:#c084fc;">previous user's</strong> row. ',
-            'The current user's backup slot stays empty until the next user books and uploads.',
+            'This backup goes to the <strong style="color:#fbbf24;">SYSTEM</strong> slot (first booking) or the <strong style="color:#c084fc;">previous user\'s</strong> row. ',
+            'The current user\'s backup slot stays empty until the next user books and uploads.',
           '</div>',
         '</div>',
 
@@ -1557,11 +1557,11 @@
           'background:rgba(255,255,255,.015);',
         '">',
           '<span style="font-size:9px;color:rgba(255,255,255,.3);">Sorted newest to oldest &nbsp;·&nbsp; ' + log.length + ' total entr' + (log.length === 1 ? 'y' : 'ies') + '</span>',
-          '<button onclick="if(confirm('Clear all backup logs for this controller?')){ window._ctlClearBackupLog('' + itemId + ''); }" style="',
+          '<button onclick="if(confirm(\'Clear all backup logs for this controller?\')){ window._ctlClearBackupLog(\'' + itemId + '\'); }" style="',
             'margin-left:auto;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);',
             'color:#f87171;border-radius:7px;padding:5px 12px;font-size:9px;font-weight:700;',
             'cursor:pointer;font-family:inherit;transition:all .15s;',
-          '" onmouseover="this.style.background='rgba(239,68,68,.15)'" onmouseout="this.style.background='rgba(239,68,68,.08)'">',
+          '">',
             '<i class="fas fa-trash" style="margin-right:4px;font-size:8px;"></i>Clear Log',
           '</button>',
         '</div>',
@@ -1744,6 +1744,7 @@
   var _sheetReachable   = null;
   var _timeUpAudio      = null;   // looping time-up Audio
   var _queueAudio       = null;   // looping queue-turn Audio
+  var _backupUploadTimer = null;
   var _pollTimer        = null;
   var _pollInterval     = 8000;
   var _queueSweepBusy   = false;
@@ -1751,6 +1752,7 @@
   var _stateReqBusy     = false;
   var _lastServerWrite  = 0;      // BUG 1 FIX: optimistic lock timestamp
   var _notifyLocks      = {};     // BUG 5 FIX: { ctrlId: timestampMs }
+  var _queueAlertState  = { activeKey: '', acked: {} };
 
   /* BUG 6 FIX: keyed timer registry { itemId: { interval, endMs } } */
   window._ctlTimers = window._ctlTimers || {};
@@ -1783,6 +1785,14 @@
   function _startPoll() {
     if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
     _pollTimer = setInterval(function () {
+      // BUG F FIX: During backoff, use a slower poll (30s) to let the server breathe.
+      // After backoff expires, _pushFailCount is reset on next successful push.
+      var effectiveInterval = (_pushBackoffUntil && Date.now() < _pushBackoffUntil) ? 30000 : _pollInterval;
+      if (effectiveInterval > _pollInterval) {
+        // Re-schedule with the correct slower interval
+        _startPoll();
+        return;
+      }
       _loadSharedStateFromServer(function () {
         _ctlSweepQueueTimeouts();
         if (window._ctlRenderAll) window._ctlRenderAll();
@@ -1859,30 +1869,81 @@
   }
 
   /* BUG 1 FIX: server push now includes lockedSince for optimistic locking */
-  function _pushSharedPatch(body, onSuccess, onConflict) {
+  /* BUG B FIX: Inflight guard + exponential backoff to prevent the
+     ERR_INSUFFICIENT_RESOURCES infinite POST storm.
+     - _pushInFlight prevents concurrent identical pushes
+     - _pushFailCount tracks consecutive server failures
+     - After 3 consecutive failures, pushes are suppressed for 30 seconds
+       to allow the server to recover without flooding it with requests.
+     - The guard resets on any successful response. */
+  var _pushInFlight    = false;
+  var _pushFailCount   = 0;
+  var _pushBackoffUntil = 0;
+  var MAX_PUSH_FAILS   = 3;
+  var PUSH_BACKOFF_MS  = 30000; // 30s cooldown after 3 consecutive failures
+
+  function _pushSharedPatch(body, onSuccess, onConflict, onError) {
     var tok = _ctlGetToken();
-    if (!tok) return;
+    if (!tok) { if (onError) onError({ reason: 'no_token' }); return; }
+
+    // BUG B FIX: If we are already in a push or in backoff, skip (not queue)
+    var now = Date.now();
+    if (_pushInFlight) { if (onError) onError({ reason: 'in_flight' }); return; }
+    if (_pushBackoffUntil && now < _pushBackoffUntil) {
+      if (onError) onError({ reason: 'backoff' });
+      return;
+    }
+
+    _pushInFlight = true;
     var payload = Object.assign({ lockedSince: _lastServerWrite }, body);
     fetch('/api/studio/ctl_lab_state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
       body: JSON.stringify(payload)
     })
-      .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+      .then(function (r) {
+        // BUG C FIX: Always attempt JSON parse; fall back to error object on failure
+        // (a 500 HTML error page would throw in r.json() and skip all .then handlers,
+        //  leaving startBtn permanently disabled — now we always reach the handler)
+        return r.json()
+          .then(function (d) { return { status: r.status, data: d }; })
+          .catch(function () { return { status: r.status, data: { ok: false, error: 'bad_json', status: r.status } }; });
+      })
       .then(function (res) {
+        _pushInFlight = false;
         if (res.data && res.data.ok) {
+          _pushFailCount = 0;      // reset backoff counter on success
+          _pushBackoffUntil = 0;
           _applySharedState(res.data);
           _lastServerWrite = Date.now();
           if (onSuccess) onSuccess(res.data);
         } else if (res.status === 409) {
-          /* BUG 1 FIX: conflict — another user booked first */
+          _pushFailCount = 0;
+          _pushBackoffUntil = 0;
+          /* Conflict — another user booked first */
           _loadSharedStateFromServer(function () {
             if (window._ctlRenderAll) window._ctlRenderAll();
             if (onConflict) onConflict();
           });
+        } else {
+          // BUG B FIX: Count failures, enter backoff after threshold
+          _pushFailCount++;
+          if (_pushFailCount >= MAX_PUSH_FAILS) {
+            _pushBackoffUntil = Date.now() + PUSH_BACKOFF_MS;
+            console.warn('[CTL] Push failed ' + _pushFailCount + 'x — backing off for ' + (PUSH_BACKOFF_MS/1000) + 's');
+          }
+          if (onError) onError(res);
         }
       })
-      .catch(function () {});
+      .catch(function (err) {
+        _pushInFlight = false;
+        _pushFailCount++;
+        if (_pushFailCount >= MAX_PUSH_FAILS) {
+          _pushBackoffUntil = Date.now() + PUSH_BACKOFF_MS;
+          console.warn('[CTL] Push error ' + _pushFailCount + 'x — backing off for ' + (PUSH_BACKOFF_MS/1000) + 's');
+        }
+        if (onError) onError(err);
+      });
   }
 
   /* ── Booking / Queue accessors (BUG 2 FIX: always reads _stateCache) ────── */
@@ -1896,7 +1957,8 @@
     return b;
   }
 
-  function setBooking(id, data, onSuccess, onConflict) {
+  function setBooking(id, data, onSuccess, onConflict, onError) {
+    var prevBooking = _stateCache.bookings && _stateCache.bookings[id] ? _stateCache.bookings[id] : null;
     if (!_stateCache.bookings || typeof _stateCache.bookings !== 'object') _stateCache.bookings = {};
     if (data) _stateCache.bookings[id] = data;
     else       delete _stateCache.bookings[id];
@@ -1918,6 +1980,23 @@
       /* BUG 1 FIX: conflict — revert local optimistic update */
       var serverBooking = _stateCache.bookings && _stateCache.bookings[id] ? _stateCache.bookings[id] : null;
       if (onConflict) onConflict(serverBooking);
+    }, function (err) {
+      /* Network/server error (non-409): rollback optimistic write */
+      /* BUG D FIX: Only rollback the optimistic update if this was a real
+         server/network failure. In_flight / backoff rejections mean the booking
+         state is still locally correct — don't revert it. */
+      var reason = err && err.reason;
+      if (reason !== 'in_flight' && reason !== 'backoff') {
+        if (prevBooking) _stateCache.bookings[id] = prevBooking;
+        else delete _stateCache.bookings[id];
+        try {
+          if (prevBooking) localStorage.setItem('ctl_booking_' + id, JSON.stringify(prevBooking));
+          else localStorage.removeItem('ctl_booking_' + id);
+        } catch (_) {}
+        _saveStateCache();
+        if (window._ctlRenderAll) window._ctlRenderAll();
+      }
+      if (onError) onError(err);
     });
     if (window._ctlRenderAll) window._ctlRenderAll();
   }
@@ -2146,6 +2225,10 @@
   /* ── Queue sweeper ───────────────────────────────────────────────────────── */
   function _ctlSweepQueueTimeouts() {
     if (_queueSweepBusy) return;
+    // BUG E FIX: Do not mutate queue state during backoff — the sweep would
+    // call setQueue → _pushSharedPatch → 500 → increment failCount again,
+    // extending the outage. Just wait for backoff to expire.
+    if (_pushBackoffUntil && Date.now() < _pushBackoffUntil) return;
     _queueSweepBusy = true;
     try {
       var now = Date.now();
@@ -2206,6 +2289,7 @@
   _injectTimeUpCSS();
 
   var _timeUpState = { audio: null, stopTimer: null, barTimer: null, key: '' };
+  var _timeUpDismissed = {};
 
   function _stopTimeUpAlert() {
     try {
@@ -2263,7 +2347,7 @@
     document.body.appendChild(modal);
 
     document.getElementById('hp-ctl-timeup-ok-btn').addEventListener('click', function () {
-      _timeUpState.key = '';
+      _timeUpDismissed[_timeUpState.key] = Date.now();
       _stopTimeUpAlert();
     });
 
@@ -2283,13 +2367,17 @@
     audio.volume = 0.92;
     _timeUpState.audio = audio;
     _playAudio(audio, [TIMEUP_SOUND_URL, '/sound alert/Alert_Yourtimeisup.mp3', SOUND_FALLBACK], 0);
-    _timeUpState.stopTimer = setTimeout(function () { _timeUpState.key = ''; _stopTimeUpAlert(); }, ALARM_MS);
+    _timeUpState.stopTimer = setTimeout(function () {
+      _timeUpDismissed[_timeUpState.key] = Date.now();
+      _stopTimeUpAlert();
+    }, ALARM_MS);
   }
 
   function _maybeTimeUpAlert(item, booking) {
     if (!item || !booking) return;
     if (!_sameUser(booking.user, _getCurrentUser())) return;
     var alertKey = [item.id, booking.user || '', booking.startMs || '', booking.endMs || ''].join('|');
+    if (_timeUpDismissed[alertKey]) return;
     if (_timeUpState.key === alertKey) return;
     _timeUpState.key = alertKey;
     _showTimeUpAlert(item, booking);
@@ -2307,7 +2395,26 @@
     _playAudio(_queueAudio, [QUEUE_SOUND_URL, '/sound alert/Alert_Yourturntousethecontroller.mp3', SOUND_FALLBACK], 0);
   }
 
+  function _clearBackupUploadTimer() {
+    if (_backupUploadTimer) {
+      clearInterval(_backupUploadTimer);
+      _backupUploadTimer = null;
+    }
+  }
+
+  function _queueTurnKey(ctrlId, user, notifyExpiresAt) {
+    return [ctrlId || '', String(user || '').trim().toLowerCase(), Number(notifyExpiresAt || 0)].join('|');
+  }
+
   function _triggerQueueAlert(ctrlId, ctrlLabel, notifyExpiresAt) {
+    var queue = getQueue(ctrlId);
+    var me = _getCurrentUser();
+    var head = queue[0] || {};
+    if (!head.user || !_sameUser(head.user, me)) return;
+    var turnKey = _queueTurnKey(ctrlId, head.user, notifyExpiresAt || head.notifyExpiresAt || 0);
+    if (_queueAlertState.acked[turnKey]) return;
+    if (_queueAlertState.activeKey === turnKey && document.getElementById('hp-ctl-queue-alert-modal')) return;
+    _queueAlertState.activeKey = turnKey;
     _stopQueueSound();
     _showQueueAlertBanner(ctrlId, ctrlLabel, notifyExpiresAt);
     _startQueueSound();
@@ -2360,6 +2467,7 @@
       if (rem <= 0) {
         clearInterval(cdTimer);
         _stopQueueSound();
+        _queueAlertState.activeKey = '';
         if (overlay && overlay.parentElement) overlay.remove();
         /* Auto-void this user's queue turn */
         var q  = getQueue(ctrlId);
@@ -2380,6 +2488,16 @@
     document.getElementById('hp-ctl-qa-ack-btn').addEventListener('click', function () {
       clearInterval(cdTimer);
       _stopQueueSound();
+      var me = _getCurrentUser();
+      var q = getQueue(ctrlId);
+      var head = q[0] || {};
+      if (head.user && _sameUser(head.user, me)) {
+        head.acknowledgedAt = Date.now();
+        q[0] = head;
+        setQueue(ctrlId, q);
+      }
+      _queueAlertState.acked[_queueTurnKey(ctrlId, me, expMs)] = Date.now();
+      _queueAlertState.activeKey = '';
       overlay.remove();
       window._ctlOpenBackupUpload && window._ctlOpenBackupUpload(ctrlId);
     });
@@ -2396,6 +2514,17 @@
 
     var existing = document.getElementById('hp-ctl-backup-upload-modal');
     if (existing) existing.remove();
+    _clearBackupUploadTimer();
+
+    var expireAt = Number(qEntry.notifyExpiresAt || 0);
+    if (!expireAt || expireAt <= Date.now()) {
+      expireAt = Date.now() + (3 * 60 * 1000);
+      if (queue.length && queue[0] && _sameUser(queue[0].user, me)) {
+        queue[0].notifyExpiresAt = expireAt;
+        if (!queue[0].notifiedAt) queue[0].notifiedAt = Date.now();
+        setQueue(itemId, queue);
+      }
+    }
 
     var overlay = document.createElement('div');
     overlay.id  = 'hp-ctl-backup-upload-modal';
@@ -2434,6 +2563,28 @@
         '</div>' +
       '</div>';
     document.body.appendChild(overlay);
+
+    _backupUploadTimer = setInterval(function () {
+      var rem = expireAt - Date.now();
+      if (rem > 0) return;
+      _clearBackupUploadTimer();
+      var latest = getQueue(itemId);
+      var meNow = _getCurrentUser();
+      if (latest.length && latest[0] && _sameUser(latest[0].user, meNow)) {
+        var lockKey = itemId + '|' + (latest[0].user || '');
+        delete _notifyLocks[lockKey];
+        latest.shift();
+        setQueue(itemId, latest);
+        if (latest.length) _ctlNotifyQueue(itemId);
+      }
+      var modalNow = document.getElementById('hp-ctl-backup-upload-modal');
+      if (modalNow) modalNow.remove();
+      // BUG G FIX: Reset _pushInFlight on expiry so next queue cycle is not blocked
+      _pushInFlight = false;
+      _pushFailCount = 0;
+      _pushBackoffUntil = 0;
+      alert('Queue turn expired (3:00). Slot was auto-cleared because backup/start was not completed.');
+    }, 1000);
   };
 
   /* ── Start session from queue ──────────────────────────────────────────── */
@@ -2460,12 +2611,6 @@
       return;
     }
 
-    /* Remove user from queue */
-    var lockKey = itemId + '|' + me;
-    delete _notifyLocks[lockKey];
-    var newQueue = queue.filter(function (q) { return !_sameUser(q && q.user, me); });
-    setQueue(itemId, newQueue);
-
     var durMs   = parseDurMs(qEntry.duration || '30 minutes');
     var booking = {
       user: me, avatarUrl: _getAvatarUrl(),
@@ -2481,6 +2626,13 @@
 
     setBooking(itemId, booking, function () {
       /* success */
+      /* Remove user from queue only after booking is committed */
+      var lockKey = itemId + '|' + me;
+      delete _notifyLocks[lockKey];
+      var latestQueue = getQueue(itemId);
+      var newQueue = latestQueue.filter(function (q) { return !_sameUser(q && q.user, me); });
+      setQueue(itemId, newQueue);
+
       var items  = getItems();
       var ctrl   = items.find(function (it) { return it.id === itemId; }) || {};
       var payload = { timestamp: phtNow(), user: me, controller: labelFor(ctrl.type) + ' — ' + (ctrl.ip || '—'), task: booking.task, duration: booking.duration, backupFile: backup, note: 'Started from queue' };
@@ -2493,6 +2645,7 @@
       _updatePendingBtn();
       var modal = document.getElementById('hp-ctl-backup-upload-modal');
       if (modal) modal.remove();
+      _clearBackupUploadTimer();
       if (window._ctlRenderAll) window._ctlRenderAll();
     }, function (existingBooking) {
       /* BUG 1 FIX: conflict — another user booked between our checks */
@@ -2500,6 +2653,22 @@
       if (errorEl) {
         var who = existingBooking ? existingBooking.user : 'someone else';
         errorEl.textContent = 'Controller was just booked by ' + esc(who) + '. Please wait for their session to end.';
+        errorEl.style.display = 'block';
+      }
+    }, function (errRes) {
+      /* BUG C FIX: Server/network error (including backoff/in_flight rejections)
+         ALWAYS re-enable the button so the user is never permanently stuck.
+         Distinguish between a real server error and a local throttle response. */
+      if (startBtn) { startBtn.disabled = false; startBtn.innerHTML = '<i class="fas fa-play-circle" style="font-size:14px;"></i> Start My Session'; }
+      if (errorEl) {
+        var reason = errRes && errRes.reason;
+        if (reason === 'in_flight') {
+          errorEl.textContent = 'Please wait — a request is already in progress. Tap "Start My Session" again in a moment.';
+        } else if (reason === 'backoff') {
+          errorEl.textContent = 'Server is temporarily unavailable. Your queue slot is preserved. Please retry in 30 seconds.';
+        } else {
+          errorEl.textContent = 'Unable to start session right now (server unavailable). Your queue slot is preserved. Please retry.';
+        }
         errorEl.style.display = 'block';
       }
     });
