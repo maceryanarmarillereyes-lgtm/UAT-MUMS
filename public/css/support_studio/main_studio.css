@@ -793,10 +793,10 @@
     }
     .hp-ctl-col:last-child { border-right: none; }
     .hp-ctl-col:hover { background: rgba(255,255,255,.02); }
-    /* Stabilize actions visibility to prevent hover flicker on controller cards */
-    .hp-ctl-col-actions { opacity: 1; transform: translateY(0); transition: none; pointer-events: auto; }
+    /* Actions hidden by default — visible on hover/focus; always visible in-use */
+    .hp-ctl-col-actions { opacity: 0; transform: translateY(6px); transition: opacity .22s ease, transform .22s ease; pointer-events: none; }
     .hp-ctl-col:hover .hp-ctl-col-actions,
-    .hp-ctl-col:focus-within .hp-ctl-col-actions,
+    .hp-ctl-col:focus-within .hp-ctl-col-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
     .hp-ctl-col.in-use .hp-ctl-col-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
 
     /* Controller type badge at top */
