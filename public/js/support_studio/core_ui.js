@@ -1753,6 +1753,9 @@
   var _lastServerWrite  = 0;      // BUG 1 FIX: optimistic lock timestamp
   var _notifyLocks      = {};     // BUG 5 FIX: { ctrlId: timestampMs }
   var _queueAlertState  = { activeKey: '', acked: {} };
+  var _patchFailCount   = 0;
+  var _patchFailWindow  = 0;
+  var _patchBackoffUntil = 0;
 
   /* BUG 6 FIX: keyed timer registry { itemId: { interval, endMs } } */
   window._ctlTimers = window._ctlTimers || {};
@@ -1869,32 +1872,20 @@
   }
 
   /* BUG 1 FIX: server push now includes lockedSince for optimistic locking */
-  /* BUG B FIX: Inflight guard + exponential backoff to prevent the
-     ERR_INSUFFICIENT_RESOURCES infinite POST storm.
-     - _pushInFlight prevents concurrent identical pushes
-     - _pushFailCount tracks consecutive server failures
-     - After 3 consecutive failures, pushes are suppressed for 30 seconds
-       to allow the server to recover without flooding it with requests.
-     - The guard resets on any successful response. */
-  var _pushInFlight    = false;
-  var _pushFailCount   = 0;
-  var _pushBackoffUntil = 0;
-  var MAX_PUSH_FAILS   = 3;
-  var PUSH_BACKOFF_MS  = 30000; // 30s cooldown after 3 consecutive failures
-
   function _pushSharedPatch(body, onSuccess, onConflict, onError) {
-    var tok = _ctlGetToken();
-    if (!tok) { if (onError) onError({ reason: 'no_token' }); return; }
-
-    // BUG B FIX: If we are already in a push or in backoff, skip (not queue)
     var now = Date.now();
-    if (_pushInFlight) { if (onError) onError({ reason: 'in_flight' }); return; }
-    if (_pushBackoffUntil && now < _pushBackoffUntil) {
-      if (onError) onError({ reason: 'backoff' });
-      return;
+    if (_patchBackoffUntil > now) { if (onError) onError({ code: 'PATCH_BACKOFF' }); return; }
+    var tok = _ctlGetToken();
+    if (!tok) { if (onError) onError({ code: 'NO_TOKEN' }); return; }
+    var settled = false;
+    function _safe(fn, arg) {
+      if (settled) return;
+      settled = true;
+      if (fn) fn(arg);
     }
-
-    _pushInFlight = true;
+    var reqTimeout = setTimeout(function () {
+      _safe(onError, { code: 'REQUEST_TIMEOUT' });
+    }, 15000);
     var payload = Object.assign({ lockedSince: _lastServerWrite }, body);
     fetch('/api/studio/ctl_lab_state', {
       method: 'POST',
@@ -1912,38 +1903,44 @@
       .then(function (res) {
         _pushInFlight = false;
         if (res.data && res.data.ok) {
-          _pushFailCount = 0;      // reset backoff counter on success
-          _pushBackoffUntil = 0;
+          clearTimeout(reqTimeout);
+          _patchFailCount = 0;
+          _patchFailWindow = 0;
+          _patchBackoffUntil = 0;
           _applySharedState(res.data);
           _lastServerWrite = Date.now();
-          if (onSuccess) onSuccess(res.data);
+          _safe(onSuccess, res.data);
         } else if (res.status === 409) {
-          _pushFailCount = 0;
-          _pushBackoffUntil = 0;
-          /* Conflict — another user booked first */
+          clearTimeout(reqTimeout);
+          /* BUG 1 FIX: conflict — another user booked first */
           _loadSharedStateFromServer(function () {
             if (window._ctlRenderAll) window._ctlRenderAll();
-            if (onConflict) onConflict();
+            _safe(onConflict);
           });
         } else {
-          // BUG B FIX: Count failures, enter backoff after threshold
-          _pushFailCount++;
-          if (_pushFailCount >= MAX_PUSH_FAILS) {
-            _pushBackoffUntil = Date.now() + PUSH_BACKOFF_MS;
-            console.warn('[CTL] Push failed ' + _pushFailCount + 'x — backing off for ' + (PUSH_BACKOFF_MS/1000) + 's');
-          }
-          if (onError) onError(res);
+          clearTimeout(reqTimeout);
+          _trackPatchFailure();
+          _safe(onError, res);
         }
       })
       .catch(function (err) {
-        _pushInFlight = false;
-        _pushFailCount++;
-        if (_pushFailCount >= MAX_PUSH_FAILS) {
-          _pushBackoffUntil = Date.now() + PUSH_BACKOFF_MS;
-          console.warn('[CTL] Push error ' + _pushFailCount + 'x — backing off for ' + (PUSH_BACKOFF_MS/1000) + 's');
-        }
-        if (onError) onError(err);
+        clearTimeout(reqTimeout);
+        _trackPatchFailure();
+        _safe(onError, err);
       });
+
+    function _trackPatchFailure() {
+      var ts = Date.now();
+      if (!_patchFailWindow || (ts - _patchFailWindow) > 10000) {
+        _patchFailWindow = ts;
+        _patchFailCount = 1;
+      } else {
+        _patchFailCount += 1;
+      }
+      if (_patchFailCount >= 4) {
+        _patchBackoffUntil = ts + 20000;
+      }
+    }
   }
 
   /* ── Booking / Queue accessors (BUG 2 FIX: always reads _stateCache) ────── */
@@ -1982,20 +1979,14 @@
       if (onConflict) onConflict(serverBooking);
     }, function (err) {
       /* Network/server error (non-409): rollback optimistic write */
-      /* BUG D FIX: Only rollback the optimistic update if this was a real
-         server/network failure. In_flight / backoff rejections mean the booking
-         state is still locally correct — don't revert it. */
-      var reason = err && err.reason;
-      if (reason !== 'in_flight' && reason !== 'backoff') {
-        if (prevBooking) _stateCache.bookings[id] = prevBooking;
-        else delete _stateCache.bookings[id];
-        try {
-          if (prevBooking) localStorage.setItem('ctl_booking_' + id, JSON.stringify(prevBooking));
-          else localStorage.removeItem('ctl_booking_' + id);
-        } catch (_) {}
-        _saveStateCache();
-        if (window._ctlRenderAll) window._ctlRenderAll();
-      }
+      if (prevBooking) _stateCache.bookings[id] = prevBooking;
+      else delete _stateCache.bookings[id];
+      try {
+        if (prevBooking) localStorage.setItem('ctl_booking_' + id, JSON.stringify(prevBooking));
+        else localStorage.removeItem('ctl_booking_' + id);
+      } catch (_) {}
+      _saveStateCache();
+      if (window._ctlRenderAll) window._ctlRenderAll();
       if (onError) onError(err);
     });
     if (window._ctlRenderAll) window._ctlRenderAll();
@@ -2579,10 +2570,6 @@
       }
       var modalNow = document.getElementById('hp-ctl-backup-upload-modal');
       if (modalNow) modalNow.remove();
-      // BUG G FIX: Reset _pushInFlight on expiry so next queue cycle is not blocked
-      _pushInFlight = false;
-      _pushFailCount = 0;
-      _pushBackoffUntil = 0;
       alert('Queue turn expired (3:00). Slot was auto-cleared because backup/start was not completed.');
     }, 1000);
   };
@@ -2623,8 +2610,21 @@
     /* BUG 1 FIX: optimistic lock — if server rejects with 409, show error */
     var startBtn = document.getElementById('hp-ctl-bu-start-btn');
     if (startBtn) { startBtn.disabled = true; startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting…'; }
+    var done = false;
+    function _finishWithError(msg) {
+      if (done) return;
+      done = true;
+      if (startBtn) { startBtn.disabled = false; startBtn.innerHTML = '<i class="fas fa-play-circle" style="font-size:14px;"></i> Start My Session'; }
+      if (errorEl) { errorEl.textContent = msg; errorEl.style.display = 'block'; }
+    }
+    var guardTimer = setTimeout(function () {
+      _finishWithError('Request timed out while starting your session. Your queue slot is preserved. Please retry.');
+    }, 18000);
 
     setBooking(itemId, booking, function () {
+      if (done) return;
+      done = true;
+      clearTimeout(guardTimer);
       /* success */
       /* Remove user from queue only after booking is committed */
       var lockKey = itemId + '|' + me;
@@ -2648,29 +2648,14 @@
       _clearBackupUploadTimer();
       if (window._ctlRenderAll) window._ctlRenderAll();
     }, function (existingBooking) {
+      clearTimeout(guardTimer);
       /* BUG 1 FIX: conflict — another user booked between our checks */
-      if (startBtn) { startBtn.disabled = false; startBtn.innerHTML = '<i class="fas fa-play-circle" style="font-size:14px;"></i> Start My Session'; }
-      if (errorEl) {
-        var who = existingBooking ? existingBooking.user : 'someone else';
-        errorEl.textContent = 'Controller was just booked by ' + esc(who) + '. Please wait for their session to end.';
-        errorEl.style.display = 'block';
-      }
-    }, function (errRes) {
-      /* BUG C FIX: Server/network error (including backoff/in_flight rejections)
-         ALWAYS re-enable the button so the user is never permanently stuck.
-         Distinguish between a real server error and a local throttle response. */
-      if (startBtn) { startBtn.disabled = false; startBtn.innerHTML = '<i class="fas fa-play-circle" style="font-size:14px;"></i> Start My Session'; }
-      if (errorEl) {
-        var reason = errRes && errRes.reason;
-        if (reason === 'in_flight') {
-          errorEl.textContent = 'Please wait — a request is already in progress. Tap "Start My Session" again in a moment.';
-        } else if (reason === 'backoff') {
-          errorEl.textContent = 'Server is temporarily unavailable. Your queue slot is preserved. Please retry in 30 seconds.';
-        } else {
-          errorEl.textContent = 'Unable to start session right now (server unavailable). Your queue slot is preserved. Please retry.';
-        }
-        errorEl.style.display = 'block';
-      }
+      var who = existingBooking ? existingBooking.user : 'someone else';
+      _finishWithError('Controller was just booked by ' + esc(who) + '. Please wait for their session to end.');
+    }, function () {
+      clearTimeout(guardTimer);
+      /* Server/network error: allow retry and keep queue position */
+      _finishWithError('Unable to start session right now (server unavailable). Your queue slot is preserved. Please retry.');
     });
   };
 
