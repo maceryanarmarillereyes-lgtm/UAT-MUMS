@@ -1756,6 +1756,7 @@
   var _patchFailCount   = 0;
   var _patchFailWindow  = 0;
   var _patchBackoffUntil = 0;
+  var _pushInFlight     = false;
 
   /* BUG 6 FIX: keyed timer registry { itemId: { interval, endMs } } */
   window._ctlTimers = window._ctlTimers || {};
@@ -1789,8 +1790,8 @@
     if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
     _pollTimer = setInterval(function () {
       // BUG F FIX: During backoff, use a slower poll (30s) to let the server breathe.
-      // After backoff expires, _pushFailCount is reset on next successful push.
-      var effectiveInterval = (_pushBackoffUntil && Date.now() < _pushBackoffUntil) ? 30000 : _pollInterval;
+      // After backoff expires, _patchFailCount is reset on next successful push.
+      var effectiveInterval = (_patchBackoffUntil && Date.now() < _patchBackoffUntil) ? 30000 : _pollInterval;
       if (effectiveInterval > _pollInterval) {
         // Re-schedule with the correct slower interval
         _startPoll();
@@ -2219,7 +2220,7 @@
     // BUG E FIX: Do not mutate queue state during backoff — the sweep would
     // call setQueue → _pushSharedPatch → 500 → increment failCount again,
     // extending the outage. Just wait for backoff to expire.
-    if (_pushBackoffUntil && Date.now() < _pushBackoffUntil) return;
+    if (_patchBackoffUntil && Date.now() < _patchBackoffUntil) return;
     _queueSweepBusy = true;
     try {
       var now = Date.now();
