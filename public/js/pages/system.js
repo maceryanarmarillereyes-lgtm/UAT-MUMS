@@ -419,14 +419,39 @@
   </div>`;
 
   // ── Tab switching ─────────────────────────────────────────────────────────
-  let activeTab = 'overview';
+  const TAB_FROM_ROUTE = {
+    overview: 'overview',
+    requests: 'requests',
+    realtime: 'realtime',
+    timers: 'timers',
+    supabase: 'supabase',
+    cloudflare: 'cloudflare',
+    queue: 'queue'
+  };
+  function tabFromRoute(){
+    try{
+      const path = String(window.location.pathname || window.location.hash || '').toLowerCase();
+      const cleaned = path.replace(/^#?\/?/, '').split('?')[0].split('#')[0];
+      if(!cleaned.startsWith('system/')) return 'overview';
+      const seg = cleaned.split('/')[1] || '';
+      return TAB_FROM_ROUTE[seg] || 'overview';
+    }catch(_){ return 'overview'; }
+  }
+
+  let activeTab = tabFromRoute();
+  function applyActiveTab(tab){
+    const t = TAB_FROM_ROUTE[tab] || 'overview';
+    root.querySelectorAll('.sys-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+    root.querySelectorAll('.sys-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + t));
+    activeTab = t;
+  }
+
+  applyActiveTab(activeTab);
   root.querySelector('#sysTabs').addEventListener('click', e => {
     const btn = e.target.closest('.sys-tab');
     if (!btn) return;
     const tab = btn.dataset.tab;
-    root.querySelectorAll('.sys-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-    root.querySelectorAll('.sys-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
-    activeTab = tab;
+    applyActiveTab(tab);
     renderActiveTab();
   });
 
