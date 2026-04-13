@@ -461,7 +461,9 @@
     timers: 'timers',
     supabase: 'supabase',
     cloudflare: 'cloudflare',
-    queue: 'queue'
+    queue: 'queue',
+    studio: 'studio',
+    bugscanner: 'bugscanner',
   };
   function tabFromRoute(){
     try{
