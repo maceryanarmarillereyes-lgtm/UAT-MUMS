@@ -2904,6 +2904,8 @@ function updateClocksPreviewTimes(){
       if(rp === 'distribution/monitoring') return 'distribution_monitoring';
       // System sub-pages all resolve to main 'system' page (tab driven internally)
       if(rp.startsWith('system/') || rp === 'system') return 'system';
+      // Backward compatibility for legacy System submenu URLs like /system_overview
+      if(rp.startsWith('system_')) return 'system';
       return String(routePath||'').split('/')[0] || '';
     }catch(_){ return ''; }
   }

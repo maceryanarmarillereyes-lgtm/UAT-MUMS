@@ -461,16 +461,22 @@
     timers: 'timers',
     supabase: 'supabase',
     cloudflare: 'cloudflare',
-    queue: 'queue',
-    studio: 'studio',
-    bugscanner: 'bugscanner',
+    queue: 'queue'
   };
   function tabFromRoute(){
     try{
       const path = String(window.location.pathname || window.location.hash || '').toLowerCase();
       const cleaned = path.replace(/^#?\/?/, '').split('?')[0].split('#')[0];
-      if(!cleaned.startsWith('system/')) return 'overview';
-      const seg = cleaned.split('/')[1] || '';
+      let seg = '';
+      if(cleaned.startsWith('system/')){
+        seg = cleaned.split('/')[1] || '';
+      }else if(cleaned.startsWith('system_')){
+        seg = cleaned.slice('system_'.length);
+      }else if(cleaned === 'system'){
+        seg = 'overview';
+      }else{
+        return 'overview';
+      }
       return TAB_FROM_ROUTE[seg] || 'overview';
     }catch(_){ return 'overview'; }
   }
