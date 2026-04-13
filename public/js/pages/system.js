@@ -1067,17 +1067,17 @@
       const bg = { ok: 'rgba(34,197,94,.08)', warn: 'rgba(245,158,11,.08)', crit: 'rgba(239,68,68,.08)', info: 'rgba(59,130,246,.08)' };
       const border = { ok: 'rgba(34,197,94,.2)', warn: 'rgba(245,158,11,.2)', crit: 'rgba(239,68,68,.2)', info: 'rgba(59,130,246,.2)' };
       const pill = { ok: '✅ OK', warn: '⚠️ WARNING', crit: '🔴 CRITICAL', info: 'ℹ️ INFO' };
-      return \`<tr style="border-bottom:1px solid rgba(255,255,255,.04);">
-        <td style="padding:10px 8px;font-size:13px;">\${icon}</td>
-        <td style="padding:10px 8px;font-weight:700;color:#f1f5f9;font-size:12px;">\${esc(name)}</td>
+      return `<tr style="border-bottom:1px solid rgba(255,255,255,.04);">
+        <td style="padding:10px 8px;font-size:13px;">${icon}</td>
+        <td style="padding:10px 8px;font-weight:700;color:#f1f5f9;font-size:12px;">${esc(name)}</td>
         <td style="padding:10px 8px;">
-          <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;background:\${bg[severity]};border:1px solid \${border[severity]};color:\${colors[severity]};">
-            \${pill[severity]}
+          <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;background:${bg[severity]};border:1px solid ${border[severity]};color:${colors[severity]};">
+            ${pill[severity]}
           </span>
         </td>
-        <td style="padding:10px 8px;font-size:11px;color:#94a3b8;">\${esc(status)}</td>
-        <td style="padding:10px 8px;font-size:11px;color:#6b7280;max-width:300px;">\${esc(detail)}</td>
-      </tr>\`;
+        <td style="padding:10px 8px;font-size:11px;color:#94a3b8;">${esc(status)}</td>
+        <td style="padding:10px 8px;font-size:11px;color:#6b7280;max-width:300px;">${esc(detail)}</td>
+      </tr>`;
     }
 
     // Derive severity
@@ -1091,34 +1091,34 @@
     // CTL poll rate - 15s is aggressive for free tier
     const ctlPollSev = ctlPollMs < 20000 ? 'warn' : 'ok';
 
-    panel.innerHTML = \`
+    panel.innerHTML = `
       <div>
         <div class="sys-refresh-row">
           <div class="sys-section-title" style="margin:0;">🎛️ Support Studio Feature Health</div>
           <button class="sys-btn ghost" onclick="window.Pages && Pages.system && Pages.system._renderStudio && Pages.system._renderStudio()">🔄 Refresh</button>
-          <span class="sys-refresh-ts">Live runtime probe — \${new Date().toLocaleTimeString()}</span>
+          <span class="sys-refresh-ts">Live runtime probe — ${new Date().toLocaleTimeString()}</span>
         </div>
 
         <!-- Summary cards -->
         <div class="sys-grid" style="margin-bottom:20px;">
           <div class="sys-card">
             <div class="sys-card-label">Controllers Configured</div>
-            <div class="sys-card-val">\${ctlItems.length}</div>
-            <div class="sys-card-sub">\${ctlActiveBookings} active booking(s)</div>
+            <div class="sys-card-val">${ctlItems.length}</div>
+            <div class="sys-card-sub">${ctlActiveBookings} active booking(s)</div>
           </div>
-          <div class="sys-card \${ctlTotalQueued > 0 ? 'warn' : 'ok'}">
+          <div class="sys-card ${ctlTotalQueued > 0 ? 'warn' : 'ok'}">
             <div class="sys-card-label">Queue Depth</div>
-            <div class="sys-card-val">\${ctlTotalQueued}</div>
+            <div class="sys-card-val">${ctlTotalQueued}</div>
             <div class="sys-card-sub">Users waiting across all controllers</div>
           </div>
-          <div class="sys-card \${odpSev}">
+          <div class="sys-card ${odpSev}">
             <div class="sys-card-label">ODP Realtime</div>
-            <div class="sys-card-val" style="font-size:16px;">\${odpRt}</div>
+            <div class="sys-card-val" style="font-size:16px;">${odpRt}</div>
             <div class="sys-card-sub">daily_passwords subscription</div>
           </div>
-          <div class="sys-card \${sbSev}">
+          <div class="sys-card ${sbSev}">
             <div class="sys-card-label">Supabase Client</div>
-            <div class="sys-card-val" style="font-size:16px;">\${sbOk ? '✅ READY' : '❌ MISSING'}</div>
+            <div class="sys-card-val" style="font-size:16px;">${sbOk ? '✅ READY' : '❌ MISSING'}</div>
             <div class="sys-card-sub">__MUMS_SB_CLIENT</div>
           </div>
         </div>
@@ -1136,43 +1136,43 @@
             </tr>
           </thead>
           <tbody>
-            \${featureRow('🎮', 'CTL Lab Booking System', homeAppsLoaded ? 'Module loaded' : 'NOT LOADED', ctlItems.length + ' controllers · ' + ctlActiveBookings + ' active session(s) · ' + ctlTotalQueued + ' queued', ctlSev)}
-            \${featureRow('🔒', 'CTL State Server Sync', 'Poll every 15s', 'Hits /api/studio/ctl_lab_state every ' + fmtMs(ctlPollMs) + ' per open tab', ctlPollSev)}
-            \${featureRow('🔔', 'CTL Alarm Audio', alarmPlaying, ctlState ? 'alarmPlaying=' + String(ctlState.alarmPlaying) : 'State not available', 'info')}
-            \${featureRow('🗓️', 'One Day Password (ODP)', odpRt, 'SDK: ' + (odpSdkLoaded ? 'Loaded' : 'NOT LOADED') + ' · Data: ' + odpLastFetch, odpSev)}
-            \${featureRow('📡', 'ODP Realtime Channel', odpState && odpState.rtChannel ? 'Channel active' : 'No channel', odpState && odpState.pollInterval ? 'Using POLL fallback (15s) — check Supabase Realtime' : 'Using WebSocket (efficient)', odpSev)}
-            \${featureRow('👨‍💻', 'On-Call Tech Module', onCallLoaded ? 'Loaded' : 'Not yet loaded', onCallHomeCard ? 'Home card rendered' : 'Home card not rendered', onCallSev)}
-            \${featureRow('📚', 'Knowledge Base Sync', kbLoaded ? 'Module loaded' : 'Not yet loaded', kbLastSync, kbSev)}
-            \${featureRow('🗄️', 'Cache Manager', cacheLoaded ? 'Initialized' : 'Not loaded', 'Studio-side IndexedDB cache layer', cacheSev)}
-            \${featureRow('🗄️', 'Supabase Client (MUMS)', sbOk ? 'Ready' : 'Not initialized', sbClient ? 'Auth: ' + (sbClient.auth ? 'OK' : 'MISSING') : '__MUMS_SB_CLIENT not found', sbSev)}
-            \${featureRow('📋', 'Support Records', srLoaded ? 'Panel present' : 'Panel missing', 'Left sidebar panel for case knowledge base', srLoaded ? 'ok' : 'warn')}
+            ${featureRow('🎮', 'CTL Lab Booking System', homeAppsLoaded ? 'Module loaded' : 'NOT LOADED', ctlItems.length + ' controllers · ' + ctlActiveBookings + ' active session(s) · ' + ctlTotalQueued + ' queued', ctlSev)}
+            ${featureRow('🔒', 'CTL State Server Sync', 'Poll every 15s', 'Hits /api/studio/ctl_lab_state every ' + fmtMs(ctlPollMs) + ' per open tab', ctlPollSev)}
+            ${featureRow('🔔', 'CTL Alarm Audio', alarmPlaying, ctlState ? 'alarmPlaying=' + String(ctlState.alarmPlaying) : 'State not available', 'info')}
+            ${featureRow('🗓️', 'One Day Password (ODP)', odpRt, 'SDK: ' + (odpSdkLoaded ? 'Loaded' : 'NOT LOADED') + ' · Data: ' + odpLastFetch, odpSev)}
+            ${featureRow('📡', 'ODP Realtime Channel', odpState && odpState.rtChannel ? 'Channel active' : 'No channel', odpState && odpState.pollInterval ? 'Using POLL fallback (15s) — check Supabase Realtime' : 'Using WebSocket (efficient)', odpSev)}
+            ${featureRow('👨‍💻', 'On-Call Tech Module', onCallLoaded ? 'Loaded' : 'Not yet loaded', onCallHomeCard ? 'Home card rendered' : 'Home card not rendered', onCallSev)}
+            ${featureRow('📚', 'Knowledge Base Sync', kbLoaded ? 'Module loaded' : 'Not yet loaded', kbLastSync, kbSev)}
+            ${featureRow('🗄️', 'Cache Manager', cacheLoaded ? 'Initialized' : 'Not loaded', 'Studio-side IndexedDB cache layer', cacheSev)}
+            ${featureRow('🗄️', 'Supabase Client (MUMS)', sbOk ? 'Ready' : 'Not initialized', sbClient ? 'Auth: ' + (sbClient.auth ? 'OK' : 'MISSING') : '__MUMS_SB_CLIENT not found', sbSev)}
+            ${featureRow('📋', 'Support Records', srLoaded ? 'Panel present' : 'Panel missing', 'Left sidebar panel for case knowledge base', srLoaded ? 'ok' : 'warn')}
           </tbody>
         </table>
 
         <!-- CTL Booking Detail -->
-        \${ctlItems.length > 0 ? \`
+        ${ctlItems.length > 0 ? `
         <div class="sys-section-title" style="margin-top:24px;">🎮 Controller Lab — Session Detail</div>
         <table class="sys-table" style="width:100%;">
           <thead><tr>
             <th>Controller</th><th>IP</th><th>Status</th><th>Booked By</th><th>Ends In</th><th>Queue</th>
           </tr></thead>
           <tbody>
-            \${ctlItems.map(ctl => {
+            ${ctlItems.map(ctl => {
               const bk = ctlBookings[ctl.id];
               const q  = Array.isArray(ctlQueues[ctl.id]) ? ctlQueues[ctl.id] : [];
               const active = bk && bk.endMs > Date.now();
               const rem = active ? bk.endMs - Date.now() : 0;
-              return \`<tr>
-                <td><b>\${esc(ctl.type || '—')}</b></td>
-                <td class="sys-mono">\${esc(ctl.ip || '—')}</td>
-                <td><span class="sys-pill \${esc(ctl.status === 'Offline' ? 'crit' : 'ok')}">\${esc(ctl.status || 'Online')}</span></td>
-                <td>\${active ? esc(bk.user) : '<span style="color:#6b7280">—</span>'}</td>
-                <td class="sys-mono">\${active ? fmtMs(rem) : '<span style="color:#22c55e">Free</span>'}</td>
-                <td>\${q.length > 0 ? q.length + ' waiting' : '<span style="color:#6b7280">Empty</span>'}</td>
-              </tr>\`;
+              return `<tr>
+                <td><b>${esc(ctl.type || '—')}</b></td>
+                <td class="sys-mono">${esc(ctl.ip || '—')}</td>
+                <td><span class="sys-pill ${esc(ctl.status === 'Offline' ? 'crit' : 'ok')}">${esc(ctl.status || 'Online')}</span></td>
+                <td>${active ? esc(bk.user) : '<span style="color:#6b7280">—</span>'}</td>
+                <td class="sys-mono">${active ? fmtMs(rem) : '<span style="color:#22c55e">Free</span>'}</td>
+                <td>${q.length > 0 ? q.length + ' waiting' : '<span style="color:#6b7280">Empty</span>'}</td>
+              </tr>`;
             }).join('')}
           </tbody>
-        </table>\` : ''}
+        </table>` : ''}
 
         <!-- Interval warnings -->
         <div class="sys-section-title" style="margin-top:24px;">⏱️ Studio Feature Poll Intervals</div>
@@ -1195,13 +1195,13 @@
               <td><b>ODP Realtime (WebSocket)</b></td>
               <td class="sys-mono">Event-driven</td>
               <td class="sys-mono">supabase_realtime → daily_passwords</td>
-              <td><span class="sys-pill \${odpSev}">\${odpRt === 'SUBSCRIBED' ? '✅ Connected' : '⚠️ ' + odpRt}</span></td>
+              <td><span class="sys-pill ${odpSev}">${odpRt === 'SUBSCRIBED' ? '✅ Connected' : '⚠️ ' + odpRt}</span></td>
             </tr>
             <tr>
               <td><b>ODP Poll Fallback</b></td>
               <td class="sys-mono">15s</td>
               <td class="sys-mono">/api/studio/daily_passwords</td>
-              <td><span class="sys-pill \${odpState && odpState.pollInterval ? 'warn' : 'ok'}">\${odpState && odpState.pollInterval ? '⚠️ Active (RT failed)' : '✅ Dormant (RT connected)'}</span></td>
+              <td><span class="sys-pill ${odpState && odpState.pollInterval ? 'warn' : 'ok'}">${odpState && odpState.pollInterval ? '⚠️ Active (RT failed)' : '✅ Dormant (RT connected)'}</span></td>
             </tr>
             <tr>
               <td><b>OnCall Tech</b></td>
@@ -1218,7 +1218,7 @@
           </tbody>
         </table>
       </div>
-    \`;
+    `;
   }
   // expose for self-refresh button
   if (!window.Pages) window.Pages = {};
@@ -1479,12 +1479,12 @@
 
     // Show loading state if no scan yet
     if (!_bugResults || forceRescan) {
-      panel.innerHTML = \`<div style="padding:40px;text-align:center;">
+      panel.innerHTML = `<div style="padding:40px;text-align:center;">
         <div style="font-size:32px;margin-bottom:12px;">🔍</div>
         <div style="font-size:15px;font-weight:700;color:#f1f5f9;margin-bottom:6px;">Auto Bug Scanner</div>
         <div style="font-size:12px;color:#6b7280;margin-bottom:24px;">Scans runtime state, env vars, timers, and feature modules for known bug patterns.</div>
         <button class="sys-btn" onclick="window.__mums_runScan()">▶ Run Scan Now</button>
-      </div>\`;
+      </div>`;
       window.__mums_runScan = function() {
         const issues = _runBugScan();
         renderBugScanner(false);
@@ -1507,81 +1507,81 @@
       const border = { critical: 'rgba(239,68,68,.25)', warning: 'rgba(245,158,11,.2)', info: 'rgba(59,130,246,.2)' };
       const icon   = { critical: '🔴', warning: '🟡', info: 'ℹ️' };
       const label  = { critical: 'CRITICAL', warning: 'WARNING', info: 'INFO' };
-      return \`
-        <div style="background:\${bg[issue.severity]};border:1px solid \${border[issue.severity]};border-radius:12px;padding:16px 18px;margin-bottom:10px;">
+      return `
+        <div style="background:${bg[issue.severity]};border:1px solid ${border[issue.severity]};border-radius:12px;padding:16px 18px;margin-bottom:10px;">
           <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px;">
-            <span style="font-size:18px;flex-shrink:0;">\${icon[issue.severity]}</span>
+            <span style="font-size:18px;flex-shrink:0;">${icon[issue.severity]}</span>
             <div style="flex:1;">
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-                <span style="font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:4px;background:\${colors[issue.severity]}22;border:1px solid \${colors[issue.severity]}44;color:\${colors[issue.severity]};">\${label[issue.severity]}</span>
-                <span style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#94a3b8;">\${esc(issue.feature)}</span>
-                <span style="font-size:9px;font-family:monospace;color:#6b7280;">\${esc(issue.id)}</span>
+                <span style="font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:4px;background:${colors[issue.severity]}22;border:1px solid ${colors[issue.severity]}44;color:${colors[issue.severity]};">${label[issue.severity]}</span>
+                <span style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#94a3b8;">${esc(issue.feature)}</span>
+                <span style="font-size:9px;font-family:monospace;color:#6b7280;">${esc(issue.id)}</span>
               </div>
-              <div style="font-size:13px;font-weight:800;color:#f1f5f9;margin-bottom:6px;">\${esc(issue.title)}</div>
-              <div style="font-size:11px;color:#94a3b8;line-height:1.65;margin-bottom:10px;">\${esc(issue.description)}</div>
+              <div style="font-size:13px;font-weight:800;color:#f1f5f9;margin-bottom:6px;">${esc(issue.title)}</div>
+              <div style="font-size:11px;color:#94a3b8;line-height:1.65;margin-bottom:10px;">${esc(issue.description)}</div>
               <div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.18);border-radius:8px;padding:10px 12px;">
                 <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#4ade80;margin-bottom:4px;">💡 FIX RECOMMENDATION</div>
-                <div style="font-size:11px;color:#86efac;line-height:1.65;">\${esc(issue.recommendation)}</div>
+                <div style="font-size:11px;color:#86efac;line-height:1.65;">${esc(issue.recommendation)}</div>
               </div>
             </div>
-            <div style="font-size:9px;font-family:monospace;color:#374151;flex-shrink:0;text-align:right;line-height:1.8;">\${esc(issue.file)}</div>
+            <div style="font-size:9px;font-family:monospace;color:#374151;flex-shrink:0;text-align:right;line-height:1.8;">${esc(issue.file)}</div>
           </div>
-        </div>\`;
+        </div>`;
     }
 
-    panel.innerHTML = \`
+    panel.innerHTML = `
       <div>
         <div class="sys-refresh-row">
           <div class="sys-section-title" style="margin:0;">🔍 Auto Bug Scanner</div>
           <button class="sys-btn" onclick="window.__mums_runScan()">🔄 Re-Scan</button>
-          <span class="sys-refresh-ts">Last scan: \${new Date(_bugScanTs).toLocaleTimeString()}</span>
+          <span class="sys-refresh-ts">Last scan: ${new Date(_bugScanTs).toLocaleTimeString()}</span>
         </div>
 
         <!-- Summary -->
         <div class="sys-grid" style="margin-bottom:20px;">
-          <div class="sys-card" style="border-color:\${healthColor}33;">
+          <div class="sys-card" style="border-color:${healthColor}33;">
             <div class="sys-card-label">System Health</div>
-            <div class="sys-card-val" style="font-size:20px;color:\${healthColor};">\${healthLabel}</div>
-            <div class="sys-card-sub">Based on \${issues.length} check(s)</div>
+            <div class="sys-card-val" style="font-size:20px;color:${healthColor};">${healthLabel}</div>
+            <div class="sys-card-sub">Based on ${issues.length} check(s)</div>
           </div>
-          <div class="sys-card \${crits.length > 0 ? 'crit' : 'ok'}">
+          <div class="sys-card ${crits.length > 0 ? 'crit' : 'ok'}">
             <div class="sys-card-label">🔴 Critical Issues</div>
-            <div class="sys-card-val">\${crits.length}</div>
+            <div class="sys-card-val">${crits.length}</div>
             <div class="sys-card-sub">Require immediate action</div>
           </div>
-          <div class="sys-card \${warns.length > 0 ? 'warn' : 'ok'}">
+          <div class="sys-card ${warns.length > 0 ? 'warn' : 'ok'}">
             <div class="sys-card-label">🟡 Warnings</div>
-            <div class="sys-card-val">\${warns.length}</div>
+            <div class="sys-card-val">${warns.length}</div>
             <div class="sys-card-sub">Should be addressed soon</div>
           </div>
           <div class="sys-card ok">
             <div class="sys-card-label">✅ Checks Passed</div>
-            <div class="sys-card-val">\${issues.length === 0 ? '—' : (issues.length - crits.length - warns.length - infos.length)}</div>
+            <div class="sys-card-val">${issues.length === 0 ? '—' : (issues.length - crits.length - warns.length - infos.length)}</div>
             <div class="sys-card-sub">No issues detected</div>
           </div>
         </div>
 
-        \${crits.length === 0 && warns.length === 0 ? \`
+        ${crits.length === 0 && warns.length === 0 ? `
           <div class="sys-alert ok">
             <span>✅</span>
             <span>All scanned patterns look healthy. No critical or warning issues detected. Run scan again after any deployment or config change.</span>
           </div>
-        \` : ''}
+        ` : ''}
 
-        \${crits.length > 0 ? \`
+        ${crits.length > 0 ? `
           <div class="sys-section-title">🔴 Critical Issues — Immediate Action Required</div>
-          \${crits.map(issueCard).join('')}
-        \` : ''}
+          ${crits.map(issueCard).join('')}
+        ` : ''}
 
-        \${warns.length > 0 ? \`
+        ${warns.length > 0 ? `
           <div class="sys-section-title">🟡 Warnings — Should Be Fixed Soon</div>
-          \${warns.map(issueCard).join('')}
-        \` : ''}
+          ${warns.map(issueCard).join('')}
+        ` : ''}
 
-        \${infos.length > 0 ? \`
+        ${infos.length > 0 ? `
           <div class="sys-section-title">ℹ️ Info</div>
-          \${infos.map(issueCard).join('')}
-        \` : ''}
+          ${infos.map(issueCard).join('')}
+        ` : ''}
 
         <!-- Scan coverage -->
         <div class="sys-section-title" style="margin-top:24px;">📋 Scan Coverage</div>
@@ -1602,7 +1602,7 @@
           Scan is client-side only — reads runtime window state, localStorage, and MUMS_ENV. Does not make any API calls. Safe to run in production.
         </div>
       </div>
-    \`;
+    `;
 
     window.__mums_runScan = function() {
       _runBugScan();
