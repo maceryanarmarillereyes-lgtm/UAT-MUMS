@@ -150,7 +150,7 @@ BEGIN
                AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public'))
   THEN
     ALTER TABLE public.mums_documents REPLICA IDENTITY DEFAULT;
-    RAISE NOTICE '✅ mums_documents: REPLICA IDENTITY DEFAULT — ~50% WAL reduction';
+    RAISE NOTICE '✅ mums_documents: REPLICA IDENTITY DEFAULT — ~50%% WAL reduction';
   ELSE
     RAISE NOTICE '⏭  mums_documents: table not found — skipped';
   END IF;
@@ -265,7 +265,10 @@ END $$;
 -- STEP 7: Reload PostgREST schema cache (clears bloated cache = less memory)
 -- =============================================================================
 NOTIFY pgrst, 'reload schema';
-RAISE NOTICE '✅ PostgREST schema cache reloaded';
+DO $$
+BEGIN
+  RAISE NOTICE '✅ PostgREST schema cache reloaded';
+END $$;
 
 
 -- =============================================================================

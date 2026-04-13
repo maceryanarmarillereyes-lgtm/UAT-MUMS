@@ -186,6 +186,35 @@
         note: 'Local clock tick — no network call.',
         critical: false,
       },
+      // ── Support Studio Features ─────────────────────────────────────────
+      {
+        name: 'CTL Lab State Poll',
+        file: 'features/ctl_booking.js',
+        interval: 15000,
+        endpoint: '/api/studio/ctl_lab_state',
+        method: 'GET',
+        note: 'Polls shared booking/queue state while Support Studio is open. 15s is aggressive for free tier — active per-tab.',
+        critical: false,
+        warn: true,
+      },
+      {
+        name: 'CTL Lab Config Poll',
+        file: 'features/ctl_booking.js',
+        interval: 30000,
+        endpoint: '/api/studio/ctl_lab_config',
+        method: 'GET',
+        note: 'Refreshes controller list (items) from shared Supabase document. Only runs while Support Studio is open.',
+        critical: false,
+      },
+      {
+        name: 'ODP Poll Fallback',
+        file: 'features/odp.js',
+        interval: 15000,
+        endpoint: '/api/studio/daily_passwords',
+        method: 'GET',
+        note: 'Active ONLY when ODP Supabase Realtime subscription fails. Normally dormant (RT handles updates).',
+        critical: false,
+      },
     ];
   }
 
@@ -318,6 +347,8 @@
         { label: 'Realtime Reconcile', perHr: reconcPerHr, interval: fmtMs(reconcMs) },
         { label: 'QuickBase Poll', perHr: qbPerHr, interval: '5m' },
         { label: 'Auth/Token Refresh', perHr: authPerHr, interval: 'event' },
+        { label: 'CTL Lab State (Studio)', perHr: 240, interval: '15s', note: 'Active per-tab when Support Studio open' },
+        { label: 'CTL Lab Config (Studio)', perHr: 120, interval: '30s', note: 'Active per-tab when Support Studio open' },
       ]
     };
   }
@@ -405,6 +436,8 @@
       <button class="sys-tab" data-tab="supabase">🗄️ Supabase</button>
       <button class="sys-tab" data-tab="cloudflare">☁️ Cloudflare</button>
       <button class="sys-tab" data-tab="queue">🔁 Sync Queue</button>
+      <button class="sys-tab" data-tab="studio">🎛️ Studio Features</button>
+      <button class="sys-tab" data-tab="bugscanner" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:6px;">🔍 Auto Bug Scan <span id="bugBadge" style="display:none;margin-left:4px;background:#ef4444;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:900;"></span></button>
     </div>
 
     <div id="sysTabPanels">
@@ -415,18 +448,47 @@
       <div class="sys-panel" id="tab-supabase"></div>
       <div class="sys-panel" id="tab-cloudflare"></div>
       <div class="sys-panel" id="tab-queue"></div>
+      <div class="sys-panel" id="tab-studio"></div>
+      <div class="sys-panel" id="tab-bugscanner"></div>
     </div>
   </div>`;
 
   // ── Tab switching ─────────────────────────────────────────────────────────
-  let activeTab = 'overview';
+  const TAB_FROM_ROUTE = {
+    overview: 'overview',
+    requests: 'requests',
+    realtime: 'realtime',
+    timers: 'timers',
+    supabase: 'supabase',
+    cloudflare: 'cloudflare',
+    queue: 'queue',
+    studio: 'studio',
+    bugscanner: 'bugscanner',
+  };
+  function tabFromRoute(){
+    try{
+      const path = String(window.location.pathname || window.location.hash || '').toLowerCase();
+      const cleaned = path.replace(/^#?\/?/, '').split('?')[0].split('#')[0];
+      if(!cleaned.startsWith('system/')) return 'overview';
+      const seg = cleaned.split('/')[1] || '';
+      return TAB_FROM_ROUTE[seg] || 'overview';
+    }catch(_){ return 'overview'; }
+  }
+
+  let activeTab = tabFromRoute();
+  function applyActiveTab(tab){
+    const t = TAB_FROM_ROUTE[tab] || 'overview';
+    root.querySelectorAll('.sys-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+    root.querySelectorAll('.sys-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + t));
+    activeTab = t;
+  }
+
+  applyActiveTab(activeTab);
   root.querySelector('#sysTabs').addEventListener('click', e => {
     const btn = e.target.closest('.sys-tab');
     if (!btn) return;
     const tab = btn.dataset.tab;
-    root.querySelectorAll('.sys-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-    root.querySelectorAll('.sys-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
-    activeTab = tab;
+    applyActiveTab(tab);
     renderActiveTab();
   });
 
@@ -940,6 +1002,608 @@
     root.querySelector('#sysQueueRefresh').onclick = () => renderQueue();
   }
 
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🎛️  SUPPORT STUDIO FEATURES MONITOR
+  // ══════════════════════════════════════════════════════════════════════════
+  function renderStudio() {
+    const panel = root.querySelector('#tab-studio');
+    if (!panel) return;
+
+    // ── Probe live state from window globals ───────────────────────────────
+    const env = window.MUMS_ENV || {};
+
+    // CTL Booking
+    const ctlState = window._ctlS || null;
+    const ctlItems = (() => { try { const r = localStorage.getItem('mums_controller_lab_items_v1'); return JSON.parse(r || '[]'); } catch (_) { return []; } })();
+    const ctlBookings = ctlState ? ctlState.bookings || {} : {};
+    const ctlQueues   = ctlState ? ctlState.queues   || {} : {};
+    const ctlPollMs   = 15000; // hardcoded in ctl_booking.js
+    const ctlActiveBookings = Object.values(ctlBookings).filter(b => b && b.endMs > Date.now()).length;
+    const ctlTotalQueued = Object.values(ctlQueues).reduce((s, q) => s + (Array.isArray(q) ? q.length : 0), 0);
+
+    // ODP (One Day Password)
+    const odpState = window._odpState || null;
+    const odpRt = odpState && odpState.rtChannel ? 'SUBSCRIBED' : (odpState && odpState.pollInterval ? 'POLL FALLBACK' : 'UNKNOWN');
+    const odpSdkLoaded = !!(window.supabase && typeof window.supabase.createClient === 'function');
+
+    // OnCall Tech
+    const onCallLoaded = typeof window._ocsLoadSettings === 'function';
+    const onCallHomeCard = !!document.getElementById('hp-oncall-home-card');
+
+    // Knowledge Base
+    const kbLoaded = typeof window._kbLoadSettings === 'function';
+    const kbSyncEl = document.getElementById('kb-last-sync');
+    const kbLastSync = kbSyncEl ? kbSyncEl.textContent : 'Unknown';
+
+    // Supabase client health
+    const sbClient = window.__MUMS_SB_CLIENT;
+    const sbOk = !!(sbClient && sbClient.auth);
+
+    // Cache system
+    const cacheLoaded = typeof window._cacheUI !== 'undefined';
+
+    // Home apps (controller lab host)
+    const homeAppsLoaded = typeof window._ctlOpenBooking === 'function';
+
+    // Support Records / KB Feature
+    const srLoaded = !!document.getElementById('left-panel-support_records');
+
+    // ODP last fetch
+    const odpLastFetch = odpState && odpState.homeData ? 'Loaded' : 'Not loaded';
+
+    // Alarm audio
+    const alarmPlaying = ctlState && ctlState.alarmPlaying ? '🔊 PLAYING' : '🔇 Silent';
+
+    function featureRow(icon, name, status, detail, severity) {
+      const colors = { ok: '#22c55e', warn: '#f59e0b', crit: '#ef4444', info: '#3b82f6' };
+      const bg = { ok: 'rgba(34,197,94,.08)', warn: 'rgba(245,158,11,.08)', crit: 'rgba(239,68,68,.08)', info: 'rgba(59,130,246,.08)' };
+      const border = { ok: 'rgba(34,197,94,.2)', warn: 'rgba(245,158,11,.2)', crit: 'rgba(239,68,68,.2)', info: 'rgba(59,130,246,.2)' };
+      const pill = { ok: '✅ OK', warn: '⚠️ WARNING', crit: '🔴 CRITICAL', info: 'ℹ️ INFO' };
+      return \`<tr style="border-bottom:1px solid rgba(255,255,255,.04);">
+        <td style="padding:10px 8px;font-size:13px;">\${icon}</td>
+        <td style="padding:10px 8px;font-weight:700;color:#f1f5f9;font-size:12px;">\${esc(name)}</td>
+        <td style="padding:10px 8px;">
+          <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;background:\${bg[severity]};border:1px solid \${border[severity]};color:\${colors[severity]};">
+            \${pill[severity]}
+          </span>
+        </td>
+        <td style="padding:10px 8px;font-size:11px;color:#94a3b8;">\${esc(status)}</td>
+        <td style="padding:10px 8px;font-size:11px;color:#6b7280;max-width:300px;">\${esc(detail)}</td>
+      </tr>\`;
+    }
+
+    // Derive severity
+    const odpSev = odpRt === 'SUBSCRIBED' ? 'ok' : odpRt === 'POLL FALLBACK' ? 'warn' : 'crit';
+    const ctlSev = homeAppsLoaded ? 'ok' : 'crit';
+    const kbSev  = kbLoaded ? 'ok' : 'warn';
+    const onCallSev = onCallLoaded ? 'ok' : 'warn';
+    const sbSev  = sbOk ? 'ok' : 'crit';
+    const cacheSev = cacheLoaded ? 'ok' : 'warn';
+
+    // CTL poll rate - 15s is aggressive for free tier
+    const ctlPollSev = ctlPollMs < 20000 ? 'warn' : 'ok';
+
+    panel.innerHTML = \`
+      <div>
+        <div class="sys-refresh-row">
+          <div class="sys-section-title" style="margin:0;">🎛️ Support Studio Feature Health</div>
+          <button class="sys-btn ghost" onclick="window.Pages && Pages.system && Pages.system._renderStudio && Pages.system._renderStudio()">🔄 Refresh</button>
+          <span class="sys-refresh-ts">Live runtime probe — \${new Date().toLocaleTimeString()}</span>
+        </div>
+
+        <!-- Summary cards -->
+        <div class="sys-grid" style="margin-bottom:20px;">
+          <div class="sys-card">
+            <div class="sys-card-label">Controllers Configured</div>
+            <div class="sys-card-val">\${ctlItems.length}</div>
+            <div class="sys-card-sub">\${ctlActiveBookings} active booking(s)</div>
+          </div>
+          <div class="sys-card \${ctlTotalQueued > 0 ? 'warn' : 'ok'}">
+            <div class="sys-card-label">Queue Depth</div>
+            <div class="sys-card-val">\${ctlTotalQueued}</div>
+            <div class="sys-card-sub">Users waiting across all controllers</div>
+          </div>
+          <div class="sys-card \${odpSev}">
+            <div class="sys-card-label">ODP Realtime</div>
+            <div class="sys-card-val" style="font-size:16px;">\${odpRt}</div>
+            <div class="sys-card-sub">daily_passwords subscription</div>
+          </div>
+          <div class="sys-card \${sbSev}">
+            <div class="sys-card-label">Supabase Client</div>
+            <div class="sys-card-val" style="font-size:16px;">\${sbOk ? '✅ READY' : '❌ MISSING'}</div>
+            <div class="sys-card-sub">__MUMS_SB_CLIENT</div>
+          </div>
+        </div>
+
+        <!-- Feature table -->
+        <div class="sys-section-title">Feature Module Status</div>
+        <table class="sys-table" style="width:100%;">
+          <thead>
+            <tr>
+              <th style="width:30px;"></th>
+              <th>Feature</th>
+              <th style="width:130px;">Status</th>
+              <th style="width:180px;">State</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            \${featureRow('🎮', 'CTL Lab Booking System', homeAppsLoaded ? 'Module loaded' : 'NOT LOADED', ctlItems.length + ' controllers · ' + ctlActiveBookings + ' active session(s) · ' + ctlTotalQueued + ' queued', ctlSev)}
+            \${featureRow('🔒', 'CTL State Server Sync', 'Poll every 15s', 'Hits /api/studio/ctl_lab_state every ' + fmtMs(ctlPollMs) + ' per open tab', ctlPollSev)}
+            \${featureRow('🔔', 'CTL Alarm Audio', alarmPlaying, ctlState ? 'alarmPlaying=' + String(ctlState.alarmPlaying) : 'State not available', 'info')}
+            \${featureRow('🗓️', 'One Day Password (ODP)', odpRt, 'SDK: ' + (odpSdkLoaded ? 'Loaded' : 'NOT LOADED') + ' · Data: ' + odpLastFetch, odpSev)}
+            \${featureRow('📡', 'ODP Realtime Channel', odpState && odpState.rtChannel ? 'Channel active' : 'No channel', odpState && odpState.pollInterval ? 'Using POLL fallback (15s) — check Supabase Realtime' : 'Using WebSocket (efficient)', odpSev)}
+            \${featureRow('👨‍💻', 'On-Call Tech Module', onCallLoaded ? 'Loaded' : 'Not yet loaded', onCallHomeCard ? 'Home card rendered' : 'Home card not rendered', onCallSev)}
+            \${featureRow('📚', 'Knowledge Base Sync', kbLoaded ? 'Module loaded' : 'Not yet loaded', kbLastSync, kbSev)}
+            \${featureRow('🗄️', 'Cache Manager', cacheLoaded ? 'Initialized' : 'Not loaded', 'Studio-side IndexedDB cache layer', cacheSev)}
+            \${featureRow('🗄️', 'Supabase Client (MUMS)', sbOk ? 'Ready' : 'Not initialized', sbClient ? 'Auth: ' + (sbClient.auth ? 'OK' : 'MISSING') : '__MUMS_SB_CLIENT not found', sbSev)}
+            \${featureRow('📋', 'Support Records', srLoaded ? 'Panel present' : 'Panel missing', 'Left sidebar panel for case knowledge base', srLoaded ? 'ok' : 'warn')}
+          </tbody>
+        </table>
+
+        <!-- CTL Booking Detail -->
+        \${ctlItems.length > 0 ? \`
+        <div class="sys-section-title" style="margin-top:24px;">🎮 Controller Lab — Session Detail</div>
+        <table class="sys-table" style="width:100%;">
+          <thead><tr>
+            <th>Controller</th><th>IP</th><th>Status</th><th>Booked By</th><th>Ends In</th><th>Queue</th>
+          </tr></thead>
+          <tbody>
+            \${ctlItems.map(ctl => {
+              const bk = ctlBookings[ctl.id];
+              const q  = Array.isArray(ctlQueues[ctl.id]) ? ctlQueues[ctl.id] : [];
+              const active = bk && bk.endMs > Date.now();
+              const rem = active ? bk.endMs - Date.now() : 0;
+              return \`<tr>
+                <td><b>\${esc(ctl.type || '—')}</b></td>
+                <td class="sys-mono">\${esc(ctl.ip || '—')}</td>
+                <td><span class="sys-pill \${esc(ctl.status === 'Offline' ? 'crit' : 'ok')}">\${esc(ctl.status || 'Online')}</span></td>
+                <td>\${active ? esc(bk.user) : '<span style="color:#6b7280">—</span>'}</td>
+                <td class="sys-mono">\${active ? fmtMs(rem) : '<span style="color:#22c55e">Free</span>'}</td>
+                <td>\${q.length > 0 ? q.length + ' waiting' : '<span style="color:#6b7280">Empty</span>'}</td>
+              </tr>\`;
+            }).join('')}
+          </tbody>
+        </table>\` : ''}
+
+        <!-- Interval warnings -->
+        <div class="sys-section-title" style="margin-top:24px;">⏱️ Studio Feature Poll Intervals</div>
+        <table class="sys-table" style="width:100%;">
+          <thead><tr><th>Source</th><th>Interval</th><th>Endpoint</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>CTL Lab State Poll</b></td>
+              <td class="sys-mono">15s</td>
+              <td class="sys-mono">/api/studio/ctl_lab_state</td>
+              <td><span class="sys-pill warn">⚠️ Aggressive — 4 req/min per open tab</span></td>
+            </tr>
+            <tr>
+              <td><b>CTL Config Poll</b></td>
+              <td class="sys-mono">30s</td>
+              <td class="sys-mono">/api/studio/ctl_lab_config</td>
+              <td><span class="sys-pill ok">✅ Acceptable</span></td>
+            </tr>
+            <tr>
+              <td><b>ODP Realtime (WebSocket)</b></td>
+              <td class="sys-mono">Event-driven</td>
+              <td class="sys-mono">supabase_realtime → daily_passwords</td>
+              <td><span class="sys-pill \${odpSev}">\${odpRt === 'SUBSCRIBED' ? '✅ Connected' : '⚠️ ' + odpRt}</span></td>
+            </tr>
+            <tr>
+              <td><b>ODP Poll Fallback</b></td>
+              <td class="sys-mono">15s</td>
+              <td class="sys-mono">/api/studio/daily_passwords</td>
+              <td><span class="sys-pill \${odpState && odpState.pollInterval ? 'warn' : 'ok'}">\${odpState && odpState.pollInterval ? '⚠️ Active (RT failed)' : '✅ Dormant (RT connected)'}</span></td>
+            </tr>
+            <tr>
+              <td><b>OnCall Tech</b></td>
+              <td class="sys-mono">Event-driven</td>
+              <td class="sys-mono">/api/studio/oncall_settings, /schedule</td>
+              <td><span class="sys-pill ok">✅ On-demand only</span></td>
+            </tr>
+            <tr>
+              <td><b>KB Sync</b></td>
+              <td class="sys-mono">Manual only</td>
+              <td class="sys-mono">/api/studio/kb_sync</td>
+              <td><span class="sys-pill ok">✅ On-demand only</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    \`;
+  }
+  // expose for self-refresh button
+  if (!window.Pages) window.Pages = {};
+  if (!window.Pages.system) window.Pages.system = {};
+  window.Pages.system._renderStudio = renderStudio;
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 🔍  AUTO BUG SCANNER
+  // ══════════════════════════════════════════════════════════════════════════
+  var _bugResults = null;
+  var _bugScanTs  = 0;
+
+  function _runBugScan() {
+    const issues = [];
+    const env = window.MUMS_ENV || {};
+    const now = Date.now();
+
+    function bug(id, severity, feature, title, description, recommendation, file) {
+      issues.push({ id, severity, feature, title, description, recommendation, file: file || '—' });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GROUP 1: REALTIME & WEBSOCKET
+    // ─────────────────────────────────────────────────────────────────────────
+    const syncMode = window.__mumsSyncMode || 'unknown';
+    if (syncMode === 'offline' || syncMode === 'unknown') {
+      bug('RT-001', 'critical', 'Realtime Sync', 'WebSocket Realtime OFFLINE',
+        'Supabase Realtime channel is not connected. Sync queue will accumulate and all collaborative features (schedules, mailbox, announcements) will stop updating in real-time for affected users.',
+        'Check SUPABASE_URL, SUPABASE_ANON_KEY in env vars. Verify Supabase project is not paused (free tier pauses after 1 week of inactivity). Check network tab for WebSocket 4xx errors.',
+        'realtime.js');
+    }
+
+    const rt = window.Realtime || {};
+    const queueStatus = typeof rt.queueStatus === 'function' ? rt.queueStatus() : [];
+    const critQueue = queueStatus.filter(i => i.tries >= 5);
+    if (critQueue.length > 0) {
+      bug('RT-002', 'critical', 'Sync Queue', 'Sync Queue Items Exceeding Retry Limit',
+        critQueue.length + ' sync queue item(s) have failed 5+ times: ' + critQueue.map(i => i.key).join(', ') + '. Data pushed by this user is not reaching the server.',
+        'Open Sync Queue tab → check error messages. Common causes: expired auth token, server returning 403 (RBAC), or network errors. Trigger a manual flush after refreshing the session.',
+        'realtime.js');
+    }
+
+    const hasQueueItems = queueStatus.filter(i => i.tries > 0).length;
+    if (hasQueueItems > 3 && syncMode !== 'offline') {
+      bug('RT-003', 'warning', 'Sync Queue', 'Multiple Pending Sync Items During Active Realtime',
+        hasQueueItems + ' item(s) pending in sync queue despite Realtime being connected. These should have been flushed on SUBSCRIBED event.',
+        'Force flush via Sync Queue tab → Retry. If issue persists, check that the \'subscribed\' event handler in realtime.js is calling flushQueue() correctly.',
+        'realtime.js');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GROUP 2: FREE TIER IO / POLLING RATES
+    // ─────────────────────────────────────────────────────────────────────────
+    const mailboxPollMs = env.MAILBOX_OVERRIDE_POLL_MS || 120000;
+    if (mailboxPollMs < 60000) {
+      bug('IO-001', 'critical', 'Free Tier IO', 'Mailbox Override Poll Too Aggressive',
+        'MAILBOX_OVERRIDE_POLL_MS = ' + fmtMs(mailboxPollMs) + '. At this rate: ' + Math.round(3600000/mailboxPollMs) + ' req/hr × 30 users = ' + Math.round(3600000/mailboxPollMs*30*8).toLocaleString() + ' req/day — this alone can exhaust the Cloudflare free tier.',
+        'Set MAILBOX_OVERRIDE_POLL_MS ≥ 120000 (120s) in Cloudflare Pages environment variables. The store.js idle-scaler will automatically slow it down further when no override is active.',
+        'env vars / store.js');
+    }
+
+    const presencePollMs = env.PRESENCE_POLL_MS || 120000;
+    if (presencePollMs < 45000) {
+      bug('IO-002', 'critical', 'Free Tier IO', 'Presence Heartbeat Too Frequent',
+        'PRESENCE_POLL_MS = ' + fmtMs(presencePollMs) + '. Heartbeats firing faster than 45s are unnecessary and burn free tier IO budget.',
+        'Set PRESENCE_POLL_MS ≥ 45000 in env vars. Supabase free tier presence TTL should be ≥120s to prevent users flashing offline.',
+        'env vars / presence_client.js');
+    }
+
+    const reconcileMs = env.SYNC_RECONCILE_MS || 180000;
+    if (reconcileMs < 90000) {
+      bug('IO-003', 'warning', 'Free Tier IO', 'Realtime Reconcile Interval Too Short',
+        'SYNC_RECONCILE_MS = ' + fmtMs(reconcileMs) + '. This safety-net pull runs while Realtime WebSocket is already connected. Firing faster than 90s wastes DB reads unnecessarily.',
+        'Set SYNC_RECONCILE_MS ≥ 90000 (90s). The WebSocket handles real-time events; this is only a missed-event safety net.',
+        'env vars / realtime.js');
+    }
+
+    // CTL poll is hardcoded 15s
+    const ctlItems = (() => { try { return JSON.parse(localStorage.getItem('mums_controller_lab_items_v1') || '[]'); } catch (_) { return []; } })();
+    if (ctlItems.length > 0) {
+      bug('IO-004', 'warning', 'CTL Lab / Free Tier', 'CTL Lab State Polling Too Frequent',
+        'CTL booking system polls /api/studio/ctl_lab_state every 15 seconds hardcoded. With ' + ctlItems.length + ' controller(s) and multiple users: ~240 req/hr per active user. On free tier this adds up quickly.',
+        'Consider increasing POLL_MS in ctl_booking.js from 15000 to 30000 when the Support Studio tab is open. Or migrate CTL state to Supabase Realtime postgres_changes subscription to eliminate polling.',
+        'features/ctl_booking.js:26');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GROUP 3: SUPABASE CLIENT HEALTH
+    // ─────────────────────────────────────────────────────────────────────────
+    const sbClient = window.__MUMS_SB_CLIENT;
+    if (!sbClient) {
+      bug('SB-001', 'critical', 'Supabase', 'Supabase Client Not Initialized',
+        '__MUMS_SB_CLIENT is null/undefined. This means auth session restore, realtime channels, and all server-side operations requiring user JWTs will fail silently.',
+        'Check supabase_loader.js → ensure /api/vendor/supabase loads correctly (should be HTTP 200, not 404). Check browser network tab for the SDK script request. The vendor proxy route must be registered in [[path]].js.',
+        'supabase_loader.js / functions/api/[[path]].js');
+    }
+
+    if (!env.SUPABASE_URL) {
+      bug('SB-002', 'critical', 'Supabase', 'SUPABASE_URL Not Set',
+        'SUPABASE_URL is missing from MUMS_ENV. All database operations, auth, realtime, and storage features will fail. This is typically a Cloudflare Pages environment variable misconfiguration.',
+        'Go to Cloudflare Pages → Settings → Environment Variables → Add SUPABASE_URL = your project URL (e.g. https://xxxx.supabase.co).',
+        'env vars');
+    }
+
+    if (!env.SUPABASE_ANON_KEY) {
+      bug('SB-003', 'critical', 'Supabase', 'SUPABASE_ANON_KEY Not Set',
+        'SUPABASE_ANON_KEY is missing. Anonymous/authenticated Supabase client calls will all return 401. Realtime websocket auth will fail.',
+        'Go to Cloudflare Pages → Settings → Environment Variables → Add SUPABASE_ANON_KEY from your Supabase project settings → API.',
+        'env vars');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GROUP 4: ODP (ONE DAY PASSWORD) REALTIME
+    // ─────────────────────────────────────────────────────────────────────────
+    const odpState = window._odpState || null;
+    if (odpState) {
+      if (odpState.pollInterval && !odpState.rtChannel) {
+        bug('ODP-001', 'warning', 'ODP / One Day Password', 'ODP Falling Back to Polling (Realtime Failed)',
+          'The ODP Supabase Realtime channel for daily_passwords failed to subscribe. A 15-second polling fallback is now active. Every user on Support Studio is making 4 extra API calls/min.',
+          'Check if daily_passwords table is added to supabase_realtime publication. Run: SELECT * FROM pg_publication_tables WHERE pubname=\'supabase_realtime\'. Also verify the ODP dedicated sbClient calls setAuth(token) after createClient().',
+          'features/odp.js');
+      }
+
+      if (!odpState.sbClient) {
+        bug('ODP-002', 'warning', 'ODP / One Day Password', 'ODP Supabase Client Not Created',
+          'ODP dedicated Supabase client (_odpState.sbClient) has not been instantiated. This means realtime subscription for daily_passwords was never attempted.',
+          'Verify the Supabase SDK loaded successfully (check window.supabase). The mums:supabase_ready event must fire on window (not document) for ODP to initialize.',
+          'features/odp.js:461');
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GROUP 5: CTL BOOKING LOGIC ISSUES
+    // ─────────────────────────────────────────────────────────────────────────
+    if (ctlItems.length > 0) {
+      const stateCache = (() => { try { return JSON.parse(localStorage.getItem('mums_ctl_lab_state_v1') || '{}'); } catch (_) { return {}; } })();
+      const bookings = stateCache.bookings || {};
+
+      // Check for expired bookings still in state
+      const expiredStuck = Object.entries(bookings).filter(([id, bk]) => bk && bk.endMs && bk.endMs < now && bk.endMs > now - 3600000);
+      if (expiredStuck.length > 0) {
+        bug('CTL-001', 'warning', 'CTL Lab', 'Expired Bookings Not Cleared from State Cache',
+          expiredStuck.length + ' booking(s) expired within the last hour but remain in local state cache: ' + expiredStuck.map(([id]) => id.slice(0,8)).join(', ') + '. This can cause stale "In Use" status displays for other users.',
+          'The timer expiry handler should call setBooking(id, null) and push to server. Check that the _syncTimers() function in ctl_booking.js is correctly deleting expired bookings from _stateCache.bookings and syncing to server.',
+          'features/ctl_booking.js');
+      }
+
+      // Check queue sanity - duplicate users
+      const queues = stateCache.queues || {};
+      Object.entries(queues).forEach(([ctlId, q]) => {
+        if (!Array.isArray(q)) return;
+        const users = q.map(e => String(e.user || '').toLowerCase());
+        const unique = new Set(users);
+        if (unique.size < users.length) {
+          bug('CTL-002', 'warning', 'CTL Lab', 'Duplicate User in Controller Queue',
+            'Controller ' + ctlId.slice(0,8) + ' has duplicate user entries in its queue. This causes the affected user to receive multiple "It\'s Your Turn" alerts.',
+            'Queue deduplication should run on every setQueue() call. Verify _deduplicateQueue() is called in ctl_booking.js. Also run server-side dedup in ctl_lab_state.js POST handler.',
+            'features/ctl_booking.js / server/routes/studio/ctl_lab_state.js');
+        }
+      });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GROUP 6: AUTH & SESSION
+    // ─────────────────────────────────────────────────────────────────────────
+    const session = (() => { try { return JSON.parse(localStorage.getItem('mums_supabase_session') || 'null'); } catch (_) { return null; } })();
+    if (!session) {
+      bug('AUTH-001', 'critical', 'Authentication', 'No Session Found in Storage',
+        'mums_supabase_session is missing from localStorage. All authenticated API calls will return 401. This user appears to be running without a valid session.',
+        'Sign out and sign back in. If the issue persists after login, check CloudAuth.signIn() and verify the session is being persisted to localStorage by cloud_auth.js.',
+        'cloud_auth.js');
+    } else {
+      const accessToken = session.access_token || (session.session && session.session.access_token);
+      if (accessToken) {
+        try {
+          const parts = accessToken.split('.');
+          const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+          const expiry = payload.exp * 1000;
+          if (expiry < now) {
+            bug('AUTH-002', 'critical', 'Authentication', 'Access Token Expired',
+              'JWT access token expired ' + fmtMs(now - expiry) + ' ago. All server API calls requiring authentication are failing with 401.',
+              'Trigger CloudAuth.refreshSession() from browser console, or sign out and sign back in. Check that the token refresh interval is running correctly in cloud_auth.js.',
+              'cloud_auth.js');
+          } else if (expiry - now < 600000) {
+            bug('AUTH-003', 'warning', 'Authentication', 'Access Token Expiring Soon',
+              'JWT access token expires in ' + fmtMs(expiry - now) + '. If the auto-refresh fails, users will experience sudden 401 errors across all features.',
+              'The token should auto-refresh via CloudAuth. Verify the mums:authtoken event is firing and realtime.js is reconnecting on token rotation.',
+              'cloud_auth.js');
+          }
+        } catch (_) {}
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GROUP 7: FEATURE MODULE LOADING
+    // ─────────────────────────────────────────────────────────────────────────
+    if (typeof window._sqbLoadSettings !== 'function') {
+      bug('MOD-001', 'warning', 'Studio QB', 'Studio QuickBase Module Not Loaded',
+        'window._sqbLoadSettings is not defined. The QuickBase_S settings panel may fail to populate when the user opens General Settings → Studio Quickbase Settings.',
+        'Check that support_studio.html correctly includes the <script> for the quickbase_s feature. Verify there are no JS errors blocking module initialization.',
+        'features/quickbase_s.js');
+    }
+
+    if (typeof window._kbLoadSettings !== 'function') {
+      bug('MOD-002', 'warning', 'Knowledge Base', 'KB Settings Module Not Loaded',
+        'window._kbLoadSettings is not defined. Clicking General Settings → Knowledge Base Sync will show an empty panel.',
+        'Check knowledge_base.js is included in support_studio.html and that no JS errors are preventing module initialization.',
+        'features/knowledge_base.js');
+    }
+
+    if (typeof window._ctlOpenBooking !== 'function') {
+      bug('MOD-003', 'critical', 'CTL Lab', 'CTL Booking Module Not Loaded',
+        'window._ctlOpenBooking is not defined. The Controller Testing Lab booking buttons will throw errors when clicked.',
+        'Verify features/ctl_booking.js is included in support_studio.html. Check for JS parse errors in the file (missing brackets, syntax issues).',
+        'features/ctl_booking.js');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GROUP 8: VENDOR SDK
+    // ─────────────────────────────────────────────────────────────────────────
+    if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+      bug('SDK-001', 'critical', 'Supabase SDK', 'Supabase SDK Not Loaded',
+        'window.supabase.createClient is not available. The ODP Realtime channel and any feature using supabase.createClient() will fail. This usually means /api/vendor/supabase returned 404.',
+        'Check Network tab for GET /api/vendor/supabase. It must return HTTP 200 with JavaScript content. Verify the route alias "vendor/supabase" (without .js) is registered in functions/api/[[path]].js.',
+        'supabase_loader.js / functions/api/[[path]].js');
+    }
+
+    _bugResults = issues;
+    _bugScanTs = Date.now();
+
+    // Update badge
+    const critCount = issues.filter(i => i.severity === 'critical').length;
+    const badge = root.querySelector('#bugBadge');
+    if (badge) {
+      if (critCount > 0) {
+        badge.style.display = 'inline-block';
+        badge.textContent = critCount + ' CRIT';
+        badge.style.background = '#ef4444';
+      } else {
+        const warnCount = issues.filter(i => i.severity === 'warning').length;
+        if (warnCount > 0) {
+          badge.style.display = 'inline-block';
+          badge.textContent = warnCount + ' WARN';
+          badge.style.background = '#f59e0b';
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+    }
+
+    return issues;
+  }
+
+  function renderBugScanner(forceRescan) {
+    const panel = root.querySelector('#tab-bugscanner');
+    if (!panel) return;
+
+    // Show loading state if no scan yet
+    if (!_bugResults || forceRescan) {
+      panel.innerHTML = \`<div style="padding:40px;text-align:center;">
+        <div style="font-size:32px;margin-bottom:12px;">🔍</div>
+        <div style="font-size:15px;font-weight:700;color:#f1f5f9;margin-bottom:6px;">Auto Bug Scanner</div>
+        <div style="font-size:12px;color:#6b7280;margin-bottom:24px;">Scans runtime state, env vars, timers, and feature modules for known bug patterns.</div>
+        <button class="sys-btn" onclick="window.__mums_runScan()">▶ Run Scan Now</button>
+      </div>\`;
+      window.__mums_runScan = function() {
+        const issues = _runBugScan();
+        renderBugScanner(false);
+      };
+      return;
+    }
+
+    const issues = _bugResults;
+    const crits   = issues.filter(i => i.severity === 'critical');
+    const warns    = issues.filter(i => i.severity === 'warning');
+    const infos    = issues.filter(i => i.severity === 'info');
+    const totalScore = crits.length * 10 + warns.length * 3 + infos.length;
+
+    const healthLabel = crits.length > 0 ? '🔴 CRITICAL' : warns.length > 0 ? '🟡 WARNING' : '🟢 ALL CLEAR';
+    const healthColor = crits.length > 0 ? '#ef4444' : warns.length > 0 ? '#f59e0b' : '#22c55e';
+
+    function issueCard(issue) {
+      const colors = { critical: '#ef4444', warning: '#f59e0b', info: '#3b82f6' };
+      const bg     = { critical: 'rgba(239,68,68,.06)', warning: 'rgba(245,158,11,.06)', info: 'rgba(59,130,246,.06)' };
+      const border = { critical: 'rgba(239,68,68,.25)', warning: 'rgba(245,158,11,.2)', info: 'rgba(59,130,246,.2)' };
+      const icon   = { critical: '🔴', warning: '🟡', info: 'ℹ️' };
+      const label  = { critical: 'CRITICAL', warning: 'WARNING', info: 'INFO' };
+      return \`
+        <div style="background:\${bg[issue.severity]};border:1px solid \${border[issue.severity]};border-radius:12px;padding:16px 18px;margin-bottom:10px;">
+          <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px;">
+            <span style="font-size:18px;flex-shrink:0;">\${icon[issue.severity]}</span>
+            <div style="flex:1;">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+                <span style="font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:4px;background:\${colors[issue.severity]}22;border:1px solid \${colors[issue.severity]}44;color:\${colors[issue.severity]};">\${label[issue.severity]}</span>
+                <span style="font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#94a3b8;">\${esc(issue.feature)}</span>
+                <span style="font-size:9px;font-family:monospace;color:#6b7280;">\${esc(issue.id)}</span>
+              </div>
+              <div style="font-size:13px;font-weight:800;color:#f1f5f9;margin-bottom:6px;">\${esc(issue.title)}</div>
+              <div style="font-size:11px;color:#94a3b8;line-height:1.65;margin-bottom:10px;">\${esc(issue.description)}</div>
+              <div style="background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.18);border-radius:8px;padding:10px 12px;">
+                <div style="font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#4ade80;margin-bottom:4px;">💡 FIX RECOMMENDATION</div>
+                <div style="font-size:11px;color:#86efac;line-height:1.65;">\${esc(issue.recommendation)}</div>
+              </div>
+            </div>
+            <div style="font-size:9px;font-family:monospace;color:#374151;flex-shrink:0;text-align:right;line-height:1.8;">\${esc(issue.file)}</div>
+          </div>
+        </div>\`;
+    }
+
+    panel.innerHTML = \`
+      <div>
+        <div class="sys-refresh-row">
+          <div class="sys-section-title" style="margin:0;">🔍 Auto Bug Scanner</div>
+          <button class="sys-btn" onclick="window.__mums_runScan()">🔄 Re-Scan</button>
+          <span class="sys-refresh-ts">Last scan: \${new Date(_bugScanTs).toLocaleTimeString()}</span>
+        </div>
+
+        <!-- Summary -->
+        <div class="sys-grid" style="margin-bottom:20px;">
+          <div class="sys-card" style="border-color:\${healthColor}33;">
+            <div class="sys-card-label">System Health</div>
+            <div class="sys-card-val" style="font-size:20px;color:\${healthColor};">\${healthLabel}</div>
+            <div class="sys-card-sub">Based on \${issues.length} check(s)</div>
+          </div>
+          <div class="sys-card \${crits.length > 0 ? 'crit' : 'ok'}">
+            <div class="sys-card-label">🔴 Critical Issues</div>
+            <div class="sys-card-val">\${crits.length}</div>
+            <div class="sys-card-sub">Require immediate action</div>
+          </div>
+          <div class="sys-card \${warns.length > 0 ? 'warn' : 'ok'}">
+            <div class="sys-card-label">🟡 Warnings</div>
+            <div class="sys-card-val">\${warns.length}</div>
+            <div class="sys-card-sub">Should be addressed soon</div>
+          </div>
+          <div class="sys-card ok">
+            <div class="sys-card-label">✅ Checks Passed</div>
+            <div class="sys-card-val">\${issues.length === 0 ? '—' : (issues.length - crits.length - warns.length - infos.length)}</div>
+            <div class="sys-card-sub">No issues detected</div>
+          </div>
+        </div>
+
+        \${crits.length === 0 && warns.length === 0 ? \`
+          <div class="sys-alert ok">
+            <span>✅</span>
+            <span>All scanned patterns look healthy. No critical or warning issues detected. Run scan again after any deployment or config change.</span>
+          </div>
+        \` : ''}
+
+        \${crits.length > 0 ? \`
+          <div class="sys-section-title">🔴 Critical Issues — Immediate Action Required</div>
+          \${crits.map(issueCard).join('')}
+        \` : ''}
+
+        \${warns.length > 0 ? \`
+          <div class="sys-section-title">🟡 Warnings — Should Be Fixed Soon</div>
+          \${warns.map(issueCard).join('')}
+        \` : ''}
+
+        \${infos.length > 0 ? \`
+          <div class="sys-section-title">ℹ️ Info</div>
+          \${infos.map(issueCard).join('')}
+        \` : ''}
+
+        <!-- Scan coverage -->
+        <div class="sys-section-title" style="margin-top:24px;">📋 Scan Coverage</div>
+        <table class="sys-table" style="width:100%;">
+          <thead><tr><th>Check ID</th><th>Category</th><th>What It Checks</th></tr></thead>
+          <tbody>
+            <tr><td class="sys-mono">RT-001…003</td><td>Realtime Sync</td><td>WebSocket connection, sync queue depth, retry failures</td></tr>
+            <tr><td class="sys-mono">IO-001…004</td><td>Free Tier IO</td><td>Poll interval aggressiveness vs Cloudflare/Supabase limits</td></tr>
+            <tr><td class="sys-mono">SB-001…003</td><td>Supabase Config</td><td>Client initialization, URL/key presence</td></tr>
+            <tr><td class="sys-mono">ODP-001…002</td><td>One Day Password</td><td>Realtime channel status, SDK load, poll fallback detection</td></tr>
+            <tr><td class="sys-mono">CTL-001…002</td><td>CTL Booking</td><td>Expired booking cleanup, queue duplicate detection</td></tr>
+            <tr><td class="sys-mono">AUTH-001…003</td><td>Authentication</td><td>Session existence, JWT expiry, token rotation</td></tr>
+            <tr><td class="sys-mono">MOD-001…003</td><td>Module Loading</td><td>Critical window.* function registrations</td></tr>
+            <tr><td class="sys-mono">SDK-001</td><td>Vendor SDK</td><td>Supabase UMD bundle availability</td></tr>
+          </tbody>
+        </table>
+        <div style="margin-top:12px;font-size:10px;color:#374151;font-style:italic;">
+          Scan is client-side only — reads runtime window state, localStorage, and MUMS_ENV. Does not make any API calls. Safe to run in production.
+        </div>
+      </div>
+    \`;
+
+    window.__mums_runScan = function() {
+      _runBugScan();
+      renderBugScanner(false);
+    };
+  }
+
   // ── Active tab render dispatcher ──────────────────────────────────────────
   function renderActiveTab(force) {
     switch (activeTab) {
@@ -950,11 +1614,15 @@
       case 'supabase':   renderSupabase(); break;
       case 'cloudflare': renderCloudflare(); break;
       case 'queue':      renderQueue(); break;
+    case 'studio':     renderStudio(); break;
+    case 'bugscanner': renderBugScanner(); break;
     }
   }
 
   // ── Auto-refresh every 30s ────────────────────────────────────────────────
   renderOverview();
+  // Auto-run bug scan after 2s so feature modules have time to initialize
+  setTimeout(function() { try { _runBugScan(); } catch(_) {} }, 2000);
   const _autoRefresh = setInterval(() => { try { renderActiveTab(); } catch (_) { } }, 30000);
   onCleanup(() => clearInterval(_autoRefresh));
 });
