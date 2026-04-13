@@ -2904,6 +2904,8 @@ function updateClocksPreviewTimes(){
       if(rp === 'distribution/monitoring') return 'distribution_monitoring';
       // System sub-pages all resolve to main 'system' page (tab driven internally)
       if(rp.startsWith('system/') || rp === 'system') return 'system';
+      // Backward compatibility for legacy System submenu URLs like /system_overview
+      if(rp.startsWith('system_')) return 'system';
       return String(routePath||'').split('/')[0] || '';
     }catch(_){ return ''; }
   }
@@ -2912,7 +2914,10 @@ function updateClocksPreviewTimes(){
     try{
       const id = String(pageId||'').trim();
       if(id === 'distribution_monitoring') return '/distribution/monitoring';
-      if(id.startsWith('system_')) return '/system';
+      if(id.startsWith('system_')){
+        const tab = id.slice('system_'.length).trim().toLowerCase();
+        return tab ? ('/system/' + tab) : '/system';
+      }
       return '/' + id;
     }catch(_){ return '/' + String(pageId||''); }
   }
@@ -2981,8 +2986,12 @@ function updateClocksPreviewTimes(){
 
   function navigateToPageId(pageId, opts){
     const pages = window.Pages || {};
-    let id = String(pageId||'').trim();
-    if(!id || !pages[id]) id = pages['dashboard'] ? 'dashboard' : (Object.keys(pages)[0] || 'dashboard');
+    const requestedId = String(pageId||'').trim();
+    let id = requestedId;
+    if(!id || !pages[id]){
+      if(id.startsWith('system_') && pages['system']) id = 'system';
+      else id = pages['dashboard'] ? 'dashboard' : (Object.keys(pages)[0] || 'dashboard');
+    }
 
     const proto = String(window.location.protocol||'');
     if(proto === 'file:'){
@@ -2991,7 +3000,7 @@ function updateClocksPreviewTimes(){
     }
 
     try{
-      const url = _routePathForPageId(id);
+      const url = _routePathForPageId(requestedId || id);
       const currentPath = _normalizeRoutePath(window.location.pathname||'/');
       const targetPath = _normalizeRoutePath(url);
       if(currentPath === targetPath && NAV_RENDER.lastPageId === id){
