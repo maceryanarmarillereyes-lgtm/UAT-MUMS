@@ -922,7 +922,9 @@
                 <div class="hp-body"><div class="hp-empty"><span style="font-size:9px;opacity:.5;">Available slot</span></div></div>
               </div>
 
-              <!-- Controller Testing Lab — 1 col, empty placeholder -->
+              <!-- Controller Testing Lab — NEW full-width booking panel (span 4) -->
+              <!-- Old left-side hp-ctl-col layout removed; ctl_booking.js exclusively
+                   renders .ctl-card tiles inside #hp-ctl-list. Visible to all users. -->
               <div class="hp-card" id="hp-controller-testing-lab-card">
                 <div class="hp-card-head">
                   <div class="hp-icon" style="background:rgba(162,93,220,.15);border:1px solid rgba(162,93,220,.25);color:var(--ss-purple);"><i class="fas fa-flask"></i></div>
@@ -3486,6 +3488,10 @@
 <!-- Legacy wrapper shim -->
 <div id="ss-cache-banner" style="display:none!important;"></div>
 
+  <!-- CTL_NEW_LAYOUT_FLAG: must be set BEFORE core_ui.js runs its synchronous
+       renderAll() call so the old hp-ctl-col renderMainList is never invoked.
+       ctl_booking.js owns #hp-ctl-list rendering exclusively. -->
+  <script>window._ctlNewLayoutActive = true;</script>
   <script src="/js/support_studio/core_ui.js"></script>
   <script src="/js/support_studio/settings_manager.js"></script>
   <script src="/js/support_studio/features/catalog.js"></script>

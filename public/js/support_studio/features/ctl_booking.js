@@ -8,6 +8,12 @@
 (function () {
   'use strict';
 
+  // ── NEW LAYOUT FLAG ───────────────────────────────────────────────────────
+  // Signal to core_ui.js renderAll() that we own #hp-ctl-list rendering.
+  // Must be set BEFORE any DOMContentLoaded so the flag is up when core_ui
+  // fires its own renderAll() on startup.
+  window._ctlNewLayoutActive = true;
+
   // ── STATE ─────────────────────────────────────────────────────────────────
   var S = {
     items: [], configRev: '',
@@ -197,6 +203,9 @@
         ? '<button class="ctl-card-btn ctl-card-btn--queue" onclick="window._ctlOpenQueue(\'' + ctl.id + '\')"><i class="fas fa-list-alt"></i> Join Queue</button>'
         : '<button class="ctl-card-btn ctl-card-btn--book" onclick="window._ctlOpenBooking(\'' + ctl.id + '\')"><i class="fas fa-bolt"></i> Book Now</button>';
 
+      // Backup Log button — migrated from old layout (core_ui.js hp-ctl-col)
+      var backupLogBtn = '<button class="ctl-card-btn ctl-card-btn--log" onclick="event.stopPropagation();window._ctlOpenBackupLog(\'' + ctl.id + '\')" title="View Backup File Log"><i class="fas fa-folder-open"></i><span class="ctl-card-btn-log-label">Backup Log</span></button>';
+
       var html = '<div class="ctl-card" data-ctl-card="' + ctl.id + '">' +
         '<div class="ctl-card-top">' +
         '<div class="ctl-card-img-wrap"><img src="' + img + '" class="ctl-card-img" alt="' + _esc(ctl.type) + '"/>' +
@@ -206,7 +215,7 @@
         '<div class="ctl-card-status" style="color:' + dot + ';">' + _esc(ctl.status) + '</div></div>' +
         '<button class="ctl-card-gear" onclick="window._ctlOpenSettings(\'' + ctl.id + '\')" title="Settings"><i class="fas fa-cog"></i></button>' +
         '</div>' + bkHtml +
-        '<div class="ctl-card-foot">' + qBadge + actionBtn + '</div></div>';
+        '<div class="ctl-card-foot">' + qBadge + actionBtn + backupLogBtn + '</div></div>';
 
       var existing = list.querySelector('[data-ctl-card="' + ctl.id + '"]');
       if (existing) {
@@ -601,8 +610,8 @@
       '@keyframes ctlPulse{0%,100%{opacity:.4;transform:scale(1)}50%{opacity:.8;transform:scale(1.04)}}',
       '@keyframes ctlSpin{to{transform:rotate(360deg)}}',
 
-      /* Cards */
-      '.ctl-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px;margin-bottom:8px;transition:border-color .2s;}',
+      /* Cards — fixed-width tiles that flow horizontally */
+      '.ctl-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px;transition:border-color .2s;flex:1 1 220px;min-width:200px;max-width:280px;display:flex;flex-direction:column;box-sizing:border-box;}',
       '.ctl-card:hover{border-color:rgba(162,93,220,.3);}',
       '.ctl-card-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;}',
       '.ctl-card-img-wrap{position:relative;flex-shrink:0;}',
@@ -625,6 +634,14 @@
       '.ctl-card-btn--book:hover{background:rgba(162,93,220,.24);}',
       '.ctl-card-btn--queue{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3);color:#fbbf24;}',
       '.ctl-card-btn--queue:hover{background:rgba(245,158,11,.18);}',
+
+      /* Backup Log button — migrated from old layout */
+      '.ctl-card-btn--log{background:rgba(96,165,250,.08);border-color:rgba(96,165,250,.25);color:#60a5fa;flex:0 0 auto;padding:7px 9px;gap:4px;}',
+      '.ctl-card-btn--log:hover{background:rgba(96,165,250,.16);border-color:rgba(96,165,250,.45);}',
+      '.ctl-card-btn-log-label{font-size:9px;}',
+
+      /* ── hp-ctl-list container: horizontal row-wrap for new card tiles ── */
+      '#hp-ctl-list.hp-ctl-list{flex-direction:row !important;flex-wrap:wrap !important;overflow-x:hidden !important;overflow-y:auto !important;gap:10px !important;padding:10px !important;align-items:flex-start !important;align-content:flex-start !important;}',
 
       /* Duration chips */
       '.hp-ctl-dur-chip{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:7px 10px;font-size:11px;color:rgba(255,255,255,.55);cursor:pointer;font-family:inherit;transition:.2s;font-weight:600;}',

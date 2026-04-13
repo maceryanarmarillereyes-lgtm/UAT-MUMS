@@ -603,21 +603,23 @@
       min-height: 0;
     }
     /* BUG 2 FIX: CTL card — cap height so it never overflows the viewport bottom.
-       The hp-ctl-list inside uses overflow-x:auto so controllers stay scrollable. */
+       The hp-ctl-list inside uses overflow-y:auto so controllers stay scrollable.
+       NEW LAYOUT: Expanded to full width (span 4) — old left-side panel removed. */
     #hp-controller-testing-lab-card {
-      grid-column: span 3;
+      grid-column: span 4;
       max-height: none;
       display: flex;
       flex-direction: column;
     }
     #hp-controller-testing-lab-card .hp-body {
       flex: 1;
-      min-height: 0;
+      min-height: 180px;
+      max-height: 340px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
     }
-    #hp-connect-credential-card { grid-column: span 1; }
+    #hp-connect-credential-card { grid-column: span 2; }
 
     .hp-apps-manage-btn {
       margin-left: auto;
@@ -751,20 +753,23 @@
       min-height: 0;
       min-width: 0;
       display: flex;
+      /* NEW LAYOUT: horizontal row with wrapping for side-by-side controller cards.
+         Each ctl-card auto-sizes to fill available width. Old row-column layout retired. */
       flex-direction: row;
-      flex-wrap: nowrap;
-      align-items: stretch;
-      gap: 0;
-      overflow-x: auto;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      align-content: flex-start;
+      gap: 10px;
+      overflow-x: hidden;
       overflow-y: auto;
       background: transparent;
       border: none;
       border-radius: 0;
-      padding-bottom: 0;
+      padding: 10px;
       scrollbar-width: thin;
       scrollbar-color: rgba(255,255,255,.12) transparent;
     }
-    .hp-ctl-list::-webkit-scrollbar { height: 3px; }
+    .hp-ctl-list::-webkit-scrollbar { width: 3px; }
     .hp-ctl-list::-webkit-scrollbar-thumb { background: rgba(162,93,220,.3); border-radius: 99px; }
 
     /* ── Empty state ── */
@@ -4739,10 +4744,15 @@
 
     /* ── Responsive hardening: keep Controller Lab actions visible on small screens ── */
     @media (max-width: 1366px), (max-height: 900px) {
+      /* NEW LAYOUT: row-wrap stays intact; cards compress to min-width */
       .hp-ctl-list {
         overflow-y: auto;
+        overflow-x: hidden;
+        flex-direction: row;
+        flex-wrap: wrap;
       }
 
+      /* OLD hp-ctl-col styles kept for graceful fallback (should never render) */
       .hp-ctl-col {
         padding: 10px 8px 8px;
         gap: 6px;

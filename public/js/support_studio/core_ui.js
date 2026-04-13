@@ -1203,7 +1203,13 @@
     function renderAll() {
       var items = getItems();
       renderChipRow(items);
-      renderMainList(items);
+      // NEW LAYOUT GATE: ctl_booking.js sets window._ctlNewLayoutActive = true
+      // and exclusively owns #hp-ctl-list rendering via _renderCards().
+      // Do NOT call renderMainList when the new layout is active — it would
+      // overwrite the new card-based UI with the old hp-ctl-col columns.
+      if (!window._ctlNewLayoutActive) {
+        renderMainList(items);
+      }
     }
 
     function addController() {
