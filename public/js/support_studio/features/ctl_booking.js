@@ -23,7 +23,7 @@
     alarmAudio: null, alarmPlaying: false,
   };
 
-  var POLL_MS   = 15000;
+  var POLL_MS   = 30000; // PERF FIX: Raised from 15s → 30s (halves CTL lab req/day from 57,600 → 28,800)
   var SP_URL    = 'https://mycopeland.sharepoint.com/sites/AdvanceServices/Shared%20Documents/Forms/AllItems.aspx';
   var IMGS = {
     'E2':              '/Widget%20Images/E2_Widget.png',

@@ -190,10 +190,10 @@
       {
         name: 'CTL Lab State Poll',
         file: 'features/ctl_booking.js',
-        interval: 15000,
+        interval: 30000, // PERF FIX: Raised from 15s → 30s
         endpoint: '/api/studio/ctl_lab_state',
         method: 'GET',
-        note: 'Polls shared booking/queue state while Support Studio is open. 15s is aggressive for free tier — active per-tab.',
+        note: 'Polls shared booking/queue state while Support Studio is open. Raised from 15s to 30s to reduce free tier impact.',
         critical: false,
         warn: true,
       },
@@ -347,7 +347,7 @@
         { label: 'Realtime Reconcile', perHr: reconcPerHr, interval: fmtMs(reconcMs) },
         { label: 'QuickBase Poll', perHr: qbPerHr, interval: '5m' },
         { label: 'Auth/Token Refresh', perHr: authPerHr, interval: 'event' },
-        { label: 'CTL Lab State (Studio)', perHr: 240, interval: '15s', note: 'Active per-tab when Support Studio open' },
+        { label: 'CTL Lab State (Studio)', perHr: 120, interval: '30s', note: 'FIXED: was 15s (240/hr) → now 30s (120/hr). Active per-tab when Support Studio open' },
         { label: 'CTL Lab Config (Studio)', perHr: 120, interval: '30s', note: 'Active per-tab when Support Studio open' },
       ]
     };
@@ -425,6 +425,7 @@
       <h1>System Monitor</h1>
       <span class="sys-badge">SUPER ADMIN</span>
       <div style="flex:1"></div>
+      <button class="sys-btn ghost" id="sysExportBtn" style="margin-right:6px">📥 Export CSV</button>
       <button class="sys-btn ghost" id="sysRefreshBtn">🔄 Refresh All</button>
     </div>
 
@@ -455,13 +456,15 @@
 
   // ── Tab switching ─────────────────────────────────────────────────────────
   const TAB_FROM_ROUTE = {
-    overview: 'overview',
-    requests: 'requests',
-    realtime: 'realtime',
-    timers: 'timers',
-    supabase: 'supabase',
+    overview:   'overview',
+    requests:   'requests',
+    realtime:   'realtime',
+    timers:     'timers',
+    supabase:   'supabase',
     cloudflare: 'cloudflare',
-    queue: 'queue'
+    queue:      'queue',
+    studio:     'studio',      // FIX: was missing — caused Studio Features tab to always show overview
+    bugscanner: 'bugscanner'   // FIX: was missing — caused Auto Bug Scan tab to always show overview
   };
   function tabFromRoute(){
     try{
@@ -499,6 +502,155 @@
   });
 
   root.querySelector('#sysRefreshBtn').addEventListener('click', () => renderActiveTab(true));
+
+  // ── Export CSV ────────────────────────────────────────────────────────────
+  function exportCSV() {
+    const rows = [];
+    const now = new Date().toISOString();
+
+    // Header
+    rows.push(['MUMS System Monitor — CRITICAL & HIGH Export', '', '', '', '', '', '', '']);
+    rows.push(['Generated', now, '', '', '', '', '', '']);
+    rows.push(['', '', '', '', '', '', '', '']);
+    rows.push(['Category', 'ID / Name', 'Severity', 'Current Value', 'Req/Hr', 'Req/Day (30 users)', 'Recommended Fix', 'File / Notes']);
+
+    // ── Section 1: Timer / Poll Intervals ────────────────────────────────
+    const timers = getTimerInventory();
+    const env = window.MUMS_ENV || {};
+    timers.forEach((t, i) => {
+      const isNetworkCall = !t.endpoint.startsWith('(');
+      const perHr = isNetworkCall ? Math.round(3600 / (t.interval / 1000)) : 0;
+      const reqDay = perHr * 8 * 30;
+      const isCrit = t.critical || (isNetworkCall && perHr >= 60);
+      const isHigh = !isCrit && isNetworkCall && perHr >= 30;
+      if (!isCrit && !isHigh) return;
+      const sev = isCrit ? 'CRITICAL' : 'HIGH';
+      const rec = t.critical
+        ? `Raise interval to ≥120s (currently ${fmtMs(t.interval)})`
+        : `Consider raising interval; current ${fmtMs(t.interval)} generates ${perHr} req/hr`;
+      rows.push([
+        'Timer / Poll',
+        t.name,
+        sev,
+        fmtMs(t.interval),
+        perHr > 0 ? perHr : '—',
+        reqDay > 0 ? reqDay : '—',
+        rec,
+        t.file
+      ]);
+    });
+
+    // ── Section 2: Free Tier Estimate ────────────────────────────────────
+    const est = calcEstimatedReqPerDay();
+    const cfPct = Math.min(100, Math.round((est.totalPerDay / 100000) * 100));
+    if (cfPct >= 60) {
+      rows.push([
+        'Free Tier — Cloudflare',
+        'Total Estimated Req/Day',
+        cfPct >= 85 ? 'CRITICAL' : 'HIGH',
+        `${fmt(est.totalPerDay)} / 100,000`,
+        est.perUserHr,
+        est.totalPerDay,
+        'Reduce poll intervals. CTL Lab State poll (15s) alone adds 57,600 req/day.',
+        'env_runtime.js / ctl_booking.js'
+      ]);
+    }
+    est.breakdown.forEach(b => {
+      const reqDay = b.perHr * 8 * 30;
+      const isCrit = b.perHr >= 60;
+      const isHigh = !isCrit && b.perHr >= 30;
+      if (!isCrit && !isHigh) return;
+      rows.push([
+        'Free Tier — Breakdown',
+        b.label,
+        isCrit ? 'CRITICAL' : 'HIGH',
+        b.interval,
+        b.perHr,
+        reqDay,
+        `Reduce poll interval. Current rate: ${b.perHr} req/hr × 8hr × 30 users = ${fmt(reqDay)}/day`,
+        b.note || 'env_runtime.js'
+      ]);
+    });
+
+    // ── Section 3: Bug Scan Issues ───────────────────────────────────────
+    const bugs = _bugResults || [];
+    bugs.forEach(issue => {
+      const sev = issue.severity === 'critical' ? 'CRITICAL' : issue.severity === 'warning' ? 'HIGH' : null;
+      if (!sev) return;
+      rows.push([
+        `Bug Scan — ${issue.feature}`,
+        `[${issue.id}] ${issue.title}`,
+        sev,
+        'Runtime State',
+        '—',
+        '—',
+        issue.recommendation.replace(/\n/g, ' '),
+        issue.file
+      ]);
+    });
+
+    // ── Section 4: Realtime health ───────────────────────────────────────
+    const rt = getRealtimeHealth();
+    if (rt.syncMode !== 'realtime' && rt.syncMode !== 'unknown') {
+      rows.push([
+        'Realtime Sync',
+        'WebSocket Status',
+        'HIGH',
+        rt.syncMode.toUpperCase(),
+        '—',
+        '—',
+        'Offline fallback poll (45s) is now active. Verify Supabase credentials.',
+        'realtime.js'
+      ]);
+    }
+    if (rt.queueErrors > 0) {
+      rows.push([
+        'Sync Queue',
+        'Items with Errors',
+        'HIGH',
+        `${rt.queueErrors} item(s)`,
+        '—',
+        '—',
+        'Open Sync Queue tab → flush queue. Check for expired tokens or 403 errors.',
+        'realtime.js'
+      ]);
+    }
+
+    // Build CSV string
+    const escape = v => {
+      const s = String(v == null ? '' : v);
+      return (s.includes(',') || s.includes('"') || s.includes('\n'))
+        ? '"' + s.replace(/"/g, '""') + '"'
+        : s;
+    };
+    const csv = rows.map(r => r.map(escape).join(',')).join('\r\n');
+
+    // Download
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `MUMS_System_Issues_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    // Toast feedback
+    try {
+      if (window.UI && UI.toast) UI.toast('📥 CSV exported — check your Downloads folder.', 'success');
+    } catch(_) {}
+  }
+
+  root.querySelector('#sysExportBtn').addEventListener('click', () => {
+    try {
+      // Make sure bug scan has run first
+      if (!_bugResults) _runBugScan();
+      exportCSV();
+    } catch(e) {
+      alert('Export failed: ' + e.message);
+    }
+  });
 
   // ── Render: Overview ──────────────────────────────────────────────────────
   function renderOverview() {
@@ -1620,8 +1772,12 @@
       case 'supabase':   renderSupabase(); break;
       case 'cloudflare': renderCloudflare(); break;
       case 'queue':      renderQueue(); break;
-    case 'studio':     renderStudio(); break;
-    case 'bugscanner': renderBugScanner(); break;
+      case 'studio':     renderStudio(); break;
+      case 'bugscanner':
+        // FIX: forward force so Refresh All triggers a full rescan on this tab
+        if (force) { _runBugScan(); }
+        renderBugScanner(false);
+        break;
     }
   }
 
