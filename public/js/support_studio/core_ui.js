@@ -1798,27 +1798,9 @@
     });
   }
 
-  /* BUG 8 FIX: adaptive poll — faster when visible, slower when hidden */
-  function _startPoll() {
-    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
-    var interval = (_pushBackoffUntil && Date.now() < _pushBackoffUntil) ? 30000 : _pollInterval;
-    _pollTimer = setInterval(function () {
-      // During backoff, use a slower poll to let the server breathe
-      if (_pushBackoffUntil && Date.now() < _pushBackoffUntil) {
-        _startPoll(); // reschedule at 30s
-        return;
-      }
-      _loadSharedStateFromServer(function () {
-        _ctlSweepQueueTimeouts();
-        if (window._ctlRenderAll) window._ctlRenderAll();
-      });
-    }, _pollInterval);
-  }
-  document.addEventListener('visibilitychange', function () {
-    _pollInterval = document.hidden ? 30000 : 8000;
-    _startPoll();
-  });
-  _startPoll();
+
+
+
 
   function _broadcast(msg) {
     try { if (_channel) _channel.postMessage(msg); } catch (_) {}

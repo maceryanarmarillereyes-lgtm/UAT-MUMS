@@ -138,16 +138,35 @@ async function serviceFetch(path, opts) {
  * - serviceSelect('table', 'select=*&id=eq.1')
  * - serviceSelect('/rest/v1/table?select=*')  // legacy path form
  */
+const _serviceSelectCache = new Map();
+const SERVICE_SELECT_CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
 async function serviceSelect(tableOrPath, queryMaybe) {
   const base = supabaseUrl();
   if (!base) requireEnv('SUPABASE_URL');
 
-  const a = String(tableOrPath || '');
+  const a = String(tableOrPath || '').trim();
   if (a.startsWith('/')) {
     return serviceFetch(a, { method: 'GET' });
   }
   const table = a;
   const query = String(queryMaybe || 'select=*');
+
+  // Only cache mums_documents for now
+  if (table === 'mums_documents') {
+    const cacheKey = `${table}:${query}`;
+    const cached = _serviceSelectCache.get(cacheKey);
+    if (cached && cached.exp > Date.now()) {
+      return cached.value;
+    }
+
+    const out = await fetchJson(`${base}/rest/v1/${table}?${query}`, { headers: serviceHeaders() });
+    if (out.ok) {
+      _serviceSelectCache.set(cacheKey, { value: out, exp: Date.now() + SERVICE_SELECT_CACHE_TTL_MS });
+    }
+    return out;
+  }
+
   const url = `${base}/rest/v1/${table}?${query}`;
   return fetchJson(url, { headers: serviceHeaders() });
 }

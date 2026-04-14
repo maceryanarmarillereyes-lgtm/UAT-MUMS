@@ -193,14 +193,26 @@ module.exports = async (req, res) => {
 
     // ── GET ──────────────────────────────────────────────────────────────────
     if (req.method === 'GET') {
+      const ifNoneMatch = req.headers['if-none-match'];
+
       const current = await readStateDoc();
       if (!current.ok) return sendJson(res, 500, { ok: false, error: current.error });
+
+      const updatedAt = current.updatedAt;
+      if (updatedAt && ifNoneMatch === `"${updatedAt}"`) {
+        res.statusCode = 304;
+        res.setHeader('Cache-Control', 'no-store');
+        res.end();
+        return;
+      }
+
+      res.setHeader('ETag', `"${updatedAt}"`);
       return sendJson(res, 200, {
         ok: true,
         bookings:     current.state.bookings,
         queues:       current.state.queues,
         participants: current.state.participants,
-        updatedAt:    current.updatedAt,
+        updatedAt:    updatedAt,
       });
     }
 

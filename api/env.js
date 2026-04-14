@@ -36,11 +36,11 @@ module.exports = async (_req, res) => {
       //   QB Refresh    300s: ~1.36 GB   (50 KB, ~33% of users on QB page)
       //   ─────────────────────────────────────────
       //   TOTAL:               ~3.21 GB  ✅ fits with 1.79 GB buffer
-      PRESENCE_TTL_SECONDS: Number(process.env.PRESENCE_TTL_SECONDS || 360),
-      PRESENCE_POLL_MS: Number(process.env.PRESENCE_POLL_MS || 45000),
-      PRESENCE_LIST_POLL_MS: Number(process.env.PRESENCE_LIST_POLL_MS || 90000),
-      SYNC_RECONCILE_MS: Number(process.env.SYNC_RECONCILE_MS || 90000),
-      MAILBOX_OVERRIDE_POLL_MS: Number(env.MAILBOX_OVERRIDE_POLL_MS || 60000)  /* FREE TIER: active=60s → idle=360s (was 10s → 60s) */,
+      PRESENCE_TTL_SECONDS: Number(process.env.PRESENCE_TTL_SECONDS || 600),
+      PRESENCE_POLL_MS: Number(process.env.PRESENCE_POLL_MS || 120000),
+      PRESENCE_LIST_POLL_MS: Number(process.env.PRESENCE_LIST_POLL_MS || 300000),
+      SYNC_RECONCILE_MS: Number(process.env.SYNC_RECONCILE_MS || 180000),
+      MAILBOX_OVERRIDE_POLL_MS: Number(process.env.MAILBOX_OVERRIDE_POLL_MS || 120000)  /* FREE TIER: active=120s → idle=720s (was 60s → 360s) */,
       // ── REALTIME KILL SWITCH (emergency use only, defaults ON):
       // Set SYNC_ENABLE_SUPABASE_REALTIME=false in Vercel/Cloudflare env ONLY
       // if Disk IO is critically exhausted and you need immediate relief.

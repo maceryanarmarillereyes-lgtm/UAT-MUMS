@@ -10,11 +10,11 @@ export async function onRequest(context) {
       SUPABASE_URL: env.SUPABASE_URL || '',
       SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY || '',
       USERNAME_EMAIL_DOMAIN: env.USERNAME_EMAIL_DOMAIN || 'mums.local',
-      PRESENCE_TTL_SECONDS: Number(env.PRESENCE_TTL_SECONDS || 360),
-      PRESENCE_POLL_MS: Number(env.PRESENCE_POLL_MS || 45000),
-      PRESENCE_LIST_POLL_MS: Number(env.PRESENCE_LIST_POLL_MS || 90000),
-      SYNC_RECONCILE_MS: Number(env.SYNC_RECONCILE_MS || 90000),
-      MAILBOX_OVERRIDE_POLL_MS: Number(env.MAILBOX_OVERRIDE_POLL_MS || 60000)  /* FREE TIER: active=60s → idle=360s (was 10s → 60s) */,
+      PRESENCE_TTL_SECONDS: Number(env.PRESENCE_TTL_SECONDS || 600),
+      PRESENCE_POLL_MS: Number(env.PRESENCE_POLL_MS || 120000),
+      PRESENCE_LIST_POLL_MS: Number(env.PRESENCE_LIST_POLL_MS || 300000),
+      SYNC_RECONCILE_MS: Number(env.SYNC_RECONCILE_MS || 180000),
+      MAILBOX_OVERRIDE_POLL_MS: Number(env.MAILBOX_OVERRIDE_POLL_MS || 120000)  /* FREE TIER: active=120s → idle=720s (was 60s → 360s) */,
       // DISK IO GUARD: set to 'false' in Cloudflare Pages env to disable WAL Realtime
       SYNC_ENABLE_SUPABASE_REALTIME: String(env.SYNC_ENABLE_SUPABASE_REALTIME || 'true')
     };

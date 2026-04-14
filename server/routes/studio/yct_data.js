@@ -54,7 +54,11 @@ function readCache(key) {
   if (!hit || (Date.now() - hit.at) > CACHE_TTL_MS) { DATA_CACHE.delete(key); return null; }
   return hit.value;
 }
-function writeCache(key, value) { DATA_CACHE.set(key, { at: Date.now(), value }); }
+function writeCache(key, value) {
+  const at = Date.now();
+  DATA_CACHE.set(key, { at, value });
+  return at;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function normalizeRealm(raw) {
@@ -192,7 +196,18 @@ module.exports = async (req, res) => {
 
     if (!forceRefresh) {
       const cached = readCache(cacheKey);
-      if (cached) return sendJson(res, 200, cached);
+      if (cached) {
+        const ifNoneMatch = req.headers['if-none-match'];
+        const etag = `"${cached.at}"`;
+        if (ifNoneMatch === etag) {
+          res.statusCode = 304;
+          res.setHeader('Cache-Control', 'no-store');
+          res.end();
+          return;
+        }
+        res.setHeader('ETag', etag);
+        return sendJson(res, 200, cached.value);
+      }
     }
 
     // ── Field resolution ──────────────────────────────────────────────────────
@@ -277,7 +292,8 @@ module.exports = async (req, res) => {
       source:  'global_qb',   // signals frontend this came from Global QB
     };
 
-    writeCache(cacheKey, payload);
+    const at = writeCache(cacheKey, payload);
+    res.setHeader('ETag', `"${at}"`);
     return sendJson(res, 200, payload);
 
   } catch (err) {

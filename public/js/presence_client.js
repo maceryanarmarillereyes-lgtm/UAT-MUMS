@@ -384,13 +384,16 @@ try {
     // never wired up here — both calls wrongly used PRESENCE_POLL_MS (45s).
     // Fix: heartbeat every 45s (minimum 30s), roster list every 90s (minimum 60s).
     // Net result: ~50% fewer presence DB reads for 30-user teams.
-    var poll     = Number(env.PRESENCE_POLL_MS      || 45000);
-    var listPoll = Number(env.PRESENCE_LIST_POLL_MS || 90000);
+    // PERF FIX: Increase intervals for free tier stability.
+    // Heartbeat: 45s -> 120s (2 min)
+    // Roster: 90s -> 300s (5 min)
+    var poll     = Number(env.PRESENCE_POLL_MS      || 120000);
+    var listPoll = Number(env.PRESENCE_LIST_POLL_MS || 300000);
     // Yield one tick so first paint / routing is not delayed by background presence calls.
     setTimeout(function(){ try{ heartbeat(); }catch(_){} try{ refreshRoster(); }catch(_){} }, 500);
 
-    setInterval(heartbeat,     Math.max(30000, poll));
-    setInterval(refreshRoster, Math.max(60000, listPoll));
+    setInterval(heartbeat,     Math.max(60000, poll));
+    setInterval(refreshRoster, Math.max(120000, listPoll));
   }
 
   if (document.readyState === 'loading') {

@@ -29,7 +29,7 @@
     alarmAudio: null, alarmPlaying: false,
   };
 
-  var POLL_MS   = 30000; // PERF FIX: Raised from 15s → 30s (halves CTL lab req/day from 57,600 → 28,800)
+  var POLL_MS   = 120000; // PERF FIX: 120s (2 min) state poll interval
   var SP_URL    = 'https://mycopeland.sharepoint.com/sites/AdvanceServices/Shared%20Documents/Forms/AllItems.aspx';
   var IMGS = {
     'E2':              '/Widget%20Images/E2_Widget.png',
@@ -85,7 +85,7 @@
       S.alarmPlaying = true;
       S.alarmAudio.play().catch(function () {});
       S.alarmAudio.onended = function () { S.alarmPlaying = false; };
-      setTimeout(function () { try { S.alarmAudio.pause(); S.alarmAudio.currentTime = 0; } catch (_) {} S.alarmPlaying = false; }, 30000);
+      setTimeout(function () { try { S.alarmAudio.pause(); S.alarmAudio.currentTime = 0; } catch (_) {} S.alarmPlaying = false; }, 120000);
     } catch (_) {}
   }
   function _stopAlarm() {
@@ -590,13 +590,21 @@
   function _startPoll() {
     // 1-second countdown ticker
     S.countdownTimer = setInterval(_tick, 1000);
-    // 15s server state poll
+    // 120s server state poll
     S.pollTimer = setInterval(_loadState, POLL_MS);
-    // 30s config poll
-    S.configPollTimer = setInterval(_loadConfig, 30000);
+    // 300s config poll
+    S.configPollTimer = setInterval(_loadConfig, 300000);
     // Poll on tab focus (catches stale state after background)
+    var lastFocusLoad = 0;
     document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible') { _loadState(); }
+      if (document.visibilityState === 'visible') {
+        var now = Date.now();
+        if (now - lastFocusLoad > 30000) { // Debounce focus-triggered loads (min 30s)
+          lastFocusLoad = now;
+          _loadState();
+          _loadConfig();
+        }
+      }
     });
   }
 

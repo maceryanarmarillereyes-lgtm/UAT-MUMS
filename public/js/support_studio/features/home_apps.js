@@ -16,6 +16,7 @@
     draft: { label: '', link: '', icon: '', description: '' },
     step: 1,
     revision: '',
+    etag: '',
     pollTimer: null,
   };
 
@@ -245,10 +246,25 @@
   async function _haLoad(opts) {
     opts = opts || {};
     try {
-      var r = await fetch('/api/studio/home_apps', { headers: _haHeaders() });
-      if (!r.ok) return;
-      var d = await r.json();
+      var headers = _haHeaders();
+      if (!opts.force && _haState.etag) {
+        headers['If-None-Match'] = _haState.etag;
+      }
+
+      var resp = await fetch('/api/studio/home_apps', {
+        headers: headers,
+        cache: 'no-store'
+      });
+
+      if (resp.status === 304) return;
+
+      var d = null;
+      try { d = await resp.json(); } catch(_) { d = null; }
       if (!d || !d.ok) return;
+
+      var etag = resp.headers.get('ETag');
+      if (etag) _haState.etag = etag;
+
       var nextApps = _haNormalizeApps(d.apps);
       var rev = _haRevision(nextApps, d.updatedAt);
       if (!opts.force && rev === _haState.revision) return;
@@ -299,7 +315,7 @@
 
   function _haStartPolling() {
     if (_haState.pollTimer) return;
-    _haState.pollTimer = setInterval(function() { _haLoad(); }, 7000);
+    _haState.pollTimer = setInterval(function() { _haLoad(); }, 300000);
     document.addEventListener('visibilitychange', function() {
       if (document.visibilityState === 'visible') _haLoad({ force: true });
     });
