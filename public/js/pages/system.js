@@ -190,12 +190,12 @@
       {
         name: 'CTL Lab State Poll',
         file: 'features/ctl_booking.js',
-        interval: 120000, // PERF FIX: Raised from 15s → 120s
+        interval: 30000, // PERF FIX: Raised from 15s → 30s
         endpoint: '/api/studio/ctl_lab_state',
         method: 'GET',
-        note: 'Polls shared booking/queue state while Support Studio is open. Raised from 15s to 120s to reduce free tier impact.',
+        note: 'Polls shared booking/queue state while Support Studio is open. Raised from 15s to 30s to reduce free tier impact.',
         critical: false,
-        warn: false,
+        warn: true,
       },
       {
         name: 'CTL Lab Config Poll',
@@ -334,9 +334,7 @@
     const qbPerHr = Math.round(SEC / 300);
     const authPerHr = 2;
 
-    const ctlStatePerHr = 30; // 120s
-    const ctlConfigPerHr = 120; // 30s
-    const perUserHr = mbPerHr + presPerHr + listPerHr + wdPerHr + reconcPerHr + qbPerHr + authPerHr + ctlStatePerHr + ctlConfigPerHr;
+    const perUserHr = mbPerHr + presPerHr + listPerHr + wdPerHr + reconcPerHr + qbPerHr + authPerHr;
     const totalPerDay = perUserHr * HRS * USERS;
     return {
       perUserHr,
@@ -349,8 +347,8 @@
         { label: 'Realtime Reconcile', perHr: reconcPerHr, interval: fmtMs(reconcMs) },
         { label: 'QuickBase Poll', perHr: qbPerHr, interval: '5m' },
         { label: 'Auth/Token Refresh', perHr: authPerHr, interval: 'event' },
-        { label: 'CTL Lab State (Studio)', perHr: ctlStatePerHr, interval: '120s', note: 'FIXED: was 15s (240/hr) → now 120s (30/hr). Active per-tab when Support Studio open' },
-        { label: 'CTL Lab Config (Studio)', perHr: ctlConfigPerHr, interval: '30s', note: 'Active per-tab when Support Studio open' },
+        { label: 'CTL Lab State (Studio)', perHr: 120, interval: '30s', note: 'FIXED: was 15s (240/hr) → now 30s (120/hr). Active per-tab when Support Studio open' },
+        { label: 'CTL Lab Config (Studio)', perHr: 120, interval: '30s', note: 'Active per-tab when Support Studio open' },
       ]
     };
   }
@@ -403,7 +401,6 @@
     font-weight:700; cursor:pointer; background:var(--accent,#6366f1); color:#fff;
     transition:opacity .15s; }
   .sys-btn:hover { opacity:.85; }
-  .sys-btn:disabled { opacity:0.5; cursor:not-allowed; }
   .sys-btn.ghost { background:var(--surface,#0f172a); border:1px solid var(--border,#334155);
     color:var(--text,#f8fafc); }
   .sys-section-title { font-size:14px; font-weight:800; color:var(--text,#f8fafc);
@@ -441,7 +438,6 @@
       <button class="sys-tab" data-tab="cloudflare">☁️ Cloudflare</button>
       <button class="sys-tab" data-tab="queue">🔁 Sync Queue</button>
       <button class="sys-tab" data-tab="studio">🎛️ Studio Features</button>
-      <button class="sys-tab" data-tab="analytics" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:#818cf8;border-radius:6px;">📈 Analytics</button>
       <button class="sys-tab" data-tab="bugscanner" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:6px;">🔍 Auto Bug Scan <span id="bugBadge" style="display:none;margin-left:4px;background:#ef4444;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:900;"></span></button>
     </div>
 
@@ -454,7 +450,6 @@
       <div class="sys-panel" id="tab-cloudflare"></div>
       <div class="sys-panel" id="tab-queue"></div>
       <div class="sys-panel" id="tab-studio"></div>
-      <div class="sys-panel" id="tab-analytics"></div>
       <div class="sys-panel" id="tab-bugscanner"></div>
     </div>
   </div>`;
@@ -468,9 +463,8 @@
     supabase:   'supabase',
     cloudflare: 'cloudflare',
     queue:      'queue',
-    studio:     'studio',
-    analytics:  'analytics',
-    bugscanner: 'bugscanner'
+    studio:     'studio',      // FIX: was missing — caused Studio Features tab to always show overview
+    bugscanner: 'bugscanner'   // FIX: was missing — caused Auto Bug Scan tab to always show overview
   };
   function tabFromRoute(){
     try{
@@ -578,32 +572,7 @@
       ]);
     });
 
-    // ── Section 3: Historical Analytics ──────────────────────────────────
-    const SYNC_KEY = 'mums_system_analytics_v1';
-    rows.push(['', '', '', '', '', '', '', '']);
-    rows.push(['System Analytics History (Last 30 Days)', '', '', '', '', '', '', '']);
-    rows.push(['Date', 'Total Requests', 'Status', 'Recommendation', '', '', '', '']);
-    
-    // We try to read from window if we have it, otherwise just skip
-    // Since exportCSV is synchronous, we can only export what's already loaded
-    // or we can use a placeholder if not on analytics tab.
-    const historyDoc = (window.Store && Store.getDocSync) ? Store.getDocSync(SYNC_KEY) : null;
-    const history = (historyDoc && Array.isArray(historyDoc.history)) ? historyDoc.history : [];
-    
-    history.slice(-30).reverse().forEach(h => {
-      const tl = trafficLight(h.totalReqDay, FREE_TIER.CF_REQUESTS_DAY * 0.6, FREE_TIER.CF_REQUESTS_DAY * 0.85);
-      rows.push([
-        h.date,
-        h.totalReqDay,
-        tl.label,
-        h.totalReqDay > FREE_TIER.CF_REQUESTS_DAY * 0.85 ? 'CRITICAL: Reduce polling' : 'OK',
-        '', '', '', ''
-      ]);
-    });
-
-    // ── Section 4: Bug Scan Issues ───────────────────────────────────────
-    rows.push(['', '', '', '', '', '', '', '']);
-    rows.push(['Bug Scan Issues', '', '', '', '', '', '', '']);
+    // ── Section 3: Bug Scan Issues ───────────────────────────────────────
     const bugs = _bugResults || [];
     bugs.forEach(issue => {
       const sev = issue.severity === 'critical' ? 'CRITICAL' : issue.severity === 'warning' ? 'HIGH' : null;
@@ -980,182 +949,6 @@
     };
   }
 
-  // ── Render: Analytics ──────────────────────────────────────────────────────
-  async function renderAnalytics(force) {
-    const panel = root.querySelector('#tab-analytics');
-    const SYNC_KEY = 'mums_system_analytics_v1';
-    
-    // Manila Time Helper
-    const getManilaDate = (offset = 0) => {
-      const now = new Date();
-      const manila = new Date(now.getTime() + (8 * 60 * 60 * 1000) + (offset * 86400000));
-      return manila.toISOString().slice(0, 10);
-    };
-
-    const today = getManilaDate();
-    let history = [];
-    let loading = true;
-
-    const render = () => {
-      if (loading) {
-        panel.innerHTML = `<div style="padding:40px;text-align:center;color:var(--muted)">⏳ Loading historical analytics from Supabase...</div>`;
-        return;
-      }
-
-      const latest = history[history.length - 1] || null;
-      const dailyReq = latest ? latest.totalReqDay : 0;
-      const cfPct = pct(dailyReq, FREE_TIER.CF_REQUESTS_DAY);
-      const barColor = cfPct >= 85 ? '#ef4444' : cfPct >= 60 ? '#f59e0b' : '#22c55e';
-
-      // Weekly/Monthly views
-      const last7 = history.slice(-7);
-      const last30 = history.slice(-30);
-
-      const avgReq7 = last7.length ? Math.round(last7.reduce((a, b) => a + b.totalReqDay, 0) / last7.length) : 0;
-      const avgReq30 = last30.length ? Math.round(last30.reduce((a, b) => a + b.totalReqDay, 0) / last30.length) : 0;
-
-      panel.innerHTML = `
-        <div class="sys-alert info">
-          <span>📈</span>
-          <span>System Analytics track daily load across all 30 users (estimated). Data is persisted to Supabase and updated at the end of each day.</span>
-        </div>
-
-        <div class="sys-section-title">📊 Historical Load Trends</div>
-        <div class="sys-grid">
-          <div class="sys-card">
-            <div class="sys-card-label">Daily Avg (7d)</div>
-            <div class="sys-card-val">${fmt(avgReq7)}</div>
-            <div class="sys-card-sub">Requests per day</div>
-          </div>
-          <div class="sys-card">
-            <div class="sys-card-label">Daily Avg (30d)</div>
-            <div class="sys-card-val">${fmt(avgReq30)}</div>
-            <div class="sys-card-sub">Requests per day</div>
-          </div>
-          <div class="sys-card">
-            <div class="sys-card-label">Peak Load (30d)</div>
-            <div class="sys-card-val">${fmt(Math.max(...last30.map(h => h.totalReqDay), 0))}</div>
-            <div class="sys-card-sub">Highest daily total</div>
-          </div>
-        </div>
-
-        <div class="sys-section-title">📅 Daily Breakdown (Last 7 Days)</div>
-        <table class="sys-table">
-          <thead><tr><th>Date</th><th>Total Req</th><th>Free Tier %</th><th>Status</th></tr></thead>
-          <tbody>
-            ${last7.reverse().map(h => {
-              const p = pct(h.totalReqDay, FREE_TIER.CF_REQUESTS_DAY);
-              const tl = trafficLight(h.totalReqDay, FREE_TIER.CF_REQUESTS_DAY * 0.6, FREE_TIER.CF_REQUESTS_DAY * 0.85);
-              return `<tr>
-                <td><b>${h.date}</b> ${h.date === today ? '<span class="sys-badge" style="background:#22c55e">TODAY</span>' : ''}</td>
-                <td class="sys-mono">${fmt(h.totalReqDay)}</td>
-                <td>
-                  <div class="sys-progress" style="width:100px;display:inline-block;vertical-align:middle;margin-right:8px">
-                    <div class="sys-progress-bar" style="width:${p}%;background:${tl.color}"></div>
-                  </div>
-                  <span class="sys-mono">${p}%</span>
-                </td>
-                <td><span class="sys-pill" style="background:${tl.color}22;color:${tl.color};border:1px solid ${tl.color}44">${tl.label}</span></td>
-              </tr>`;
-            }).join('')}
-            ${last7.length === 0 ? '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted)">No historical data found.</td></tr>' : ''}
-          </tbody>
-        </table>
-
-        <div class="sys-section-title" style="margin-top:24px">📥 Data Management</div>
-        <div style="display:flex;gap:10px">
-          <button class="sys-btn" id="sysExportAnalytics">📥 Export CSV History</button>
-          <button class="sys-btn ghost" id="sysForceSnapshot">📸 Manual Snapshot</button>
-        </div>
-      `;
-
-      panel.querySelector('#sysExportAnalytics').onclick = () => {
-        const rows = [['Date', 'Total Requests', 'Free Tier Percentage', 'Status']];
-        history.forEach(h => {
-          const p = pct(h.totalReqDay, FREE_TIER.CF_REQUESTS_DAY);
-          const tl = trafficLight(h.totalReqDay, FREE_TIER.CF_REQUESTS_DAY * 0.6, FREE_TIER.CF_REQUESTS_DAY * 0.85);
-          rows.push([h.date, h.totalReqDay, p + '%', tl.label]);
-        });
-        const csv = rows.map(r => r.join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `MUMS_Analytics_${today}.csv`;
-        a.click();
-      };
-
-      panel.querySelector('#sysForceSnapshot').onclick = async () => {
-        const btn = panel.querySelector('#sysForceSnapshot');
-        btn.disabled = true;
-        btn.textContent = '⏳ Saving...';
-        await takeSnapshot();
-        btn.disabled = false;
-        btn.textContent = '📸 Manual Snapshot';
-        loadData();
-      };
-    };
-
-    const takeSnapshot = async () => {
-      const est = calcEstimatedReqPerDay();
-      const snapshot = {
-        date: today,
-        totalReqDay: est.totalPerDay,
-        perUserHr: est.perUserHr,
-        ts: Date.now()
-      };
-
-      // Load existing
-      let current = [];
-      try {
-        if (window.Store && Store.getDoc) {
-          const doc = await Store.getDoc(SYNC_KEY);
-          current = (doc && Array.isArray(doc.history)) ? doc.history : [];
-        }
-      } catch(_) {}
-
-      // Update or add
-      const idx = current.findIndex(h => h.date === today);
-      if (idx >= 0) current[idx] = snapshot;
-      else current.push(snapshot);
-
-      // Keep last 90 days
-      if (current.length > 90) current = current.slice(-90);
-
-      // Save
-      try {
-        if (window.Store && Store.setDoc) {
-          await Store.setDoc(SYNC_KEY, { history: current });
-          if (window.UI && UI.toast) UI.toast('✅ Snapshot saved to Supabase', 'success');
-        }
-      } catch(e) {
-        if (window.UI && UI.toast) UI.toast('❌ Failed to save snapshot', 'error');
-      }
-    };
-
-    const loadData = async () => {
-      loading = true;
-      render();
-      try {
-        if (window.Store && Store.getDoc) {
-          const doc = await Store.getDoc(SYNC_KEY);
-          history = (doc && Array.isArray(doc.history)) ? doc.history : [];
-        }
-      } catch(_) {}
-      loading = false;
-      render();
-    };
-
-    // Auto-snapshot logic: If first time today, take a snapshot
-    const lastSnap = localStorage.getItem('mums_sys_last_snap');
-    if (lastSnap !== today) {
-      await takeSnapshot();
-      localStorage.setItem('mums_sys_last_snap', today);
-    }
-
-    loadData();
-  }
-
   // ── Render: Supabase ──────────────────────────────────────────────────────
   async function renderSupabase() {
     const panel = root.querySelector('#tab-supabase');
@@ -1384,7 +1177,7 @@
     const ctlItems = (() => { try { const r = localStorage.getItem('mums_controller_lab_items_v1'); return JSON.parse(r || '[]'); } catch (_) { return []; } })();
     const ctlBookings = ctlState ? ctlState.bookings || {} : {};
     const ctlQueues   = ctlState ? ctlState.queues   || {} : {};
-    const ctlPollMs   = 120000; // PERF FIX: updated to 120s in ctl_booking.js
+    const ctlPollMs   = 15000; // hardcoded in ctl_booking.js
     const ctlActiveBookings = Object.values(ctlBookings).filter(b => b && b.endMs > Date.now()).length;
     const ctlTotalQueued = Object.values(ctlQueues).reduce((s, q) => s + (Array.isArray(q) ? q.length : 0), 0);
 
@@ -1496,7 +1289,7 @@
           </thead>
           <tbody>
             ${featureRow('🎮', 'CTL Lab Booking System', homeAppsLoaded ? 'Module loaded' : 'NOT LOADED', ctlItems.length + ' controllers · ' + ctlActiveBookings + ' active session(s) · ' + ctlTotalQueued + ' queued', ctlSev)}
-            ${featureRow('🔒', 'CTL State Server Sync', 'Poll every 120s', 'Hits /api/studio/ctl_lab_state every ' + fmtMs(ctlPollMs) + ' per open tab', ctlPollSev)}
+            ${featureRow('🔒', 'CTL State Server Sync', 'Poll every 15s', 'Hits /api/studio/ctl_lab_state every ' + fmtMs(ctlPollMs) + ' per open tab', ctlPollSev)}
             ${featureRow('🔔', 'CTL Alarm Audio', alarmPlaying, ctlState ? 'alarmPlaying=' + String(ctlState.alarmPlaying) : 'State not available', 'info')}
             ${featureRow('🗓️', 'One Day Password (ODP)', odpRt, 'SDK: ' + (odpSdkLoaded ? 'Loaded' : 'NOT LOADED') + ' · Data: ' + odpLastFetch, odpSev)}
             ${featureRow('📡', 'ODP Realtime Channel', odpState && odpState.rtChannel ? 'Channel active' : 'No channel', odpState && odpState.pollInterval ? 'Using POLL fallback (15s) — check Supabase Realtime' : 'Using WebSocket (efficient)', odpSev)}
@@ -1540,9 +1333,9 @@
           <tbody>
             <tr>
               <td><b>CTL Lab State Poll</b></td>
-              <td class="sys-mono">120s</td>
+              <td class="sys-mono">15s</td>
               <td class="sys-mono">/api/studio/ctl_lab_state</td>
-              <td><span class="sys-pill ok">✅ Optimized for Free Tier</span></td>
+              <td><span class="sys-pill warn">⚠️ Aggressive — 4 req/min per open tab</span></td>
             </tr>
             <tr>
               <td><b>CTL Config Poll</b></td>
@@ -1658,11 +1451,11 @@
 
     // CTL poll is hardcoded 15s
     const ctlItems = (() => { try { return JSON.parse(localStorage.getItem('mums_controller_lab_items_v1') || '[]'); } catch (_) { return []; } })();
-    if (ctlItems.length > 0 && ctlPollMs < 60000) {
+    if (ctlItems.length > 0) {
       bug('IO-004', 'warning', 'CTL Lab / Free Tier', 'CTL Lab State Polling Too Frequent',
-        'CTL booking system polls /api/studio/ctl_lab_state every ' + fmtMs(ctlPollMs) + '. With ' + ctlItems.length + ' controller(s) and multiple users, this can burn free tier IO budget.',
-        'Set POLL_MS in ctl_booking.js to ≥ 120000 (120s).',
-        'features/ctl_booking.js');
+        'CTL booking system polls /api/studio/ctl_lab_state every 15 seconds hardcoded. With ' + ctlItems.length + ' controller(s) and multiple users: ~240 req/hr per active user. On free tier this adds up quickly.',
+        'Consider increasing POLL_MS in ctl_booking.js from 15000 to 30000 when the Support Studio tab is open. Or migrate CTL state to Supabase Realtime postgres_changes subscription to eliminate polling.',
+        'features/ctl_booking.js:26');
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1980,8 +1773,8 @@
       case 'cloudflare': renderCloudflare(); break;
       case 'queue':      renderQueue(); break;
       case 'studio':     renderStudio(); break;
-      case 'analytics':  renderAnalytics(force); break;
       case 'bugscanner':
+        // FIX: forward force so Refresh All triggers a full rescan on this tab
         if (force) { _runBugScan(); }
         renderBugScanner(false);
         break;

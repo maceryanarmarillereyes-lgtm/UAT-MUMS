@@ -7349,12 +7349,8 @@ async function boot(){
 
     UI.els('[data-close="topAnnModal"]').forEach(b=>b.onclick=()=>UI.closeModal('topAnnModal'));
 
-    if(!window.__mumsSideLogsTimer){
-      window.__mumsSideLogsTimer = setInterval(()=>{ try{ renderSideLogs(Auth.getUser()||user); }catch(e){} }, 300000); // local render, no DB — 5min
-    }
-    if(!window.__mumsUserCardTimer){
-      window.__mumsUserCardTimer = setInterval(()=>{ try{ renderUserCard(Auth.getUser()||user); }catch(e){} }, 120000); // PERF FIX: 60s -> 120s
-    }
+    setInterval(()=>{ try{ renderSideLogs(Auth.getUser()||user); }catch(e){} }, 300000); // local render, no DB — 5min
+    setInterval(()=>{ try{ renderUserCard(Auth.getUser()||user); }catch(e){} }, 60000);
 
     window.addEventListener('mums:store', ()=>{
       try{ renderUserCard(Auth.getUser()||user); }catch(e){}
@@ -7368,8 +7364,6 @@ async function boot(){
         try{ if(window.__mumsOnlineBarTimer){ clearInterval(window.__mumsOnlineBarTimer); window.__mumsOnlineBarTimer = null; } }catch(_){}
         try{ if(window.__mumsClockTimer){ clearInterval(window.__mumsClockTimer); window.__mumsClockTimer = null; } }catch(_){}
         try{ if(window.__mumsGmtOverviewTimer){ clearInterval(window.__mumsGmtOverviewTimer); window.__mumsGmtOverviewTimer = null; } }catch(_){}
-        try{ if(window.__mumsSideLogsTimer){ clearInterval(window.__mumsSideLogsTimer); window.__mumsSideLogsTimer = null; } }catch(_){}
-        try{ if(window.__mumsUserCardTimer){ clearInterval(window.__mumsUserCardTimer); window.__mumsUserCardTimer = null; } }catch(_){}
         // Realtime channel cleanup — prevents ghost subscriptions after tab sleep/restore
         try{
           if(window.Realtime && typeof Realtime.destroy === 'function') Realtime.destroy();

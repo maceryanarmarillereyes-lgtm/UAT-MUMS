@@ -51,9 +51,9 @@
   // Gap threshold matches 2× new HB interval (240s) → 300s.
   // Activity debounce: 180s (was 90s) — prevents mouse-move storms.
   // With 30 users: watchdog HB = 30 × (3600/150) = 720 req/hr (was 2,400/hr).
-  var WATCHDOG_POLL_MS     = 300000; // 300s backup poll (was 150s — 2× reduction)
-  var WATCHDOG_GAP_MS      = 600000; // Fire if >600s since last beat (2× 300s interval)
-  var ACTIVITY_DEBOUNCE_MS = 300000; // Activity-triggered HB max 1 per 300s (was 180s)
+  var WATCHDOG_POLL_MS     = 150000; // 150s backup poll (was 45s — 3.3× reduction)
+  var WATCHDOG_GAP_MS      = 300000; // Fire if >300s since last beat (2× 150s interval)
+  var ACTIVITY_DEBOUNCE_MS = 180000; // Activity-triggered HB max 1 per 180s (was 90s)
   var STORAGE_KEY          = 'mums_watchdog_last_hb';
   var CLIENT_ID_KEY        = 'mums_client_id';
 

@@ -71,29 +71,17 @@ module.exports = async (req, res) => {
     const key = docKey();
 
     if (req.method === 'GET') {
-      const ifNoneMatch = req.headers['if-none-match'];
-
-      const out = await serviceSelect('mums_documents', `select=value,updated_at&key=eq.${encodeURIComponent(key)}&limit=1`);
+      const out = await serviceSelect('mums_documents', `select=value&key=eq.${encodeURIComponent(key)}&limit=1`);
       if (!out.ok) {
         return sendJson(res, 500, { ok: false, error: 'db_read_failed', detail: out.text || '' });
       }
       const row = Array.isArray(out.json) && out.json[0] ? out.json[0] : null;
-      const updatedAt = row && row.updated_at ? row.updated_at : null;
-
-      if (updatedAt && ifNoneMatch === `"${updatedAt}"`) {
-        res.statusCode = 304;
-        res.setHeader('Cache-Control', 'no-store');
-        res.end();
-        return;
-      }
-
       const value = row ? row.value : null;
       const apps = normalizeApps(value && value.apps);
-      res.setHeader('ETag', `"${updatedAt}"`);
       return sendJson(res, 200, {
         ok: true,
         apps,
-        updatedAt,
+        updatedAt: row && row.updated_at ? row.updated_at : null,
       });
     }
 

@@ -50,8 +50,6 @@ module.exports = async (req, res) => {
 
     // ── GET — read shared config ──────────────────────────────────────────
     if (req.method === 'GET') {
-      const ifNoneMatch = req.headers['if-none-match'];
-
       const out = await serviceSelect(
         'mums_documents',
         `select=value,updated_at&key=eq.${encodeURIComponent(DOC_KEY)}&limit=1`
@@ -59,21 +57,11 @@ module.exports = async (req, res) => {
       if (!out.ok) return sendJson(res, 500, { ok: false, error: 'db_read_failed' });
 
       const row = Array.isArray(out.json) && out.json[0] ? out.json[0] : null;
-      const updatedAt = row ? row.updated_at : null;
-
-      if (updatedAt && ifNoneMatch === `"${updatedAt}"`) {
-        res.statusCode = 304;
-        res.setHeader('Cache-Control', 'no-store');
-        res.end();
-        return;
-      }
-
       const items = normalizeItems(row && row.value && row.value.items);
-      res.setHeader('ETag', `"${updatedAt}"`);
       return sendJson(res, 200, {
         ok: true,
         items,
-        updatedAt,
+        updatedAt: row ? row.updated_at : null,
       });
     }
 

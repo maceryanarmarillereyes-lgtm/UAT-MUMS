@@ -307,7 +307,6 @@ THEMES: [
           { id: 'system_supabase',    label: 'Supabase Diagnostics', icon: '🗄️', perm: 'system_monitor' },
           { id: 'system_cloudflare',  label: 'Cloudflare Usage',     icon: '☁️', perm: 'system_monitor' },
           { id: 'system_queue',       label: 'Sync Queue Inspector', icon: '🔁', perm: 'system_monitor' },
-          { id: 'system_analytics',   label: 'System Analytics',     icon: '📈', perm: 'system_monitor' },
         ]
       },
     ],

@@ -525,18 +525,13 @@
     var tok = _yctGetToken();
     var headers = { 'Content-Type': 'application/json' };
     if (tok) headers['Authorization'] = 'Bearer ' + tok;
-    if (_yctEtag) headers['If-None-Match'] = _yctEtag;
-
     return fetch('/api/studio/yct_data?limit=' + limit, { headers: headers })
       .then(function(r) {
-        if (r.status === 304) return { ok: true, _notModified: true };
         // If 401, token may be stale — trigger a re-boot on next authtoken event
         if (r.status === 401) {
           _yctBooted = false; // allow re-boot when token refreshes
           return Promise.reject(new Error('401_unauthorized'));
         }
-        var etag = r.headers.get('ETag');
-        if (etag) _yctEtag = etag;
         return r.json().catch(function() { return null; });
       })
       .then(function(data) {
@@ -611,7 +606,6 @@
 
   // ── main fetch+render cycle ──────────────────────────────────────────
   var _yctFetching = false;
-  var _yctEtag     = '';
 
   function _yctLoad(isRefresh) {
     if (_yctFetching) return;
@@ -644,8 +638,6 @@
         _yctUpdateToolbar(0);
         return;
       }
-      if (result._notModified) return;
-
       // Convert records to snap format and update global snaps on qbs-root
       var snaps = _yctRecordsToSnaps(result.records, result.columns);
       _yctUpdateToolbar(result.records.length);
