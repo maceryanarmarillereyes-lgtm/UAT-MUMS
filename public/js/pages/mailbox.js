@@ -796,6 +796,75 @@ function _mbxReadJwt(){
   let _schedSyncPending = false;
   let _periodicSyncTimer = null; // periodic schedule re-sync timer
 
+  // ── MAILBOX DISABLE / ENABLE STATE ──────────────────────────────────────
+  // null  = not yet fetched (will show loading, then load async)
+  // true  = enabled  (normal operation)
+  // false = disabled (show notice, stop all timers & network requests)
+  let _mailboxEnabled = null;
+  let _mailboxStatusLoading = false;
+
+  async function _mbxLoadStatus() {
+    if (_mailboxStatusLoading) return;
+    _mailboxStatusLoading = true;
+    try {
+      const jwt = _mbxReadJwt();
+      const headers = jwt ? { Authorization: `Bearer ${jwt}` } : {};
+      const res = await fetch('/api/settings/mailbox_status', { headers, cache: 'no-store' });
+      if (!res.ok) { _mailboxEnabled = true; return; } // fail open
+      const data = await res.json().catch(() => ({}));
+      _mailboxEnabled = !(data && data.settings && data.settings.disabled === true);
+    } catch (_) {
+      _mailboxEnabled = true; // fail open — network error = treat as enabled
+    } finally {
+      _mailboxStatusLoading = false;
+    }
+  }
+
+  function _renderMailboxDisabled() {
+    if (!root) return;
+    const me = (window.Auth && window.Auth.getUser) ? (window.Auth.getUser() || {}) : {};
+    const isSA = me.role === 'SUPER_ADMIN';
+    root.innerHTML = `
+      <div style="
+        display:flex; flex-direction:column; align-items:center; justify-content:center;
+        min-height:340px; gap:20px; padding:40px 24px; text-align:center;
+      ">
+        <div style="
+          width:72px; height:72px; border-radius:18px;
+          background:linear-gradient(145deg,rgba(239,68,68,.15),rgba(239,68,68,.05));
+          border:1px solid rgba(239,68,68,.28);
+          display:flex; align-items:center; justify-content:center;
+          box-shadow:0 0 32px rgba(239,68,68,.12);
+        ">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="1.6" stroke-linecap="round">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            <line x1="2" y1="2" x2="22" y2="22" stroke="#ef4444" stroke-width="1.8"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-size:22px;font-weight:900;color:#f1f5f9;letter-spacing:-.02em;margin-bottom:8px;">
+            Mailbox has been temporarily disabled
+          </div>
+          <div style="font-size:14px;color:#64748b;max-width:420px;line-height:1.6;">
+            The Mailbox feature is currently unavailable. Please check back later or contact your administrator.
+          </div>
+        </div>
+        ${isSA ? `
+          <div style="
+            margin-top:8px; padding:14px 20px;
+            background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.22);
+            border-radius:10px; font-size:12px; color:#fcd34d; max-width:420px; line-height:1.55;
+          ">
+            <strong>Super Admin:</strong> Re-enable the Mailbox from
+            <strong>Settings → Mailbox Control</strong>.
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+  // ── END MAILBOX DISABLE / ENABLE STATE ───────────────────────────────────
+
+
   // REALTIME ROSTER RESYNC: Forces a fresh schedule block fetch for the active duty team.
   // Called when Supabase pushes schedule/config updates so ALL roles (including MEMBERs)
   // see the same data without a page refresh.
@@ -823,6 +892,7 @@ function _mbxReadJwt(){
 
   async function _mbxSyncTeamScheduleBlocks(teamId) {
     if (!teamId) return;
+    if (_mailboxEnabled === false) return; // MAILBOX DISABLED — no Supabase calls
     if (_syncInFlight[teamId]) return;
     _syncInFlight[teamId] = true;
 
@@ -3714,6 +3784,11 @@ function _mbxReadJwt(){
     try{
       if(!root || !isMailboxRouteActive()) return;
 
+      // MAILBOX STATUS GATE: if disabled, show notice instead of normal UI
+      if (_mailboxEnabled === false) {
+        _renderMailboxDisabled();
+        return;
+      }
       const duty = getDuty();
       const {shiftKey, table, state} = ensureShiftTables();
       const activeBucketId = computeActiveBucketId(table);
@@ -4067,6 +4142,24 @@ function _mbxReadJwt(){
   // --- LIFECYCLE ---
 
   function mount(){
+    // ── MAILBOX STATUS GATE: check if mailbox is disabled before doing ANYTHING ──
+    // Fetch status first. If disabled → show notice, stop here (no timers, no Supabase calls).
+    // If enabled (or status fetch fails) → proceed with normal boot sequence.
+    _mbxLoadStatus().then(() => {
+      if (_mailboxEnabled === false) {
+        // Mailbox is disabled — render notice and do NOT start any timers or network requests
+        _renderMailboxDisabled();
+        return;
+      }
+      // Mailbox is enabled — proceed with full boot
+      _mountMailboxNormal();
+    }).catch(() => {
+      // On any error loading status, fail open (show mailbox normally)
+      _mountMailboxNormal();
+    });
+  }
+
+  function _mountMailboxNormal(){
     render();
     startRealtimeTimers();
 
@@ -4299,9 +4392,21 @@ function _mbxReadJwt(){
           _patchConfirmedCells();
           scheduleRender('cases-update');
         }
+        // MAILBOX DISABLE/ENABLE: Super Admin toggled the mailbox on or off.
+        // Reload status and either show the disabled notice or resume normal render.
+        if (k === 'mums_mailbox_status') {
+          _mbxLoadStatus().then(() => {
+            if (_mailboxEnabled === false) {
+              stopRealtimeTimers();
+              _renderMailboxDisabled();
+            } else {
+              scheduleRender('mailbox-status-enabled');
+            }
+          }).catch(() => {});
+        }
       } catch (_) {}
     });
-  }
+  } // end _mountMailboxNormal
 
   function unmount(){
     stopRealtimeTimers();

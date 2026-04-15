@@ -58,6 +58,7 @@ const ROUTES = {
   'catalog/comments': require('../server/routes/catalog/comments'),
   'catalog/history': require('../server/routes/catalog/history'),
   'settings/login_mode': require('../server/routes/settings/login_mode'),
+  'settings/mailbox_status': require('../server/routes/settings/mailbox_status'),
 
   'overall_stats': require('../server/routes/overall_stats'),
 

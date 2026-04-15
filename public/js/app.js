@@ -5400,6 +5400,10 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
               // Load current login mode status from server
               try{ if(window.__mumsLoadLoginMode) window.__mumsLoadLoginMode(); }catch(_){}
             },
+            mailboxstatus: function(){
+              // Load current mailbox enabled/disabled state from server
+              try{ if(window.__mumsLoadMailboxStatus) window.__mumsLoadMailboxStatus(); }catch(_){}
+            },
             data: function(){
               // Data health elements are already wired at boot; just sync health summary
               try{
@@ -7018,6 +7022,141 @@ async function boot(){
         loadLoginMode();
       }
     }catch(e){ console.error('[LoginMode]', e); }
+
+    // ── Mailbox Control Panel (Super Admin only) ───────────────────────────
+    try{
+      if(isSA){
+        const mbxToggle  = document.getElementById('mailboxEnabledToggle');
+        const mbxSaveBtn = document.getElementById('saveMailboxStatusBtn');
+        const mbxSaveMsg = document.getElementById('mailboxStatusSaveMsg');
+        const mbxBanner  = document.getElementById('mailboxStatusBanner');
+        const mbxDot     = document.getElementById('mailboxStatusDot');
+        const mbxLabel   = document.getElementById('mailboxStatusLabel');
+        const mbxMeta    = document.getElementById('mailboxStatusMeta');
+        const mbxWarn    = document.getElementById('mailboxDisableWarning');
+
+        function _mbxCtrlRefreshUI(disabled) {
+          if (!mbxToggle) return;
+          mbxToggle.checked = !disabled;
+          if (mbxBanner) {
+            if (disabled) {
+              mbxBanner.style.background = 'rgba(239,68,68,.08)';
+              mbxBanner.style.borderColor = 'rgba(239,68,68,.28)';
+            } else {
+              mbxBanner.style.background = 'rgba(34,197,94,.08)';
+              mbxBanner.style.borderColor = 'rgba(34,197,94,.25)';
+            }
+          }
+          if (mbxDot) {
+            mbxDot.style.background = disabled ? '#ef4444' : '#22c55e';
+            mbxDot.style.boxShadow  = disabled ? '0 0 8px rgba(239,68,68,.6)' : '0 0 8px rgba(34,197,94,.6)';
+          }
+          if (mbxLabel) {
+            mbxLabel.textContent = disabled ? 'Mailbox is DISABLED' : 'Mailbox is ENABLED';
+            mbxLabel.style.color = disabled ? '#f87171' : '#4ade80';
+          }
+          if (mbxMeta) {
+            mbxMeta.textContent = disabled
+              ? 'All mailbox features & network requests are suspended.'
+              : 'All users have full mailbox access.';
+          }
+          if (mbxWarn) mbxWarn.style.display = disabled ? '' : 'none';
+        }
+
+        // Show/hide disable warning on toggle change
+        if (mbxToggle) {
+          mbxToggle.addEventListener('change', function() {
+            const willDisable = !mbxToggle.checked;
+            if (mbxWarn) mbxWarn.style.display = willDisable ? '' : 'none';
+          });
+        }
+
+        const _mbxCtrlGetJwt = function() {
+          try {
+            return (window.CloudAuth && CloudAuth.accessToken) ? CloudAuth.accessToken() : '';
+          } catch(_) { return ''; }
+        };
+
+        const loadMailboxStatus = async () => {
+          try {
+            const jwt = _mbxCtrlGetJwt();
+            const r = await fetch('/api/settings/mailbox_status', {
+              headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
+              cache: 'no-store'
+            });
+            const data = await r.json().catch(() => ({}));
+            const disabled = !!(data && data.settings && data.settings.disabled);
+            _mbxCtrlRefreshUI(disabled);
+            const by = (data && data.settings && data.settings.updatedByName) ? data.settings.updatedByName : null;
+            const at = (data && data.settings && data.settings.updatedAt) ? new Date(data.settings.updatedAt).toLocaleString() : null;
+            if (mbxMeta && (by || at)) {
+              mbxMeta.textContent = (disabled
+                ? 'Mailbox disabled'
+                : 'Mailbox enabled') +
+                (by ? ` by ${by}` : '') +
+                (at ? ` on ${at}` : '');
+            }
+          } catch(e) {
+            if (mbxLabel) { mbxLabel.textContent = 'Could not load status.'; mbxLabel.style.color = 'var(--muted)'; }
+          }
+        };
+
+        if (mbxSaveBtn) {
+          mbxSaveBtn.addEventListener('click', async () => {
+            if (!mbxToggle) return;
+            const disabled = !mbxToggle.checked;
+            mbxSaveBtn.disabled = true;
+            mbxSaveBtn.textContent = 'Saving…';
+            try {
+              const jwt = _mbxCtrlGetJwt();
+              const r = await fetch('/api/settings/mailbox_status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}) },
+                body: JSON.stringify({ disabled })
+              });
+              const data = await r.json().catch(() => ({}));
+              if (r.ok && data && data.ok) {
+                _mbxCtrlRefreshUI(disabled);
+                if (mbxSaveMsg) {
+                  mbxSaveMsg.textContent = disabled ? '✓ Mailbox disabled — all requests stopped.' : '✓ Mailbox enabled — users can now access it.';
+                  mbxSaveMsg.style.color = disabled ? '#f87171' : 'var(--success,#22c55e)';
+                  mbxSaveMsg.style.opacity = '1';
+                  setTimeout(() => { if (mbxSaveMsg) mbxSaveMsg.style.opacity = '0'; }, 4000);
+                }
+                // Broadcast to all open tabs / mailbox instances so they react immediately
+                try {
+                  window.dispatchEvent(new CustomEvent('mums:store', {
+                    detail: { key: 'mums_mailbox_status', source: 'local', disabled }
+                  }));
+                } catch(_) {}
+                await loadMailboxStatus();
+              } else {
+                const msg = (data && data.message) ? data.message : 'Save failed.';
+                if (mbxSaveMsg) {
+                  mbxSaveMsg.textContent = '✗ ' + msg;
+                  mbxSaveMsg.style.color = 'var(--danger,#ef4444)';
+                  mbxSaveMsg.style.opacity = '1';
+                  setTimeout(() => { if (mbxSaveMsg) mbxSaveMsg.style.opacity = '0'; }, 4000);
+                }
+              }
+            } catch(e) {
+              if (mbxSaveMsg) {
+                mbxSaveMsg.textContent = '✗ Network error.';
+                mbxSaveMsg.style.color = 'var(--danger,#ef4444)';
+                mbxSaveMsg.style.opacity = '1';
+                setTimeout(() => { if (mbxSaveMsg) mbxSaveMsg.style.opacity = '0'; }, 4000);
+              }
+            } finally {
+              mbxSaveBtn.disabled = false;
+              mbxSaveBtn.textContent = 'Save';
+            }
+          });
+        }
+
+        window.__mumsLoadMailboxStatus = loadMailboxStatus;
+        loadMailboxStatus();
+      }
+    } catch(e) { console.error('[MailboxControl]', e); }
     
     UI.els('[data-close="settingsModal"]').forEach(b=>b.onclick=()=>UI.closeModal('settingsModal'));
     UI.els('[data-close="systemCheckModal"]').forEach(b=>b.onclick=()=>UI.closeModal('systemCheckModal'));
