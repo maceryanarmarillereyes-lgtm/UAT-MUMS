@@ -75,6 +75,8 @@
   let offlinePullTimer = null;
   let reconnectBackoffMs = 1200;
   let lastAuthToken = '';
+  let activeRealtimeToken = '';
+  let authTokenReconnectTimer = null;
   let userExplicitlyLoggedOut = false;
   let bootStarted = false;
   let bootCompleted = false;
@@ -524,6 +526,7 @@ function applyRemoteKey(key, value){
       const token = String(CloudAuth.accessToken() || '');
       if (!token) return false;
       lastAuthToken = token;
+      activeRealtimeToken = token;
       console.log('[Realtime Guard] Preparing realtime subscribe', { hasToken: !!token });
       if (!window.__MUMS_SB_CLIENT) {
         window.__MUMS_SB_CLIENT = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
@@ -922,12 +925,27 @@ function applyRemoteKey(key, value){
       window.addEventListener('mums:authtoken', (e)=>{
         try {
           const t = (e && e.detail && e.detail.token) ? String(e.detail.token) : '';
-          if (!t || t === lastAuthToken) return;
-          userExplicitlyLoggedOut = false;
-          lastAuthToken = t;
-          // Reconnect to ensure both HTTP headers and WS auth are updated.
-          connectCloudMandatory();
-          ensureOfflinePull();
+          if (!t) return;
+          // Skip when token is already the active realtime auth token.
+          if (t === activeRealtimeToken || t === lastAuthToken) return;
+          // Debounce auth token rotations to prevent reconnect storms
+          // when multiple listeners emit mums:authtoken nearly at once.
+          if (authTokenReconnectTimer) clearTimeout(authTokenReconnectTimer);
+          authTokenReconnectTimer = setTimeout(()=>{
+            authTokenReconnectTimer = null;
+            try {
+              const latest = (window.CloudAuth && CloudAuth.accessToken && CloudAuth.accessToken())
+                ? String(CloudAuth.accessToken() || '')
+                : '';
+              const nextToken = latest || t;
+              if (!nextToken || nextToken === activeRealtimeToken || nextToken === lastAuthToken) return;
+              userExplicitlyLoggedOut = false;
+              lastAuthToken = nextToken;
+              // Reconnect to ensure both HTTP headers and WS auth are updated.
+              connectCloudMandatory();
+              ensureOfflinePull();
+            } catch (_) {}
+          }, 300);
         } catch (_) {}
       });
       bootCompleted = true;
