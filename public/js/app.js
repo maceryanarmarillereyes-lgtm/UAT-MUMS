@@ -36,6 +36,26 @@
     return '';
   }
 
+  async function fetchFirstJson(urls, options){
+    const list = Array.isArray(urls) ? urls : [urls];
+    let lastErr = null;
+    for (const url of list) {
+      try {
+        const res = await fetch(String(url || ''), options || {});
+        const data = await res.json().catch(()=> ({}));
+        // Endpoint fallback rule:
+        // - If 404, try next candidate URL.
+        // - Any non-404 response is authoritative (including 401/403/500).
+        if (res.status === 404) continue;
+        return { ok: res.ok, status: res.status, data, url };
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    if (lastErr) throw lastErr;
+    return { ok: false, status: 404, data: { ok:false, error:'not_found' }, url: list[0] || '' };
+  }
+
   function normalizeThemeMeta(raw){
     const out = {};
     const src = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
@@ -6953,11 +6973,12 @@ async function boot(){
         const loadLoginMode = async () => {
           if(lmStatus) lmStatus.textContent = 'Loading…';
           try{
-            const jwt = (window.CloudAuth && CloudAuth.accessToken) ? CloudAuth.accessToken() : '';
-            const r = await fetch('/api/settings/login_mode', {
-              headers: jwt ? { Authorization: `Bearer ${jwt}` } : {}
+            const jwt = getBearerToken();
+            const out = await fetchFirstJson(['/api/settings/login_mode', '/functions/api/settings/login_mode'], {
+              headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
+              cache: 'no-store'
             });
-            const data = await r.json().catch(()=> ({}));
+            const data = out.data || {};
             const mode = (data && data.settings && data.settings.mode) ? data.settings.mode : 'both';
             // Set radio
             lmRadios().forEach(radio => { radio.checked = (radio.value === mode); });
@@ -6988,14 +7009,15 @@ async function boot(){
             lmSaveBtn.disabled = true;
             lmSaveBtn.textContent = 'Saving…';
             try{
-              const jwt = (window.CloudAuth && CloudAuth.accessToken) ? CloudAuth.accessToken() : '';
-              const r = await fetch('/api/settings/login_mode', {
+              const jwt = getBearerToken();
+              const out = await fetchFirstJson(['/api/settings/login_mode', '/functions/api/settings/login_mode'], {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}) },
-                body: JSON.stringify({ mode: selected.value })
+                body: JSON.stringify({ mode: selected.value }),
+                cache: 'no-store'
               });
-              const data = await r.json().catch(()=> ({}));
-              if(r.ok && data && data.ok){
+              const data = out.data || {};
+              if(out.ok && data && data.ok){
                 if(lmSaveMsg){ lmSaveMsg.textContent = `✓ Saved: ${modeLabels[selected.value] || selected.value}`; lmSaveMsg.style.opacity='1'; lmSaveMsg.style.color='var(--success,#22c55e)'; setTimeout(()=>{ lmSaveMsg.style.opacity='0'; }, 3000); }
                 await loadLoginMode();
               } else {
@@ -7071,20 +7093,14 @@ async function boot(){
           });
         }
 
-        const _mbxCtrlGetJwt = function() {
-          try {
-            return (window.CloudAuth && CloudAuth.accessToken) ? CloudAuth.accessToken() : '';
-          } catch(_) { return ''; }
-        };
-
         const loadMailboxStatus = async () => {
           try {
-            const jwt = _mbxCtrlGetJwt();
-            const r = await fetch('/api/settings/mailbox_status', {
+            const jwt = getBearerToken();
+            const out = await fetchFirstJson(['/api/settings/mailbox_status', '/functions/api/settings/mailbox_status'], {
               headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
               cache: 'no-store'
             });
-            const data = await r.json().catch(() => ({}));
+            const data = out.data || {};
             const disabled = !!(data && data.settings && data.settings.disabled);
             _mbxCtrlRefreshUI(disabled);
             const by = (data && data.settings && data.settings.updatedByName) ? data.settings.updatedByName : null;
@@ -7108,14 +7124,15 @@ async function boot(){
             mbxSaveBtn.disabled = true;
             mbxSaveBtn.textContent = 'Saving…';
             try {
-              const jwt = _mbxCtrlGetJwt();
-              const r = await fetch('/api/settings/mailbox_status', {
+              const jwt = getBearerToken();
+              const out = await fetchFirstJson(['/api/settings/mailbox_status', '/functions/api/settings/mailbox_status'], {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}) },
-                body: JSON.stringify({ disabled })
+                body: JSON.stringify({ disabled }),
+                cache: 'no-store'
               });
-              const data = await r.json().catch(() => ({}));
-              if (r.ok && data && data.ok) {
+              const data = out.data || {};
+              if (out.ok && data && data.ok) {
                 _mbxCtrlRefreshUI(disabled);
                 if (mbxSaveMsg) {
                   mbxSaveMsg.textContent = disabled ? '✓ Mailbox disabled — all requests stopped.' : '✓ Mailbox enabled — users can now access it.';
