@@ -103,7 +103,9 @@
   }
 
   var envController = new AbortController();
+  var envTimedOut = false;
   var envTimer = setTimeout(function(){
+    envTimedOut = true;
     try { envController.abort(); } catch(_) {}
   }, 3500);
 
@@ -130,6 +132,11 @@
     })
     .catch(function(){
       clearTimeout(envTimer);
+      try {
+        if (envTimedOut && DBG && typeof DBG.warn === 'function') {
+          DBG.warn('env_runtime.fetch_timeout_fallback', { timeoutMs: 3500 });
+        }
+      } catch(_) {}
       readyResolve(env);
     });
 })();

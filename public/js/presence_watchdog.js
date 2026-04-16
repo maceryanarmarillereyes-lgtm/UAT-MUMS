@@ -66,7 +66,11 @@
   var jwtCacheValue   = '';
   var jwtCacheAt      = 0;
   var jwtInFlight     = null;
-  var JWT_CACHE_MS    = 20000;
+  var JWT_CACHE_MS    = 30000;
+  var EVENT_COALESCE_MS = 2000;
+  var heartbeatCoalesceTimer = null;
+  var consecutiveAuthErrors = 0;
+  var authBackoffUntil = 0;
 
   // ── HELPERS ─────────────────────────────────────────────────────────────────
   function now() { return Date.now(); }
@@ -134,6 +138,7 @@
 
   // ── CORE HEARTBEAT ──────────────────────────────────────────────────────────
   async function fireHeartbeat(reason) {
+    if (authBackoffUntil && now() < authBackoffUntil) return;
     if (hbInFlight) return;
     hbInFlight = true;
     try {
@@ -163,17 +168,32 @@
       });
 
       if (res.ok) {
+        consecutiveAuthErrors = 0;
+        authBackoffUntil = 0;
         writeLastBeat(now());
         // NOTE: We intentionally do NOT call triggerRosterRefresh() here.
         // presence_client.js already polls the roster every 60s.
         // Calling it here too would double the egress. The bar will update
         // within 60s naturally, or instantly on visibility restore.
       }
+      if (res.status === 401 || res.status === 403) {
+        consecutiveAuthErrors = Math.min(consecutiveAuthErrors + 1, 8);
+        var backoffMs = Math.min(60000, Math.pow(2, consecutiveAuthErrors) * 1000);
+        authBackoffUntil = now() + backoffMs;
+      }
     } catch (_) {
       // Silent — best-effort
     } finally {
       hbInFlight = false;
     }
+  }
+
+  function coalescedHeartbeat(reason) {
+    if (heartbeatCoalesceTimer) return;
+    heartbeatCoalesceTimer = setTimeout(function(){
+      heartbeatCoalesceTimer = null;
+      fireHeartbeat(reason || 'coalesced');
+    }, EVENT_COALESCE_MS);
   }
 
   // ── ROSTER REFRESH ──────────────────────────────────────────────────────────
@@ -246,7 +266,7 @@
     var hidden = now() - hiddenAt;
     var stale = (now() - (readLastBeat() || lastBeatAt)) > WATCHDOG_GAP_MS;
     if (stale || hidden > WATCHDOG_GAP_MS) {
-      fireHeartbeat('visibility-restore');
+      coalescedHeartbeat('visibility-restore');
       // One-shot roster refresh on wakeup is acceptable (user needs to see current state)
       triggerRosterRefresh();
     }
@@ -262,12 +282,12 @@
 
   window.addEventListener('focus', function () {
     var stale = (now() - (readLastBeat() || lastBeatAt)) > WATCHDOG_GAP_MS;
-    if (stale) fireHeartbeat('window-focus');
+    if (stale) coalescedHeartbeat('window-focus');
   });
 
   window.addEventListener('online', function () {
     // Network came back — fire immediately so user reappears ASAP
-    fireHeartbeat('network-online');
+    coalescedHeartbeat('network-online');
   });
 
   // ── ACTIVITY DETECTION ──────────────────────────────────────────────────────
@@ -279,7 +299,7 @@
     lastActivityAt = t;
     // Only beat if the last confirmed beat is getting stale
     if ((t - (readLastBeat() || lastBeatAt)) > (WATCHDOG_GAP_MS / 2)) {
-      fireHeartbeat('user-activity');
+      coalescedHeartbeat('user-activity');
     }
   }
 
