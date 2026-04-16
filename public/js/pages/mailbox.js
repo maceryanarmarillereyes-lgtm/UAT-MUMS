@@ -795,40 +795,36 @@ function _mbxReadJwt(){
   // prevented _bootRosterSync from ever running.
   let _schedSyncPending = false;
   let _periodicSyncTimer = null; // periodic schedule re-sync timer
-  let _mbxPrefetchTimeouts = []; // Track staggered prefetch timeouts for cancellation
 
   // ── MAILBOX DISABLE / ENABLE STATE ──────────────────────────────────────
   // null  = not yet fetched (will show loading, then load async)
   // true  = enabled  (normal operation)
   // false = disabled (show notice, stop all timers & network requests)
   let _mailboxEnabled = null;
-  let _mailboxStatusLoading = false;
+  // _mbxStatusPromise: deduplicates concurrent _mbxLoadStatus() calls (see BUG FIX v4.1)
+
+  let _mbxStatusPromise = null; // deduplicate concurrent status fetches
 
   async function _mbxLoadStatus() {
-    // BUG 4 FIX: Ensure _mailboxStatusLoading is always cleared, even on race conditions.
-    // The previous check would return silently, but the caller might be waiting for a state change.
-    if (_mailboxStatusLoading) {
-      // If already loading, wait a bit and check again to avoid stale state if a race occurred
-      for (let i=0; i<10; i++) {
-        await new Promise(r => setTimeout(r, 100));
-        if (!_mailboxStatusLoading) break;
+    // BUG FIX v4.1: Replace hard boolean lock (which silently dropped rapid toggle
+    // re-fetches) with a shared Promise. Concurrent callers all await the same
+    // in-flight fetch, so no status update is ever lost.
+    if (_mbxStatusPromise) return _mbxStatusPromise;
+    _mbxStatusPromise = (async () => {
+      try {
+        const jwt = _mbxReadJwt();
+        const headers = jwt ? { Authorization: `Bearer ${jwt}` } : {};
+        const res = await fetch('/api/settings/mailbox_status', { headers, cache: 'no-store' });
+        if (!res.ok) { _mailboxEnabled = true; return; } // fail open
+        const data = await res.json().catch(() => ({}));
+        _mailboxEnabled = !(data && data.settings && data.settings.disabled === true);
+      } catch (_) {
+        _mailboxEnabled = true; // fail open — network error = treat as enabled
+      } finally {
+        _mbxStatusPromise = null; // clear so next call fetches fresh
       }
-      if (_mailboxStatusLoading) return; // Still loading after 1s, something is wrong
-    }
-
-    _mailboxStatusLoading = true;
-    try {
-      const jwt = _mbxReadJwt();
-      const headers = jwt ? { Authorization: `Bearer ${jwt}` } : {};
-      const res = await fetch('/api/settings/mailbox_status', { headers, cache: 'no-store' });
-      if (!res.ok) { _mailboxEnabled = true; return; } // fail open
-      const data = await res.json().catch(() => ({}));
-      _mailboxEnabled = !(data && data.settings && data.settings.disabled === true);
-    } catch (_) {
-      _mailboxEnabled = true; // fail open — network error = treat as enabled
-    } finally {
-      _mailboxStatusLoading = false;
-    }
+    })();
+    return _mbxStatusPromise;
   }
 
   function _renderMailboxDisabled() {
@@ -4143,13 +4139,10 @@ function _mbxReadJwt(){
     clearInterval(_dutyPillInterval);
     clearInterval(_periodicSyncTimer);
     _periodicSyncTimer = null;
-
-    // BUG 3 FIX: Cancel all pending staggered prefetch timeouts
-    if (Array.isArray(_mbxPrefetchTimeouts)) {
-      _mbxPrefetchTimeouts.forEach(h => clearTimeout(h));
-      _mbxPrefetchTimeouts = [];
-    }
-
+    // BUG FIX v4.1: Reset _mailboxEnabled to null so when _mountMailboxNormal() is
+    // called on re-enable, render() sees a clean state and doesn't short-circuit
+    // based on a stale disabled=false value from before the last status change.
+    _mailboxEnabled = null;
     // Remove singleton tooltip on nav-away
     const tt = document.getElementById('mbx-row-tooltip');
     if (tt) { tt.classList.remove('visible'); }
@@ -4159,13 +4152,67 @@ function _mbxReadJwt(){
 
   // --- LIFECYCLE ---
 
-  function mount(){
-    // BUG 1 FIX: Register the mums:store listener here so it's active even if mailbox starts disabled.
-    // This allows the page to react to a Super Admin enabling the mailbox without a refresh.
-    window.addEventListener('mums:store', _mbxHandleStoreEvent);
+  // ── MAILBOX STATUS LISTENER ──────────────────────────────────────────────
+  // BUG FIX v4.1: Listener MUST be registered in mount() BEFORE the status
+  // check — not inside _mountMailboxNormal(). When the mailbox page first loads
+  // while ALREADY disabled, _mountMailboxNormal() is never called so its internal
+  // mums_mailbox_status handler was never bound. This meant toggling ON from
+  // Settings had no effect on the already-rendered disabled page.
+  //
+  // Additionally, the re-enable path now calls stopRealtimeTimers() +
+  // _mountMailboxNormal() (full remount) instead of scheduleRender() so that
+  // ALL timers and Supabase sync restart correctly when SA re-enables.
+  //
+  // _mbxStatusListenerBound guards against duplicate listeners if mount() is
+  // ever called more than once on the same page instance.
+  let _mbxStatusListenerBound = false;
 
+  function _registerMailboxStatusListener() {
+    if (_mbxStatusListenerBound) return;
+    _mbxStatusListenerBound = true;
+
+    window.addEventListener('mums:store', (e) => {
+      try {
+        const k = e && e.detail && e.detail.key;
+        if (k !== 'mums_mailbox_status') return;
+
+        // Re-fetch authoritative status from server (not just the event payload).
+        // The event payload only carries { disabled } from the Settings panel broadcast;
+        // re-fetching ensures the page always reflects the persisted Supabase value.
+        _mbxLoadStatus().then(() => {
+          if (_mailboxEnabled === false) {
+            // ── DISABLE PATH ─────────────────────────────────────────────
+            // Stop all timers, cancel periodic syncs, and show the disabled banner.
+            // _mbxSyncTeamScheduleBlocks already checks _mailboxEnabled===false at its
+            // top so any in-flight setTimeout callbacks are safely no-ops.
+            stopRealtimeTimers();
+            _renderMailboxDisabled();
+          } else {
+            // ── RE-ENABLE PATH ───────────────────────────────────────────
+            // Full remount: stop any stale timers first (defensive), then boot the
+            // mailbox normally so timers, Supabase sync, and socket listeners all
+            // restart from a clean state. scheduleRender() alone was insufficient
+            // because it only re-renders HTML — it does NOT restart the timer loop
+            // or _mbxSyncTeamScheduleBlocks.
+            stopRealtimeTimers();
+            _mountMailboxNormal();
+          }
+        }).catch(() => {
+          // If status re-fetch fails, fail open: show mailbox normally.
+          stopRealtimeTimers();
+          _mountMailboxNormal();
+        });
+      } catch (_) {}
+    });
+  }
+
+  function mount(){
     // ── MAILBOX STATUS GATE: check if mailbox is disabled before doing ANYTHING ──
-    // Fetch status first. If disabled → show notice, stop here (no timers, no Supabase calls).
+    // Register the status listener FIRST so that any Settings toggle that fires
+    // while the page is open (including when currently disabled) is always caught.
+    _registerMailboxStatusListener();
+
+    // Fetch status. If disabled → show notice, stop here (no timers, no Supabase calls).
     // If enabled (or status fetch fails) → proceed with normal boot sequence.
     _mbxLoadStatus().then(() => {
       if (_mailboxEnabled === false) {
@@ -4179,114 +4226,6 @@ function _mbxReadJwt(){
       // On any error loading status, fail open (show mailbox normally)
       _mountMailboxNormal();
     });
-  }
-
-  // Refactored listener to be shared between mount and enabled-toggle
-  function _mbxHandleStoreEvent(e) {
-    try {
-      const k = e && e.detail && e.detail.key;
-      const src = e && e.detail && e.detail.source;
-
-      // MAILBOX DISABLE/ENABLE: Super Admin toggled the mailbox on or off.
-      if (k === 'mums_mailbox_status') {
-        _mbxLoadStatus().then(() => {
-          if (_mailboxEnabled === false) {
-            stopRealtimeTimers();
-            _renderMailboxDisabled();
-          } else {
-            // BUG 2 FIX: When re-enabling, we must call _mountMailboxNormal() 
-            // instead of just scheduleRender() to ensure timers and sync are restarted.
-            _mountMailboxNormal();
-          }
-        }).catch(() => {});
-        return;
-      }
-
-      // If mailbox is disabled, ignore all other store events
-      if (_mailboxEnabled === false) return;
-
-      if (k === 'mums_mailbox_tables') {
-        _patchConfirmedCells();
-        if(src === 'realtime' || src === 'storage'){
-          try{
-            const Store = window.Store;
-            const UI    = window.UI;
-            if(Store && Store.getMailboxState && Store.getMailboxTable && Store.saveMailboxTable){
-              const curKey = Store.getMailboxState().currentKey;
-              if(curKey){
-                const t = Store.getMailboxTable(curKey);
-                if(t && t.meta){
-                  const tid = String(t.meta.teamId || '');
-                  const rosterList = (tid && _rosterByTeam && _rosterByTeam[tid]) ? _rosterByTeam[tid] : [];
-                  if(rosterList.length){
-                    const nowP = UI && UI.mailboxNowParts ? UI.mailboxNowParts() : null;
-                    const existIds = new Set((t.members || []).map(m => m && String(m.id)));
-                    let added = false;
-                    for(const tm of rosterList){
-                      if(!tm || !tm.id || existIds.has(String(tm.id))) continue;
-                      existIds.add(String(tm.id));
-                      t.members = t.members || [];
-                      t.members.push({
-                        id:        String(tm.id),
-                        name:      String(tm.name || tm.username || tm.id),
-                        username:  String(tm.username || tm.name || tm.id),
-                        role:      String(tm.role || 'MEMBER'),
-                        roleLabel: _mbxRoleLabel(tm.role || ''),
-                        dutyLabel: _mbxDutyLabelForUser({id:String(tm.id),teamId:tid}, nowP)
-                      });
-                      added = true;
-                    }
-                    if(added){
-                      t.members.sort((a,b)=>{
-                        const ak=_mbxMemberSortKey(a),bk=_mbxMemberSortKey(b);
-                        if(ak.w!==bk.w) return ak.w-bk.w;
-                        return ak.name.localeCompare(bk.name);
-                      });
-                      Store.saveMailboxTable(curKey, t, {silent:true});
-                    }
-                  }
-                  const _noRosterCooldown = _syncCooldown && _syncCooldown[tid] && Date.now() < _syncCooldown[tid];
-                  if(!rosterList.length && tid && !_noRosterCooldown){
-                    _mbxForceResync('remote-table-no-roster');
-                  }
-                }
-              }
-            }
-          }catch(_){}
-        }
-        scheduleRender('store-mailbox-update');
-      }
-      if (
-        k === 'mailbox_override_cloud' ||
-        k === 'mailbox_time_override_cloud' ||
-        k === 'mailbox_time_override' ||
-        k === 'mums_mailbox_time_override_cloud'
-      ) {
-        scheduleRender('override-change');
-      }
-      if (
-        k === 'mums_schedule_blocks'    ||
-        k === 'mums_schedule_snapshots' ||
-        k === 'ums_weekly_schedules'    ||
-        k === 'mums_team_config'        ||
-        k === 'mums_schedule_lock_state'
-      ) {
-        const _schedCurTeam = String((window.Store && Store.getMailboxState ? Store.getMailboxState().currentKey || '' : '').split('|')[0]);
-        const _schedCooldownActive = _syncCooldown && _schedCurTeam && _syncCooldown[_schedCurTeam] && Date.now() < _syncCooldown[_schedCurTeam];
-        if (!_schedCooldownActive) { _mbxForceResync(k); }
-        scheduleRender('schedule-update');
-      }
-      if (k === 'mums_mailbox_state') {
-        const _stateCurTeam = String((window.Store && Store.getMailboxState ? Store.getMailboxState().currentKey || '' : '').split('|')[0]);
-        const _stateCooldownActive = _syncCooldown && _stateCurTeam && _syncCooldown[_stateCurTeam] && Date.now() < _syncCooldown[_stateCurTeam];
-        if (!_stateCooldownActive) { _mbxForceResync('shift-state-change'); }
-        scheduleRender('shift-state-change');
-      }
-      if (k === 'ums_cases') {
-        _patchConfirmedCells();
-        scheduleRender('cases-update');
-      }
-    } catch (_) {}
   }
 
   function _mountMailboxNormal(){
@@ -4312,14 +4251,7 @@ function _mbxReadJwt(){
       for(const t of allTeams){
         const tid = String(t.id || '');
         if(!tid || tid === bootTid || _scheduleReady[tid]) continue;
-        // BUG 3 FIX: Track timeouts so they can be cancelled if mailbox is disabled
-        const h = ((teamId, ms)=>{ 
-          return setTimeout(()=>{ 
-            if (_mailboxEnabled === false) return;
-            _mbxSyncTeamScheduleBlocks(teamId).catch(()=>{}); 
-          }, ms); 
-        })(tid, delay);
-        _mbxPrefetchTimeouts.push(h);
+        ((teamId, ms)=>{ setTimeout(()=>{ _mbxSyncTeamScheduleBlocks(teamId).catch(()=>{}); }, ms); })(tid, delay);
         delay += 2000; // stagger each team fetch by 2s
       }
     }catch(_){}
@@ -4415,11 +4347,130 @@ function _mbxReadJwt(){
       } catch (_) {}
     }
 
+    // BUG 1 FIX: Trigger BOTH _patchConfirmedCells (instant visual) AND scheduleRender
+    // (full consistency) whenever mums_mailbox_tables changes in the store.
+    // This covers: same-tab ACCEPT, cross-tab localStorage events, Supabase Realtime push,
+    // and the 8-second polling fallback — all paths now update the matrix icon without refresh.
+    window.addEventListener('mums:store', (e) => {
+      try {
+        const k = e && e.detail && e.detail.key;
+        const src = e && e.detail && e.detail.source;
+        if (k === 'mums_mailbox_tables') {
+          _patchConfirmedCells();
 
+          // CASE MATRIX ALL-USER FIX: When a remote mailbox_tables push arrives
+          // (source='realtime' or 'storage' = cross-tab), augment the received table's
+          // member list from the local _rosterByTeam cache BEFORE rendering.
+          // This ensures MEMBERs see the full team in the Case Assignment Matrix
+          // even when the pushed table was built by a SA with a different getUsers() scope.
+          if(src === 'realtime' || src === 'storage'){
+            try{
+              const Store = window.Store;
+              const UI    = window.UI;
+              if(Store && Store.getMailboxState && Store.getMailboxTable && Store.saveMailboxTable){
+                const curKey = Store.getMailboxState().currentKey;
+                if(curKey){
+                  const t = Store.getMailboxTable(curKey);
+                  if(t && t.meta){
+                    const tid = String(t.meta.teamId || '');
+                    const rosterList = (tid && _rosterByTeam && _rosterByTeam[tid]) ? _rosterByTeam[tid] : [];
+                    if(rosterList.length){
+                      const nowP = UI && UI.mailboxNowParts ? UI.mailboxNowParts() : null;
+                      const existIds = new Set((t.members || []).map(m => m && String(m.id)));
+                      let added = false;
+                      for(const tm of rosterList){
+                        if(!tm || !tm.id || existIds.has(String(tm.id))) continue;
+                        existIds.add(String(tm.id));
+                        t.members = t.members || [];
+                        t.members.push({
+                          id:        String(tm.id),
+                          name:      String(tm.name || tm.username || tm.id),
+                          username:  String(tm.username || tm.name || tm.id),
+                          role:      String(tm.role || 'MEMBER'),
+                          roleLabel: _mbxRoleLabel(tm.role || ''),
+                          dutyLabel: _mbxDutyLabelForUser({id:String(tm.id),teamId:tid}, nowP)
+                        });
+                        added = true;
+                      }
+                      // Sort and re-save silently (no new cloud push, just local augment)
+                      if(added){
+                        t.members.sort((a,b)=>{
+                          const ak=_mbxMemberSortKey(a),bk=_mbxMemberSortKey(b);
+                          if(ak.w!==bk.w) return ak.w-bk.w;
+                          return ak.name.localeCompare(bk.name);
+                        });
+                        Store.saveMailboxTable(curKey, t, {silent:true});
+                      }
+                    }
+                    // If roster is empty (first load), trigger a fetch to populate it
+                    // LOOP-GUARD: Skip if we're in a cooldown window (recent fetch failure).
+                    // Without this guard, every Realtime push would clear the cooldown and
+                    // re-trigger a fetch immediately after failure → infinite loop.
+                    const _noRosterCooldown = _syncCooldown && _syncCooldown[tid] && Date.now() < _syncCooldown[tid];
+                    if(!rosterList.length && tid && !_noRosterCooldown){
+                      _mbxForceResync('remote-table-no-roster');
+                    }
+                  }
+                }
+              }
+            }catch(_){}
+          }
+
+          scheduleRender('store-mailbox-update');
+        }
+        // OVERRIDE FIX: Re-render immediately when global mailbox override is saved/cleared.
+        if (
+          k === 'mailbox_override_cloud' ||
+          k === 'mailbox_time_override_cloud' ||
+          k === 'mailbox_time_override' ||
+          k === 'mums_mailbox_time_override_cloud'
+        ) {
+          scheduleRender('override-change');
+        }
+        // REALTIME ALL-USER FIX: When schedule blocks, snapshots, or team config change
+        // (pushed by Supabase to ALL connected clients), force a fresh API re-sync so
+        // EVERY role — MEMBER, TEAM_LEAD, SUPER_ADMIN — sees the updated duty labels,
+        // manager names, and roster without needing a page refresh.
+        // Covers: Team Lead updates schedule on Members page → all open Mailbox tabs refresh.
+        if (
+          k === 'mums_schedule_blocks'    ||
+          k === 'mums_schedule_snapshots' ||
+          k === 'ums_weekly_schedules'    ||
+          k === 'mums_team_config'        ||
+          k === 'mums_schedule_lock_state'
+        ) {
+          // LOOP-GUARD: Only force-resync on schedule changes if not in failure cooldown
+          const _schedCurTeam = String((window.Store && Store.getMailboxState ? Store.getMailboxState().currentKey || '' : '').split('|')[0]);
+          const _schedCooldownActive = _syncCooldown && _schedCurTeam && _syncCooldown[_schedCurTeam] && Date.now() < _syncCooldown[_schedCurTeam];
+          if (!_schedCooldownActive) { _mbxForceResync(k); }
+          scheduleRender('schedule-update');
+        }
+        // REALTIME SHIFT CHANGE FIX: When mailbox state changes (shift rotated),
+        // re-sync the new duty team's roster immediately so member list is up to date.
+        if (k === 'mums_mailbox_state') {
+          // LOOP-GUARD: Don't force-resync on state change if in failure cooldown
+          const _stateCurTeam = String((window.Store && Store.getMailboxState ? Store.getMailboxState().currentKey || '' : '').split('|')[0]);
+          const _stateCooldownActive = _syncCooldown && _stateCurTeam && _syncCooldown[_stateCurTeam] && Date.now() < _syncCooldown[_stateCurTeam];
+          if (!_stateCooldownActive) { _mbxForceResync('shift-state-change'); }
+          scheduleRender('shift-state-change');
+        }
+        // CASE MATRIX ALL-USER FIX: ums_cases is synced to all clients via Supabase realtime.
+        // When any case is confirmed/updated/deleted, trigger an in-place patch + re-render
+        // so all open Mailbox tabs reflect the new acknowledgment state immediately.
+        if (k === 'ums_cases') {
+          _patchConfirmedCells();
+          scheduleRender('cases-update');
+        }
+        // NOTE: 'mums_mailbox_status' is intentionally NOT handled here.
+        // It is handled by _registerMailboxStatusListener() which is bound in mount()
+        // BEFORE the status check. This ensures the disable/enable toggle works even
+        // when the page first loaded while already disabled (and _mountMailboxNormal
+        // was never called). See BUG FIX v4.1 comment above mount().
+      } catch (_) {}
+    });
   } // end _mountMailboxNormal
 
   function unmount(){
-    window.removeEventListener('mums:store', _mbxHandleStoreEvent);
     stopRealtimeTimers();
     if(window.CloudSocket && window.CloudSocket.off){
       window.CloudSocket.off('mailbox:update');

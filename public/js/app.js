@@ -7123,11 +7123,20 @@ async function boot(){
                   mbxSaveMsg.style.opacity = '1';
                   setTimeout(() => { if (mbxSaveMsg) mbxSaveMsg.style.opacity = '0'; }, 4000);
                 }
-                // Broadcast to all open tabs / mailbox instances so they react immediately
+                // BUG FIX v4.1: Broadcast via TWO channels so ALL open tabs react:
+                // 1. window event  — catches same-tab mailbox page immediately (via
+                //    _registerMailboxStatusListener which is now always bound in mount())
+                // 2. Realtime.onLocalWrite — propagates to OTHER devices/tabs via
+                //    Supabase Realtime so remote mailbox pages also disable/enable.
                 try {
                   window.dispatchEvent(new CustomEvent('mums:store', {
-                    detail: { key: 'mums_mailbox_status', source: 'local', disabled }
+                    detail: { key: 'mums_mailbox_status', source: 'settings_save', disabled }
                   }));
+                } catch(_) {}
+                try {
+                  if (window.Realtime && typeof Realtime.onLocalWrite === 'function') {
+                    Realtime.onLocalWrite('mums_mailbox_status', { disabled, updatedAt: new Date().toISOString() });
+                  }
                 } catch(_) {}
                 await loadMailboxStatus();
               } else {
