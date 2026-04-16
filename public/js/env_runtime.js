@@ -102,7 +102,14 @@
     return;
   }
 
-  fetch('/api/env', { cache: 'no-store' })
+  var envController = new AbortController();
+  var envTimedOut = false;
+  var envTimer = setTimeout(function(){
+    envTimedOut = true;
+    try { envController.abort(); } catch(_) {}
+  }, 3500);
+
+  fetch('/api/env', { cache: 'no-store', signal: envController.signal })
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(data){
       if (data && typeof data === 'object') {
@@ -120,9 +127,18 @@
         env.SYNC_POLL_MS             = Math.max(45000,  safeParseInt(data.SYNC_POLL_MS,             env.SYNC_POLL_MS));
         env.SYNC_ENABLE_SUPABASE_REALTIME = (String(data.SYNC_ENABLE_SUPABASE_REALTIME || 'true') !== 'false');
       }
+      clearTimeout(envTimer);
       readyResolve(env);
     })
-    .catch(function(){ readyResolve(env); });
+    .catch(function(){
+      clearTimeout(envTimer);
+      try {
+        if (envTimedOut && DBG && typeof DBG.warn === 'function') {
+          DBG.warn('env_runtime.fetch_timeout_fallback', { timeoutMs: 3500 });
+        }
+      } catch(_) {}
+      readyResolve(env);
+    });
 })();
 
 // Controller Lab - Google Sheets Web App Endpoint

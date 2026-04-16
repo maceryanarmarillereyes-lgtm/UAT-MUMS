@@ -5775,13 +5775,37 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
 async function boot(){
     if(window.__mumsBooted) return;
     window.__mumsBooted = true;
+    const __bootPerf = (function(){
+      const marks = {};
+      function now(){ return (window.performance && performance.now) ? performance.now() : Date.now(); }
+      return {
+        start: function(key){ marks[key] = { s: now(), d: 0, done: false }; },
+        end: function(key){
+          const m = marks[key];
+          if(!m || m.done) return;
+          m.done = true;
+          m.d = Math.max(0, now() - m.s);
+        },
+        flush: function(){
+          try{
+            const out = {};
+            Object.keys(marks).forEach((k)=>{ out[k] = Math.round(Number(marks[k].d || 0)); });
+            console.info('[MUMS BOOT PERF]', out);
+          }catch(_){ }
+        }
+      };
+    })();
     try{ UI.bindDataClose && UI.bindDataClose(); }catch(_){ }
     window.addEventListener('error', (e)=>{ showFatalError(e.error || e.message || e); });
     window.addEventListener('unhandledrejection', (e)=>{ showFatalError(e.reason || e); });
 
     Store.ensureSeed();
 
-    try{ await Promise.all([loadThemeMeta(), loadGlobalThemeSettings()]); }catch(_){ }
+    try{
+      __bootPerf.start('theme_load_ms');
+      await Promise.all([loadThemeMeta(), loadGlobalThemeSettings()]);
+      __bootPerf.end('theme_load_ms');
+    }catch(_){ __bootPerf.end('theme_load_ms'); }
 
     // ── FORCED DEFAULTS: Super Admin may push APEX+130% to ALL users ──────
     try{
@@ -5904,23 +5928,29 @@ async function boot(){
       }
     } catch(_) {}
 
+    __bootPerf.start('auth_require_user_ms');
     const user = await Auth.requireUser();
+    __bootPerf.end('auth_require_user_ms');
     if(!user) return;
 
     // ── SECURITY PIN GATE ──────────────────────────────────────────────────
     // Must pass PIN verification before the app renders.
     // PinController.gate() checks policy → shows overlay if needed.
     if (window.PinController && typeof PinController.gate === 'function') {
+      __bootPerf.start('pin_gate_ms');
       await new Promise((resolve) => {
         PinController.gate(resolve);
       });
+      __bootPerf.end('pin_gate_ms');
     }
     // ── END PIN GATE ──────────────────────────────────────────────────────
 
     // Realtime Guard: initialize realtime only after auth has been resolved.
     try{
       if(window.Realtime && typeof window.Realtime.init === 'function'){
+        __bootPerf.start('realtime_init_ms');
         window.Realtime.init();
+        __bootPerf.end('realtime_init_ms');
       }
     }catch(_){ }
 
@@ -5929,7 +5959,9 @@ async function boot(){
     const isSU = roleUpper === 'SUPER_USER';
 
     try{ window.__mumsBootTs = Date.now(); }catch(_){ }
-    try{ if(window.Store && Store.autoFixLogs) Store.autoFixLogs(); }catch(e){ console.error(e); }
+    try{
+      setTimeout(()=>{ try{ if(window.Store && Store.autoFixLogs) Store.autoFixLogs(); }catch(e){ console.error(e); } }, 0);
+    }catch(e){ console.error(e); }
 
     function normalizeRole(v){
       const raw = String(v||'').trim();
@@ -7386,6 +7418,8 @@ async function boot(){
         }catch(_){}
       }, { once: false, passive: true });
     }
+
+    try{ __bootPerf.flush(); }catch(_){ }
 
   } 
 

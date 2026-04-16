@@ -25,6 +25,10 @@ const WIDGETS = [
 ];
 
 let state = loadState();
+let __enabledMapCache = null;
+let __enabledMapCacheAt = 0;
+const ENABLED_MAP_TTL_MS = 60000;
+const ENABLED_MAP_CACHE_KEY = 'mums_status_widgets_enabled_cache_v1';
 
 function token(){
 try{
@@ -108,9 +112,31 @@ return Object.keys(out).length ? out : null;
 }
 
 async function loadEnabledMap(){
+const now = Date.now();
+if(__enabledMapCache && (now - __enabledMapCacheAt) < ENABLED_MAP_TTL_MS){
+  return __enabledMapCache;
+}
+try{
+  const raw = sessionStorage.getItem(ENABLED_MAP_CACHE_KEY);
+  if(raw){
+    const parsed = JSON.parse(raw);
+    const ts = Number(parsed && parsed.ts ? parsed.ts : 0);
+    if(parsed && typeof parsed === 'object' && parsed.data && (now - ts) < ENABLED_MAP_TTL_MS){
+      __enabledMapCache = parsed.data;
+      __enabledMapCacheAt = ts;
+      return __enabledMapCache;
+    }
+  }
+}catch(_){ }
 const out = await fetchFirstJson(SETTINGS_ENDPOINTS);
 if(!out.ok) return null;
-return normalizeEnabledMap(out.data);
+const normalized = normalizeEnabledMap(out.data);
+__enabledMapCache = normalized;
+__enabledMapCacheAt = now;
+try{
+  sessionStorage.setItem(ENABLED_MAP_CACHE_KEY, JSON.stringify({ ts: now, data: normalized }));
+}catch(_){ }
+return normalized;
 }
 
 function renderGrid(enabledMap){
