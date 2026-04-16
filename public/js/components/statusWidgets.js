@@ -25,6 +25,9 @@ const WIDGETS = [
 ];
 
 let state = loadState();
+let __enabledMapCache = null;
+let __enabledMapCacheAt = 0;
+const ENABLED_MAP_TTL_MS = 60000;
 
 function token(){
 try{
@@ -108,9 +111,16 @@ return Object.keys(out).length ? out : null;
 }
 
 async function loadEnabledMap(){
+const now = Date.now();
+if(__enabledMapCache && (now - __enabledMapCacheAt) < ENABLED_MAP_TTL_MS){
+  return __enabledMapCache;
+}
 const out = await fetchFirstJson(SETTINGS_ENDPOINTS);
 if(!out.ok) return null;
-return normalizeEnabledMap(out.data);
+const normalized = normalizeEnabledMap(out.data);
+__enabledMapCache = normalized;
+__enabledMapCacheAt = now;
+return normalized;
 }
 
 function renderGrid(enabledMap){
