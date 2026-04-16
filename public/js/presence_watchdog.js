@@ -63,6 +63,10 @@
   var hbInFlight      = false;
   var initialized     = false;
   var hiddenAt        = 0; // timestamp when tab went hidden
+  var jwtCacheValue   = '';
+  var jwtCacheAt      = 0;
+  var jwtInFlight     = null;
+  var JWT_CACHE_MS    = 20000;
 
   // ── HELPERS ─────────────────────────────────────────────────────────────────
   function now() { return Date.now(); }
@@ -84,6 +88,13 @@
   }
 
   async function getJwt() {
+    var cachedAge = now() - jwtCacheAt;
+    if (jwtCacheValue && cachedAge >= 0 && cachedAge < JWT_CACHE_MS) {
+      return jwtCacheValue;
+    }
+    if (jwtInFlight) return await jwtInFlight;
+
+    jwtInFlight = (async function(){
     try {
       if (window.CloudAuth) {
         if (typeof CloudAuth.ensureFreshSession === 'function') {
@@ -91,15 +102,34 @@
         }
         if (typeof CloudAuth.accessToken === 'function') {
           var tok = CloudAuth.accessToken();
-          if (tok) return tok;
+          if (tok) {
+            jwtCacheValue = tok;
+            jwtCacheAt = now();
+            return tok;
+          }
         }
         if (typeof CloudAuth.loadSession === 'function') {
           await CloudAuth.loadSession();
-          if (typeof CloudAuth.accessToken === 'function') return CloudAuth.accessToken() || '';
+          if (typeof CloudAuth.accessToken === 'function') {
+            var loaded = CloudAuth.accessToken() || '';
+            if (loaded) {
+              jwtCacheValue = loaded;
+              jwtCacheAt = now();
+            }
+            return loaded;
+          }
         }
       }
     } catch (_) {}
     return '';
+    })();
+
+    try {
+      var jwt = await jwtInFlight;
+      return jwt || '';
+    } finally {
+      jwtInFlight = null;
+    }
   }
 
   // ── CORE HEARTBEAT ──────────────────────────────────────────────────────────
