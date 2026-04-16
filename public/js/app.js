@@ -2221,7 +2221,9 @@ function updateClocksPreviewTimes(){
     UI.openModal('cropModal');
   }
 
-  function openProfileModal(user){
+  function openProfileModal(user, opts){
+    opts = opts || {};
+    var shouldOpenModal = (opts.openModal !== false);
     const prof = Store.getProfile(user.id) || {};
     const roleUpper0 = String(user && user.role ? user.role : '').trim().toUpperCase();
     const isSuperAdmin0 = (roleUpper0 === 'SUPER_ADMIN');
@@ -2444,10 +2446,14 @@ function updateClocksPreviewTimes(){
 
       const updated = Store.getUsers().find(u=>u.id===user.id);
       if(updated){ renderUserCard(updated); }
-      UI.closeModal('profileModal');
+      if(shouldOpenModal){
+        UI.closeModal('profileModal');
+      }
     };
 
-    UI.openModal('profileModal');
+    if(shouldOpenModal){
+      UI.openModal('profileModal');
+    }
   }
 
   function renderProfileAvatar(photoDataUrl, user){
@@ -5152,11 +5158,11 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
       try{ _syncMsBrightnessBadge(); }catch(_){}
       try{ _syncMsBarToggles(); }catch(_){}
 
-      // Always open Profile panel on settings open + populate fields
+      // Open a settings panel directly (no nested Profile modal popup)
       try {
         _msSelectPanel('profile');
         var _defaultUser = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
-        if (_defaultUser) setTimeout(function(){ try{ openProfileModal(_defaultUser); }catch(_){} }, 80);
+        if (_defaultUser) setTimeout(function(){ try{ openProfileModal(_defaultUser, { openModal:false }); }catch(_){} }, 80);
       } catch(_) {}
     };
 
@@ -5186,7 +5192,7 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
           var _panelUser = (window.Auth && Auth.getUser) ? Auth.getUser() : user;
           var panelInits = {
             profile: function(){
-              try{ openProfileModal(_panelUser); }catch(_){}
+              try{ openProfileModal(_panelUser, { openModal:false }); }catch(_){}
             },
             theme: function(){
               // renderThemeGrid is a scoped inner function accessible here
