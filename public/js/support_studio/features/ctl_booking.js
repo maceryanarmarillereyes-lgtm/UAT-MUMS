@@ -75,9 +75,13 @@
   function _z(n) { return n < 10 ? '0' + n : String(n); }
 
   // ── ALARM & NOTIFICATION ──────────────────────────────────────────────────
+  // type === 'done'  → session ended   → play Alert_Yourtimeisup
+  // type === 'queue' → it's your turn  → play Alert_Yourturntousethecontroller
   function _playAlarm(type) {
     try {
-      var src = type === 'queue' ? '/sound_alert_queue.mp3' : '/sound%20alert/Alert_Yourturntousethecontroller.mp3';
+      var src = type === 'queue'
+        ? '/sound%20alert/Alert_Yourturntousethecontroller.mp3'
+        : '/sound%20alert/Alert_Yourtimeisup.mp3';
       if (S.alarmPlaying) return;
       S.alarmAudio = S.alarmAudio || new Audio();
       S.alarmAudio.src = src;
@@ -317,10 +321,59 @@
       delete S.alarmFired[ctlId]; delete S.qAlarmFired[ctlId];
       try { sessionStorage.removeItem('ctl_q_alarm_' + ctlId); } catch (_) {}
 
+      // ── BUG 1 FIX: log booking to Google Sheets ──────────────────────────
+      _logToSheet(ctlId, bkData, 'Direct booking');
+
       _setBusy(false); _renderCards(); _showSuccess(ctlId, task, bkData.endMs);
       if (wantsAlarm) { _askNotifPerm(); _toast('🔔 Alarm Set', 'You\'ll be alerted when your session ends.', 'success'); }
     } catch (e) { _setBusy(false); _toast('❌ Network Error', 'Cannot reach server. Check connection.', 'warning'); }
   };
+
+  // ── GAS SHEET LOGGER ─────────────────────────────────────────────────────
+  // Sends booking data to the Google Apps Script endpoint (doPost) so it gets
+  // recorded in the "CONTROLLER LAB BACKUP" sheet.
+  // Called from both direct booking AND queue-start paths.
+  function _logToSheet(ctlId, bkData, note) {
+    try {
+      var endpoint = window._CTL_SHEETS_ENDPOINT || '';
+      if (!endpoint) return; // endpoint not configured — skip silently
+
+      var ctl = S.items.find(function (c) { return c.id === ctlId; }) || {};
+      var ctlLabel = (function (type) {
+        var m = { 'E2': 'E2 Controller', 'E3': 'E3 Gateway', 'Site Supervisor': 'Site Supervisor' };
+        return m[type] || type || 'Controller';
+      })(ctl.type);
+
+      var ts = new Date().toLocaleString('en-US', {
+        timeZone: 'Asia/Manila',
+        month: 'short', day: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+      }) + ' PHT';
+
+      var payload = new URLSearchParams({
+        timestamp:  ts,
+        user:       bkData.user        || '',
+        controller: ctlLabel + ' — ' + (ctl.ip || '—'),
+        task:       bkData.task        || '',
+        duration:   bkData.duration    || '',
+        backupFile: bkData.backupFile  || '',
+        note:       note               || 'Direct booking'
+      });
+
+      fetch(endpoint, { method: 'POST', mode: 'no-cors', body: payload })
+        .catch(function () { /* silent — GAS is best-effort */ });
+
+      // Also feed the per-controller in-app backup log if available
+      if (typeof window._ctlAppendBackupLog === 'function') {
+        window._ctlAppendBackupLog(ctlId, {
+          timestamp:  ts,
+          user:       bkData.user       || '',
+          task:       bkData.task       || '',
+          backupFile: bkData.backupFile || ''
+        });
+      }
+    } catch (_) {}
+  }
 
   function _showSuccess(ctlId, task, endMs) {
     var succ = document.getElementById('hp-ctl-bk-success');
