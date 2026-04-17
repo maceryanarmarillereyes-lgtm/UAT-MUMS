@@ -1745,8 +1745,10 @@
   var BACKUP_FOLDER_URL = 'https://mycopeland.sharepoint.com/sites/AdvanceServices/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FAdvanceServices%2FShared%20Documents%2FManila%20Controller%20Appsheet%20Project%2FMUMS%20APP%2FCONTROLLER%20LAB%20BACKUP%20FILE&viewid=e4a428c7%2D1e26%2D4929%2D9fe6%2D85f5f21174a9';
   var BACKUP_LS_KEY     = 'mums_ctl_log_backup';
   var SHEETS_ENDPOINT   = window._CTL_SHEETS_ENDPOINT || '';
-  var TIMEUP_SOUND_URL  = '/sound%20alert/Alert_Yourtimeisup.mp3';
-  var QUEUE_SOUND_URL   = '/sound%20alert/Alert_Yourturntousethecontroller.mp3';
+  // Root-level paths are the ONLY reliable way to serve audio in Cloudflare Pages.
+  // Folder names with spaces (/sound%20alert/) fail silently in many CDN configs.
+  var TIMEUP_SOUND_URL  = '/Alert_Yourtimeisup.mp3';
+  var QUEUE_SOUND_URL   = '/Alert_Yourturntousethecontroller.mp3';
   var SOUND_FALLBACK    = '/sound_alert_queue.mp3';
 
   /* ── State ──────────────────────────────────────────────────────────────── */
@@ -2418,7 +2420,7 @@
     audio.loop   = true;
     audio.volume = 0.92;
     _timeUpState.audio = audio;
-    _playAudio(audio, [TIMEUP_SOUND_URL, '/sound alert/Alert_Yourtimeisup.mp3', SOUND_FALLBACK], 0);
+    _playAudio(audio, [TIMEUP_SOUND_URL, '/sound_alert_queue.mp3'], 0);
     _timeUpState.stopTimer = setTimeout(function () {
       _timeUpDismissed[_timeUpState.key] = Date.now();
       _stopTimeUpAlert();
@@ -2444,7 +2446,7 @@
     _queueAudio = new Audio();
     _queueAudio.loop   = true;
     _queueAudio.volume = 0.85;
-    _playAudio(_queueAudio, [QUEUE_SOUND_URL, '/sound alert/Alert_Yourturntousethecontroller.mp3', SOUND_FALLBACK], 0);
+    _playAudio(_queueAudio, [QUEUE_SOUND_URL, '/sound_alert_queue.mp3'], 0);
   }
 
   function _clearBackupUploadTimer() {
@@ -3228,6 +3230,20 @@
 
   /* BUG 6 FIX: expose syncTimers for renderMainList */
   window._ctlSyncTimers = _syncTimers;
+
+  /* ── Sheet logger bridge — used by ctl_booking.js (new layout) ───────────────
+     Exposes the internal buildFormPayload + SHEETS_ENDPOINT so the new
+     ctl_booking.js can log bookings to Google Sheets using the EXACT same
+     code path that already works. Call as:
+       window._ctlSendToSheet({ timestamp, user, controller, task, duration, backupFile, note })
+  ──────────────────────────────────────────────────────────────────────────── */
+  window._ctlSendToSheet = function (payload) {
+    try {
+      if (!SHEETS_ENDPOINT) return;
+      fetch(SHEETS_ENDPOINT, { method: 'POST', mode: 'no-cors', body: buildFormPayload(payload) })
+        .catch(function () {});
+    } catch (_) {}
+  };
 
   /* ── Keyboard + click wiring ──────────────────────────────────────────────  */
   document.addEventListener('click', function (e) {

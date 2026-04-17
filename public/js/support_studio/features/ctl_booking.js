@@ -77,16 +77,25 @@
   // ── ALARM & NOTIFICATION ──────────────────────────────────────────────────
   // type === 'done'  → session ended   → play Alert_Yourtimeisup
   // type === 'queue' → it's your turn  → play Alert_Yourturntousethecontroller
+  // Root-level MP3 paths — reliable in ALL CDN/Cloudflare environments.
+  // Files with spaces in the folder name (/sound%20alert/) fail silently.
+  var ALARM_SRC_TIMEUP = '/Alert_Yourtimeisup.mp3';
+  var ALARM_SRC_QUEUE  = '/Alert_Yourturntousethecontroller.mp3';
+  var ALARM_SRC_LEGACY = '/sound_alert_queue.mp3'; // fallback
+
   function _playAlarm(type) {
     try {
-      var src = type === 'queue'
-        ? '/sound%20alert/Alert_Yourturntousethecontroller.mp3'
-        : '/sound%20alert/Alert_Yourtimeisup.mp3';
+      // Pick the correct file then fall back to the legacy root mp3
+      var primary = (type === 'queue') ? ALARM_SRC_QUEUE : ALARM_SRC_TIMEUP;
       if (S.alarmPlaying) return;
-      S.alarmAudio = S.alarmAudio || new Audio();
-      S.alarmAudio.src = src;
+      S.alarmAudio = new Audio();
+      S.alarmAudio.src = primary;
       S.alarmAudio.currentTime = 0;
       S.alarmPlaying = true;
+      // If primary fails to load, fall back to the legacy root file
+      S.alarmAudio.onerror = function () {
+        try { S.alarmAudio.src = ALARM_SRC_LEGACY; S.alarmAudio.play().catch(function () {}); } catch (_) {}
+      };
       S.alarmAudio.play().catch(function () {});
       S.alarmAudio.onended = function () { S.alarmPlaying = false; };
       setTimeout(function () { try { S.alarmAudio.pause(); S.alarmAudio.currentTime = 0; } catch (_) {} S.alarmPlaying = false; }, 30000);
@@ -330,19 +339,16 @@
   };
 
   // ── GAS SHEET LOGGER ─────────────────────────────────────────────────────
-  // Sends booking data to the Google Apps Script endpoint (doPost) so it gets
-  // recorded in the "CONTROLLER LAB BACKUP" sheet.
-  // Called from both direct booking AND queue-start paths.
+  // Uses window._ctlSendToSheet exposed by core_ui.js — which uses the EXACT
+  // same internal buildFormPayload() + SHEETS_ENDPOINT that already works.
+  // This guarantees both code paths hit GAS identically.
   function _logToSheet(ctlId, bkData, note) {
     try {
-      var endpoint = window._CTL_SHEETS_ENDPOINT || '';
-      if (!endpoint) return; // endpoint not configured — skip silently
+      // Bridge must be ready (core_ui.js loads before this file)
+      if (typeof window._ctlSendToSheet !== 'function') return;
 
       var ctl = S.items.find(function (c) { return c.id === ctlId; }) || {};
-      var ctlLabel = (function (type) {
-        var m = { 'E2': 'E2 Controller', 'E3': 'E3 Gateway', 'Site Supervisor': 'Site Supervisor' };
-        return m[type] || type || 'Controller';
-      })(ctl.type);
+      var ctlLabel = { 'E2': 'E2 Controller', 'E3': 'E3 Gateway', 'Site Supervisor': 'Site Supervisor' }[ctl.type] || (ctl.type || 'Controller');
 
       var ts = new Date().toLocaleString('en-US', {
         timeZone: 'Asia/Manila',
@@ -350,20 +356,17 @@
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
       }) + ' PHT';
 
-      var payload = new URLSearchParams({
+      window._ctlSendToSheet({
         timestamp:  ts,
-        user:       bkData.user        || '',
-        controller: ctlLabel + ' — ' + (ctl.ip || '—'),
-        task:       bkData.task        || '',
-        duration:   bkData.duration    || '',
-        backupFile: bkData.backupFile  || '',
-        note:       note               || 'Direct booking'
+        user:       bkData.user       || '',
+        controller: ctlLabel + ' \u2014 ' + (ctl.ip || '\u2014'),
+        task:       bkData.task       || '',
+        duration:   bkData.duration   || '',
+        backupFile: bkData.backupFile || '',
+        note:       note              || 'Direct booking'
       });
 
-      fetch(endpoint, { method: 'POST', mode: 'no-cors', body: payload })
-        .catch(function () { /* silent — GAS is best-effort */ });
-
-      // Also feed the per-controller in-app backup log if available
+      // Also sync the in-app per-controller backup log
       if (typeof window._ctlAppendBackupLog === 'function') {
         window._ctlAppendBackupLog(ctlId, {
           timestamp:  ts,
