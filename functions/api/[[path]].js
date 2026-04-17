@@ -145,6 +145,7 @@ async function getRoutes(env) {
     // ── Controller Testing Lab — shared config (all users see same controllers) ──
     'studio/ctl_lab_config':      unwrapCjs(await import('../../server/routes/studio/ctl_lab_config.js')),
     'studio/ctl_lab_state':       unwrapCjs(await import('../../server/routes/studio/ctl_lab_state.js')),
+    'studio/ctl_lab_log':         unwrapCjs(await import('../../server/routes/studio/ctl_lab_log.js')),
 
     // ── ICare Oncall Tech — QB On-Call Schedule ──────────────────────────────
     'studio/oncall_settings':     unwrapCjs(await import('../../server/routes/studio/oncall_settings.js')),

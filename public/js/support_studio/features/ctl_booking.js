@@ -330,7 +330,7 @@
       delete S.alarmFired[ctlId]; delete S.qAlarmFired[ctlId];
       try { sessionStorage.removeItem('ctl_q_alarm_' + ctlId); } catch (_) {}
 
-      // ── BUG 1 FIX: log booking to Google Sheets ──────────────────────────
+      // ── BUG 1 FIX: log booking to Google Sheets (server-verified path) ──
       _logToSheet(ctlId, bkData, 'Direct booking');
 
       _setBusy(false); _renderCards(); _showSuccess(ctlId, task, bkData.endMs);
@@ -342,11 +342,8 @@
   // Uses window._ctlSendToSheet exposed by core_ui.js — which uses the EXACT
   // same internal buildFormPayload() + SHEETS_ENDPOINT that already works.
   // This guarantees both code paths hit GAS identically.
-  function _logToSheet(ctlId, bkData, note) {
+  async function _logToSheet(ctlId, bkData, note) {
     try {
-      // Bridge must be ready (core_ui.js loads before this file)
-      if (typeof window._ctlSendToSheet !== 'function') return;
-
       var ctl = S.items.find(function (c) { return c.id === ctlId; }) || {};
       var ctlLabel = { 'E2': 'E2 Controller', 'E3': 'E3 Gateway', 'Site Supervisor': 'Site Supervisor' }[ctl.type] || (ctl.type || 'Controller');
 
@@ -356,7 +353,7 @@
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
       }) + ' PHT';
 
-      window._ctlSendToSheet({
+      var payload = {
         timestamp:  ts,
         user:       bkData.user       || '',
         controller: ctlLabel + ' \u2014 ' + (ctl.ip || '\u2014'),
@@ -364,7 +361,22 @@
         duration:   bkData.duration   || '',
         backupFile: bkData.backupFile || '',
         note:       note              || 'Direct booking'
-      });
+      };
+
+      var ok = false;
+      try {
+        var r = await fetch('/api/studio/ctl_lab_log', {
+          method: 'POST',
+          headers: _hdrs(),
+          body: JSON.stringify(payload)
+        });
+        ok = !!(r && r.ok);
+      } catch (_) {}
+
+      // Fallback path — keep legacy browser logger as secondary channel.
+      if (!ok && typeof window._ctlSendToSheet === 'function') {
+        try { window._ctlSendToSheet(payload); } catch (_) {}
+      }
 
       // Also sync the in-app per-controller backup log
       if (typeof window._ctlAppendBackupLog === 'function') {
