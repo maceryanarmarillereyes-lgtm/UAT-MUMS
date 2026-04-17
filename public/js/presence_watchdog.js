@@ -46,14 +46,9 @@
   // Watchdog fires HB only — roster fetch stays with presence_client (90s)
   // Gap threshold = 1.5× main HB interval: fires immediately if 67s+ since last beat
   // This ensures user never misses more than 1 HB before watchdog recovers it
-  // ── PERF FIX v4.0: FREE TIER OPTIMIZED INTERVALS ──────────────────────────
-  // Watchdog POLL increased from 45s → 150s (backup only; presence_client is primary).
-  // Gap threshold matches 2× new HB interval (240s) → 300s.
-  // Activity debounce: 180s (was 90s) — prevents mouse-move storms.
-  // With 30 users: watchdog HB = 30 × (3600/150) = 720 req/hr (was 2,400/hr).
-  var WATCHDOG_POLL_MS     = 150000; // 150s backup poll (was 45s — 3.3× reduction)
-  var WATCHDOG_GAP_MS      = 300000; // Fire if >300s since last beat (2× 150s interval)
-  var ACTIVITY_DEBOUNCE_MS = 180000; // Activity-triggered HB max 1 per 180s (was 90s)
+  var WATCHDOG_POLL_MS     = 45000;  // 45s — matches main HB interval (backup only)
+  var WATCHDOG_GAP_MS      = 67000;  // Fire if >67s since last beat (1.5× 45s interval)
+  var ACTIVITY_DEBOUNCE_MS = 90000;  // Activity-triggered HB max 1 per 90s
   var STORAGE_KEY          = 'mums_watchdog_last_hb';
   var CLIENT_ID_KEY        = 'mums_client_id';
 
@@ -63,14 +58,6 @@
   var hbInFlight      = false;
   var initialized     = false;
   var hiddenAt        = 0; // timestamp when tab went hidden
-  var jwtCacheValue   = '';
-  var jwtCacheAt      = 0;
-  var jwtInFlight     = null;
-  var JWT_CACHE_MS    = 30000;
-  var EVENT_COALESCE_MS = 2000;
-  var heartbeatCoalesceTimer = null;
-  var consecutiveAuthErrors = 0;
-  var authBackoffUntil = 0;
 
   // ── HELPERS ─────────────────────────────────────────────────────────────────
   function now() { return Date.now(); }
@@ -92,13 +79,6 @@
   }
 
   async function getJwt() {
-    var cachedAge = now() - jwtCacheAt;
-    if (jwtCacheValue && cachedAge >= 0 && cachedAge < JWT_CACHE_MS) {
-      return jwtCacheValue;
-    }
-    if (jwtInFlight) return await jwtInFlight;
-
-    jwtInFlight = (async function(){
     try {
       if (window.CloudAuth) {
         if (typeof CloudAuth.ensureFreshSession === 'function') {
@@ -106,39 +86,19 @@
         }
         if (typeof CloudAuth.accessToken === 'function') {
           var tok = CloudAuth.accessToken();
-          if (tok) {
-            jwtCacheValue = tok;
-            jwtCacheAt = now();
-            return tok;
-          }
+          if (tok) return tok;
         }
         if (typeof CloudAuth.loadSession === 'function') {
           await CloudAuth.loadSession();
-          if (typeof CloudAuth.accessToken === 'function') {
-            var loaded = CloudAuth.accessToken() || '';
-            if (loaded) {
-              jwtCacheValue = loaded;
-              jwtCacheAt = now();
-            }
-            return loaded;
-          }
+          if (typeof CloudAuth.accessToken === 'function') return CloudAuth.accessToken() || '';
         }
       }
     } catch (_) {}
     return '';
-    })();
-
-    try {
-      var jwt = await jwtInFlight;
-      return jwt || '';
-    } finally {
-      jwtInFlight = null;
-    }
   }
 
   // ── CORE HEARTBEAT ──────────────────────────────────────────────────────────
   async function fireHeartbeat(reason) {
-    if (authBackoffUntil && now() < authBackoffUntil) return;
     if (hbInFlight) return;
     hbInFlight = true;
     try {
@@ -168,32 +128,17 @@
       });
 
       if (res.ok) {
-        consecutiveAuthErrors = 0;
-        authBackoffUntil = 0;
         writeLastBeat(now());
         // NOTE: We intentionally do NOT call triggerRosterRefresh() here.
         // presence_client.js already polls the roster every 60s.
         // Calling it here too would double the egress. The bar will update
         // within 60s naturally, or instantly on visibility restore.
       }
-      if (res.status === 401 || res.status === 403) {
-        consecutiveAuthErrors = Math.min(consecutiveAuthErrors + 1, 8);
-        var backoffMs = Math.min(60000, Math.pow(2, consecutiveAuthErrors) * 1000);
-        authBackoffUntil = now() + backoffMs;
-      }
     } catch (_) {
       // Silent — best-effort
     } finally {
       hbInFlight = false;
     }
-  }
-
-  function coalescedHeartbeat(reason) {
-    if (heartbeatCoalesceTimer) return;
-    heartbeatCoalesceTimer = setTimeout(function(){
-      heartbeatCoalesceTimer = null;
-      fireHeartbeat(reason || 'coalesced');
-    }, EVENT_COALESCE_MS);
   }
 
   // ── ROSTER REFRESH ──────────────────────────────────────────────────────────
@@ -266,7 +211,7 @@
     var hidden = now() - hiddenAt;
     var stale = (now() - (readLastBeat() || lastBeatAt)) > WATCHDOG_GAP_MS;
     if (stale || hidden > WATCHDOG_GAP_MS) {
-      coalescedHeartbeat('visibility-restore');
+      fireHeartbeat('visibility-restore');
       // One-shot roster refresh on wakeup is acceptable (user needs to see current state)
       triggerRosterRefresh();
     }
@@ -282,12 +227,12 @@
 
   window.addEventListener('focus', function () {
     var stale = (now() - (readLastBeat() || lastBeatAt)) > WATCHDOG_GAP_MS;
-    if (stale) coalescedHeartbeat('window-focus');
+    if (stale) fireHeartbeat('window-focus');
   });
 
   window.addEventListener('online', function () {
     // Network came back — fire immediately so user reappears ASAP
-    coalescedHeartbeat('network-online');
+    fireHeartbeat('network-online');
   });
 
   // ── ACTIVITY DETECTION ──────────────────────────────────────────────────────
@@ -299,7 +244,7 @@
     lastActivityAt = t;
     // Only beat if the last confirmed beat is getting stale
     if ((t - (readLastBeat() || lastBeatAt)) > (WATCHDOG_GAP_MS / 2)) {
-      coalescedHeartbeat('user-activity');
+      fireHeartbeat('user-activity');
     }
   }
 

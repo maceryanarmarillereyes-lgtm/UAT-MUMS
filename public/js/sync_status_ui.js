@@ -15,12 +15,9 @@
   // Apply improvements immediately (e.g., Connected), but delay degradations
   // (e.g., Connected -> Offline) to avoid transient drops during token refresh.
   const DEBOUNCE_MS = 200;
-  // BUG FIX 2026-04-16: Increased delays to absorb token-rotation reconnect cycle.
-  // Token refresh takes ~400ms debounce + channel setup time. Without longer delays
-  // the UI briefly flashes orange "Connecting" after every 1-hour token refresh.
-  const DOWNGRADE_DELAY_MS = 2500;  // Connected -> (Connecting/Polling/Offline) — was 800ms
-  const OFFLINE_CONFIRM_MS = 3000;  // Require sustained offline before showing — was 1200ms
-  const RECENT_CONNECT_GRACE_MS = 2000; // Grace after connect — was 1000ms
+  const DOWNGRADE_DELAY_MS = 800;   // Connected -> (Connecting/Polling/Offline)
+  const OFFLINE_CONFIRM_MS = 1200;  // Require sustained offline before showing
+  const RECENT_CONNECT_GRACE_MS = 1000;
 
   let lastApplied = { mode: null, detail: '' };
   let lastConnectedAt = 0;

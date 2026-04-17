@@ -280,10 +280,6 @@
               <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
               <span class="ms-ni-text"><span class="ms-ni-name">Login Mode</span><span class="ms-ni-sub">Auth method control</span></span>
             </button>
-            <button class="ms-nav-item ms-admin-section" id="msNav_mailboxstatus" data-panel="mailboxstatus" type="button" style="display:none">
-              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
-              <span class="ms-ni-text"><span class="ms-ni-name">Mailbox Control</span><span class="ms-ni-sub">Enable / disable mailbox</span></span>
-            </button>
             <button class="ms-nav-item ms-admin-section" id="msNav_appearancedefaults" data-panel="appearancedefaults" type="button" style="display:none">
               <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="2.2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
               <span class="ms-ni-text"><span class="ms-ni-name">Appearance Defaults</span><span class="ms-ni-sub">Force APEX + brightness</span></span>
@@ -841,7 +837,6 @@
                 <button class="btn primary" type="button" id="calSaveBtn" style="background:linear-gradient(135deg,#0d9488,#0891b2);border-color:rgba(20,184,166,.5)">Save Calendar Settings</button>
               </div>
             </div>
-          </div>
 
           <!-- PANEL: Login Mode (Admin) -->
           <div class="ms-panel ms-admin-section" id="msp_loginmode" data-panel="loginmode" data-legacy-id="loginModeCard" style="display:none">
@@ -870,71 +865,6 @@
               <div class="ms-panel-actions">
                 <button class="btn primary" id="saveLoginModeBtn" type="button">Save</button>
                 <span id="loginModeSaveMsg" class="small" style="opacity:0;transition:opacity .4s"></span>
-              </div>
-            </div>
-          </div>
-
-          <!-- PANEL: Mailbox Control (Super Admin only) -->
-          <div class="ms-panel ms-admin-section" id="msp_mailboxstatus" data-panel="mailboxstatus" style="display:none">
-            <div class="ms-panel-hero">
-              <div class="ms-hero-icon ms-hero-icon--admin">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                  <polyline points="22,6 12,13 2,6"/>
-                </svg>
-              </div>
-              <div class="ms-hero-text">
-                <div class="ms-hero-title">Mailbox Control</div>
-                <div class="ms-hero-desc" id="mailboxStatusDesc">Manage the global on/off state of the Mailbox feature for all users.</div>
-              </div>
-            </div>
-            <div class="ms-panel-body">
-
-              <!-- Current status banner -->
-              <div id="mailboxStatusBanner" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;margin-bottom:18px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);">
-                <div id="mailboxStatusDot" style="width:10px;height:10px;border-radius:50%;background:#22c55e;flex-shrink:0;box-shadow:0 0 8px rgba(34,197,94,.6);"></div>
-                <div>
-                  <div id="mailboxStatusLabel" style="font-size:13px;font-weight:800;color:#4ade80;">Mailbox is ENABLED</div>
-                  <div id="mailboxStatusMeta" style="font-size:11px;color:rgba(148,163,184,.65);margin-top:2px;">All users have full mailbox access.</div>
-                </div>
-              </div>
-
-              <div class="ms-ctrl-group">
-                <div class="ms-ctrl-group-label">Global Mailbox Switch</div>
-
-                <div class="ms-ctrl-row">
-                  <div class="ms-ctrl-label">
-                    <div class="ms-ctrl-name">Mailbox Feature</div>
-                    <div class="ms-ctrl-hint">
-                      When disabled: the Mailbox page shows a "temporarily disabled" notice for all users.
-                      All Supabase and Cloudflare requests from the mailbox (sync, assignment, real-time timers) are
-                      completely stopped — protecting your free-tier quota.
-                    </div>
-                  </div>
-                  <div class="ms-ctrl-control">
-                    <label class="ms-toggle-wrap" title="Toggle Mailbox On/Off">
-                      <input type="checkbox" id="mailboxEnabledToggle" class="ms-toggle-input" checked />
-                      <span class="ms-toggle-track"><span class="ms-toggle-thumb"></span></span>
-                    </label>
-                  </div>
-                </div>
-
-                <!-- Disable warning -->
-                <div id="mailboxDisableWarning" style="display:none;margin-top:12px;padding:12px 14px;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.25);border-radius:8px;">
-                  <div style="font-size:12px;font-weight:700;color:#fca5a5;margin-bottom:4px;">⚠️ Disabling the Mailbox will:</div>
-                  <ul style="margin:0;padding-left:18px;font-size:11px;color:rgba(148,163,184,.75);line-height:1.7;">
-                    <li>Stop all roster sync, assignment, and real-time timer requests</li>
-                    <li>Stop periodic schedule re-sync (every 90s) to Supabase</li>
-                    <li>Stop presence updates triggered by the mailbox</li>
-                    <li>Show "Mailbox has been temporarily disabled" to all users</li>
-                    <li>Super Admin can re-enable at any time from this panel</li>
-                  </ul>
-                </div>
-              </div>
-
-              <div class="ms-panel-actions">
-                <span id="mailboxStatusSaveMsg" class="small" style="opacity:0;transition:opacity .4s;color:var(--success,#22c55e)"></span>
-                <button class="btn primary" id="saveMailboxStatusBtn" type="button">Save</button>
               </div>
             </div>
           </div>
@@ -1489,7 +1419,6 @@
   <script src="/js/pages/commands.js?v=p1-664" defer></script>
   <script src="/js/pages/privileges.js?v=p1-664" defer></script>
   <script src="/js/pages/gmt_overview.js?v=p1-664" defer></script>
-  <script src="/js/pages/system.js?v=p4-001" defer></script>
 
   <script src="/js/pages/distribution_monitoring.js?v=p1-664" defer></script>
   <!-- ── RELEASE NOTES VIEWER MODAL ─────────────────────────────── -->

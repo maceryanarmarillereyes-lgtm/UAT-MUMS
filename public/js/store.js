@@ -2306,9 +2306,7 @@
         }catch(_){ }
       };
       update();
-      // PERF FIX v4.0: Increased from 15s to 120s — was firing 4× per minute unnecessarily.
-      // This timer only updates the in-memory presence map; realtime channel handles live sync.
-      window.__mumsPresenceTimer = setInterval(update, 120000);
+      window.__mumsPresenceTimer = setInterval(update, 15000);
 
       // Best-effort cleanup on tab close
       window.addEventListener('beforeunload', ()=>{ try{ Store.setOffline(uid); }catch(_){ } });
@@ -2450,8 +2448,8 @@ Store.startMailboxOverrideSync = function(opts){
     S.poll = poll;
 
     // IO-OPT: Adaptive polling — fast when override is active, slow when idle.
-    // PERF FIX v4.0: Active = MAILBOX_OVERRIDE_POLL_MS (default 120s), Idle = 6× active = 720s.
-    // With 30 users: 30 × (24hr × 3600s / 720s) = 3,600 reads/day idle (was 43,200 — 12× reduction).
+    // Defaults: 10s active, 120s idle (was 60s idle — doubled for Free plan IO savings).
+    // With 30 users: 30 × (24hr × 3600s / 120s) = 21,600 reads/day idle (was 43,200).
     const getAdaptiveInterval = () => {
       try {
         const envPoll = window.MUMS_ENV && Number(window.MUMS_ENV.MAILBOX_OVERRIDE_POLL_MS);

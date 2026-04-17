@@ -603,23 +603,21 @@
       min-height: 0;
     }
     /* BUG 2 FIX: CTL card — cap height so it never overflows the viewport bottom.
-       The hp-ctl-list inside uses overflow-y:auto so controllers stay scrollable.
-       NEW LAYOUT: Expanded to full width (span 4) — old left-side panel removed. */
+       The hp-ctl-list inside uses overflow-x:auto so controllers stay scrollable. */
     #hp-controller-testing-lab-card {
-      grid-column: span 4;
+      grid-column: span 3;
       max-height: none;
       display: flex;
       flex-direction: column;
     }
     #hp-controller-testing-lab-card .hp-body {
       flex: 1;
-      min-height: 180px;
-      max-height: 340px;
+      min-height: 0;
       overflow: hidden;
       display: flex;
       flex-direction: column;
     }
-    #hp-connect-credential-card { grid-column: span 2; }
+    #hp-connect-credential-card { grid-column: span 1; }
 
     .hp-apps-manage-btn {
       margin-left: auto;
@@ -753,23 +751,20 @@
       min-height: 0;
       min-width: 0;
       display: flex;
-      /* NEW LAYOUT: horizontal row with wrapping for side-by-side controller cards.
-         Each ctl-card auto-sizes to fill available width. Old row-column layout retired. */
       flex-direction: row;
-      flex-wrap: wrap;
-      align-items: flex-start;
-      align-content: flex-start;
-      gap: 10px;
-      overflow-x: hidden;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      gap: 0;
+      overflow-x: auto;
       overflow-y: auto;
       background: transparent;
       border: none;
       border-radius: 0;
-      padding: 10px;
+      padding-bottom: 0;
       scrollbar-width: thin;
       scrollbar-color: rgba(255,255,255,.12) transparent;
     }
-    .hp-ctl-list::-webkit-scrollbar { width: 3px; }
+    .hp-ctl-list::-webkit-scrollbar { height: 3px; }
     .hp-ctl-list::-webkit-scrollbar-thumb { background: rgba(162,93,220,.3); border-radius: 99px; }
 
     /* ── Empty state ── */
@@ -798,10 +793,10 @@
     }
     .hp-ctl-col:last-child { border-right: none; }
     .hp-ctl-col:hover { background: rgba(255,255,255,.02); }
-    /* Actions hidden by default — visible on hover/focus; always visible in-use */
+    /* Actions hidden by default — visible on hover */
     .hp-ctl-col-actions { opacity: 0; transform: translateY(6px); transition: opacity .22s ease, transform .22s ease; pointer-events: none; }
-    .hp-ctl-col:hover .hp-ctl-col-actions,
-    .hp-ctl-col:focus-within .hp-ctl-col-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    .hp-ctl-col:hover .hp-ctl-col-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    /* Always show actions when controller is in-use (user strip/countdown need them visible) */
     .hp-ctl-col.in-use .hp-ctl-col-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
 
     /* Controller type badge at top */
@@ -1197,7 +1192,7 @@
       border-color: rgba(88,166,255,.55);
       box-shadow: 0 0 0 3px rgba(88,166,255,.1);
     }
-    .hp-ctl-settings-select option { background: #0f172a; color: #e2e8f0; }
+    .hp-ctl-settings-select option { background: #0f172a; }
     .hp-ctl-save-btn {
       width: 100%;
       border: none;
@@ -4744,15 +4739,10 @@
 
     /* ── Responsive hardening: keep Controller Lab actions visible on small screens ── */
     @media (max-width: 1366px), (max-height: 900px) {
-      /* NEW LAYOUT: row-wrap stays intact; cards compress to min-width */
       .hp-ctl-list {
         overflow-y: auto;
-        overflow-x: hidden;
-        flex-direction: row;
-        flex-wrap: wrap;
       }
 
-      /* OLD hp-ctl-col styles kept for graceful fallback (should never render) */
       .hp-ctl-col {
         padding: 10px 8px 8px;
         gap: 6px;

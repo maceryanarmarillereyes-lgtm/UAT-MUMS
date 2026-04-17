@@ -901,25 +901,18 @@
       if (_ctlSavePending) return;
       var tok = _ctlGetToken();
       if (!tok) return;
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-        setTimeout(function(){ _ctlPushToServer(items); }, 1500);
-        return;
-      }
       _ctlSavePending = true;
       fetch('/api/studio/ctl_lab_config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
         body: JSON.stringify({ items: items })
-      }).catch(function(){
-        setTimeout(function(){ _ctlPushToServer(items); }, 1500);
-      }).finally(function(){ _ctlSavePending = false; });
+      }).catch(function(){}).finally(function(){ _ctlSavePending = false; });
     }
 
     // Called once on mount — fetches the authoritative shared list from Supabase
     function _ctlLoadFromServer() {
       var tok = _ctlGetToken();
       if (!tok) { setTimeout(_ctlLoadFromServer, 1200); return; }
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) { setTimeout(_ctlLoadFromServer, 1500); return; }
       fetch('/api/studio/ctl_lab_config', {
         headers: { 'Authorization': 'Bearer ' + tok, 'Cache-Control': 'no-store' }
       })
@@ -935,7 +928,7 @@
         if (localItems.length > serverItems.length) _ctlPushToServer(localItems);
         renderAll();
       })
-      .catch(function(){ setTimeout(_ctlLoadFromServer, 1800); });
+      .catch(function(){});
     }
     function imageFor(type) {
       var hit = CATALOG[type]; return hit && hit.img ? hit.img : FALLBACK_IMG;
@@ -1089,11 +1082,12 @@
     function renderMainList(items){
       var host=document.getElementById('hp-ctl-list'); if(!host) return;
       if(!items.length){
-        if(window._ctlTimers){Object.keys(window._ctlTimers).forEach(function(k){var t=window._ctlTimers[k];clearInterval(t&&t.interval?t.interval:t);});}
-        window._ctlTimers={};
         host.innerHTML='<div class="hp-ctl-empty"><i class="fas fa-network-wired"></i><span>No controller configured yet</span><span style="font-size:9px;opacity:.5;">Click the cog icon to add one</span></div>';
         return;
       }
+      if(window._ctlTimers){Object.keys(window._ctlTimers).forEach(function(k){clearInterval(window._ctlTimers[k]);});}
+      window._ctlTimers={};
+
       host.innerHTML=items.map(function(item){
         var cls=statusCls(item.status);
         var booking=getBooking(item.id);
@@ -1203,13 +1197,7 @@
     function renderAll() {
       var items = getItems();
       renderChipRow(items);
-      // NEW LAYOUT GATE: ctl_booking.js sets window._ctlNewLayoutActive = true
-      // and exclusively owns #hp-ctl-list rendering via _renderCards().
-      // Do NOT call renderMainList when the new layout is active — it would
-      // overwrite the new card-based UI with the old hp-ctl-col columns.
-      if (!window._ctlNewLayoutActive) {
-        renderMainList(items);
-      }
+      renderMainList(items);
     }
 
     function addController() {
@@ -1745,10 +1733,8 @@
   var BACKUP_FOLDER_URL = 'https://mycopeland.sharepoint.com/sites/AdvanceServices/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2FAdvanceServices%2FShared%20Documents%2FManila%20Controller%20Appsheet%20Project%2FMUMS%20APP%2FCONTROLLER%20LAB%20BACKUP%20FILE&viewid=e4a428c7%2D1e26%2D4929%2D9fe6%2D85f5f21174a9';
   var BACKUP_LS_KEY     = 'mums_ctl_log_backup';
   var SHEETS_ENDPOINT   = window._CTL_SHEETS_ENDPOINT || '';
-  // Root-level paths are the ONLY reliable way to serve audio in Cloudflare Pages.
-  // Folder names with spaces (/sound%20alert/) fail silently in many CDN configs.
-  var TIMEUP_SOUND_URL  = '/Alert_Yourtimeisup.mp3';
-  var QUEUE_SOUND_URL   = '/Alert_Yourturntousethecontroller.mp3';
+  var TIMEUP_SOUND_URL  = '/sound%20alert/Alert_Yourtimeisup.mp3';
+  var QUEUE_SOUND_URL   = '/sound%20alert/Alert_Yourturntousethecontroller.mp3';
   var SOUND_FALLBACK    = '/sound_alert_queue.mp3';
 
   /* ── State ──────────────────────────────────────────────────────────────── */
@@ -1785,17 +1771,12 @@
       /* Apply the inline state patch if provided (faster than a full re-fetch) */
       if (e.data.statePatch) _applyStatePatch(e.data.statePatch);
       if (window._ctlRenderAll) window._ctlRenderAll();
-      /* queue_notify — only trigger alarm for the target user */
+      /* BUG 5 FIX: queue_notify — only trigger for the target user */
       if (
         e.data.subtype === 'queue_notify' &&
         _sameUser(e.data.targetUser, _getCurrentUser())
       ) {
         _triggerQueueAlert(e.data.ctrlId, e.data.ctrlLabel, Number(e.data.notifyExpiresAt || 0));
-      }
-      /* booking_expired — re-run queue sweep on ALL tabs so the alarm fires
-         for the next queued user regardless of which tab had the active timer */
-      if (e.data.subtype === 'booking_expired' && e.data.ctrlId) {
-        setTimeout(function() { _ctlNotifyQueue(e.data.ctrlId); }, 200);
       }
     });
   }
@@ -1803,13 +1784,7 @@
   /* BUG 8 FIX: adaptive poll — faster when visible, slower when hidden */
   function _startPoll() {
     if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
-    var interval = (_pushBackoffUntil && Date.now() < _pushBackoffUntil) ? 30000 : _pollInterval;
     _pollTimer = setInterval(function () {
-      // During backoff, use a slower poll to let the server breathe
-      if (_pushBackoffUntil && Date.now() < _pushBackoffUntil) {
-        _startPoll(); // reschedule at 30s
-        return;
-      }
       _loadSharedStateFromServer(function () {
         _ctlSweepQueueTimeouts();
         if (window._ctlRenderAll) window._ctlRenderAll();
@@ -1886,115 +1861,32 @@
   }
 
   /* BUG 1 FIX: server push now includes lockedSince for optimistic locking */
-  /* ═══════════════════════════════════════════════════════════════════════════
-     PUSH PATCH SYSTEM — Per-resource write queue (replaces global _pushInFlight)
-     ───────────────────────────────────────────────────────────────────────────
-     Root causes fixed here:
-     BUG B: A single global _pushInFlight flag blocked ALL concurrent writes.
-            When setBooking() set _pushInFlight=true, any concurrent setQueue()
-            call was silently dropped → queue state never reached the server →
-            poll returned stale data → sweep looped endlessly → 500 storm.
-     FIX:   Per-resource inflight map. Booking writes and queue writes are
-            independent resources and NEVER block each other.
-     BUG C: JSON parse failure on 500 HTML responses left startBtn disabled.
-     FIX:   Always wrap r.json() with a .catch() fallback.
-     ═══════════════════════════════════════════════════════════════════════════ */
-  var _pushInFlight    = {};   // { resourceKey: bool }   — per-resource lock
-  var _pushQueue       = {};   // { resourceKey: [pending] } — coalesce rapid writes
-  var _pushFailCount   = 0;
-  var _pushBackoffUntil = 0;
-  var MAX_PUSH_FAILS   = 5;    // raised: 3 was too low, single transient 500 entered backoff
-  var PUSH_BACKOFF_MS  = 20000; // 20s cooldown (down from 30s for faster recovery)
-
-  function _pushResourceKey(body) {
-    /* Derive a stable resource key so booking and queue writes never collide */
-    if (body && body.booking && body.booking.id) return 'booking:' + body.booking.id;
-    if (body && body.queue   && body.queue.id)   return 'queue:'   + body.queue.id;
-    return 'state'; /* full-state write */
-  }
-
   function _pushSharedPatch(body, onSuccess, onConflict, onError) {
     var tok = _ctlGetToken();
-    if (!tok) { if (onError) onError({ reason: 'no_token' }); return; }
-
-    var now = Date.now();
-    // Global backoff only blocks when we've had many consecutive failures
-    if (_pushBackoffUntil && now < _pushBackoffUntil) {
-      if (onError) onError({ reason: 'backoff' });
-      return;
-    }
-
-    var rk = _pushResourceKey(body);
-    // Per-resource inflight: queue the write instead of dropping it
-    if (_pushInFlight[rk]) {
-      // Store only the LATEST pending write (coalesce rapid edits)
-      _pushQueue[rk] = { body: body, onSuccess: onSuccess, onConflict: onConflict, onError: onError };
-      return;
-    }
-
-    _pushInFlight[rk] = true;
+    if (!tok) return;
     var payload = Object.assign({ lockedSince: _lastServerWrite }, body);
     fetch('/api/studio/ctl_lab_state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
       body: JSON.stringify(payload)
     })
-      .then(function (r) {
-        // Always parse JSON safely — a 500 HTML page would throw and skip all handlers
-        return r.json()
-          .then(function (d) { return { status: r.status, data: d }; })
-          .catch(function () { return { status: r.status, data: { ok: false, error: 'bad_json' } }; });
-      })
+      .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
       .then(function (res) {
-        _pushInFlight[rk] = false;
-        // Drain the queue for this resource key if a newer write arrived during inflight
-        var pending = _pushQueue[rk];
-        delete _pushQueue[rk];
-
         if (res.data && res.data.ok) {
-          _pushFailCount = 0;
-          _pushBackoffUntil = 0;
           _applySharedState(res.data);
           _lastServerWrite = Date.now();
           if (onSuccess) onSuccess(res.data);
-          // Flush the queued write now that we're free
-          if (pending) _pushSharedPatch(pending.body, pending.onSuccess, pending.onConflict, pending.onError);
         } else if (res.status === 409) {
-          _pushFailCount = 0;
-          _pushBackoffUntil = 0;
+          /* BUG 1 FIX: conflict — another user booked first */
           _loadSharedStateFromServer(function () {
             if (window._ctlRenderAll) window._ctlRenderAll();
             if (onConflict) onConflict();
           });
         } else {
-          _pushFailCount++;
-          if (_pushFailCount >= MAX_PUSH_FAILS) {
-            _pushBackoffUntil = Date.now() + PUSH_BACKOFF_MS;
-            console.warn('[CTL] Push failed ' + _pushFailCount + 'x — backing off ' + (PUSH_BACKOFF_MS/1000) + 's');
-          }
           if (onError) onError(res);
-          // Still flush pending even on error — it may be a different payload that succeeds
-          if (pending) _pushSharedPatch(pending.body, pending.onSuccess, pending.onConflict, pending.onError);
         }
       })
-      .catch(function (err) {
-        _pushInFlight[rk] = false;
-        delete _pushQueue[rk];
-        _pushFailCount++;
-        if (_pushFailCount >= MAX_PUSH_FAILS) {
-          _pushBackoffUntil = Date.now() + PUSH_BACKOFF_MS;
-          console.warn('[CTL] Push error ' + _pushFailCount + 'x — backing off ' + (PUSH_BACKOFF_MS/1000) + 's');
-        }
-        if (onError) onError(err);
-      });
-  }
-
-  /* Expose for diagnostic / timer-expiry resets */
-  function _resetPushState() {
-    _pushInFlight = {};
-    _pushQueue    = {};
-    _pushFailCount = 0;
-    _pushBackoffUntil = 0;
+      .catch(function (err) { if (onError) onError(err); });
   }
 
   /* ── Booking / Queue accessors (BUG 2 FIX: always reads _stateCache) ────── */
@@ -2033,19 +1925,14 @@
       if (onConflict) onConflict(serverBooking);
     }, function (err) {
       /* Network/server error (non-409): rollback optimistic write */
-      /* FIX: Only rollback the optimistic update on a real server/network error.
-         Backoff rejections mean the booking state is locally correct. */
-      var reason = err && err.reason;
-      if (reason !== 'backoff') {
-        if (prevBooking) _stateCache.bookings[id] = prevBooking;
-        else delete _stateCache.bookings[id];
-        try {
-          if (prevBooking) localStorage.setItem('ctl_booking_' + id, JSON.stringify(prevBooking));
-          else localStorage.removeItem('ctl_booking_' + id);
-        } catch (_) {}
-        _saveStateCache();
-        if (window._ctlRenderAll) window._ctlRenderAll();
-      }
+      if (prevBooking) _stateCache.bookings[id] = prevBooking;
+      else delete _stateCache.bookings[id];
+      try {
+        if (prevBooking) localStorage.setItem('ctl_booking_' + id, JSON.stringify(prevBooking));
+        else localStorage.removeItem('ctl_booking_' + id);
+      } catch (_) {}
+      _saveStateCache();
+      if (window._ctlRenderAll) window._ctlRenderAll();
       if (onError) onError(err);
     });
     if (window._ctlRenderAll) window._ctlRenderAll();
@@ -2179,16 +2066,11 @@
             _saveStateCache();
             /* Time-up alarm for the session owner */
             _maybeTimeUpAlert(capturedItem, capturedBooking);
-            /* Broadcast expiry — all tabs will re-render and trigger their own notify sweep */
-            _broadcast({
-              type: 'ctl_update',
-              subtype: 'booking_expired',
-              ctrlId: capturedItem.id,
-              statePatch: { bookings: {}, deletedBookings: [capturedItem.id] }
-            });
+            /* Broadcast expiry */
+            _broadcast({ type: 'ctl_update', key: 'ctl_booking_' + capturedItem.id, statePatch: { bookings: {}, deletedBookings: [capturedItem.id] } });
             _pushSharedPatch({ booking: { id: capturedItem.id, data: null } });
-            /* Notify next in queue — runs on the tab that owns the timer */
-            setTimeout(function() { _ctlNotifyQueue(capturedItem.id); }, 300);
+            /* Notify next in queue */
+            _ctlNotifyQueue(capturedItem.id);
             if (window._ctlRenderAll) window._ctlRenderAll();
             return;
           }
@@ -2280,9 +2162,6 @@
   /* ── Queue sweeper ───────────────────────────────────────────────────────── */
   function _ctlSweepQueueTimeouts() {
     if (_queueSweepBusy) return;
-    // FIX: Do not mutate queue state during global backoff window.
-    // During backoff, setQueue calls would hit the failCount limit immediately.
-    if (_pushBackoffUntil && Date.now() < _pushBackoffUntil) return;
     _queueSweepBusy = true;
     try {
       var now = Date.now();
@@ -2420,7 +2299,7 @@
     audio.loop   = true;
     audio.volume = 0.92;
     _timeUpState.audio = audio;
-    _playAudio(audio, [TIMEUP_SOUND_URL, '/sound_alert_queue.mp3'], 0);
+    _playAudio(audio, [TIMEUP_SOUND_URL, '/sound alert/Alert_Yourtimeisup.mp3', SOUND_FALLBACK], 0);
     _timeUpState.stopTimer = setTimeout(function () {
       _timeUpDismissed[_timeUpState.key] = Date.now();
       _stopTimeUpAlert();
@@ -2446,7 +2325,7 @@
     _queueAudio = new Audio();
     _queueAudio.loop   = true;
     _queueAudio.volume = 0.85;
-    _playAudio(_queueAudio, [QUEUE_SOUND_URL, '/sound_alert_queue.mp3'], 0);
+    _playAudio(_queueAudio, [QUEUE_SOUND_URL, '/sound alert/Alert_Yourturntousethecontroller.mp3', SOUND_FALLBACK], 0);
   }
 
   function _clearBackupUploadTimer() {
@@ -2633,8 +2512,6 @@
       }
       var modalNow = document.getElementById('hp-ctl-backup-upload-modal');
       if (modalNow) modalNow.remove();
-      // BUG G FIX: Reset push state on expiry so next queue cycle is not blocked
-      _resetPushState();
       alert('Queue turn expired (3:00). Slot was auto-cleared because backup/start was not completed.');
     }, 1000);
   };
@@ -2707,18 +2584,11 @@
         errorEl.textContent = 'Controller was just booked by ' + esc(who) + '. Please wait for their session to end.';
         errorEl.style.display = 'block';
       }
-    }, function (errRes) {
-      /* BUG C FIX: Server/network error (including backoff/in_flight rejections)
-         ALWAYS re-enable the button so the user is never permanently stuck.
-         Distinguish between a real server error and a local throttle response. */
+    }, function () {
+      /* Server/network error: allow retry and keep queue position */
       if (startBtn) { startBtn.disabled = false; startBtn.innerHTML = '<i class="fas fa-play-circle" style="font-size:14px;"></i> Start My Session'; }
       if (errorEl) {
-        var reason = errRes && errRes.reason;
-        if (reason === 'backoff') {
-          errorEl.textContent = 'Server is temporarily unavailable. Your queue slot is preserved. Please retry in 30 seconds.';
-        } else {
-          errorEl.textContent = 'Unable to start session right now (server unavailable). Your queue slot is preserved. Please retry.';
-        }
+        errorEl.textContent = 'Unable to start session right now (server unavailable). Your queue slot is preserved. Please retry.';
         errorEl.style.display = 'block';
       }
     });
@@ -3230,20 +3100,6 @@
 
   /* BUG 6 FIX: expose syncTimers for renderMainList */
   window._ctlSyncTimers = _syncTimers;
-
-  /* ── Sheet logger bridge — used by ctl_booking.js (new layout) ───────────────
-     Exposes the internal buildFormPayload + SHEETS_ENDPOINT so the new
-     ctl_booking.js can log bookings to Google Sheets using the EXACT same
-     code path that already works. Call as:
-       window._ctlSendToSheet({ timestamp, user, controller, task, duration, backupFile, note })
-  ──────────────────────────────────────────────────────────────────────────── */
-  window._ctlSendToSheet = function (payload) {
-    try {
-      if (!SHEETS_ENDPOINT) return;
-      fetch(SHEETS_ENDPOINT, { method: 'POST', mode: 'no-cors', body: buildFormPayload(payload) })
-        .catch(function () {});
-    } catch (_) {}
-  };
 
   /* ── Keyboard + click wiring ──────────────────────────────────────────────  */
   document.addEventListener('click', function (e) {

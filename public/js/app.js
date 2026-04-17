@@ -1823,15 +1823,7 @@ function updateClocksPreviewTimes(){
         my_attendance: 'schedule',
         my_schedule: 'schedule',
         my_case: 'mailbox',
-        my_task: 'tasks',
-        system: 'dashboard',
-        system_overview: 'dashboard',
-        system_requests: 'dashboard',
-        system_realtime: 'dashboard',
-        system_timers: 'dashboard',
-        system_supabase: 'dashboard',
-        system_cloudflare: 'dashboard',
-        system_queue: 'dashboard',
+        my_task: 'tasks'
       };
       return map[id] || 'dashboard';
     };
@@ -1885,15 +1877,13 @@ function updateClocksPreviewTimes(){
       const id = String(item && item.id || '');
       if(id === 'my_record') return 'records';
       if(id === 'my_reminders' || id === 'team_reminders') return 'notifications';
-      if(id === 'system') return 'system';
       return 'main';
     }
 
     const sectionLabel = {
       main: 'MAIN',
       records: 'RECORDS',
-      notifications: 'NOTIFICATIONS',
-      system: 'SYSTEM'
+      notifications: 'NOTIFICATIONS'
     };
 
     const navItems = Array.isArray(Config.NAV) ? [...Config.NAV] : [];
@@ -2221,9 +2211,7 @@ function updateClocksPreviewTimes(){
     UI.openModal('cropModal');
   }
 
-  function openProfileModal(user, opts){
-    opts = opts || {};
-    var shouldOpenModal = (opts.openModal !== false);
+  function openProfileModal(user){
     const prof = Store.getProfile(user.id) || {};
     const roleUpper0 = String(user && user.role ? user.role : '').trim().toUpperCase();
     const isSuperAdmin0 = (roleUpper0 === 'SUPER_ADMIN');
@@ -2446,14 +2434,10 @@ function updateClocksPreviewTimes(){
 
       const updated = Store.getUsers().find(u=>u.id===user.id);
       if(updated){ renderUserCard(updated); }
-      if(shouldOpenModal){
-        UI.closeModal('profileModal');
-      }
+      UI.closeModal('profileModal');
     };
 
-    if(shouldOpenModal){
-      UI.openModal('profileModal');
-    }
+    UI.openModal('profileModal');
   }
 
   function renderProfileAvatar(photoDataUrl, user){
@@ -2868,7 +2852,6 @@ function updateClocksPreviewTimes(){
   function startAnnouncementRotation(){
     if(annTimer) return;
     updateAnnouncementBar();
-    // PERF FIX v4.0: Increased from 3s to 8s — 3s caused unnecessary DOM thrashing.
     annTimer = setInterval(()=>{
       try{
       const bar = UI.el('#announceBar');
@@ -2878,7 +2861,7 @@ function updateClocksPreviewTimes(){
       updateAnnouncementBar();
     
       }catch(e){ console.error('Announcement interval error', e); }
-    }, 8000);
+    }, 3000);
   }
 
   
@@ -2908,10 +2891,6 @@ function updateClocksPreviewTimes(){
     try{
       const rp = String(routePath||'').trim().toLowerCase();
       if(rp === 'distribution/monitoring') return 'distribution_monitoring';
-      // System sub-pages all resolve to main 'system' page (tab driven internally)
-      if(rp.startsWith('system/') || rp === 'system') return 'system';
-      // Backward compatibility for legacy System submenu URLs like /system_overview
-      if(rp.startsWith('system_')) return 'system';
       return String(routePath||'').split('/')[0] || '';
     }catch(_){ return ''; }
   }
@@ -2920,10 +2899,6 @@ function updateClocksPreviewTimes(){
     try{
       const id = String(pageId||'').trim();
       if(id === 'distribution_monitoring') return '/distribution/monitoring';
-      if(id.startsWith('system_')){
-        const tab = id.slice('system_'.length).trim().toLowerCase();
-        return tab ? ('/system/' + tab) : '/system';
-      }
       return '/' + id;
     }catch(_){ return '/' + String(pageId||''); }
   }
@@ -2992,12 +2967,8 @@ function updateClocksPreviewTimes(){
 
   function navigateToPageId(pageId, opts){
     const pages = window.Pages || {};
-    const requestedId = String(pageId||'').trim();
-    let id = requestedId;
-    if(!id || !pages[id]){
-      if(id.startsWith('system_') && pages['system']) id = 'system';
-      else id = pages['dashboard'] ? 'dashboard' : (Object.keys(pages)[0] || 'dashboard');
-    }
+    let id = String(pageId||'').trim();
+    if(!id || !pages[id]) id = pages['dashboard'] ? 'dashboard' : (Object.keys(pages)[0] || 'dashboard');
 
     const proto = String(window.location.protocol||'');
     if(proto === 'file:'){
@@ -3006,7 +2977,7 @@ function updateClocksPreviewTimes(){
     }
 
     try{
-      const url = _routePathForPageId(requestedId || id);
+      const url = _routePathForPageId(id);
       const currentPath = _normalizeRoutePath(window.location.pathname||'/');
       const targetPath = _normalizeRoutePath(url);
       if(currentPath === targetPath && NAV_RENDER.lastPageId === id){
@@ -5158,11 +5129,11 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
       try{ _syncMsBrightnessBadge(); }catch(_){}
       try{ _syncMsBarToggles(); }catch(_){}
 
-      // Open a settings panel directly (no nested Profile modal popup)
+      // Always open Profile panel on settings open + populate fields
       try {
         _msSelectPanel('profile');
         var _defaultUser = (window.Auth && Auth.getUser) ? Auth.getUser() : null;
-        if (_defaultUser) setTimeout(function(){ try{ openProfileModal(_defaultUser, { openModal:false }); }catch(_){} }, 80);
+        if (_defaultUser) setTimeout(function(){ try{ openProfileModal(_defaultUser); }catch(_){} }, 80);
       } catch(_) {}
     };
 
@@ -5192,7 +5163,7 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
           var _panelUser = (window.Auth && Auth.getUser) ? Auth.getUser() : user;
           var panelInits = {
             profile: function(){
-              try{ openProfileModal(_panelUser, { openModal:false }); }catch(_){}
+              try{ openProfileModal(_panelUser); }catch(_){}
             },
             theme: function(){
               // renderThemeGrid is a scoped inner function accessible here
@@ -5405,10 +5376,6 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
             loginmode: function(){
               // Load current login mode status from server
               try{ if(window.__mumsLoadLoginMode) window.__mumsLoadLoginMode(); }catch(_){}
-            },
-            mailboxstatus: function(){
-              // Load current mailbox enabled/disabled state from server
-              try{ if(window.__mumsLoadMailboxStatus) window.__mumsLoadMailboxStatus(); }catch(_){}
             },
             data: function(){
               // Data health elements are already wired at boot; just sync health summary
@@ -5775,37 +5742,13 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
 async function boot(){
     if(window.__mumsBooted) return;
     window.__mumsBooted = true;
-    const __bootPerf = (function(){
-      const marks = {};
-      function now(){ return (window.performance && performance.now) ? performance.now() : Date.now(); }
-      return {
-        start: function(key){ marks[key] = { s: now(), d: 0, done: false }; },
-        end: function(key){
-          const m = marks[key];
-          if(!m || m.done) return;
-          m.done = true;
-          m.d = Math.max(0, now() - m.s);
-        },
-        flush: function(){
-          try{
-            const out = {};
-            Object.keys(marks).forEach((k)=>{ out[k] = Math.round(Number(marks[k].d || 0)); });
-            console.info('[MUMS BOOT PERF]', out);
-          }catch(_){ }
-        }
-      };
-    })();
     try{ UI.bindDataClose && UI.bindDataClose(); }catch(_){ }
     window.addEventListener('error', (e)=>{ showFatalError(e.error || e.message || e); });
     window.addEventListener('unhandledrejection', (e)=>{ showFatalError(e.reason || e); });
 
     Store.ensureSeed();
 
-    try{
-      __bootPerf.start('theme_load_ms');
-      await Promise.all([loadThemeMeta(), loadGlobalThemeSettings()]);
-      __bootPerf.end('theme_load_ms');
-    }catch(_){ __bootPerf.end('theme_load_ms'); }
+    try{ await Promise.all([loadThemeMeta(), loadGlobalThemeSettings()]); }catch(_){ }
 
     // ── FORCED DEFAULTS: Super Admin may push APEX+130% to ALL users ──────
     try{
@@ -5928,29 +5871,23 @@ async function boot(){
       }
     } catch(_) {}
 
-    __bootPerf.start('auth_require_user_ms');
     const user = await Auth.requireUser();
-    __bootPerf.end('auth_require_user_ms');
     if(!user) return;
 
     // ── SECURITY PIN GATE ──────────────────────────────────────────────────
     // Must pass PIN verification before the app renders.
     // PinController.gate() checks policy → shows overlay if needed.
     if (window.PinController && typeof PinController.gate === 'function') {
-      __bootPerf.start('pin_gate_ms');
       await new Promise((resolve) => {
         PinController.gate(resolve);
       });
-      __bootPerf.end('pin_gate_ms');
     }
     // ── END PIN GATE ──────────────────────────────────────────────────────
 
     // Realtime Guard: initialize realtime only after auth has been resolved.
     try{
       if(window.Realtime && typeof window.Realtime.init === 'function'){
-        __bootPerf.start('realtime_init_ms');
         window.Realtime.init();
-        __bootPerf.end('realtime_init_ms');
       }
     }catch(_){ }
 
@@ -5959,9 +5896,7 @@ async function boot(){
     const isSU = roleUpper === 'SUPER_USER';
 
     try{ window.__mumsBootTs = Date.now(); }catch(_){ }
-    try{
-      setTimeout(()=>{ try{ if(window.Store && Store.autoFixLogs) Store.autoFixLogs(); }catch(e){ console.error(e); } }, 0);
-    }catch(e){ console.error(e); }
+    try{ if(window.Store && Store.autoFixLogs) Store.autoFixLogs(); }catch(e){ console.error(e); }
 
     function normalizeRole(v){
       const raw = String(v||'').trim();
@@ -7060,150 +6995,6 @@ async function boot(){
         loadLoginMode();
       }
     }catch(e){ console.error('[LoginMode]', e); }
-
-    // ── Mailbox Control Panel (Super Admin only) ───────────────────────────
-    try{
-      if(isSA){
-        const mbxToggle  = document.getElementById('mailboxEnabledToggle');
-        const mbxSaveBtn = document.getElementById('saveMailboxStatusBtn');
-        const mbxSaveMsg = document.getElementById('mailboxStatusSaveMsg');
-        const mbxBanner  = document.getElementById('mailboxStatusBanner');
-        const mbxDot     = document.getElementById('mailboxStatusDot');
-        const mbxLabel   = document.getElementById('mailboxStatusLabel');
-        const mbxMeta    = document.getElementById('mailboxStatusMeta');
-        const mbxWarn    = document.getElementById('mailboxDisableWarning');
-
-        function _mbxCtrlRefreshUI(disabled) {
-          if (!mbxToggle) return;
-          mbxToggle.checked = !disabled;
-          if (mbxBanner) {
-            if (disabled) {
-              mbxBanner.style.background = 'rgba(239,68,68,.08)';
-              mbxBanner.style.borderColor = 'rgba(239,68,68,.28)';
-            } else {
-              mbxBanner.style.background = 'rgba(34,197,94,.08)';
-              mbxBanner.style.borderColor = 'rgba(34,197,94,.25)';
-            }
-          }
-          if (mbxDot) {
-            mbxDot.style.background = disabled ? '#ef4444' : '#22c55e';
-            mbxDot.style.boxShadow  = disabled ? '0 0 8px rgba(239,68,68,.6)' : '0 0 8px rgba(34,197,94,.6)';
-          }
-          if (mbxLabel) {
-            mbxLabel.textContent = disabled ? 'Mailbox is DISABLED' : 'Mailbox is ENABLED';
-            mbxLabel.style.color = disabled ? '#f87171' : '#4ade80';
-          }
-          if (mbxMeta) {
-            mbxMeta.textContent = disabled
-              ? 'All mailbox features & network requests are suspended.'
-              : 'All users have full mailbox access.';
-          }
-          if (mbxWarn) mbxWarn.style.display = disabled ? '' : 'none';
-        }
-
-        // Show/hide disable warning on toggle change
-        if (mbxToggle) {
-          mbxToggle.addEventListener('change', function() {
-            const willDisable = !mbxToggle.checked;
-            if (mbxWarn) mbxWarn.style.display = willDisable ? '' : 'none';
-          });
-        }
-
-        const _mbxCtrlGetJwt = function() {
-          try {
-            return (window.CloudAuth && CloudAuth.accessToken) ? CloudAuth.accessToken() : '';
-          } catch(_) { return ''; }
-        };
-
-        const loadMailboxStatus = async () => {
-          try {
-            const jwt = _mbxCtrlGetJwt();
-            const r = await fetch('/api/settings/mailbox_status', {
-              headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
-              cache: 'no-store'
-            });
-            const data = await r.json().catch(() => ({}));
-            const disabled = !!(data && data.settings && data.settings.disabled);
-            _mbxCtrlRefreshUI(disabled);
-            const by = (data && data.settings && data.settings.updatedByName) ? data.settings.updatedByName : null;
-            const at = (data && data.settings && data.settings.updatedAt) ? new Date(data.settings.updatedAt).toLocaleString() : null;
-            if (mbxMeta && (by || at)) {
-              mbxMeta.textContent = (disabled
-                ? 'Mailbox disabled'
-                : 'Mailbox enabled') +
-                (by ? ` by ${by}` : '') +
-                (at ? ` on ${at}` : '');
-            }
-          } catch(e) {
-            if (mbxLabel) { mbxLabel.textContent = 'Could not load status.'; mbxLabel.style.color = 'var(--muted)'; }
-          }
-        };
-
-        if (mbxSaveBtn) {
-          mbxSaveBtn.addEventListener('click', async () => {
-            if (!mbxToggle) return;
-            const disabled = !mbxToggle.checked;
-            mbxSaveBtn.disabled = true;
-            mbxSaveBtn.textContent = 'Saving…';
-            try {
-              const jwt = _mbxCtrlGetJwt();
-              const r = await fetch('/api/settings/mailbox_status', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}) },
-                body: JSON.stringify({ disabled })
-              });
-              const data = await r.json().catch(() => ({}));
-              if (r.ok && data && data.ok) {
-                _mbxCtrlRefreshUI(disabled);
-                if (mbxSaveMsg) {
-                  mbxSaveMsg.textContent = disabled ? '✓ Mailbox disabled — all requests stopped.' : '✓ Mailbox enabled — users can now access it.';
-                  mbxSaveMsg.style.color = disabled ? '#f87171' : 'var(--success,#22c55e)';
-                  mbxSaveMsg.style.opacity = '1';
-                  setTimeout(() => { if (mbxSaveMsg) mbxSaveMsg.style.opacity = '0'; }, 4000);
-                }
-                // BUG FIX v4.1: Broadcast via TWO channels so ALL open tabs react:
-                // 1. window event  — catches same-tab mailbox page immediately (via
-                //    _registerMailboxStatusListener which is now always bound in mount())
-                // 2. Realtime.onLocalWrite — propagates to OTHER devices/tabs via
-                //    Supabase Realtime so remote mailbox pages also disable/enable.
-                try {
-                  window.dispatchEvent(new CustomEvent('mums:store', {
-                    detail: { key: 'mums_mailbox_status', source: 'settings_save', disabled }
-                  }));
-                } catch(_) {}
-                try {
-                  if (window.Realtime && typeof Realtime.onLocalWrite === 'function') {
-                    Realtime.onLocalWrite('mums_mailbox_status', { disabled, updatedAt: new Date().toISOString() });
-                  }
-                } catch(_) {}
-                await loadMailboxStatus();
-              } else {
-                const msg = (data && data.message) ? data.message : 'Save failed.';
-                if (mbxSaveMsg) {
-                  mbxSaveMsg.textContent = '✗ ' + msg;
-                  mbxSaveMsg.style.color = 'var(--danger,#ef4444)';
-                  mbxSaveMsg.style.opacity = '1';
-                  setTimeout(() => { if (mbxSaveMsg) mbxSaveMsg.style.opacity = '0'; }, 4000);
-                }
-              }
-            } catch(e) {
-              if (mbxSaveMsg) {
-                mbxSaveMsg.textContent = '✗ Network error.';
-                mbxSaveMsg.style.color = 'var(--danger,#ef4444)';
-                mbxSaveMsg.style.opacity = '1';
-                setTimeout(() => { if (mbxSaveMsg) mbxSaveMsg.style.opacity = '0'; }, 4000);
-              }
-            } finally {
-              mbxSaveBtn.disabled = false;
-              mbxSaveBtn.textContent = 'Save';
-            }
-          });
-        }
-
-        window.__mumsLoadMailboxStatus = loadMailboxStatus;
-        loadMailboxStatus();
-      }
-    } catch(e) { console.error('[MailboxControl]', e); }
     
     UI.els('[data-close="settingsModal"]').forEach(b=>b.onclick=()=>UI.closeModal('settingsModal'));
     UI.els('[data-close="systemCheckModal"]').forEach(b=>b.onclick=()=>UI.closeModal('systemCheckModal'));
@@ -7418,8 +7209,6 @@ async function boot(){
         }catch(_){}
       }, { once: false, passive: true });
     }
-
-    try{ __bootPerf.flush(); }catch(_){ }
 
   } 
 

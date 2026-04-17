@@ -40,7 +40,7 @@ module.exports = async (_req, res) => {
       PRESENCE_POLL_MS: Number(process.env.PRESENCE_POLL_MS || 45000),
       PRESENCE_LIST_POLL_MS: Number(process.env.PRESENCE_LIST_POLL_MS || 90000),
       SYNC_RECONCILE_MS: Number(process.env.SYNC_RECONCILE_MS || 90000),
-      MAILBOX_OVERRIDE_POLL_MS: Number(env.MAILBOX_OVERRIDE_POLL_MS || 60000)  /* FREE TIER: active=60s → idle=360s (was 10s → 60s) */,
+      MAILBOX_OVERRIDE_POLL_MS: Number(process.env.MAILBOX_OVERRIDE_POLL_MS || 10000),
       // ── REALTIME KILL SWITCH (emergency use only, defaults ON):
       // Set SYNC_ENABLE_SUPABASE_REALTIME=false in Vercel/Cloudflare env ONLY
       // if Disk IO is critically exhausted and you need immediate relief.

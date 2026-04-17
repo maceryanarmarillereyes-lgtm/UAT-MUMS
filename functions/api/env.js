@@ -14,7 +14,7 @@ export async function onRequest(context) {
       PRESENCE_POLL_MS: Number(env.PRESENCE_POLL_MS || 45000),
       PRESENCE_LIST_POLL_MS: Number(env.PRESENCE_LIST_POLL_MS || 90000),
       SYNC_RECONCILE_MS: Number(env.SYNC_RECONCILE_MS || 90000),
-      MAILBOX_OVERRIDE_POLL_MS: Number(env.MAILBOX_OVERRIDE_POLL_MS || 60000)  /* FREE TIER: active=60s → idle=360s (was 10s → 60s) */,
+      MAILBOX_OVERRIDE_POLL_MS: Number(env.MAILBOX_OVERRIDE_POLL_MS || 10000),
       // DISK IO GUARD: set to 'false' in Cloudflare Pages env to disable WAL Realtime
       SYNC_ENABLE_SUPABASE_REALTIME: String(env.SYNC_ENABLE_SUPABASE_REALTIME || 'true')
     };
