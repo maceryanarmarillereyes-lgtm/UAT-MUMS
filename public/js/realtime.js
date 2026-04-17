@@ -79,6 +79,15 @@
   let bootStarted = false;
   let bootCompleted = false;
 
+  // BUG FIX 2026-04-16: authtoken reconnect debounce.
+  // Without this, every token rotation (which fires mums:authtoken) triggers:
+  //   connectCloudMandatory → stopCloud (unsubscribes) → CLOSED status
+  //   → scheduleReconnect('closed') → connectCloudMandatory again
+  // This creates a console-spam loop of "[Realtime Guard] Preparing realtime subscribe"
+  // and keeps the UI stuck at "Connecting" briefly after every token refresh.
+  let _authtokenDebounceTimer = null;
+  const _AUTHTOKEN_DEBOUNCE_MS = 400; // wait 400ms before reconnecting on token rotation
+
   // Realtime subscription generation guard (prevents CONNECTED/OFFLINE flicker on reconnect)
   let connectSeq = 0;
   let activeSeq = 0;
@@ -524,7 +533,8 @@ function applyRemoteKey(key, value){
       const token = String(CloudAuth.accessToken() || '');
       if (!token) return false;
       lastAuthToken = token;
-      console.log('[Realtime Guard] Preparing realtime subscribe', { hasToken: !!token });
+      // BUG FIX: was console.log — moved to debug-only to eliminate console spam
+      try{ (window.MUMS_DEBUG||{}).log && MUMS_DEBUG.log('realtime.preparing_subscribe', { hasToken: !!token }); }catch(_){}
       if (!window.__MUMS_SB_CLIENT) {
         window.__MUMS_SB_CLIENT = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
           auth: { persistSession: false, autoRefreshToken: false, storage: SUPABASE_STORAGE },
@@ -583,7 +593,8 @@ function applyRemoteKey(key, value){
         .subscribe((status) => {
           // Ignore status events from older channels after a reconnect.
           if (seq !== activeSeq) return;
-          console.log('[Realtime Guard] Channel status', { status });
+          // Log non-SUBSCRIBED statuses at warn; SUBSCRIBED silently
+      if (status !== 'SUBSCRIBED') { console.warn('[Realtime Guard] Channel status:', status); }
           if (status === 'SUBSCRIBED') {
             cloudOkAt = Date.now();
             reconnectBackoffMs = 1200;
@@ -622,13 +633,20 @@ function applyRemoteKey(key, value){
             // Treat transient channel errors as reconnecting (yellow), not offline (red), to avoid UI flicker.
             scheduleReconnect(status);
           } else if (status === 'CLOSED') {
-            try {
-              window.dispatchEvent(new CustomEvent('mums:syncstatus', {
-                detail: { mode: 'offline', syncMode: 'offline', error: 'CLOSED', detail: 'CLOSED' }
-              }));
-            } catch(_) {}
-            // CLOSED is commonly emitted when we intentionally unsubscribe during reconnect/token rotation.
-            scheduleReconnect('closed');
+            // BUG FIX 2026-04-16: Only treat CLOSED as an error when the sequence still
+            // matches (i.e., this is NOT from our own stopCloud/unsubscribe during token
+            // rotation or manual reconnect). Stale CLOSED events from old channels must
+            // be silently ignored — previously they fired scheduleReconnect() causing the
+            // "Connecting" loop even after a successful re-subscribe.
+            if (seq === activeSeq) {
+              try {
+                window.dispatchEvent(new CustomEvent('mums:syncstatus', {
+                  detail: { mode: 'offline', syncMode: 'offline', error: 'CLOSED', detail: 'CLOSED' }
+                }));
+              } catch(_) {}
+              scheduleReconnect('closed');
+            }
+            // If seq !== activeSeq: this CLOSED came from our own unsubscribe — ignore silently.
           }
         });
 
@@ -668,7 +686,8 @@ function applyRemoteKey(key, value){
       }
 
       if (!(CloudAuth.accessToken && CloudAuth.accessToken())) {
-        console.log('[Realtime Guard] connect skipped: no CloudAuth token');
+        // Debug-only: suppress noisy 'no token' log on cold boot
+        try{ (window.MUMS_DEBUG||{}).log && MUMS_DEBUG.log('realtime.connect_skipped_no_token'); }catch(_){}
         dispatchStatus('offline', 'Not authenticated');
         return;
       }
@@ -678,7 +697,7 @@ function applyRemoteKey(key, value){
       // Attempt Supabase Realtime (mandatory).
       const ok = trySupabaseRealtimeMandatory();
       if (!ok) {
-        console.log('[Realtime Guard] subscribe init failed (env/auth missing)');
+        console.warn('[Realtime Guard] subscribe init failed (env/auth missing)');
         dispatchStatus('offline', 'Realtime init failed (env/auth missing)');
         scheduleReconnect('init-failed');
       }
@@ -917,17 +936,47 @@ function applyRemoteKey(key, value){
         ensureOfflinePull();
       });
 
-      // If Supabase access token rotates (refresh), reconnect realtime
-      // to avoid silent RLS auth failures.
+      // BUG FIX 2026-04-16: Debounced token-rotation reconnect.
+      //
+      // ROOT CAUSE OF "Sync: Connecting" LOOP + CONSOLE SPAM:
+      //   1. mums:authtoken fires (token refresh)
+      //   2. → connectCloudMandatory() → stopCloud() → sbChannel.unsubscribe()
+      //   3. → Supabase emits CLOSED status on the channel callback
+      //   4. → scheduleReconnect('closed') → connectCloudMandatory() AGAIN
+      //   5. → "[Realtime Guard] Preparing realtime subscribe" printed on every iteration
+      //   6. → UI flickers orange "Connecting" after every 1-hour token refresh
+      //
+      // FIX: Two-layer guard:
+      //   a) Debounce 400ms so rapid token events (e.g. loadSession + refreshSession firing
+      //      in quick succession at boot) collapse into one reconnect.
+      //   b) Skip reconnect entirely when SUBSCRIBED and token changed but channel is live —
+      //      just call setAuth() to update the WS auth in-place (no channel tear-down).
+      //   c) Only do a full reconnect when channel is NOT already subscribed.
       window.addEventListener('mums:authtoken', (e)=>{
         try {
           const t = (e && e.detail && e.detail.token) ? String(e.detail.token) : '';
           if (!t || t === lastAuthToken) return;
           userExplicitlyLoggedOut = false;
           lastAuthToken = t;
-          // Reconnect to ensure both HTTP headers and WS auth are updated.
-          connectCloudMandatory();
-          ensureOfflinePull();
+
+          // Debounce: cancel any pending reconnect and restart the timer.
+          if (_authtokenDebounceTimer) { clearTimeout(_authtokenDebounceTimer); _authtokenDebounceTimer = null; }
+          _authtokenDebounceTimer = setTimeout(()=>{
+            _authtokenDebounceTimer = null;
+            try {
+              // PREFERRED PATH: if already SUBSCRIBED, just rotate the auth token
+              // on the existing channel. No teardown → no CLOSED event → no reconnect loop.
+              if (cloudMode === 'realtime' && sbClient && sbClient.realtime &&
+                  typeof sbClient.realtime.setAuth === 'function') {
+                sbClient.realtime.setAuth(lastAuthToken);
+                ensureOfflinePull();
+                return; // ✅ Token updated in-place — no reconnect needed
+              }
+              // FALLBACK: channel not live → do full reconnect (normal startup path).
+              connectCloudMandatory();
+              ensureOfflinePull();
+            } catch (_) {}
+          }, _AUTHTOKEN_DEBOUNCE_MS);
         } catch (_) {}
       });
       bootCompleted = true;

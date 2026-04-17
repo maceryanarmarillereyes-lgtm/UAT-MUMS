@@ -922,7 +922,9 @@
                 <div class="hp-body"><div class="hp-empty"><span style="font-size:9px;opacity:.5;">Available slot</span></div></div>
               </div>
 
-              <!-- Controller Testing Lab — 1 col, empty placeholder -->
+              <!-- Controller Testing Lab — NEW full-width booking panel (span 4) -->
+              <!-- Old left-side hp-ctl-col layout removed; ctl_booking.js exclusively
+                   renders .ctl-card tiles inside #hp-ctl-list. Visible to all users. -->
               <div class="hp-card" id="hp-controller-testing-lab-card">
                 <div class="hp-card-head">
                   <div class="hp-icon" style="background:rgba(162,93,220,.15);border:1px solid rgba(162,93,220,.25);color:var(--ss-purple);"><i class="fas fa-flask"></i></div>
@@ -1177,6 +1179,7 @@
                         <label>Session Duration <span style="color:#f85149;font-size:9px;">Required</span></label>
                         <select id="hp-ctl-q-duration-select" class="hp-ctl-settings-select">
                           <option value="">— Select duration —</option>
+                          <option value="1 minute">1 minute</option>
                           <option value="5 minutes">5 minutes</option>
                           <option value="10 minutes">10 minutes</option>
                           <option value="15 minutes">15 minutes</option>
@@ -3485,6 +3488,10 @@
 <!-- Legacy wrapper shim -->
 <div id="ss-cache-banner" style="display:none!important;"></div>
 
+  <!-- CTL_NEW_LAYOUT_FLAG: must be set BEFORE core_ui.js runs its synchronous
+       renderAll() call so the old hp-ctl-col renderMainList is never invoked.
+       ctl_booking.js owns #hp-ctl-list rendering exclusively. -->
+  <script>window._ctlNewLayoutActive = true;</script>
   <script src="/js/support_studio/core_ui.js"></script>
   <script src="/js/support_studio/settings_manager.js"></script>
   <script src="/js/support_studio/features/catalog.js"></script>
@@ -3492,12 +3499,13 @@
   <script src="/js/support_studio/features/quickbase_s.js"></script>
   <script src="/js/support_studio/features/yct.js"></script>
   <script src="/js/support_studio/features/home_apps.js"></script>
-  <script src="/js/support_studio/features/odp.js"></script>
+    <script src="/js/support_studio/features/odp.js"></script>
   <script src="/js/support_studio/features/oncall_tech.js"></script>
   <script src="/js/support_studio/features/cache_ui.js"></script>
   <script src="/js/support_studio/features/se2.js"></script>
   <script src="/js/support_studio/features/tab_connect_parts_contact.js"></script>
   <!-- support_studio_patches moved to end of body -->
+<script src="/js/support_studio/features/ctl_booking.js"></script>
 <script src="/js/pages/support_studio_patches.js"></script>
 </body>
 
