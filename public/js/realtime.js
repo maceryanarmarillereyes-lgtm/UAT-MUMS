@@ -78,6 +78,7 @@
   let userExplicitlyLoggedOut = false;
   let bootStarted = false;
   let bootCompleted = false;
+  let forceClientRecreate = false;
 
   // BUG FIX 2026-04-16: authtoken reconnect debounce.
   // Without this, every token rotation (which fires mums:authtoken) triggers:
@@ -498,6 +499,16 @@ function applyRemoteKey(key, value){
       if (offlinePullTimer) { clearInterval(offlinePullTimer); offlinePullTimer = null; }
     } catch (_) {}
     try { if (sbChannel && sbChannel.unsubscribe) sbChannel.unsubscribe(); } catch (_) {}
+    try {
+      if (window.__MUMS_SB_CLIENT && typeof window.__MUMS_SB_CLIENT.removeAllChannels === 'function') {
+        window.__MUMS_SB_CLIENT.removeAllChannels();
+      }
+    } catch (_) {}
+    try {
+      if (forceClientRecreate && window.__MUMS_SB_CLIENT) {
+        window.__MUMS_SB_CLIENT = null;
+      }
+    } catch (_) {}
     sbChannel = null;
     sbClient = null;
   }
@@ -507,6 +518,12 @@ function applyRemoteKey(key, value){
       if (userExplicitlyLoggedOut) {
         console.log('[Realtime Guard] Reconnect skipped: explicit logout');
         return;
+      }
+      // If WebSocket transport failed before SUBSCRIBED, rebuild Supabase client
+      // on next attempt to avoid reusing a poisoned realtime socket state.
+      const rs = String(reason || '').toLowerCase();
+      if (rs === 'closed' || rs === 'channel_error' || rs === 'timed_out' || rs === 'not-subscribed') {
+        forceClientRecreate = true;
       }
       if (reconnectTimer) return;
       const delay = Math.min(12000, reconnectBackoffMs);
@@ -535,6 +552,9 @@ function applyRemoteKey(key, value){
       lastAuthToken = token;
       // BUG FIX: was console.log — moved to debug-only to eliminate console spam
       try{ (window.MUMS_DEBUG||{}).log && MUMS_DEBUG.log('realtime.preparing_subscribe', { hasToken: !!token }); }catch(_){}
+      if (forceClientRecreate && window.__MUMS_SB_CLIENT) {
+        try { window.__MUMS_SB_CLIENT = null; } catch (_) {}
+      }
       if (!window.__MUMS_SB_CLIENT) {
         window.__MUMS_SB_CLIENT = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
           auth: { persistSession: false, autoRefreshToken: false, storage: SUPABASE_STORAGE },
@@ -596,6 +616,7 @@ function applyRemoteKey(key, value){
           // Log non-SUBSCRIBED statuses at warn; SUBSCRIBED silently
       if (status !== 'SUBSCRIBED') { console.warn('[Realtime Guard] Channel status:', status); }
           if (status === 'SUBSCRIBED') {
+            forceClientRecreate = false;
             cloudOkAt = Date.now();
             reconnectBackoffMs = 1200;
             dispatchStatus('realtime', 'Supabase Realtime connected');
