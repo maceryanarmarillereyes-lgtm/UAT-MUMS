@@ -111,6 +111,7 @@ const ROUTES = {
   'studio/daily_passwords':    require('../server/routes/studio/daily_passwords'),
   'studio/ctl_lab_config':    require('../server/routes/studio/ctl_lab_config'),
   'studio/ctl_lab_state':     require('../server/routes/studio/ctl_lab_state'),
+  'studio/ctl_lab_log':       require('../server/routes/studio/ctl_lab_log'),
   'studio/oncall_settings':   require('../server/routes/studio/oncall_settings'),
   'studio/oncall_schedule':   require('../server/routes/studio/oncall_schedule'),
 };
