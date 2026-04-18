@@ -74,6 +74,7 @@
   let reconcileTimer = null;
   let offlinePullTimer = null;
   let reconnectBackoffMs = 1200;
+  let lastRtStatusLogged = '';
   let lastAuthToken = '';
   let userExplicitlyLoggedOut = false;
   let bootStarted = false;
@@ -557,7 +558,13 @@ function applyRemoteKey(key, value){
       }
       if (!window.__MUMS_SB_CLIENT) {
         window.__MUMS_SB_CLIENT = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
-          auth: { persistSession: false, autoRefreshToken: false, storage: SUPABASE_STORAGE },
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+            storage: SUPABASE_STORAGE,
+            storageKey: 'mums_shared'
+          },
           realtime: { params: { eventsPerSecond: 10 } },
           global: {
             headers: {
@@ -613,8 +620,13 @@ function applyRemoteKey(key, value){
         .subscribe((status) => {
           // Ignore status events from older channels after a reconnect.
           if (seq !== activeSeq) return;
-          // Log non-SUBSCRIBED statuses at warn; SUBSCRIBED silently
-      if (status !== 'SUBSCRIBED') { console.warn('[Realtime Guard] Channel status:', status); }
+          // Avoid console flood: log only when status actually changes.
+          if (status !== 'SUBSCRIBED' && status !== lastRtStatusLogged) {
+            lastRtStatusLogged = status;
+            console.warn('[Realtime Guard] Channel status:', status);
+          } else if (status === 'SUBSCRIBED') {
+            lastRtStatusLogged = '';
+          }
           if (status === 'SUBSCRIBED') {
             forceClientRecreate = false;
             cloudOkAt = Date.now();

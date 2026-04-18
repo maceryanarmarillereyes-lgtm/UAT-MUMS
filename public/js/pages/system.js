@@ -1177,7 +1177,7 @@
     const ctlItems = (() => { try { const r = localStorage.getItem('mums_controller_lab_items_v1'); return JSON.parse(r || '[]'); } catch (_) { return []; } })();
     const ctlBookings = ctlState ? ctlState.bookings || {} : {};
     const ctlQueues   = ctlState ? ctlState.queues   || {} : {};
-    const ctlPollMs   = 15000; // hardcoded in ctl_booking.js
+    const ctlPollMs   = 30000; // hardcoded in ctl_booking.js
     const ctlActiveBookings = Object.values(ctlBookings).filter(b => b && b.endMs > Date.now()).length;
     const ctlTotalQueued = Object.values(ctlQueues).reduce((s, q) => s + (Array.isArray(q) ? q.length : 0), 0);
 
@@ -1203,6 +1203,18 @@
     const cacheLoaded = typeof window._cacheUI !== 'undefined';
 
     // Home apps (controller lab host)
+    const isSupportStudioRuntime = (() => {
+      try {
+        if (window.location && /support_studio\.html$/i.test(String(window.location.pathname || ''))) return true;
+        return !!(
+          document.getElementById('supportStudioRoot') ||
+          document.getElementById('hp-ctl-list') ||
+          document.querySelector('[data-page="quickbase_s"]')
+        );
+      } catch (_) {
+        return false;
+      }
+    })();
     const homeAppsLoaded = typeof window._ctlOpenBooking === 'function';
 
     // Support Records / KB Feature
@@ -1234,8 +1246,8 @@
 
     // Derive severity
     const odpSev = odpRt === 'SUBSCRIBED' ? 'ok' : odpRt === 'POLL FALLBACK' ? 'warn' : 'crit';
-    const ctlSev = homeAppsLoaded ? 'ok' : 'crit';
-    const kbSev  = kbLoaded ? 'ok' : 'warn';
+    const ctlSev = homeAppsLoaded ? 'ok' : (isSupportStudioRuntime ? 'crit' : 'info');
+    const kbSev  = kbLoaded ? 'ok' : (isSupportStudioRuntime ? 'warn' : 'info');
     const onCallSev = onCallLoaded ? 'ok' : 'warn';
     const sbSev  = sbOk ? 'ok' : 'crit';
     const cacheSev = cacheLoaded ? 'ok' : 'warn';
@@ -1288,13 +1300,13 @@
             </tr>
           </thead>
           <tbody>
-            ${featureRow('🎮', 'CTL Lab Booking System', homeAppsLoaded ? 'Module loaded' : 'NOT LOADED', ctlItems.length + ' controllers · ' + ctlActiveBookings + ' active session(s) · ' + ctlTotalQueued + ' queued', ctlSev)}
-            ${featureRow('🔒', 'CTL State Server Sync', 'Poll every 15s', 'Hits /api/studio/ctl_lab_state every ' + fmtMs(ctlPollMs) + ' per open tab', ctlPollSev)}
+            ${featureRow('🎮', 'CTL Lab Booking System', homeAppsLoaded ? 'Module loaded' : (isSupportStudioRuntime ? 'NOT LOADED' : 'Not active on this page'), ctlItems.length + ' controllers · ' + ctlActiveBookings + ' active session(s) · ' + ctlTotalQueued + ' queued', ctlSev)}
+            ${featureRow('🔒', 'CTL State Server Sync', 'Poll every ' + fmtMs(ctlPollMs), 'Hits /api/studio/ctl_lab_state every ' + fmtMs(ctlPollMs) + ' per open Support Studio tab', ctlPollSev)}
             ${featureRow('🔔', 'CTL Alarm Audio', alarmPlaying, ctlState ? 'alarmPlaying=' + String(ctlState.alarmPlaying) : 'State not available', 'info')}
             ${featureRow('🗓️', 'One Day Password (ODP)', odpRt, 'SDK: ' + (odpSdkLoaded ? 'Loaded' : 'NOT LOADED') + ' · Data: ' + odpLastFetch, odpSev)}
             ${featureRow('📡', 'ODP Realtime Channel', odpState && odpState.rtChannel ? 'Channel active' : 'No channel', odpState && odpState.pollInterval ? 'Using POLL fallback (15s) — check Supabase Realtime' : 'Using WebSocket (efficient)', odpSev)}
             ${featureRow('👨‍💻', 'On-Call Tech Module', onCallLoaded ? 'Loaded' : 'Not yet loaded', onCallHomeCard ? 'Home card rendered' : 'Home card not rendered', onCallSev)}
-            ${featureRow('📚', 'Knowledge Base Sync', kbLoaded ? 'Module loaded' : 'Not yet loaded', kbLastSync, kbSev)}
+            ${featureRow('📚', 'Knowledge Base Sync', kbLoaded ? 'Module loaded' : (isSupportStudioRuntime ? 'Not yet loaded' : 'Not active on this page'), kbLastSync, kbSev)}
             ${featureRow('🗄️', 'Cache Manager', cacheLoaded ? 'Initialized' : 'Not loaded', 'Studio-side IndexedDB cache layer', cacheSev)}
             ${featureRow('🗄️', 'Supabase Client (MUMS)', sbOk ? 'Ready' : 'Not initialized', sbClient ? 'Auth: ' + (sbClient.auth ? 'OK' : 'MISSING') : '__MUMS_SB_CLIENT not found', sbSev)}
             ${featureRow('📋', 'Support Records', srLoaded ? 'Panel present' : 'Panel missing', 'Left sidebar panel for case knowledge base', srLoaded ? 'ok' : 'warn')}
@@ -1333,9 +1345,9 @@
           <tbody>
             <tr>
               <td><b>CTL Lab State Poll</b></td>
-              <td class="sys-mono">15s</td>
+              <td class="sys-mono">30s</td>
               <td class="sys-mono">/api/studio/ctl_lab_state</td>
-              <td><span class="sys-pill warn">⚠️ Aggressive — 4 req/min per open tab</span></td>
+              <td><span class="sys-pill ok">✅ Optimized — 2 req/min per open tab</span></td>
             </tr>
             <tr>
               <td><b>CTL Config Poll</b></td>
@@ -1449,14 +1461,23 @@
         'env vars / realtime.js');
     }
 
-    // CTL poll is hardcoded 15s
+    const isSupportStudioRuntime = (() => {
+      try {
+        if (window.location && /support_studio\.html$/i.test(String(window.location.pathname || ''))) return true;
+        return !!(
+          document.getElementById('supportStudioRoot') ||
+          document.getElementById('hp-ctl-list') ||
+          document.querySelector('[data-page="quickbase_s"]')
+        );
+      } catch (_) {
+        return false;
+      }
+    })();
+
+    // CTL poll is hardcoded 30s
     const ctlItems = (() => { try { return JSON.parse(localStorage.getItem('mums_controller_lab_items_v1') || '[]'); } catch (_) { return []; } })();
-    if (ctlItems.length > 0) {
-      bug('IO-004', 'warning', 'CTL Lab / Free Tier', 'CTL Lab State Polling Too Frequent',
-        'CTL booking system polls /api/studio/ctl_lab_state every 15 seconds hardcoded. With ' + ctlItems.length + ' controller(s) and multiple users: ~240 req/hr per active user. On free tier this adds up quickly.',
-        'Consider increasing POLL_MS in ctl_booking.js from 15000 to 30000 when the Support Studio tab is open. Or migrate CTL state to Supabase Realtime postgres_changes subscription to eliminate polling.',
-        'features/ctl_booking.js:26');
-    }
+    // CTL polling is now 30s (optimized for free-tier usage), so we no longer raise
+    // a warning by default. Keep this section as a placeholder for future thresholds.
 
     // ─────────────────────────────────────────────────────────────────────────
     // GROUP 3: SUPABASE CLIENT HEALTH
@@ -1568,21 +1589,21 @@
     // ─────────────────────────────────────────────────────────────────────────
     // GROUP 7: FEATURE MODULE LOADING
     // ─────────────────────────────────────────────────────────────────────────
-    if (typeof window._sqbLoadSettings !== 'function') {
+    if (isSupportStudioRuntime && typeof window._sqbLoadSettings !== 'function') {
       bug('MOD-001', 'warning', 'Studio QB', 'Studio QuickBase Module Not Loaded',
         'window._sqbLoadSettings is not defined. The QuickBase_S settings panel may fail to populate when the user opens General Settings → Studio Quickbase Settings.',
         'Check that support_studio.html correctly includes the <script> for the quickbase_s feature. Verify there are no JS errors blocking module initialization.',
         'features/quickbase_s.js');
     }
 
-    if (typeof window._kbLoadSettings !== 'function') {
+    if (isSupportStudioRuntime && typeof window._kbLoadSettings !== 'function') {
       bug('MOD-002', 'warning', 'Knowledge Base', 'KB Settings Module Not Loaded',
         'window._kbLoadSettings is not defined. Clicking General Settings → Knowledge Base Sync will show an empty panel.',
         'Check knowledge_base.js is included in support_studio.html and that no JS errors are preventing module initialization.',
         'features/knowledge_base.js');
     }
 
-    if (typeof window._ctlOpenBooking !== 'function') {
+    if (isSupportStudioRuntime && typeof window._ctlOpenBooking !== 'function') {
       bug('MOD-003', 'critical', 'CTL Lab', 'CTL Booking Module Not Loaded',
         'window._ctlOpenBooking is not defined. The Controller Testing Lab booking buttons will throw errors when clicked.',
         'Verify features/ctl_booking.js is included in support_studio.html. Check for JS parse errors in the file (missing brackets, syntax issues).',
