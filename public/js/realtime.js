@@ -120,6 +120,12 @@
   function dispatchStatus(mode, detail){
     cloudMode = mode;
     try {
+      // Mirror latest sync mode on window so late subscribers (e.g. System Monitor)
+      // can read current state even if they missed earlier mums:syncstatus events.
+      window.__mumsSyncMode = mode || 'unknown';
+      window.__mumsSyncOkAt = cloudOkAt || 0;
+    } catch(_) {}
+    try {
       window.dispatchEvent(new CustomEvent('mums:syncstatus', {
         detail: { mode, detail: detail || '', lastOkAt: cloudOkAt }
       }));
