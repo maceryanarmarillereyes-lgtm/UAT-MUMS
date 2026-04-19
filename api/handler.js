@@ -28,6 +28,7 @@ const ROUTES = {
   'debug/log': require('../server/routes/debug/log'),
 
   // Vendor bundles served as first-party scripts (avoid 3rd-party storage blocks)
+  'vendor/supabase': require('../server/routes/vendor/supabase'),
   'vendor/supabase.js': require('../server/routes/vendor/supabase'),
 
   // Keep-alive ping for Supabase (prevents project pausing on free plans)

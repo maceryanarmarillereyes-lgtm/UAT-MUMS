@@ -25,6 +25,11 @@
 */
 (function(){
   const isLocalHost = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+  const _rt_DEBUG = isLocalHost;
+  const _RT_WS_URL = isLocalHost ? 'ws://localhost:17601' : null;
+  const _rtState = { attempts: 0, circuitOpen: false, circuitTimer: null };
+  const _RT_MAX_ATTEMPTS = 6;
+  const _RT_CIRCUIT_RESET_MS = 5 * 60 * 1000;
 
   // Keys that should synchronize across all devices/users (global read).
   const SYNC_KEYS = [
@@ -74,6 +79,7 @@
   let reconcileTimer = null;
   let offlinePullTimer = null;
   let reconnectBackoffMs = 1200;
+  let pollingFallbackStop = null;
   let lastRtStatusLogged = '';
   let lastAuthToken = '';
   let userExplicitlyLoggedOut = false;
@@ -117,6 +123,17 @@
         detail: { mode, detail: detail || '', lastOkAt: cloudOkAt }
       }));
     } catch(_) {}
+  }
+
+  const _lastBadgeState = { s: null };
+  function updateSyncBadge(state, detail){
+    if (_lastBadgeState.s === state && !detail) return;
+    _lastBadgeState.s = state;
+    const mode = (state === 'connected') ? 'realtime'
+      : (state === 'connecting') ? 'connecting'
+      : (state === 'error') ? 'error'
+      : String(state || 'offline');
+    dispatchStatus(mode, detail || '');
   }
 
   function shouldSyncKey(key){
@@ -411,9 +428,12 @@ function applyRemoteKey(key, value){
   // ----------------------
   function connectRelay(){
     try {
+      if (!_RT_WS_URL) {
+        if (!pollingFallbackStop) pollingFallbackStop = startPollingFallback();
+        return;
+      }
       const env = (window.EnvRuntime && EnvRuntime.env && EnvRuntime.env()) || (window.MUMS_ENV || {});
       const relayUrl = (env.REALTIME_RELAY_URL || '').trim() || DEFAULT_RELAY_URL;
-      if (!isLocalHost) return; // only for dev
 
       ws = new WebSocket(relayUrl);
       ws.addEventListener('open', ()=>{ wsOk = true; });
@@ -476,6 +496,41 @@ function applyRemoteKey(key, value){
     }
   }
 
+
+  function processSync(data){
+    try {
+      const docs = (data && data.docs) ? data.docs : [];
+      for (const d of docs) {
+        if (!d || !d.key) continue;
+        applyRemoteKey(d.key, d.value);
+        if (d.updatedAt && d.updatedAt > lastCloudTs) lastCloudTs = d.updatedAt;
+      }
+    } catch(_) {}
+  }
+
+  function startPollingFallback() {
+    let _pollInterval = null;
+    async function poll() {
+      try {
+        const out = await cloudFetch(`/api/sync/pull?since=${encodeURIComponent(String(lastCloudTs))}&clientId=${encodeURIComponent(clientId)}`);
+        if (out && out.ok) {
+          updateSyncBadge('connected', 'Polling sync active');
+          processSync(out.json || {});
+        } else if (out && out.json && out.json.error === 'sync_unavailable') {
+          updateSyncBadge('error', 'Sync unavailable');
+        }
+      } catch(_) {
+        updateSyncBadge('error', 'Polling failed');
+      }
+    }
+    _pollInterval = setInterval(poll, 30000);
+    poll();
+    return () => {
+      try { if (_pollInterval) clearInterval(_pollInterval); } catch(_) {}
+      _pollInterval = null;
+    };
+  }
+
   function ensureOfflinePull(){
     try{
       if(offlinePullTimer) return;
@@ -496,6 +551,7 @@ function applyRemoteKey(key, value){
     try {
       if (connectTimer) { clearTimeout(connectTimer); connectTimer = null; }
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      if (_rtState.circuitTimer) { clearTimeout(_rtState.circuitTimer); _rtState.circuitTimer = null; }
       if (reconcileTimer) { clearInterval(reconcileTimer); reconcileTimer = null; }
       if (offlinePullTimer) { clearInterval(offlinePullTimer); offlinePullTimer = null; }
     } catch (_) {}
@@ -513,21 +569,32 @@ function applyRemoteKey(key, value){
 
   function scheduleReconnect(reason){
     try {
+      if (_rtState.circuitOpen) return;
       if (userExplicitlyLoggedOut) {
-        console.log('[Realtime Guard] Reconnect skipped: explicit logout');
+        if (_rt_DEBUG) console.log('[Realtime Guard] Reconnect skipped: explicit logout');
         return;
       }
-      // If WebSocket transport failed before SUBSCRIBED, rebuild Supabase client
-      // on next attempt to avoid reusing a poisoned realtime socket state.
       const rs = String(reason || '').toLowerCase();
       if (rs === 'closed' || rs === 'channel_error' || rs === 'timed_out' || rs === 'not-subscribed') {
         forceClientRecreate = true;
       }
+      _rtState.attempts++;
+      if (_rtState.attempts > _RT_MAX_ATTEMPTS) {
+        _rtState.circuitOpen = true;
+        updateSyncBadge('error', 'Sync: Offline ↺');
+        if (_rt_DEBUG) console.warn('[MUMS Sync] Circuit open — too many failures. Auto-retry in 5min.');
+        _rtState.circuitTimer = setTimeout(() => {
+          _rtState.circuitOpen = false;
+          _rtState.attempts = 0;
+          connectCloudMandatory();
+        }, _RT_CIRCUIT_RESET_MS);
+        return;
+      }
       if (reconnectTimer) return;
-      const delay = Math.min(12000, reconnectBackoffMs);
-      reconnectBackoffMs = Math.min(12000, Math.round(reconnectBackoffMs * 1.6));
-      console.log('[Realtime Guard] Reconnect scheduled', { reason: reason || '', delay });
-      dispatchStatus('connecting', `Reconnecting… ${reason ? '('+reason+')' : ''}`);
+      const jitter = Math.floor(Math.random() * 1000);
+      const delay = Math.min(30000, 1000 * Math.pow(2, _rtState.attempts)) + jitter;
+      reconnectBackoffMs = delay;
+      updateSyncBadge('connecting', `Reconnecting… ${reason ? '('+reason+')' : ''}`);
       reconnectTimer = setTimeout(async ()=>{
   try{ if(window.EnvRuntime && typeof EnvRuntime.ready==='function'){ await Promise.race([EnvRuntime.ready(), new Promise(res=>setTimeout(res, 2500))]); } }catch(e){ (window.MUMS_DEBUG||{}).warn && MUMS_DEBUG.warn('realtime.env_wait_failed',{e:String(e)}); }
 
@@ -629,15 +696,18 @@ function applyRemoteKey(key, value){
           // Avoid console flood: log only when status actually changes.
           if (status !== 'SUBSCRIBED' && status !== lastRtStatusLogged) {
             lastRtStatusLogged = status;
-            console.warn('[Realtime Guard] Channel status:', status);
+            if (_rt_DEBUG) console.warn('[Realtime Guard] Channel status:', status);
           } else if (status === 'SUBSCRIBED') {
             lastRtStatusLogged = '';
           }
           if (status === 'SUBSCRIBED') {
             forceClientRecreate = false;
+            _rtState.attempts = 0;
+            _rtState.circuitOpen = false;
+            if (_rtState.circuitTimer) { clearTimeout(_rtState.circuitTimer); _rtState.circuitTimer = null; }
             cloudOkAt = Date.now();
             reconnectBackoffMs = 1200;
-            dispatchStatus('realtime', 'Supabase Realtime connected');
+            updateSyncBadge('connected', 'Supabase Realtime connected');
             try {
               window.dispatchEvent(new CustomEvent('mums:syncstatus', {
                 detail: { mode: 'realtime', syncMode: 'realtime', detail: 'Supabase Realtime connected', lastOkAt: cloudOkAt }
@@ -736,7 +806,7 @@ function applyRemoteKey(key, value){
       // Attempt Supabase Realtime (mandatory).
       const ok = trySupabaseRealtimeMandatory();
       if (!ok) {
-        console.warn('[Realtime Guard] subscribe init failed (env/auth missing)');
+        if (_rt_DEBUG) console.warn('[Realtime Guard] subscribe init failed (env/auth missing)');
         dispatchStatus('offline', 'Realtime init failed (env/auth missing)');
         scheduleReconnect('init-failed');
       }
@@ -949,7 +1019,7 @@ function applyRemoteKey(key, value){
       } catch (_) {}
 
       const ready = await waitForRealtimeAuthReady(4200);
-      console.log('[Realtime Guard] Auth readiness', { ready });
+      if (_rt_DEBUG) console.log('[Realtime Guard] Auth readiness', { ready });
 
       // Connect once we have a token.
       if (ready && window.CloudAuth && CloudAuth.isEnabled && CloudAuth.isEnabled() && CloudAuth.accessToken && CloudAuth.accessToken()) {
