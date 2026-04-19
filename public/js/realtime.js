@@ -80,6 +80,7 @@
   let offlinePullTimer = null;
   let reconnectBackoffMs = 1200;
   let pollingFallbackStop = null;
+  let pollingFallbackActive = false;
   let lastRtStatusLogged = '';
   let lastAuthToken = '';
   let userExplicitlyLoggedOut = false;
@@ -134,6 +135,17 @@
       : (state === 'error') ? 'error'
       : String(state || 'offline');
     dispatchStatus(mode, detail || '');
+  }
+
+  function resetRealtimeCircuit(){
+    try {
+      _rtState.attempts = 0;
+      _rtState.circuitOpen = false;
+      if (_rtState.circuitTimer) {
+        clearTimeout(_rtState.circuitTimer);
+        _rtState.circuitTimer = null;
+      }
+    } catch(_) {}
   }
 
   function shouldSyncKey(key){
@@ -509,15 +521,21 @@ function applyRemoteKey(key, value){
   }
 
   function startPollingFallback() {
+    if (pollingFallbackActive) return pollingFallbackStop || (()=>{});
+    pollingFallbackActive = true;
     let _pollInterval = null;
     async function poll() {
       try {
+        if (!(window.CloudAuth && CloudAuth.isEnabled && CloudAuth.isEnabled())) return;
+        if (!(CloudAuth.accessToken && CloudAuth.accessToken())) return;
         const out = await cloudFetch(`/api/sync/pull?since=${encodeURIComponent(String(lastCloudTs))}&clientId=${encodeURIComponent(clientId)}`);
         if (out && out.ok) {
-          updateSyncBadge('connected', 'Polling sync active');
+          updateSyncBadge('connected', 'Sync: Connected');
           processSync(out.json || {});
         } else if (out && out.json && out.json.error === 'sync_unavailable') {
           updateSyncBadge('error', 'Sync unavailable');
+        } else if (out && out.status >= 500) {
+          updateSyncBadge('error', `Sync unavailable (${out.status})`);
         }
       } catch(_) {
         updateSyncBadge('error', 'Polling failed');
@@ -528,6 +546,7 @@ function applyRemoteKey(key, value){
     return () => {
       try { if (_pollInterval) clearInterval(_pollInterval); } catch(_) {}
       _pollInterval = null;
+      pollingFallbackActive = false;
     };
   }
 
@@ -582,10 +601,10 @@ function applyRemoteKey(key, value){
       if (_rtState.attempts > _RT_MAX_ATTEMPTS) {
         _rtState.circuitOpen = true;
         updateSyncBadge('error', 'Sync: Offline ↺');
+        if (!pollingFallbackStop) pollingFallbackStop = startPollingFallback();
         if (_rt_DEBUG) console.warn('[MUMS Sync] Circuit open — too many failures. Auto-retry in 5min.');
         _rtState.circuitTimer = setTimeout(() => {
-          _rtState.circuitOpen = false;
-          _rtState.attempts = 0;
+          resetRealtimeCircuit();
           connectCloudMandatory();
         }, _RT_CIRCUIT_RESET_MS);
         return;
@@ -702,9 +721,7 @@ function applyRemoteKey(key, value){
           }
           if (status === 'SUBSCRIBED') {
             forceClientRecreate = false;
-            _rtState.attempts = 0;
-            _rtState.circuitOpen = false;
-            if (_rtState.circuitTimer) { clearTimeout(_rtState.circuitTimer); _rtState.circuitTimer = null; }
+            resetRealtimeCircuit();
             cloudOkAt = Date.now();
             reconnectBackoffMs = 1200;
             updateSyncBadge('connected', 'Supabase Realtime connected');
@@ -1116,7 +1133,8 @@ function applyRemoteKey(key, value){
       } catch(_) { return []; }
     },
     flushQueue: (trigger)=>flushQueue(trigger||'manual'),
-    forceReconnect: ()=>{ try{ userExplicitlyLoggedOut = false; connectCloudMandatory(); }catch(_){ } },
+    forceReconnect: ()=>{ try{ userExplicitlyLoggedOut = false; resetRealtimeCircuit(); connectCloudMandatory(); }catch(_){ } },
+    resetCircuit: ()=>{ try{ resetRealtimeCircuit(); }catch(_){ } },
     init: ()=>{ try{ initRealtimeSync(); }catch(_){ } }
   };
 })();
