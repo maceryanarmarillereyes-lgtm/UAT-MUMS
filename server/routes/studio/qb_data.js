@@ -120,6 +120,32 @@ async function resolveCaseFieldId({ realm, token, tableId }) {
   return fieldId;
 }
 
+function getCaseFieldCandidates(allFields) {
+  const candidates = [];
+  const add = (id) => {
+    const n = Number(id);
+    if (Number.isFinite(n) && !candidates.includes(n)) candidates.push(n);
+  };
+
+  (Array.isArray(allFields) ? allFields : []).forEach(f => {
+    const l = String(f?.label || '').trim().toLowerCase();
+    if (!l) return;
+    if (l === 'case #' || l === 'case number' || l === 'case no' || l === 'case id') add(f.id);
+  });
+  (Array.isArray(allFields) ? allFields : []).forEach(f => {
+    const l = String(f?.label || '').trim().toLowerCase();
+    if (!l) return;
+    if (l.includes('case #') || l.includes('case number') || l.includes('case no') || l.includes('case id')) add(f.id);
+  });
+  (Array.isArray(allFields) ? allFields : []).forEach(f => {
+    const l = String(f?.label || '').trim().toLowerCase();
+    if (!l) return;
+    if (l === 'case' || l.includes('case')) add(f.id);
+  });
+  add(3);
+  return candidates;
+}
+
 // ── Report runner (for list view) ────────────────────────────────────────────
 async function runQBReport({ realm, token, tableId, reportId, limit, extraWhere }) {
   const cacheKey = `${realm}:${tableId}:${reportId}:${limit}:${extraWhere || ''}`;
@@ -208,15 +234,7 @@ module.exports = async (req, res) => {
         ? (fieldsOut.fields || []).map(f => ({ id: Number(f?.id), label: String(f?.label || '').trim() })).filter(f => Number.isFinite(f.id) && f.label)
         : [];
 
-      const caseFieldCandidates = [];
-      const addCaseCandidate = (id) => {
-        const n = Number(id);
-        if (Number.isFinite(n) && !caseFieldCandidates.includes(n)) caseFieldCandidates.push(n);
-      };
-      allFields.forEach(f => { const l = String(f.label || '').trim().toLowerCase(); if (!l) return; if (l === 'case #' || l === 'case number' || l === 'case no' || l === 'case id') addCaseCandidate(f.id); });
-      allFields.forEach(f => { const l = String(f.label || '').trim().toLowerCase(); if (!l) return; if (l.includes('case #') || l.includes('case number') || l.includes('case no') || l.includes('case id')) addCaseCandidate(f.id); });
-      allFields.forEach(f => { const l = String(f.label || '').trim().toLowerCase(); if (!l) return; if (l === 'case' || l.includes('case')) addCaseCandidate(f.id); });
-      addCaseCandidate(3);
+      const caseFieldCandidates = getCaseFieldCandidates(allFields);
 
       const selectIds     = allFields.map(f => f.id).filter(id => Number.isFinite(id));
       const safeSelectIds = selectIds.length ? selectIds : undefined;
@@ -262,7 +280,15 @@ module.exports = async (req, res) => {
       const ids    = [...new Set(rawIds)].slice(0, 100);
       if (!ids.length) return sendJson(res, 200, { ok: true, records: {}, notFound: [] });
 
-      const caseFieldId = await resolveCaseFieldId({ realm, token, tableId });
+      const fieldsOut = await getFields({ realm, token, tableId });
+      const allFields = fieldsOut.ok
+        ? (fieldsOut.fields || []).map(f => ({ id: Number(f?.id), label: String(f?.label || '').trim() })).filter(f => Number.isFinite(f.id))
+        : [];
+
+      const primaryCaseFieldId = await resolveCaseFieldId({ realm, token, tableId });
+      const caseFieldCandidates = [primaryCaseFieldId]
+        .concat(getCaseFieldCandidates(allFields))
+        .filter((id, idx, arr) => Number.isFinite(id) && arr.indexOf(id) === idx);
 
       // Map canonical value -> original requested id so response keys stay stable.
       const requestedByCanonical = new Map();
@@ -271,7 +297,7 @@ module.exports = async (req, res) => {
         if (canon && !requestedByCanonical.has(canon)) requestedByCanonical.set(canon, id);
       });
 
-      const batchCachePrefix = `${realm}:${tableId}:${caseFieldId}`;
+      const batchCachePrefix = `${realm}:${tableId}:${primaryCaseFieldId}`;
       const result   = {};
       const notFound = [];
       const toFetch  = [];
@@ -288,10 +314,6 @@ module.exports = async (req, res) => {
       });
 
       if (toFetch.length > 0) {
-        const clauses     = toFetch.map(id => `{${caseFieldId}.EX.'${encLit(id)}'}`);
-        const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join('OR')})`;
-
-        const fieldsOut    = await getFields({ realm, token, tableId });
         const allFieldIds  = fieldsOut.ok
           ? (fieldsOut.fields || []).map(f => Number(f?.id)).filter(id => Number.isFinite(id))
           : [];
@@ -299,41 +321,46 @@ module.exports = async (req, res) => {
           ? (fieldsOut.fields || []).map(f => ({ id: Number(f?.id), label: String(f?.label || '') })).filter(f => Number.isFinite(f.id))
           : [];
 
-        const body = { from: tableId, where: whereClause, options: { top: 100 } };
-        if (allFieldIds.length) body.select = allFieldIds;
-
+        const pendingIds = new Set(toFetch);
+        const foundIds = new Set();
         try {
-          const resp = await fetch('https://api.quickbase.com/v1/records/query', {
-            method: 'POST',
-            headers: { 'QB-Realm-Hostname': realm, Authorization: `QB-USER-TOKEN ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          });
+          for (const caseFieldId of caseFieldCandidates) {
+            if (pendingIds.size === 0) break;
+            const idsForThisPass = Array.from(pendingIds);
+            const clauses = idsForThisPass.map(id => `{${caseFieldId}.EX.'${encLit(id)}'}`);
+            const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join('OR')})`;
+            const body = { from: tableId, where: whereClause, options: { top: 100 } };
+            if (allFieldIds.length) body.select = allFieldIds;
 
-          if (!resp.ok) {
-            return sendJson(res, 200, { ok: true, records: result, notFound: [...notFound, ...toFetch], error: 'qb_error' });
+            const resp = await fetch('https://api.quickbase.com/v1/records/query', {
+              method: 'POST',
+              headers: { 'QB-Realm-Hostname': realm, Authorization: `QB-USER-TOKEN ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            if (!resp.ok) continue;
+
+            const json       = await resp.json().catch(() => ({}));
+            const rows       = Array.isArray(json.data)   ? json.data   : [];
+            const fieldsMeta = Array.isArray(json.fields) ? json.fields : allFieldMeta;
+
+            rows.forEach(row => {
+              const caseCell  = row[String(caseFieldId)];
+              const caseValue = caseCell ? normalizeQbValue(typeof caseCell === 'object' && 'value' in caseCell ? caseCell.value : caseCell) : '';
+              const caseKey   = normalizeCaseKey(caseValue);
+              if (!caseKey) return;
+
+              const { fieldValues, columnMap } = buildFieldMap(row, fieldsMeta);
+              const rec = { fields: fieldValues, columnMap };
+
+              const matchedId = requestedByCanonical.get(caseKey);
+              if (matchedId && pendingIds.has(matchedId)) {
+                result[matchedId] = rec;
+                foundIds.add(matchedId);
+                pendingIds.delete(matchedId);
+                writeCache(BATCH_CACHE, `${batchCachePrefix}:${matchedId}`, rec);
+              }
+            });
           }
-
-          const json       = await resp.json().catch(() => ({}));
-          const rows       = Array.isArray(json.data)   ? json.data   : [];
-          const fieldsMeta = Array.isArray(json.fields) ? json.fields : allFieldMeta;
-
-          const foundIds = new Set();
-          rows.forEach(row => {
-            const caseCell  = row[String(caseFieldId)];
-            const caseValue = caseCell ? normalizeQbValue(typeof caseCell === 'object' && 'value' in caseCell ? caseCell.value : caseCell) : '';
-            const caseKey   = normalizeCaseKey(caseValue);
-            if (!caseKey) return;
-
-            const { fieldValues, columnMap } = buildFieldMap(row, fieldsMeta);
-            const rec = { fields: fieldValues, columnMap };
-
-            const matchedId = requestedByCanonical.get(caseKey);
-            if (matchedId) {
-              result[matchedId] = rec;
-              foundIds.add(matchedId);
-              writeCache(BATCH_CACHE, `${batchCachePrefix}:${matchedId}`, rec);
-            }
-          });
 
           toFetch.forEach(id => {
             if (!foundIds.has(id)) {
