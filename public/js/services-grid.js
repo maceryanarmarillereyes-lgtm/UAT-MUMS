@@ -166,6 +166,33 @@
     if (window.svcQbLookup) {
       window.svcQbLookup.autofillLinkedColumns(current, grid);
     }
+
+    // ── Scroll-triggered re-autofill ─────────────────────────────────────────
+    // When user scrolls down, newly visible rows get their QB data painted.
+    (function attachScrollRepaint() {
+      var wrap = document.getElementById('svcGridWrap');
+      if (!wrap) return;
+      if (wrap._qbScrollHandler) {
+        wrap.removeEventListener('scroll', wrap._qbScrollHandler);
+        wrap._qbScrollHandler = null;
+      }
+      var scrollTimer = null;
+      var capturedCurrent = current;
+      wrap._qbScrollHandler = function () {
+        if (current !== capturedCurrent) {
+          wrap.removeEventListener('scroll', wrap._qbScrollHandler);
+          wrap._qbScrollHandler = null;
+          return;
+        }
+        clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(function () {
+          if (window.svcQbLookup && current === capturedCurrent) {
+            window.svcQbLookup.autofillLinkedColumns(current, grid);
+          }
+        }, 200);
+      };
+      wrap.addEventListener('scroll', wrap._qbScrollHandler, { passive: true });
+    })();
   }
 
   function attachCellHandlers() {

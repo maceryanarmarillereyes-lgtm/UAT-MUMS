@@ -62,28 +62,78 @@
 
   // ── QB single-record cache ────────────────────────────────────────────────────
   var _recordCache  = {}; // caseNum → { fields, columnMap, at }
-  var _RECORD_TTL   = 2 * 60 * 1000;
+  var _RECORD_TTL   = 5 * 60 * 1000; // 5 min cache — reduce repeat hits
   var _pending      = {}; // caseNum → Promise
+  var _notFound     = {}; // caseNum → timestamp — suppress retrying known 404s
 
-  function fetchCaseRecord(caseNum) {
-    var key = String(caseNum || '').trim();
-    if (!key) return Promise.resolve(null);
+  // ── Concurrency-limited fetch queue ──────────────────────────────────────────
+  // ROOT CAUSE FIX: The old code fired ALL rows concurrently (500+ requests at once)
+  // → server overload → mass 500 errors. New queue: max 3 in-flight at a time.
+  var _QUEUE_CONCURRENCY = 3;
+  var _queueRunning      = 0;
+  var _queue             = []; // Array of { key, resolve, reject }
 
-    var cached = _recordCache[key];
-    if (cached && (Date.now() - cached.at) < _RECORD_TTL) return Promise.resolve(cached);
+  function _drainQueue() {
+    while (_queueRunning < _QUEUE_CONCURRENCY && _queue.length > 0) {
+      var item = _queue.shift();
+      _queueRunning++;
+      _doFetch(item.key)
+        .then(function (result) { item.resolve(result); })
+        .catch(function (err)   { item.reject(err); })
+        .finally(function ()    { _queueRunning--; _drainQueue(); });
+    }
+  }
 
-    if (_pending[key]) return _pending[key];
-
-    var p = fetch('/api/studio/qb_data?recordId=' + encodeURIComponent(key), { headers: apiHeaders() })
-      .then(function (r) { return r.json(); })
+  function _doFetch(key) {
+    return fetch('/api/studio/qb_data?recordId=' + encodeURIComponent(key), { headers: apiHeaders() })
+      .then(function (r) {
+        // Silently handle 404 (record not in QB) and 500 (server error) — no console flood
+        if (r.status === 404) { _notFound[key] = Date.now(); return null; }
+        if (!r.ok) { return null; } // 500, 502, etc — fail silently, retry next load
+        return r.json();
+      })
       .then(function (data) {
-        if (!data.ok) return null;
+        if (!data) return null;
+        if (!data.ok) {
+          if (data.error === 'record_not_found') { _notFound[key] = Date.now(); }
+          return null;
+        }
         var rec = { fields: data.fields || {}, columnMap: data.columnMap || {}, at: Date.now() };
         _recordCache[key] = rec;
         delete _pending[key];
         return rec;
       })
       .catch(function () { delete _pending[key]; return null; });
+  }
+
+  var _NOT_FOUND_TTL = 10 * 60 * 1000; // don't retry 404s for 10 min
+
+  function fetchCaseRecord(caseNum) {
+    var key = String(caseNum || '').trim();
+    if (!key) return Promise.resolve(null);
+
+    // Return cache hit immediately
+    var cached = _recordCache[key];
+    if (cached && (Date.now() - cached.at) < _RECORD_TTL) return Promise.resolve(cached);
+
+    // Don't retry known-not-found records
+    var nf = _notFound[key];
+    if (nf && (Date.now() - nf) < _NOT_FOUND_TTL) return Promise.resolve(null);
+
+    // Return in-flight promise if already queued/running
+    if (_pending[key]) return _pending[key];
+
+    // Enqueue — concurrency-limited
+    var p = new Promise(function (resolve, reject) {
+      _queue.push({ key: key, resolve: resolve, reject: reject });
+      _drainQueue();
+    }).then(function (result) {
+      delete _pending[key];
+      return result;
+    }).catch(function () {
+      delete _pending[key];
+      return null;
+    });
 
     _pending[key] = p;
     return p;
@@ -91,10 +141,12 @@
 
   // ── Auto-fill engine ──────────────────────────────────────────────────────────
   // Scans column_defs for qbLookup. For each row with a Case # in col[0],
-  // fetches the QB record and paints the linked field value into the DOM cell.
+  // fetches the QB record via a THROTTLED QUEUE and paints the linked field.
   // Read-only paint only — does NOT write to Supabase.
+  // Priority: visible rows first, off-screen rows deferred by 400ms.
 
-  var _autofillTimer = null;
+  var _autofillTimer    = null;
+  var _autofillAbort    = null; // token to cancel stale runs on re-render
 
   function autofillLinkedColumns(current, gridEl) {
     if (!current || !gridEl) return;
@@ -114,14 +166,71 @@
     });
     if (!rowsWithCase.length) return;
 
+    // Cancel any previous pending autofill run for this grid
+    var runToken = {};
+    _autofillAbort = runToken;
+
     clearTimeout(_autofillTimer);
     _autofillTimer = setTimeout(function () {
+      if (_autofillAbort !== runToken) return; // stale run — grid was re-rendered
+
+      // ── Phase 1: mark ALL linked cells as pending immediately ──────────────
       rowsWithCase.forEach(function (row) {
+        linkedCols.forEach(function (col) {
+          var inp = gridEl.querySelector(
+            'input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]'
+          );
+          if (!inp || inp.classList.contains('cell-qb-linked')) return;
+          // Only mark pending if not already cached
+          var caseNum = String(row.data[caseCol.key] || '').trim();
+          var cached  = _recordCache[caseNum];
+          if (cached && (Date.now() - cached.at) < _RECORD_TTL) return; // will paint instantly
+          inp.classList.add('cell-qb-pending');
+          inp.readOnly    = true;
+          inp.placeholder = '⋯';
+        });
+      });
+
+      // ── Phase 2: detect which rows are currently in the viewport ───────────
+      var gridWrap      = document.getElementById('svcGridWrap') || gridEl.parentElement;
+      var wrapRect      = gridWrap ? gridWrap.getBoundingClientRect() : null;
+      var visibleRows   = [];
+      var offscreenRows = [];
+
+      rowsWithCase.forEach(function (row) {
+        var anyInp = gridEl.querySelector('input.cell[data-row="' + row.row_index + '"]');
+        if (anyInp && wrapRect) {
+          var r = anyInp.getBoundingClientRect();
+          if (r.bottom >= wrapRect.top && r.top <= wrapRect.bottom) {
+            visibleRows.push(row);
+          } else {
+            offscreenRows.push(row);
+          }
+        } else {
+          visibleRows.push(row); // fallback: treat as visible
+        }
+      });
+
+      // ── Paint helper ───────────────────────────────────────────────────────
+      function paintRow(row) {
         var caseNum = String(row.data[caseCol.key] || '').trim();
         if (!caseNum) return;
 
         fetchCaseRecord(caseNum).then(function (rec) {
-          if (!rec) return;
+          if (_autofillAbort !== runToken) return; // grid changed — discard paint
+          if (!rec) {
+            // Record not found: clear pending state gracefully
+            linkedCols.forEach(function (col) {
+              var inp = gridEl.querySelector(
+                'input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]'
+              );
+              if (!inp) return;
+              inp.classList.remove('cell-qb-pending');
+              inp.readOnly    = false;
+              inp.placeholder = '';
+            });
+            return;
+          }
           linkedCols.forEach(function (col) {
             var fid       = String(col.qbLookup.fieldId);
             var fieldCell = rec.fields[fid];
@@ -139,19 +248,19 @@
             inp.classList.remove('cell-qb-pending');
           });
         });
+      }
 
-        // Show "loading" state immediately for linked cells of this row
-        linkedCols.forEach(function (col) {
-          var inp = gridEl.querySelector(
-            'input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]'
-          );
-          if (!inp || inp.classList.contains('cell-qb-linked')) return;
-          inp.classList.add('cell-qb-pending');
-          inp.readOnly = true;
-          inp.placeholder = '⋯';
-        });
-      });
-    }, 80);
+      // ── Phase 3: fetch visible rows immediately, offscreen rows deferred ───
+      visibleRows.forEach(function (row) { paintRow(row); });
+
+      // Defer offscreen rows so visible rows get queue priority
+      if (offscreenRows.length) {
+        setTimeout(function () {
+          if (_autofillAbort !== runToken) return;
+          offscreenRows.forEach(function (row) { paintRow(row); });
+        }, 400);
+      }
+    }, 120); // slight debounce so rapid re-renders don't stack
   }
 
   // ── DOM helpers ───────────────────────────────────────────────────────────────
@@ -460,6 +569,9 @@
     clearCache: function () {
       _fieldsCache = null;
       _recordCache = {};
+      _notFound    = {};
+      _queue       = [];
+      _queueRunning = 0;
     },
   };
 })();

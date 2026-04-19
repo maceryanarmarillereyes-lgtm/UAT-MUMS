@@ -185,7 +185,8 @@ module.exports = async (req, res) => {
         }
 
         if (!json || !Array.isArray(json.data) || !json.data.length) {
-          return sendJson(res, 404, {
+          // Return 200 ok:false (not HTTP 404) so browser doesn't flood console with red errors
+          return sendJson(res, 200, {
             ok: false,
             error: 'record_not_found',
             message: `Case #${recordIdParam} not found`,
