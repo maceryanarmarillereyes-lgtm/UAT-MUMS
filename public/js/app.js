@@ -1832,6 +1832,7 @@ function updateClocksPreviewTimes(){
         system_supabase: 'dashboard',
         system_cloudflare: 'dashboard',
         system_queue: 'dashboard',
+        system_analytics: 'dashboard',
       };
       return map[id] || 'dashboard';
     };
