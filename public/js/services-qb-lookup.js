@@ -64,7 +64,9 @@
   var _recordCache  = {};  // caseNum → { fields, columnMap, at }
   var _notFound     = {};  // caseNum → timestamp
   var _RECORD_TTL   = 5 * 60 * 1000;
-  var _NOT_FOUND_TTL = 10 * 60 * 1000;
+  // Keep not-found cache short so backend fixes / QB sync do not stay stale
+  // in the browser for long periods.
+  var _NOT_FOUND_TTL = 60 * 1000;
 
   // ── Batch fetch engine ────────────────────────────────────────────────────────
   var _BATCH_SIZE        = 100;
