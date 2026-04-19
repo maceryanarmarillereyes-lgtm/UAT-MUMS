@@ -56,6 +56,8 @@
     var rightPanel = document.getElementById('svcRight');
     var mainEl     = document.querySelector('.svc-main');
     if (!toggleBtn || !rightPanel || !mainEl) return;
+    if (toggleBtn.dataset.bound === '1') return;
+    toggleBtn.dataset.bound = '1';
 
     var isCollapsed = true;
 
