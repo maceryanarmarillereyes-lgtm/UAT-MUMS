@@ -47,6 +47,7 @@
   // ── Request tracking (in-page session counters) ──────────────────────────
   const _reqLog = [];
   const _MAX_LOG = 500;
+  const ANALYTICS_CACHE_KEY = 'mums_sysmon_analytics_cache_v1';
 
   function _intercept() {
     if (window.__sysMonPatched) return;
@@ -437,6 +438,7 @@
       <button class="sys-tab" data-tab="supabase">🗄️ Supabase</button>
       <button class="sys-tab" data-tab="cloudflare">☁️ Cloudflare</button>
       <button class="sys-tab" data-tab="queue">🔁 Sync Queue</button>
+      <button class="sys-tab" data-tab="analytics">📈 Analytics</button>
       <button class="sys-tab" data-tab="studio">🎛️ Studio Features</button>
       <button class="sys-tab" data-tab="bugscanner" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:6px;">🔍 Auto Bug Scan <span id="bugBadge" style="display:none;margin-left:4px;background:#ef4444;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:900;"></span></button>
     </div>
@@ -449,6 +451,7 @@
       <div class="sys-panel" id="tab-supabase"></div>
       <div class="sys-panel" id="tab-cloudflare"></div>
       <div class="sys-panel" id="tab-queue"></div>
+      <div class="sys-panel" id="tab-analytics"></div>
       <div class="sys-panel" id="tab-studio"></div>
       <div class="sys-panel" id="tab-bugscanner"></div>
     </div>
@@ -463,23 +466,28 @@
     supabase:   'supabase',
     cloudflare: 'cloudflare',
     queue:      'queue',
+    analytics:  'analytics',
     studio:     'studio',      // FIX: was missing — caused Studio Features tab to always show overview
     bugscanner: 'bugscanner'   // FIX: was missing — caused Auto Bug Scan tab to always show overview
   };
+  function _extractSystemRouteSegment(raw){
+    try{
+      const path = String(raw || '').toLowerCase().split('?')[0].split('#')[0];
+      if (!path) return '';
+      const normalized = path.replace(/^#?\/?/, '').replace(/\/+$/,'');
+      if (!normalized) return '';
+      if (normalized.startsWith('system/')) return normalized.split('/')[1] || 'overview';
+      if (normalized === 'system') return 'overview';
+      if (normalized.startsWith('system_')) return normalized.slice('system_'.length);
+      return '';
+    }catch(_){ return ''; }
+  }
   function tabFromRoute(){
     try{
-      const path = String(window.location.pathname || window.location.hash || '').toLowerCase();
-      const cleaned = path.replace(/^#?\/?/, '').split('?')[0].split('#')[0];
-      let seg = '';
-      if(cleaned.startsWith('system/')){
-        seg = cleaned.split('/')[1] || '';
-      }else if(cleaned.startsWith('system_')){
-        seg = cleaned.slice('system_'.length);
-      }else if(cleaned === 'system'){
-        seg = 'overview';
-      }else{
-        return 'overview';
-      }
+      // pathname may stay "/" in hash-based navigation; check both.
+      const fromPath = _extractSystemRouteSegment(window.location.pathname || '');
+      const fromHash = _extractSystemRouteSegment(window.location.hash || '');
+      const seg = fromPath || fromHash || 'overview';
       return TAB_FROM_ROUTE[seg] || 'overview';
     }catch(_){ return 'overview'; }
   }
@@ -1160,6 +1168,139 @@
     root.querySelector('#sysQueueRefresh').onclick = () => renderQueue();
   }
 
+  function _readAnalyticsCache() {
+    try {
+      const raw = localStorage.getItem(ANALYTICS_CACHE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) { return null; }
+  }
+  function _saveAnalyticsCache(snapshot) {
+    try { localStorage.setItem(ANALYTICS_CACHE_KEY, JSON.stringify(snapshot)); } catch (_) {}
+  }
+  function _manilaDateKey(ts) {
+    try {
+      const d = ts ? new Date(ts) : new Date();
+      return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    } catch (_) {
+      return new Date().toISOString().slice(0,10);
+    }
+  }
+  function _safeLogsFromDoc(syncData) {
+    try {
+      const docs = (syncData && syncData.docs) || [];
+      const logsDoc = docs.find(d => d && d.key === 'ums_activity_logs');
+      const logs = logsDoc && logsDoc.value;
+      return Array.isArray(logs) ? logs : [];
+    } catch (_) { return []; }
+  }
+  function _computeActiveUsers(logs) {
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const buckets = {
+      daily: now - dayMs,
+      weekly: now - (7 * dayMs),
+      monthly: now - (30 * dayMs),
+    };
+    const users = { daily: new Set(), weekly: new Set(), monthly: new Set() };
+    logs.forEach(l => {
+      const ts = Number(l && l.ts || 0);
+      if (!ts) return;
+      const uid = String((l && (l.actorId || l.userId || l.username || l.actorName)) || '').trim();
+      if (!uid) return;
+      if (ts >= buckets.daily) users.daily.add(uid);
+      if (ts >= buckets.weekly) users.weekly.add(uid);
+      if (ts >= buckets.monthly) users.monthly.add(uid);
+    });
+    return { daily: users.daily.size, weekly: users.weekly.size, monthly: users.monthly.size };
+  }
+  async function _fetchAnalyticsSnapshot(force) {
+    const todayKey = _manilaDateKey();
+    const cached = _readAnalyticsCache();
+    if (!force && cached && cached.dayKey === todayKey) return cached;
+
+    const tok = (window.CloudAuth && CloudAuth.accessToken) ? CloudAuth.accessToken() : '';
+    if (!tok) throw new Error('No auth token for analytics sync.');
+
+    const [envRes, syncRes, presenceRes] = await Promise.all([
+      fetch('/api/env', { headers: { Authorization: 'Bearer ' + tok } }),
+      fetch('/api/sync/pull?since=0&clientId=sysmon_analytics', { headers: { Authorization: 'Bearer ' + tok } }),
+      fetch('/api/presence/list', { headers: { Authorization: 'Bearer ' + tok } }),
+    ]);
+
+    const envJson = envRes.ok ? await envRes.json() : {};
+    const syncJson = syncRes.ok ? await syncRes.json() : {};
+    const presenceJson = presenceRes.ok ? await presenceRes.json() : {};
+    const logs = _safeLogsFromDoc(syncJson);
+    const activeUsers = _computeActiveUsers(logs);
+    const est = calcEstimatedReqPerDay();
+
+    const snapshot = {
+      dayKey: todayKey,
+      syncedAt: Date.now(),
+      activeUsers,
+      cloudflare: {
+        estimatedReqDay: est.totalPerDay,
+        usedPct: pct(est.totalPerDay, FREE_TIER.CF_REQUESTS_DAY),
+      },
+      supabase: {
+        docsCount: Array.isArray(syncJson.docs) ? syncJson.docs.length : 0,
+        onlineNow: Array.isArray(presenceJson.users) ? presenceJson.users.length : 0,
+        urlSet: !!(envJson && (envJson.SUPABASE_URL || (envJson.env && envJson.env.SUPABASE_URL))),
+      }
+    };
+    _saveAnalyticsCache(snapshot);
+    return snapshot;
+  }
+  async function renderAnalytics(force) {
+    const panel = root.querySelector('#tab-analytics');
+    panel.innerHTML = `<div style="color:var(--muted);padding:20px">⏳ Loading analytics snapshot…</div>`;
+    try {
+      const data = await _fetchAnalyticsSnapshot(!!force);
+      panel.innerHTML = `
+      <div class="sys-alert info">
+        <span>ℹ️</span>
+        <span>Cloudflare + Supabase data pull-out is cached once per day (Manila date). Use manual sync when doing incident investigation.</span>
+      </div>
+      <div class="sys-refresh-row">
+        <button class="sys-btn" id="sysAnalyticsSync">🔄 Manual Sync</button>
+        <div class="sys-refresh-ts">Last snapshot: ${new Date(data.syncedAt).toLocaleString()}</div>
+      </div>
+
+      <div class="sys-section-title">👥 Active Users (DAU / WAU / MAU)</div>
+      <div class="sys-grid">
+        <div class="sys-card"><div class="sys-card-label">Daily Active Users</div><div class="sys-card-val">${fmt(data.activeUsers.daily)}</div></div>
+        <div class="sys-card"><div class="sys-card-label">Weekly Active Users</div><div class="sys-card-val">${fmt(data.activeUsers.weekly)}</div></div>
+        <div class="sys-card"><div class="sys-card-label">Monthly Active Users</div><div class="sys-card-val">${fmt(data.activeUsers.monthly)}</div></div>
+        <div class="sys-card"><div class="sys-card-label">Online Now</div><div class="sys-card-val">${fmt(data.supabase.onlineNow)}</div></div>
+      </div>
+
+      <div class="sys-section-title">📈 Daily / Weekly / Monthly Capacity View</div>
+      <table class="sys-table">
+        <thead><tr><th>Metric</th><th>Daily</th><th>Weekly</th><th>Monthly</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Cloudflare Estimated Requests</td>
+            <td class="sys-mono">${fmt(data.cloudflare.estimatedReqDay)}</td>
+            <td class="sys-mono">${fmt(data.cloudflare.estimatedReqDay * 7)}</td>
+            <td class="sys-mono">${fmt(data.cloudflare.estimatedReqDay * 30)}</td>
+            <td><span class="sys-pill ${data.cloudflare.usedPct >= 85 ? 'crit' : data.cloudflare.usedPct >= 60 ? 'warn' : 'ok'}">${data.cloudflare.usedPct}% daily free-tier</span></td>
+          </tr>
+          <tr>
+            <td>Supabase Synced Documents</td>
+            <td class="sys-mono">${fmt(data.supabase.docsCount)}</td>
+            <td class="sys-mono">${fmt(data.supabase.docsCount)}</td>
+            <td class="sys-mono">${fmt(data.supabase.docsCount)}</td>
+            <td><span class="sys-pill ${data.supabase.urlSet ? 'ok' : 'crit'}">${data.supabase.urlSet ? 'Config OK' : 'Config Missing'}</span></td>
+          </tr>
+        </tbody>
+      </table>`;
+      const syncBtn = root.querySelector('#sysAnalyticsSync');
+      if (syncBtn) syncBtn.onclick = () => renderAnalytics(true);
+    } catch (e) {
+      panel.innerHTML = `<div class="sys-alert crit"><span>❌</span><span>${esc(String(e && e.message ? e.message : e))}</span></div>`;
+    }
+  }
+
 
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1793,6 +1934,7 @@
       case 'supabase':   renderSupabase(); break;
       case 'cloudflare': renderCloudflare(); break;
       case 'queue':      renderQueue(); break;
+      case 'analytics':  renderAnalytics(force); break;
       case 'studio':     renderStudio(); break;
       case 'bugscanner':
         // FIX: forward force so Refresh All triggers a full rescan on this tab
