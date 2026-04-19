@@ -121,6 +121,14 @@
       th.dataset.key = c.key;
       th.tabIndex = 0;
       th.title = 'Right-click to rename column';
+      // QB Lookup badge
+      if (c.qbLookup && c.qbLookup.fieldLabel) {
+        var badge = document.createElement('span');
+        badge.className   = 'th-qb-badge';
+        badge.textContent = 'QB';
+        badge.title       = '🔗 Linked: ' + c.qbLookup.fieldLabel;
+        th.appendChild(badge);
+      }
     });
 
     var tbody = mkEl('tbody');
