@@ -56,6 +56,8 @@
     var rightPanel = document.getElementById('svcRight');
     var mainEl     = document.querySelector('.svc-main');
     if (!toggleBtn || !rightPanel || !mainEl) return;
+    if (toggleBtn.dataset.bound === '1') return;
+    toggleBtn.dataset.bound = '1';
 
     var isCollapsed = true;
 
@@ -102,24 +104,4 @@
 
     setSyncState('synced');
   })();
-})();
-
-// Sidebar collapse toggle
-(function () {
-  var btn   = document.getElementById('svcRightToggle');
-  var panel = document.getElementById('svcRight');
-  var main  = document.querySelector('.svc-main');
-  if (!btn || !panel || !main) return;
-  var collapsed = true;
-  function apply() {
-    if (collapsed) {
-      panel.classList.add('collapsed'); main.classList.add('right-collapsed');
-      btn.textContent = '«'; btn.title = 'Show sidebar';
-    } else {
-      panel.classList.remove('collapsed'); main.classList.remove('right-collapsed');
-      btn.textContent = '»'; btn.title = 'Hide sidebar';
-    }
-  }
-  apply();
-  btn.addEventListener('click', function () { collapsed = !collapsed; apply(); });
 })();
