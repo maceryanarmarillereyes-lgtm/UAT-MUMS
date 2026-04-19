@@ -294,6 +294,7 @@
 
     var overlay = el('div', 'qb-fp-overlay');
     overlay.id  = 'svcQbFieldOverlay';
+    overlay.setAttribute('data-picker-v2', '1'); // use opacity transition, not animation
 
     var panel = el('div', 'qb-fp-panel');
     overlay.appendChild(panel);
@@ -380,7 +381,10 @@
             item.appendChild(tick);
           }
           item.onclick = function () {
-            opts.onSelect({ fieldId: fid, fieldLabel: f.label || fid });
+            // FIX: Always call onSelect(fieldId, fieldLabel) — 2 separate string args.
+            // The grid handler (services-grid.js) expects: onSelect(fieldId, fieldLabel)
+            // Previous code passed a single object which broke QB link saving.
+            opts.onSelect(fid, f.label || fid);
             closeFieldPicker();
           };
           listEl.appendChild(item);
