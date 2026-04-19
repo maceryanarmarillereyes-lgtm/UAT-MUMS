@@ -550,18 +550,17 @@ function applyRemoteKey(key, value){
       lastAuthToken = token;
       // BUG FIX: was console.log — moved to debug-only to eliminate console spam
       try{ (window.MUMS_DEBUG||{}).log && MUMS_DEBUG.log('realtime.preparing_subscribe', { hasToken: !!token }); }catch(_){}
-      // FIX v3.9.31: NEVER null __MUMS_SB_CLIENT on forceClientRecreate.
-      // OLD: set null -> createClient() -> new GoTrueClient every reconnect cycle
-      //      -> Supabase SDK warns about multiple instances -> console spam.
-      // NEW: keep the singleton alive; reset only the realtime WebSocket transport
-      //      (the actual poisoned socket). setAuth() below refreshes the JWT so RLS works.
-      if (forceClientRecreate && window.__MUMS_SB_CLIENT) {
-        try {
-          if (window.__MUMS_SB_CLIENT.realtime && typeof window.__MUMS_SB_CLIENT.realtime.disconnect === 'function') {
-            window.__MUMS_SB_CLIENT.realtime.disconnect();
-          }
-        } catch (_) {}
-        forceClientRecreate = false;
+      // FIX v3.9.31b: Correct GoTrueClient singleton approach.
+      // v3.9.31 called realtime.disconnect() here — WRONG. Phoenix Socket's disconnect()
+      // clears its internal reconnect timer and puts the socket into a manual-disconnect
+      // state. Subsequent subscribe() calls then see "WebSocket closed before connection
+      // established" × N, triggering CHANNEL_ERROR → scheduleReconnect → disconnect loop.
+      // CORRECT FIX: do NOT touch the socket at all. stopCloud() already called
+      // removeAllChannels() which removed stale channels but kept the WebSocket alive.
+      // We simply reset the flag and resubscribe new channels on the live socket.
+      // This prevents GoTrueClient spam (no new createClient calls) AND keeps sync healthy.
+      if (forceClientRecreate) {
+        forceClientRecreate = false; // flag reset only — socket and client stay untouched
       }
       if (!window.__MUMS_SB_CLIENT) {
         window.__MUMS_SB_CLIENT = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
