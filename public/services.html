@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Services · MUMS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/services.css" />
+</head>
+<body class="services-body">
+
+  <!-- TOP BAR -->
+  <header class="svc-topbar">
+    <a href="/index.html" class="svc-back">← MUMS</a>
+    <div class="svc-title">
+      <span class="svc-title-icon">📊</span>
+      <h1>Services Workspace</h1>
+    </div>
+    <div class="svc-top-actions">
+      <button id="svcSearchBtn" class="svc-icon-btn" title="Search sheets (Ctrl+K)">🔍</button>
+      <button id="svcSyncIndicator" class="svc-sync-chip">● Synced</button>
+      <div class="svc-user-chip" id="svcUserChip">—</div>
+    </div>
+  </header>
+
+  <!-- 3-COLUMN WORKSPACE -->
+  <main class="svc-main">
+
+    <!-- LEFT SIDEBAR: SHEETS NAVIGATOR -->
+    <aside class="svc-left" id="svcLeft">
+      <div class="svc-left-header">
+        <span class="svc-left-label">SHEETS</span>
+        <button id="svcNewSheetBtn" class="svc-new-btn" title="New sheet (Ctrl+N)">+ New</button>
+      </div>
+      <input id="svcSheetSearch" class="svc-sheet-search" placeholder="Search sheets… (Ctrl+K)" autocomplete="off" />
+      <div id="svcSheetList" class="svc-sheet-list"></div>
+      <div class="svc-left-footer">
+        <small>Ctrl+N · New &nbsp;|&nbsp; Ctrl+K · Search</small>
+      </div>
+    </aside>
+
+    <!-- CENTER: SPREADSHEET EDITOR -->
+    <section class="svc-center" id="svcCenter">
+      <div class="svc-sheet-toolbar">
+        <div class="svc-sheet-tabs" id="svcSheetTabs"></div>
+        <div class="svc-toolbar-actions">
+          <button class="svc-btn" id="svcAddRow">+ Row</button>
+          <button class="svc-btn" id="svcAddCol">+ Column</button>
+          <button class="svc-btn ghost" id="svcUndo" title="Undo (Ctrl+Z)">↶ Undo</button>
+          <button class="svc-btn ghost" id="svcRedo" title="Redo (Ctrl+Y)">↷ Redo</button>
+          <button class="svc-btn accent" id="svcExportCsv">⬇ CSV</button>
+        </div>
+      </div>
+
+      <div class="svc-grid-wrap" id="svcGridWrap">
+        <div class="svc-empty-state" id="svcEmptyState">
+          <div class="svc-empty-icon">📋</div>
+          <h2>No sheet selected</h2>
+          <p>Pick a sheet on the left or create a new one.</p>
+          <button class="svc-btn accent" onclick="document.getElementById('svcNewSheetBtn').click()">
+            + Create your first sheet
+          </button>
+        </div>
+        <table class="svc-grid" id="svcGrid" hidden></table>
+      </div>
+
+      <div class="svc-statusbar" id="svcStatusbar">
+        <span id="svcStatusCells">0 cells</span>
+        <span id="svcStatusSaved">—</span>
+      </div>
+    </section>
+
+    <!-- RIGHT SIDEBAR: DASHBOARD -->
+    <aside class="svc-right" id="svcRight">
+      <div class="svc-right-header">DASHBOARD</div>
+
+      <div class="svc-widget" id="svcWidgetStats">
+        <div class="svc-widget-title">Overview</div>
+        <div class="svc-stat-grid">
+          <div class="svc-stat"><span id="svcStatRows">0</span><label>Rows</label></div>
+          <div class="svc-stat"><span id="svcStatCols">0</span><label>Columns</label></div>
+          <div class="svc-stat"><span id="svcStatFilled">0%</span><label>Filled</label></div>
+          <div class="svc-stat"><span id="svcStatUpdated">—</span><label>Updated</label></div>
+        </div>
+      </div>
+
+      <div class="svc-widget" id="svcWidgetActivity">
+        <div class="svc-widget-title">Recent Activity</div>
+        <ul id="svcActivityList" class="svc-activity-list">
+          <li class="muted">No activity yet.</li>
+        </ul>
+      </div>
+
+      <div class="svc-widget" id="svcWidgetCollab">
+        <div class="svc-widget-title">Online</div>
+        <div id="svcCollabList" class="svc-collab-list">
+          <span class="svc-collab-chip">Just you</span>
+        </div>
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- Load Supabase SDK first, then app modules in dependency order -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- MUMS env must be loaded before servicesDB can read SUPABASE_URL -->
+  <script src="/js/env_runtime.js"></script>
+  <script>
+    // Wait for MUMS env to be ready before booting the Services app
+    (function () {
+      function boot() {
+        var s = function (src) {
+          var el = document.createElement('script');
+          el.src = src;
+          document.body.appendChild(el);
+          return el;
+        };
+        // Chain scripts in strict load order
+        s('/js/services-supabase.js').onload = function () {
+          s('/js/services-dashboard.js').onload = function () {
+            s('/js/services-grid.js').onload = function () {
+              s('/js/services-sheet-manager.js').onload = function () {
+                s('/js/services.js');
+              };
+            };
+          };
+        };
+      }
+
+      // MUMS_ENV is set asynchronously by env_runtime.js
+      var waited = 0;
+      function waitForEnv() {
+        if (window.MUMS_ENV && window.MUMS_ENV.SUPABASE_URL) {
+          boot();
+        } else if (waited < 5000) {
+          waited += 50;
+          setTimeout(waitForEnv, 50);
+        } else {
+          // Env not available — boot anyway so UI renders
+          console.warn('[services] MUMS_ENV not ready after 5s, booting without env.');
+          boot();
+        }
+      }
+      waitForEnv();
+    })();
+  </script>
+</body>
+</html>

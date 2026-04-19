@@ -9,6 +9,14 @@
 
 const { getUserFromJwt, getProfileForUserId, serviceSelect, serviceUpsert } = require('../../lib/supabase');
 
+function setCors(res){
+  try{
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  }catch(_){}
+}
+
 // POST /api/sync/push
 // Body: { key, value, op: 'set'|'merge', removedIds?: string[], clientId?: string, ts?: number }
 //
@@ -190,6 +198,11 @@ function mergeMailboxTables(existing, incoming, removedIds){
 
 module.exports = async (req, res) => {
   try {
+    setCors(res);
+    if (String(req.method || '').toUpperCase() === 'OPTIONS') {
+      res.statusCode = 204;
+      return res.end('');
+    }
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'POST') {
       res.statusCode = 405;
@@ -273,8 +286,9 @@ module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     return res.end(JSON.stringify({ ok: true }));
   } catch (e) {
-    res.statusCode = 500;
+    setCors(res);
+    res.statusCode = 503;
     res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ ok: false, error: 'Server error', details: String(e?.message || e) }));
+    return res.end(JSON.stringify({ ok: false, error: 'sync_unavailable', retryAfter: 30 }));
   }
 };
