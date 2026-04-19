@@ -6675,6 +6675,73 @@ async function boot(){
           panel.style.display = 'block';
         }
 
+        function initGqbSelectedPanelDrag() {
+          const panel = document.getElementById('gqbSelectedFloatingPanel');
+          const handle = document.getElementById('gqbSelectedFloatingHandle');
+          if (!panel || !handle || panel.dataset.dragBound === '1') return;
+          panel.dataset.dragBound = '1';
+
+          let dragging = false;
+          let offsetX = 0;
+          let offsetY = 0;
+
+          const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
+          const getBounds = () => {
+            const parent = panel.parentElement;
+            if (!parent) return null;
+            const parentRect = parent.getBoundingClientRect();
+            const panelRect = panel.getBoundingClientRect();
+            return {
+              minX: 0,
+              minY: 0,
+              maxX: Math.max(0, parentRect.width - panelRect.width),
+              maxY: Math.max(0, parentRect.height - panelRect.height),
+            };
+          };
+
+          handle.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0) return;
+            const panelRect = panel.getBoundingClientRect();
+            const parentRect = panel.parentElement ? panel.parentElement.getBoundingClientRect() : panelRect;
+            dragging = true;
+            offsetX = event.clientX - panelRect.left;
+            offsetY = event.clientY - panelRect.top;
+            panel.style.left = `${Math.max(0, panelRect.left - parentRect.left)}px`;
+            panel.style.top = `${Math.max(0, panelRect.top - parentRect.top)}px`;
+            panel.style.right = 'auto';
+            panel.style.bottom = 'auto';
+            if (typeof handle.setPointerCapture === 'function') {
+              handle.setPointerCapture(event.pointerId);
+            }
+            event.preventDefault();
+          });
+
+          handle.addEventListener('pointermove', (event) => {
+            if (!dragging) return;
+            const parentRect = panel.parentElement ? panel.parentElement.getBoundingClientRect() : null;
+            if (!parentRect) return;
+            const bounds = getBounds();
+            if (!bounds) return;
+            const nextX = clamp(event.clientX - parentRect.left - offsetX, bounds.minX, bounds.maxX);
+            const nextY = clamp(event.clientY - parentRect.top - offsetY, bounds.minY, bounds.maxY);
+            panel.style.left = `${nextX}px`;
+            panel.style.top = `${nextY}px`;
+            panel.style.right = 'auto';
+            panel.style.bottom = 'auto';
+          });
+
+          const stopDrag = (event) => {
+            if (!dragging) return;
+            dragging = false;
+            if (event && typeof handle.releasePointerCapture === 'function') {
+              try { handle.releasePointerCapture(event.pointerId); } catch (_) {}
+            }
+          };
+
+          handle.addEventListener('pointerup', stopDrag);
+          handle.addEventListener('pointercancel', stopDrag);
+        }
+
         function applyGqbColumnSearch() {
           const input = document.getElementById('gqbColumnSearch');
           const query = String(input && input.value || '').trim().toLowerCase();
@@ -6718,6 +6785,7 @@ async function boot(){
 
         const gqbColSearch = document.getElementById('gqbColumnSearch');
         if (gqbColSearch) gqbColSearch.oninput = applyGqbColumnSearch;
+        initGqbSelectedPanelDrag();
 
         // ── Filter Rows (matches existing QB settings style) ───────────────────
         function gqbFilterRowTemplate(f, idx) {
