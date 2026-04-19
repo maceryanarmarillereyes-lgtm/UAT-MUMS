@@ -49,6 +49,37 @@
     }
   });
 
+
+  // ── Right sidebar collapse toggle ──────────────────────────────────────────
+  (function () {
+    var toggleBtn  = document.getElementById('svcRightToggle');
+    var rightPanel = document.getElementById('svcRight');
+    var mainEl     = document.querySelector('.svc-main');
+    if (!toggleBtn || !rightPanel || !mainEl) return;
+
+    var isCollapsed = true;
+
+    function applyState() {
+      if (isCollapsed) {
+        rightPanel.classList.add('collapsed');
+        mainEl.classList.add('right-collapsed');
+        toggleBtn.textContent = '«';
+        toggleBtn.title = 'Show sidebar';
+      } else {
+        rightPanel.classList.remove('collapsed');
+        mainEl.classList.remove('right-collapsed');
+        toggleBtn.textContent = '»';
+        toggleBtn.title = 'Hide sidebar';
+      }
+    }
+
+    applyState();
+    toggleBtn.addEventListener('click', function () {
+      isCollapsed = !isCollapsed;
+      applyState();
+    });
+  })();
+
   // ── Boot sequence ─────────────────────────────────────────────────────────────
   setSyncState('loading');
 

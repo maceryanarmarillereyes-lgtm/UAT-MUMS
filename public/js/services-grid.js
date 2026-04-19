@@ -1,16 +1,13 @@
 (function () {
-  // ─────────────────────────────────────────────────────────────────────────────
-  // services-grid.js  — v3 (+ SAVE button, toast, getState)
-  //
-  // ALL ORIGINAL FIXES PRESERVED:
-  //   FIX-5: Realtime deltas in-memory — no listRows() on remote change
-  //   FIX-6: 800ms save debounce
-  // NEW in v3:
-  //   NEW-1: saveAllRows() — manual SAVE button bulk upsert
-  //   NEW-2: setStatus()   — colour-coded status bar
-  //   NEW-3: svcToast.pulse() on auto-save
-  //   NEW-4: getState()    — for import module
-  // ─────────────────────────────────────────────────────────────────────────────
+  // services-grid.js — v4 (DOM-safe render, context menu, auto-resize, getState)
+  // FIX-5: Realtime deltas in-memory
+  // FIX-6: 800ms save debounce
+  // NEW-1: saveAllRows()
+  // NEW-2: setStatus()
+  // NEW-3: svcToast.pulse()
+  // NEW-4: getState()
+  // NEW-5: Right-click context menu on column headers
+  // NEW-6: autoResizeColumns()
 
   var grid        = document.getElementById('svcGrid');
   var empty       = document.getElementById('svcEmptyState');
@@ -23,7 +20,7 @@
   var statusCells = document.getElementById('svcStatusCells');
   var statusSaved = document.getElementById('svcStatusSaved');
 
-  var SAVE_DEBOUNCE_MS = 800; // FIX-6
+  var SAVE_DEBOUNCE_MS = 800;
 
   var current      = null;
   var subscription = null;
@@ -31,7 +28,6 @@
   var undoStack    = [];
   var redoStack    = [];
 
-  // NEW-2: colour-coded status
   function setStatus(state, text) {
     if (!statusSaved) return;
     statusSaved.textContent = text;
@@ -55,7 +51,6 @@
     render();
     window.servicesDashboard && window.servicesDashboard.update(current);
 
-    // FIX-5: in-memory delta — no full re-fetch
     subscription = window.servicesDB.subscribeToSheet(sheet.id, function (payload) {
       if (!current) return;
       var ev  = payload.eventType;
@@ -83,31 +78,69 @@
     });
   }
 
+  // ── RENDER — pure DOM construction (no innerHTML for structure) ─────────────
   function render() {
     if (!current) { clear(); return; }
     empty.style.display = 'none';
     grid.hidden = false;
+
     var cols      = current.sheet.column_defs || [];
     var totalRows = Math.max(current.rows.length + 2, 10);
 
-    var html = '<thead><tr><th class="row-num">#</th>';
+    // Build table using DOM API so no HTML escaping issues
+    var thead = document.createElement('thead');
+    var headRow = document.createElement('tr');
+
+    // Row-number corner cell
+    var thNum = document.createElement('th');
+    thNum.className = 'row-num';
+    thNum.textContent = '#';
+    headRow.appendChild(thNum);
+
     cols.forEach(function (c) {
-      html += '<th data-key="' + ea(c.key) + '" contenteditable="true" spellcheck="false" style="min-width:' + (c.width || 160) + 'px">' + eh(c.label) + '</th>';
+      var th = document.createElement('th');
+      th.contentEditable = 'true';
+      th.dataset.key = c.key;
+      th.textContent = c.label;
+      headRow.appendChild(th);
     });
-    html += '</tr></thead><tbody>';
+    thead.appendChild(headRow);
+
+    var tbody = document.createElement('tbody');
     for (var i = 0; i < totalRows; i++) {
-      var row = current.rows.find(function (r) { return r.row_index === i; }) || { data: {} };
-      html += '<tr data-row="' + i + '"><td class="row-num">' + (i + 1) + '</td>';
+      var rowData = current.rows.find(function (r) { return r.row_index === i; }) || { data: {} };
+      var tr = document.createElement('tr');
+
+      var tdNum = document.createElement('td');
+      tdNum.className = 'row-num';
+      tdNum.textContent = (i + 1).toString();
+      tr.appendChild(tdNum);
+
       cols.forEach(function (c) {
-        html += '<td><input class="cell" data-row="' + i + '" data-key="' + ea(c.key) + '" value="' + ea((row.data[c.key] != null ? row.data[c.key] : '').toString()) + '" autocomplete="off" spellcheck="false"/></td>';
+        var td = document.createElement('td');
+        var inp = document.createElement('input');
+        inp.className = 'cell';
+        inp.dataset.row = i;
+        inp.dataset.key = c.key;
+        inp.value = (rowData.data[c.key] != null ? rowData.data[c.key] : '').toString();
+        inp.autocomplete = 'off';
+        inp.spellcheck = false;
+        td.appendChild(inp);
+        tr.appendChild(td);
       });
-      html += '</tr>';
+      tbody.appendChild(tr);
     }
-    html += '</tbody>';
-    grid.innerHTML = html;
+
+    // Clear and rebuild
+    grid.innerHTML = '';
+    grid.appendChild(thead);
+    grid.appendChild(tbody);
+
     attachCellHandlers();
     attachHeaderHandlers();
+    attachHeaderContextMenu();
     updateStatusBar();
+    autoResizeColumns();
   }
 
   function attachCellHandlers() {
@@ -120,15 +153,171 @@
   function attachHeaderHandlers() {
     grid.querySelectorAll('thead th[data-key]').forEach(function (th) {
       th.addEventListener('blur', async function () {
-        var key = th.dataset.key;
+        var key      = th.dataset.key;
         var newLabel = th.innerText.trim();
-        var col = current.sheet.column_defs.find(function (c) { return c.key === key; });
+        var col      = current.sheet.column_defs.find(function (c) { return c.key === key; });
         if (!col || col.label === newLabel) return;
         col.label = newLabel;
         await window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs);
       });
-      th.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); th.blur(); } });
+      th.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); th.blur(); }
+      });
     });
+  }
+
+  // ── NEW-5: Right-click context menu ─────────────────────────────────────────
+  function attachHeaderContextMenu() {
+    document.querySelectorAll('.svc-col-ctx-menu').forEach(function (m) { m.remove(); });
+
+    grid.querySelectorAll('thead th[data-key]').forEach(function (th) {
+      th.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        document.querySelectorAll('.svc-col-ctx-menu').forEach(function (m) { m.remove(); });
+
+        var key    = th.dataset.key;
+        var cols   = current.sheet.column_defs;
+        var colIdx = cols.findIndex(function (c) { return c.key === key; });
+        if (colIdx < 0) return;
+
+        var menu = document.createElement('div');
+        menu.className = 'svc-col-ctx-menu';
+
+        function makeItem(icon, label, action, sub) {
+          var item = document.createElement('div');
+          item.className = 'ctx-item';
+          if (action) item.dataset.action = action;
+          item.innerHTML = '<span class="ctx-icon">' + icon + '</span><span class="ctx-label">' + label + '</span>';
+          if (sub) {
+            var arrow = document.createElement('span');
+            arrow.className = 'ctx-arrow';
+            arrow.textContent = '▶';
+            item.appendChild(arrow);
+            item.appendChild(sub);
+          }
+          return item;
+        }
+
+        function makeSub(items) {
+          var sub = document.createElement('div');
+          sub.className = 'ctx-sub';
+          items.forEach(function (i) { sub.appendChild(i); });
+          return sub;
+        }
+
+        function makeSep() {
+          var s = document.createElement('div');
+          s.className = 'ctx-separator';
+          return s;
+        }
+
+        // Move sub
+        var moveSub = makeSub([
+          makeItem('⬅', 'To Left',  colIdx > 0               ? 'move-left'  : null),
+          makeItem('➡', 'To Right', colIdx < cols.length - 1 ? 'move-right' : null)
+        ]);
+
+        // Quickbase sub
+        var qbSub = makeSub([makeItem('📋', 'Select Quickbase Field', 'select-qb-field')]);
+        var setProgramSub = makeSub([
+          makeItem('🔗', 'Lookup to Global Quickbase', null, qbSub),
+          makeItem('🎨', 'Conditional Formatting', 'conditional-format')
+        ]);
+
+        menu.appendChild(makeItem('✏️', 'Rename Column', 'rename'));
+        menu.appendChild(makeSep());
+        menu.appendChild(makeItem('⚙️', 'Set Program', null, setProgramSub));
+        menu.appendChild(makeSep());
+        menu.appendChild(makeItem('↔️', 'Move Column', null, moveSub));
+
+        menu.style.left = e.clientX + 'px';
+        menu.style.top  = e.clientY + 'px';
+        document.body.appendChild(menu);
+
+        // Viewport clamp
+        var rect = menu.getBoundingClientRect();
+        if (rect.right  > window.innerWidth)  menu.style.left = (window.innerWidth  - rect.width  - 8) + 'px';
+        if (rect.bottom > window.innerHeight) menu.style.top  = (window.innerHeight - rect.height - 8) + 'px';
+
+        menu.addEventListener('click', async function (ev) {
+          var item = ev.target.closest('[data-action]');
+          if (!item) return;
+          var action = item.dataset.action;
+
+          if (action === 'rename') {
+            var newName = prompt('Rename column:', cols[colIdx].label);
+            if (newName && newName.trim()) {
+              cols[colIdx].label = newName.trim();
+              await window.servicesDB.updateColumns(current.sheet.id, cols);
+              render();
+            }
+          } else if (action === 'move-left' && colIdx > 0) {
+            var tmp = cols[colIdx]; cols[colIdx] = cols[colIdx - 1]; cols[colIdx - 1] = tmp;
+            await window.servicesDB.updateColumns(current.sheet.id, cols);
+            render();
+          } else if (action === 'move-right' && colIdx < cols.length - 1) {
+            var tmp2 = cols[colIdx]; cols[colIdx] = cols[colIdx + 1]; cols[colIdx + 1] = tmp2;
+            await window.servicesDB.updateColumns(current.sheet.id, cols);
+            render();
+          } else if (action === 'select-qb-field') {
+            window.svcQuickbaseFieldPicker
+              ? window.svcQuickbaseFieldPicker.open(key)
+              : window.svcToast && window.svcToast.show('info', 'Quickbase', 'Field picker coming soon.');
+          } else if (action === 'conditional-format') {
+            window.svcToast && window.svcToast.show('info', 'Formatting', 'Conditional formatting coming soon.');
+          }
+          menu.remove();
+        });
+
+        function closeMenu(ev2) {
+          if (!menu.contains(ev2.target)) {
+            menu.remove();
+            document.removeEventListener('mousedown', closeMenu);
+          }
+        }
+        setTimeout(function () { document.addEventListener('mousedown', closeMenu); }, 0);
+      });
+    });
+  }
+
+  // ── NEW-6: Auto-resize columns ───────────────────────────────────────────────
+  function autoResizeColumns() {
+    if (!current) return;
+    var cols = current.sheet.column_defs || [];
+    var measurer = document.createElement('span');
+    measurer.style.cssText = 'visibility:hidden;position:absolute;white-space:nowrap;top:-9999px;left:-9999px;';
+    document.body.appendChild(measurer);
+
+    cols.forEach(function (c) {
+      var maxW = 80;
+
+      var th = grid.querySelector('thead th[data-key="' + c.key + '"]');
+      if (th) {
+        measurer.style.font = '600 11px/1 Inter,system-ui,sans-serif';
+        measurer.style.letterSpacing = '0.05em';
+        measurer.style.textTransform = 'uppercase';
+        measurer.textContent = c.label;
+        maxW = Math.max(maxW, measurer.offsetWidth + 32);
+      }
+
+      grid.querySelectorAll('input.cell[data-key="' + c.key + '"]').forEach(function (inp) {
+        if (!inp.value) return;
+        measurer.style.font = '13px/1 "JetBrains Mono","Fira Code",Consolas,monospace';
+        measurer.style.letterSpacing = '';
+        measurer.style.textTransform = '';
+        measurer.textContent = inp.value;
+        maxW = Math.max(maxW, measurer.offsetWidth + 32);
+      });
+
+      var finalW = Math.min(500, maxW);
+      if (th) { th.style.width = finalW + 'px'; th.style.minWidth = finalW + 'px'; }
+      grid.querySelectorAll('td input.cell[data-key="' + c.key + '"]').forEach(function (inp) {
+        inp.parentElement.style.width = finalW + 'px';
+        inp.parentElement.style.minWidth = finalW + 'px';
+      });
+    });
+
+    measurer.remove();
   }
 
   function onCellInput(e) {
@@ -143,14 +332,13 @@
     setStatus('unsaved', 'Unsaved');
     updateStatusBar();
 
-    // FIX-6: 800ms debounce
     var tKey = rowIdx + ':' + key;
     clearTimeout(saveTimers.get(tKey));
     saveTimers.set(tKey, setTimeout(async function () {
       setStatus('saving', 'Saving…');
       await window.servicesDB.upsertRow(current.sheet.id, rowIdx, rowObj.data);
       setStatus('saved', '✓ Saved');
-      window.svcToast && window.svcToast.pulse(); // NEW-3: subtle chip pulse
+      window.svcToast && window.svcToast.pulse();
       window.servicesDashboard && window.servicesDashboard.update(current);
     }, SAVE_DEBOUNCE_MS));
   }
@@ -161,8 +349,8 @@
     var cols = current.sheet.column_defs.map(function (c) { return c.key; });
     var idx  = cols.indexOf(key);
     var nextRow = row, nextKey = key;
-    if      (e.key === 'Enter' || e.key === 'ArrowDown')  nextRow = row + 1;
-    else if (e.key === 'ArrowUp')                          nextRow = Math.max(0, row - 1);
+    if      (e.key === 'Enter' || e.key === 'ArrowDown') nextRow = row + 1;
+    else if (e.key === 'ArrowUp')                        nextRow = Math.max(0, row - 1);
     else if (e.key === 'Tab') {
       e.preventDefault();
       if (e.shiftKey) {
@@ -211,10 +399,15 @@
     var lines  = current.rows
       .sort(function (a, b) { return a.row_index - b.row_index; })
       .map(function (r) {
-        return cols.map(function (c) { return JSON.stringify(r.data[c.key] != null ? r.data[c.key] : ''); }).join(',');
+        return cols.map(function (c) {
+          return JSON.stringify(r.data[c.key] != null ? r.data[c.key] : '');
+        }).join(',');
       });
     var blob = new Blob([header + '\n' + lines.join('\n')], { type: 'text/csv' });
-    var a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: current.sheet.title + '.csv' });
+    var a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(blob),
+      download: current.sheet.title + '.csv'
+    });
     document.body.appendChild(a); a.click(); a.remove();
   });
 
@@ -232,9 +425,8 @@
   }
 
   function eh(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-  function ea(s) { return String(s).replace(/"/g,'&quot;'); }
 
-  // ── NEW-1: Manual SAVE ────────────────────────────────────────────────────────
+  // NEW-1: Manual SAVE
   async function saveAllRows() {
     if (!current) {
       window.svcToast && window.svcToast.show('warning', 'No Sheet Open', 'Open a sheet before saving.');
@@ -255,16 +447,12 @@
         nonEmpty.map(function (r) { return { row_index: r.row_index, data: r.data }; })
       );
       if (result && result.error) throw new Error(result.error.message || 'Write failed');
-      setStatus('saved', '✓ Saved');
-      window.svcToast && window.svcToast.show(
-        'success', '✓ Saved to Supabase',
-        nonEmpty.length + ' row' + (nonEmpty.length !== 1 ? 's' : '') + ' saved successfully.'
-      );
+      setStatus('saved', '✓ All saved');
+      window.svcToast && window.svcToast.show('success', 'Saved', nonEmpty.length + ' rows saved to Supabase.');
       window.servicesDashboard && window.servicesDashboard.update(current);
     } catch (err) {
-      setStatus('error', '✕ Save Error');
-      window.svcToast && window.svcToast.show('error', 'Save Failed', err.message || 'Check your connection.');
-      console.error('[services-grid] saveAllRows:', err);
+      setStatus('error', '✕ Save failed');
+      window.svcToast && window.svcToast.show('error', 'Save Failed', err.message);
     } finally {
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 SAVE'; }
     }
@@ -272,10 +460,8 @@
 
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
 
-  window.servicesGrid = {
-    load,
-    clear,
-    saveAllRows,
-    getState: function () { return current; }  // NEW-4: import module reads column_defs here
-  };
+  // NEW-4: getState
+  function getState() { return current; }
+
+  window.servicesGrid = { load, clear, render, getState, saveAllRows };
 })();
