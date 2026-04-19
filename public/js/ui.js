@@ -3016,6 +3016,12 @@
 
   (function bindSyncStatus(){
     function root(){ return document.getElementById("realtimeSyncStatus"); }
+    var _lastBadgeState = { s: null };
+    function updateSyncBadge(mode, detail){
+      if (_lastBadgeState.s === mode) return;
+      _lastBadgeState.s = mode;
+      set(mode, detail);
+    }
     function set(mode, detail){
       var el = root();
       if (!el) return;
@@ -3025,17 +3031,25 @@
       else el.classList.add("off");
       var state = el.querySelector(".state");
       if (state) {
-        state.textContent = (mode === "realtime") ? "Connected" : (mode === "connecting") ? "Connecting" : (mode === "polling") ? "Polling" : "Offline";
+        state.textContent = (mode === "realtime") ? "Connected" : (mode === "connecting") ? "Connecting" : (mode === "polling") ? "Polling" : (mode === "error") ? "Offline ↺" : "Offline";
       }
       if (typeof detail === "string" && detail) el.title = detail;
+      el.style.cursor = (mode === "error") ? "pointer" : "";
+      el.onclick = null;
+      if (mode === "error") {
+        el.title = detail || "Sync offline. Click to retry.";
+        el.onclick = function(){
+          try{ if(window.Realtime && typeof Realtime.forceReconnect === "function") Realtime.forceReconnect(); }catch(_){}
+        };
+      }
     }
     window.addEventListener("mums:syncstatus", function(e){
       try {
         var d = e && e.detail ? e.detail : {};
-        set(String(d.mode||"offline"), String(d.detail||""));
+        updateSyncBadge(String(d.mode||"offline"), String(d.detail||""));
       } catch (_) {}
     });
-    document.addEventListener("DOMContentLoaded", function(){ set("offline", "Starting sync..."); });
+    document.addEventListener("DOMContentLoaded", function(){ updateSyncBadge("offline", "Starting sync..."); });
   })();
 
   UI.initMailboxManagerToasts();
