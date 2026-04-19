@@ -618,6 +618,9 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   justify-content: center;
   padding: 20px;
 }
+.svc-modal-overlay[hidden] {
+  display: none !important;
+}
 .svc-modal {
   background: var(--svc-panel);
   border: 1px solid var(--svc-border-strong);
