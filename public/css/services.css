@@ -612,33 +612,166 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   margin: 0 auto 12px;
 }
 
-/* ============ CONTEXT MENU ============ */
-.svc-ctx-menu {
+/* ============ COLUMN HEADER CONTEXT MENU ============ */
+.svc-col-ctx-menu {
   position: fixed;
-  z-index: 200;
-  background: var(--svc-panel);
-  border: 1px solid var(--svc-border-strong);
-  border-radius: var(--svc-radius-sm);
-  box-shadow: var(--svc-shadow);
-  padding: 4px;
-  min-width: 160px;
-  animation: svc-fade-in 0.1s ease-out;
+  z-index: 9999;
+  background: #1a2235;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  padding: 6px;
+  min-width: 210px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(34,211,238,0.08);
+  animation: ctx-appear 0.12s cubic-bezier(0.16,1,0.3,1);
+  user-select: none;
 }
-.svc-ctx-item {
+
+@keyframes ctx-appear {
+  from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Section header labels */
+.ctx-section-header {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(148,163,184,0.5);
+  padding: 6px 12px 3px;
+  pointer-events: none;
+}
+
+.ctx-separator {
+  height: 1px;
+  background: rgba(148,163,184,0.1);
+  margin: 4px 6px;
+}
+
+.ctx-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: 7px;
   cursor: pointer;
   font-size: 13px;
-  color: var(--svc-text);
-  transition: all 0.1s;
+  color: #cbd5e1;
+  transition: background 0.1s, color 0.1s;
+  white-space: nowrap;
 }
-.svc-ctx-item:hover { background: var(--svc-panel-2); color: var(--svc-accent); }
-.svc-ctx-item.danger { color: var(--svc-danger); }
-.svc-ctx-item.danger:hover { background: rgba(248,113,113,0.1); }
-.svc-ctx-sep { height: 1px; background: var(--svc-border); margin: 4px 0; }
+
+.ctx-item:hover {
+  background: rgba(34,211,238,0.1);
+  color: #22d3ee;
+}
+
+.ctx-item.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.ctx-icon {
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.ctx-label {
+  flex: 1;
+  font-weight: 500;
+}
+
+.ctx-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(34,211,238,0.15);
+  color: #22d3ee;
+  border: 1px solid rgba(34,211,238,0.25);
+  flex-shrink: 0;
+}
+
+.ctx-arrow {
+  font-size: 9px;
+  color: rgba(148,163,184,0.5);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.ctx-item:hover > .ctx-arrow {
+  color: #22d3ee;
+  transform: translateX(2px);
+}
+
+/* Submenu */
+.ctx-sub {
+  display: none;
+  position: absolute;
+  left: calc(100% + 4px);
+  top: -6px;
+  background: #1a2235;
+  border: 1px solid rgba(148,163,184,0.18);
+  border-radius: 10px;
+  padding: 6px;
+  min-width: 210px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(34,211,238,0.08);
+  z-index: 10000;
+  animation: ctx-appear 0.1s cubic-bezier(0.16,1,0.3,1);
+}
+
+/* flip left if overflows right */
+.ctx-sub.flip-left {
+  left: auto;
+  right: calc(100% + 4px);
+}
+
+.ctx-item:hover > .ctx-sub {
+  display: block;
+}
+
+/* Deep submenu (level 3) */
+.ctx-sub .ctx-sub {
+  top: -6px;
+}
+
+/* Inline rename input */
+.ctx-rename-input {
+  flex: 1;
+  background: rgba(15,23,42,0.8);
+  border: 1px solid rgba(34,211,238,0.4);
+  border-radius: 5px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 3px 8px;
+  outline: none;
+  font-family: inherit;
+  min-width: 0;
+}
+.ctx-rename-input:focus {
+  border-color: #22d3ee;
+  box-shadow: 0 0 0 2px rgba(34,211,238,0.2);
+}
+
+/* Confirm button inside rename row */
+.ctx-rename-ok {
+  background: #22d3ee;
+  color: #0b1220;
+  border: none;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.ctx-rename-ok:hover { box-shadow: 0 0 12px rgba(34,211,238,0.5); }
+
 
 /* ============ SIDEBAR TOGGLE BUTTON ============ */
 .svc-sidebar-toggle {

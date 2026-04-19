@@ -177,95 +177,166 @@
 
   function attachHeaderContextMenu() {
     document.querySelectorAll('.svc-col-ctx-menu').forEach(function (m) { m.remove(); });
+
     grid.querySelectorAll('thead th[data-key]').forEach(function (th) {
       th.addEventListener('contextmenu', function (e) {
         e.preventDefault();
-        document.querySelectorAll('.svc-col-ctx-menu').forEach(function (m) { m.remove(); });
+        e.stopPropagation();
+        closeAllCtxMenus();
+
         var key    = th.dataset.key;
         var cols   = current.sheet.column_defs;
         var colIdx = cols.findIndex(function (c) { return c.key === key; });
         if (colIdx < 0) return;
 
-        var menu = mkEl('div', { className: 'svc-col-ctx-menu' });
+        var menu = document.createElement('div');
+        menu.className = 'svc-col-ctx-menu';
 
-        function addItem(icon, label, action, subItems) {
-          var item = mkEl('div', { className: 'ctx-item' }, menu);
-          if (action) item.dataset.action = action;
-          mkEl('span', { className: 'ctx-icon', textContent: icon }, item);
-          mkEl('span', { className: 'ctx-label', textContent: label }, item);
-          if (subItems) {
-            mkEl('span', { className: 'ctx-arrow', textContent: '▶' }, item);
-            var sub = mkEl('div', { className: 'ctx-sub' }, item);
-            subItems.forEach(function (si) {
-              var si_el = mkEl('div', { className: 'ctx-item' }, sub);
-              if (si.action) si_el.dataset.action = si.action;
-              mkEl('span', { className: 'ctx-icon', textContent: si.icon }, si_el);
-              mkEl('span', { className: 'ctx-label', textContent: si.label }, si_el);
-              if (si.subItems) {
-                mkEl('span', { className: 'ctx-arrow', textContent: '▶' }, si_el);
-                var sub2 = mkEl('div', { className: 'ctx-sub' }, si_el);
-                si.subItems.forEach(function (si2) {
-                  var si2_el = mkEl('div', { className: 'ctx-item' }, sub2);
-                  if (si2.action) si2_el.dataset.action = si2.action;
-                  mkEl('span', { className: 'ctx-icon', textContent: si2.icon }, si2_el);
-                  mkEl('span', { className: 'ctx-label', textContent: si2.label }, si2_el);
-                });
-              }
-            });
-          }
+        /* ── helpers ── */
+        function mkEl(tag, props, parent) {
+          var el = document.createElement(tag);
+          if (props) Object.assign(el, props);
+          if (parent) parent.appendChild(el);
+          return el;
         }
 
-        function addSep() { mkEl('div', { className: 'ctx-separator' }, menu); }
+        function addSectionHeader(label) {
+          mkEl('div', { className: 'ctx-section-header', textContent: label }, menu);
+        }
 
-        addItem('✏️', 'Rename Column', 'rename');
-        addSep();
-        addItem('⚔️', 'Set Program', null, [
-          { icon: '🔗', label: 'Lookup to Global Quickbase', subItems: [
-            { icon: '📋', label: 'Select Quickbase Field', action: 'select-qb-field' }
-          ]},
-          { icon: '🎨', label: 'Conditional Formatting', action: 'conditional-format' }
-        ]);
-        addSep();
-        addItem('↔️', 'Move Column', null, [
-          { icon: '⬅', label: 'To Left',  action: colIdx > 0               ? 'move-left'  : '' },
-          { icon: '➡', label: 'To Right', action: colIdx < cols.length - 1 ? 'move-right' : '' }
-        ]);
+        function addSep() {
+          mkEl('div', { className: 'ctx-separator' }, menu);
+        }
 
+        function buildItem(parent, cfg) {
+          var item = mkEl('div', { className: 'ctx-item' + (cfg.disabled ? ' disabled' : '') }, parent);
+          if (cfg.action) item.dataset.action = cfg.action;
+          mkEl('span', { className: 'ctx-icon', textContent: cfg.icon || '' }, item);
+          mkEl('span', { className: 'ctx-label', textContent: cfg.label }, item);
+          if (cfg.badge) mkEl('span', { className: 'ctx-badge', textContent: cfg.badge }, item);
+          if (cfg.sub) {
+            mkEl('span', { className: 'ctx-arrow', textContent: '›' }, item);
+            var sub = mkEl('div', { className: 'ctx-sub' }, item);
+            cfg.sub.forEach(function (child) { buildItem(sub, child); });
+            /* flip submenu left if it would overflow right edge */
+            item.addEventListener('mouseenter', function () {
+              var r = sub.getBoundingClientRect();
+              if (r.right > window.innerWidth - 8) sub.classList.add('flip-left');
+              else sub.classList.remove('flip-left');
+            });
+          }
+          return item;
+        }
+
+        /* ── RENAME COLUMN (inline) ── */
+        addSectionHeader('COLUMN');
+        var renameRow = mkEl('div', { className: 'ctx-item' }, menu);
+        mkEl('span', { className: 'ctx-icon', textContent: '✏️' }, renameRow);
+        var renameInput = mkEl('input', {
+          className: 'ctx-rename-input',
+          value: cols[colIdx].label,
+          placeholder: 'Column name…'
+        }, renameRow);
+        var renameOk = mkEl('button', { className: 'ctx-rename-ok', textContent: '✓' }, renameRow);
+
+        async function doRename() {
+          var val = renameInput.value.trim();
+          if (val && val !== cols[colIdx].label) {
+            cols[colIdx].label = val;
+            await window.servicesDB.updateColumns(current.sheet.id, cols);
+            render();
+          }
+          closeAllCtxMenus();
+        }
+        renameOk.addEventListener('click', function (ev) { ev.stopPropagation(); doRename(); });
+        renameInput.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter') doRename();
+          if (ev.key === 'Escape') closeAllCtxMenus();
+          ev.stopPropagation();
+        });
+        renameInput.addEventListener('click', function (ev) { ev.stopPropagation(); });
+
+        addSep();
+
+        /* ── SET PROGRAM ── */
+        addSectionHeader('SET PROGRAM');
+        buildItem(menu, {
+          icon: '🔗', label: 'Lookup to Global Quickbase',
+          sub: [
+            { icon: '📋', label: 'Select Quickbase Field', action: 'select-qb-field', badge: 'QB' }
+          ]
+        });
+        buildItem(menu, { icon: '🎨', label: 'Conditional Formatting', action: 'conditional-format' });
+
+        addSep();
+
+        /* ── MOVE COLUMN ── */
+        addSectionHeader('MOVE COLUMN');
+        buildItem(menu, {
+          icon: '⬅️', label: 'To Left',
+          action: 'move-left',
+          disabled: colIdx <= 0
+        });
+        buildItem(menu, {
+          icon: '➡️', label: 'To Right',
+          action: 'move-right',
+          disabled: colIdx >= cols.length - 1
+        });
+
+        /* ── Position menu ── */
         menu.style.left = e.clientX + 'px';
         menu.style.top  = e.clientY + 'px';
         document.body.appendChild(menu);
 
-        var rect = menu.getBoundingClientRect();
-        if (rect.right  > window.innerWidth)  menu.style.left = (window.innerWidth  - rect.width  - 8) + 'px';
-        if (rect.bottom > window.innerHeight) menu.style.top  = (window.innerHeight - rect.height - 8) + 'px';
+        // Auto-focus rename input
+        setTimeout(function () { renameInput.focus(); renameInput.select(); }, 60);
 
+        // Flip if overflows
+        var r = menu.getBoundingClientRect();
+        if (r.right  > window.innerWidth  - 8) menu.style.left = (e.clientX - r.width)  + 'px';
+        if (r.bottom > window.innerHeight - 8) menu.style.top  = (e.clientY - r.height) + 'px';
+
+        /* ── Action handler ── */
         menu.addEventListener('click', async function (ev) {
-          var item = ev.target.closest('[data-action]');
-          if (!item || !item.dataset.action) return;
-          var action = item.dataset.action;
-          if (action === 'rename') {
-            var n = prompt('Rename column:', cols[colIdx].label);
-            if (n && n.trim()) { cols[colIdx].label = n.trim(); await window.servicesDB.updateColumns(current.sheet.id, cols); render(); }
-          } else if (action === 'move-left' && colIdx > 0) {
-            var t = cols[colIdx]; cols[colIdx] = cols[colIdx-1]; cols[colIdx-1] = t;
-            await window.servicesDB.updateColumns(current.sheet.id, cols); render();
-          } else if (action === 'move-right' && colIdx < cols.length - 1) {
-            var t2 = cols[colIdx]; cols[colIdx] = cols[colIdx+1]; cols[colIdx+1] = t2;
-            await window.servicesDB.updateColumns(current.sheet.id, cols); render();
-          } else if (action === 'select-qb-field') {
-            window.svcToast && window.svcToast.show('info', 'Quickbase', 'Field picker coming soon.');
-          } else if (action === 'conditional-format') {
-            window.svcToast && window.svcToast.show('info', 'Formatting', 'Conditional formatting coming soon.');
-          }
-          menu.remove();
-        });
+          var target = ev.target.closest('[data-action]');
+          if (!target || !target.dataset.action) return;
+          var action = target.dataset.action;
 
-        function closeMenu(ev2) {
-          if (!menu.contains(ev2.target)) { menu.remove(); document.removeEventListener('mousedown', closeMenu); }
-        }
-        setTimeout(function () { document.addEventListener('mousedown', closeMenu); }, 0);
+          if (action === 'move-left' && colIdx > 0) {
+            var tmp = cols[colIdx]; cols[colIdx] = cols[colIdx-1]; cols[colIdx-1] = tmp;
+            await window.servicesDB.updateColumns(current.sheet.id, cols);
+            render();
+            closeAllCtxMenus();
+          } else if (action === 'move-right' && colIdx < cols.length - 1) {
+            var tmp2 = cols[colIdx]; cols[colIdx] = cols[colIdx+1]; cols[colIdx+1] = tmp2;
+            await window.servicesDB.updateColumns(current.sheet.id, cols);
+            render();
+            closeAllCtxMenus();
+          } else if (action === 'select-qb-field') {
+            alert('Quickbase Field Selector — coming soon.');
+            closeAllCtxMenus();
+          } else if (action === 'conditional-format') {
+            alert('Conditional Formatting — coming soon.');
+            closeAllCtxMenus();
+          }
+        });
       });
     });
+
+    /* Close menu on outside click / scroll / Esc */
+    document.addEventListener('mousedown', function onOutside(ev) {
+      if (!ev.target.closest('.svc-col-ctx-menu')) {
+        closeAllCtxMenus();
+        document.removeEventListener('mousedown', onOutside);
+      }
+    });
+    document.addEventListener('keydown', function onEsc(ev) {
+      if (ev.key === 'Escape') { closeAllCtxMenus(); document.removeEventListener('keydown', onEsc); }
+    });
+  }
+
+  function closeAllCtxMenus() {
+    document.querySelectorAll('.svc-col-ctx-menu').forEach(function (m) { m.remove(); });
   }
 
   function autoResizeColumns() {
