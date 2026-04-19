@@ -110,7 +110,6 @@
     if (!current) { clear(); return; }
     empty.style.display = 'none';
     grid.hidden = false;
-
     var cols      = current.sheet.column_defs || [];
     var totalRows = Math.max(current.rows.length + 2, 10);
 
@@ -378,15 +377,10 @@
     var lines  = current.rows
       .sort(function (a, b) { return a.row_index - b.row_index; })
       .map(function (r) {
-        return cols.map(function (c) {
-          return JSON.stringify(r.data[c.key] != null ? r.data[c.key] : '');
-        }).join(',');
+        return cols.map(function (c) { return JSON.stringify(r.data[c.key] != null ? r.data[c.key] : ''); }).join(',');
       });
     var blob = new Blob([header + '\n' + lines.join('\n')], { type: 'text/csv' });
-    var a = Object.assign(document.createElement('a'), {
-      href: URL.createObjectURL(blob),
-      download: current.sheet.title + '.csv'
-    });
+    var a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: current.sheet.title + '.csv' });
     document.body.appendChild(a); a.click(); a.remove();
   });
 
