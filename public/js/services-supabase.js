@@ -1,30 +1,24 @@
 (function () {
   // ─────────────────────────────────────────────────────────────────────────────
-  // services-supabase.js
+  // services-supabase.js  — v3 (free-tier load reduction)
   //
-  // ROOT CAUSE FIX (401 + Tracking Prevention):
-  //   When services.html opens as a new page the CDN-loaded Supabase SDK cannot
-  //   read its own localStorage due to Edge/Firefox Tracking Prevention, so
-  //   auth.getSession() returns null → every RLS-protected query gets 401.
-  //
-  //   FIX: Our first-party code IS allowed to read same-origin localStorage.
-  //   We read the MUMS session key ('mums_supabase_session') directly and
-  //   call client.auth.setSession() ourselves before any query runs.
-  //   All DB helpers are gated behind the `ready` promise so nothing fires
-  //   before the session is confirmed.
+  // OVERLOAD FIXES applied here:
+  //   FIX-1: upsertRow now uses a single ON CONFLICT query (was SELECT + write = 2x)
+  //   FIX-2: Singleton channel guards prevent duplicate realtime subscriptions
+  //   FIX-3: persistSession:false stops SDK fighting browser tracking prevention
+  //   FIX-4: eventsPerSecond throttled to 4 (was 10) — free tier websocket limit
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const LS_SESSION = 'mums_supabase_session'; // same key as cloud_auth.js
+  const LS_SESSION = 'mums_supabase_session';
 
-  // ── Read MUMS session from storage (first-party, never blocked) ──────────────
+  // ── Read MUMS session from same-origin storage (never blocked) ───────────────
   function readMumsSession() {
     const sources = [
       () => localStorage.getItem(LS_SESSION),
       () => sessionStorage.getItem(LS_SESSION),
       () => {
-        // Cookie fallback
-        const match = document.cookie.match('(?:^|;)\\s*' + LS_SESSION + '=([^;]*)');
-        return match ? decodeURIComponent(match[1]) : null;
+        const m = document.cookie.match('(?:^|;)\\s*' + LS_SESSION + '=([^;]*)');
+        return m ? decodeURIComponent(m[1]) : null;
       }
     ];
     for (const src of sources) {
@@ -39,41 +33,63 @@
     return null;
   }
 
-  // ── Build / reuse the Supabase client ────────────────────────────────────────
+  // ── Single Supabase client (shared with main app if already created) ─────────
   function buildClient(url, key) {
     if (window.__MUMS_SB_CLIENT) return window.__MUMS_SB_CLIENT;
-    const client = window.supabase.createClient(url, key, {
+    window.__MUMS_SB_CLIENT = window.supabase.createClient(url, key, {
       auth: {
-        persistSession: false,   // Don't let SDK fight with tracking prevention
+        persistSession: false,    // FIX-3: don't fight tracking prevention
         autoRefreshToken: true,
         detectSessionInUrl: false
       },
-      realtime: { params: { eventsPerSecond: 10 } }
+      realtime: {
+        params: { eventsPerSecond: 4 }  // FIX-4: free tier is ~4 events/s safe
+      }
     });
-    window.__MUMS_SB_CLIENT = client;
-    return client;
+    return window.__MUMS_SB_CLIENT;
   }
 
-  // ── Ready promise — resolves once session is injected ────────────────────────
+  // ── Ready promise ─────────────────────────────────────────────────────────────
   let _resolveReady;
   const _ready = new Promise(res => { _resolveReady = res; });
 
-  // ── init() — MUST be called once before any DB operation ─────────────────────
+  // ── FIX-2: Singleton channel references — prevents stale subscriptions ────────
+  // Each key maps to exactly one live Supabase channel.
+  // Calling subscribe again auto-removes the old channel first.
+  const _channels = new Map();
+
+  function openChannel(key, setup) {
+    const c = window.__MUMS_SB_CLIENT;
+    if (!c) return { unsubscribe: () => {} };
+    // Remove previous channel with this key
+    const prev = _channels.get(key);
+    if (prev) {
+      try { c.removeChannel(prev); } catch (_) {}
+    }
+    const ch = setup(c, key);
+    _channels.set(key, ch);
+    return {
+      unsubscribe() {
+        try { c.removeChannel(ch); } catch (_) {}
+        _channels.delete(key);
+      }
+    };
+  }
+
+  // ── init() ────────────────────────────────────────────────────────────────────
   async function init() {
     const envObj = window.MUMS_ENV || {};
     const url = envObj.SUPABASE_URL;
     const key = envObj.SUPABASE_ANON_KEY;
 
     if (!url || !key) {
-      console.error('[services] MUMS_ENV missing SUPABASE_URL / SUPABASE_ANON_KEY. ' +
-                    'Ensure env_runtime.js loaded and Cloudflare env vars are set.');
+      console.error('[services] MUMS_ENV missing SUPABASE_URL / SUPABASE_ANON_KEY.');
       _resolveReady(false);
       return false;
     }
 
     const client = buildClient(url, key);
 
-    // Inject session so RLS receives a valid JWT
     const sess = readMumsSession();
     if (sess && sess.access_token && sess.refresh_token) {
       try {
@@ -82,23 +98,21 @@
           refresh_token: sess.refresh_token
         });
         if (error) {
-          console.warn('[services] setSession error:', error.message);
-          // Token may be expired — attempt refresh
-          const { error: re } = await client.auth.refreshSession({ refresh_token: sess.refresh_token });
+          const { error: re } = await client.auth.refreshSession({
+            refresh_token: sess.refresh_token
+          });
           if (re) {
-            console.error('[services] Session refresh failed:', re.message,
-                          '— redirecting to login.');
+            console.error('[services] Session refresh failed — redirecting to login.');
             _resolveReady(false);
             window.location.href = '/login.html?redirect=/services.html';
             return false;
           }
         }
       } catch (e) {
-        console.error('[services] Unexpected auth error:', e);
+        console.error('[services] Auth error:', e);
       }
     } else {
-      // No session at all → must log in first
-      console.warn('[services] No MUMS session found — redirecting to login.');
+      console.warn('[services] No MUMS session — redirecting to login.');
       _resolveReady(false);
       window.location.href = '/login.html?redirect=/services.html';
       return false;
@@ -108,7 +122,6 @@
     return true;
   }
 
-  // ── Helper: gate every call behind ready ─────────────────────────────────────
   async function db() {
     await _ready;
     return window.__MUMS_SB_CLIENT;
@@ -118,14 +131,12 @@
   window.servicesDB = {
     init,
     ready: _ready,
-
     get client() { return window.__MUMS_SB_CLIENT; },
 
     async listSheets() {
       const c = await db(); if (!c) return [];
       const { data, error } = await c
-        .from('services_sheets')
-        .select('*')
+        .from('services_sheets').select('*')
         .eq('is_archived', false)
         .order('sort_order', { ascending: true });
       if (error) console.error('[services] listSheets:', error.message);
@@ -135,10 +146,7 @@
     async createSheet(title = 'Untitled Sheet') {
       const c = await db(); if (!c) return null;
       const { data, error } = await c
-        .from('services_sheets')
-        .insert({ title })
-        .select()
-        .single();
+        .from('services_sheets').insert({ title }).select().single();
       if (error) console.error('[services] createSheet:', error.message);
       return data;
     },
@@ -151,59 +159,73 @@
 
     async deleteSheet(id) {
       const c = await db(); if (!c) return;
-      const { error } = await c.from('services_sheets').update({ is_archived: true }).eq('id', id);
+      const { error } = await c.from('services_sheets')
+        .update({ is_archived: true }).eq('id', id);
       if (error) console.error('[services] deleteSheet:', error.message);
     },
 
     async listRows(sheetId) {
       const c = await db(); if (!c) return [];
       const { data, error } = await c
-        .from('services_rows')
-        .select('*')
+        .from('services_rows').select('*')
         .eq('sheet_id', sheetId)
         .order('row_index', { ascending: true });
       if (error) console.error('[services] listRows:', error.message);
       return data || [];
     },
 
+    // FIX-1: Single-query UPSERT using ON CONFLICT (sheet_id, row_index)
+    // Previous: SELECT to check existence + INSERT or UPDATE = 2 PostgREST calls
+    // Now:      1 call. Requires unique constraint uq_services_rows_sheet_row
     async upsertRow(sheetId, rowIndex, data) {
       const c = await db(); if (!c) return;
-      const { data: existing } = await c
-        .from('services_rows')
-        .select('id')
-        .eq('sheet_id', sheetId)
-        .eq('row_index', rowIndex)
-        .maybeSingle();
-      const { error } = existing
-        ? await c.from('services_rows').update({ data }).eq('id', existing.id)
-        : await c.from('services_rows').insert({ sheet_id: sheetId, row_index: rowIndex, data });
+      const { error } = await c.from('services_rows')
+        .upsert(
+          { sheet_id: sheetId, row_index: rowIndex, data },
+          { onConflict: 'sheet_id,row_index', ignoreDuplicates: false }
+        );
       if (error) console.error('[services] upsertRow:', error.message);
     },
 
     async updateColumns(sheetId, column_defs) {
       const c = await db(); if (!c) return;
-      const { error } = await c.from('services_sheets').update({ column_defs }).eq('id', sheetId);
+      const { error } = await c.from('services_sheets')
+        .update({ column_defs }).eq('id', sheetId);
       if (error) console.error('[services] updateColumns:', error.message);
     },
 
+    // FIX-2: singleton channel per sheet — old channel removed before new one opens
     subscribeToSheet(sheetId, onRowChange) {
-      const c = window.__MUMS_SB_CLIENT;
-      if (!c) return { unsubscribe: () => {} };
-      return c.channel(`services_rows_${sheetId}`)
-        .on('postgres_changes',
-            { event: '*', schema: 'public', table: 'services_rows', filter: `sheet_id=eq.${sheetId}` },
-            onRowChange)
-        .subscribe();
+      return openChannel(`rows_${sheetId}`, (c, key) =>
+        c.channel(key)
+          .on('postgres_changes',
+              { event: '*', schema: 'public', table: 'services_rows',
+                filter: `sheet_id=eq.${sheetId}` },
+              onRowChange)
+          .subscribe()
+      );
     },
 
+    // FIX-2: singleton sheets channel — never stacks
     subscribeToSheets(onSheetChange) {
+      return openChannel('sheets_global', (c, key) =>
+        c.channel(key)
+          .on('postgres_changes',
+              { event: '*', schema: 'public', table: 'services_sheets' },
+              onSheetChange)
+          .subscribe()
+      );
+    },
+
+    // Graceful teardown — call on page unload to free server-side channels
+    cleanup() {
       const c = window.__MUMS_SB_CLIENT;
-      if (!c) return { unsubscribe: () => {} };
-      return c.channel('services_sheets_all')
-        .on('postgres_changes',
-            { event: '*', schema: 'public', table: 'services_sheets' },
-            onSheetChange)
-        .subscribe();
+      if (!c) return;
+      _channels.forEach((ch) => { try { c.removeChannel(ch); } catch (_) {} });
+      _channels.clear();
     }
   };
+
+  // Auto-cleanup on page unload so server-side channels don't accumulate
+  window.addEventListener('beforeunload', () => window.servicesDB.cleanup());
 })();
