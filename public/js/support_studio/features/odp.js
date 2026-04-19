@@ -468,21 +468,29 @@
 
       var token = _odpGetToken();
 
-      // Build a dedicated ODP realtime client so we don't interfere with __MUMS_SB_CLIENT
+      // FIX v3.9.31: GoTrueClient singleton guard.
+      // BEFORE: createClient() was called unconditionally every time _odpDoSubscribe() ran,
+      // creating a new GoTrueClient instance on every reconnect and flooding the console with
+      // "Multiple GoTrueClient instances detected" warnings (Supabase v2 SDK fires this when
+      // >1 GoTrueClient exists in the same browser context, regardless of storageKey).
+      // FIX: Build the client ONCE and reuse it. On retries, only remove old channels.
       if (_odpState.sbClient) {
+        // Client already exists — only clean up stale channels, keep the GoTrueClient alive
         try { _odpState.sbClient.removeAllChannels(); } catch(_) {}
+      } else {
+        // First-time setup: create the dedicated ODP realtime client (creates exactly ONE GoTrueClient)
+        _odpState.sbClient = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+            storage: { getItem: function(){ return null; }, setItem: function(){}, removeItem: function(){} },
+            storageKey: 'mums_odp_rt'
+          },
+          realtime: { params: { eventsPerSecond: 10 } },
+          global: { headers: token ? { Authorization: 'Bearer ' + token } : {} }
+        });
       }
-      _odpState.sbClient = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-          detectSessionInUrl: false,
-          storage: { getItem: function(){ return null; }, setItem: function(){}, removeItem: function(){} },
-          storageKey: 'mums_odp_rt'
-        },
-        realtime: { params: { eventsPerSecond: 10 } },
-        global: { headers: token ? { Authorization: 'Bearer ' + token } : {} }
-      });
 
       // FIX v3.9.30: Authorize the Realtime WebSocket socket explicitly.
       // Without setAuth(), the WS connection uses the anon key only — Supabase Realtime

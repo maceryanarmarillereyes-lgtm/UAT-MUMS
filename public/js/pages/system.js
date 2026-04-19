@@ -1945,7 +1945,10 @@
   }
 
   // ── Auto-refresh every 30s ────────────────────────────────────────────────
-  renderOverview();
+  // FIX v3.9.31: Use renderActiveTab() instead of hardcoded renderOverview()
+  // so sidebar sub-menu clicks (e.g. system_requests → /system/requests) render
+  // the correct panel. tabFromRoute() already set activeTab from the URL above.
+  renderActiveTab();
   // Auto-run bug scan after 2s so feature modules have time to initialize
   setTimeout(function() { try { _runBugScan(); } catch(_) {} }, 2000);
   const _autoRefresh = setInterval(() => { try { renderActiveTab(); } catch (_) { } }, 30000);
