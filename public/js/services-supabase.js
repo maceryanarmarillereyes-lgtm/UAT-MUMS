@@ -229,3 +229,28 @@
   // Auto-cleanup on page unload so server-side channels don't accumulate
   window.addEventListener('beforeunload', () => window.servicesDB.cleanup());
 })();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADDITIVE PATCH — bulkUpsertRows()
+// Single batch upsert using ON CONFLICT(sheet_id,row_index).
+// Used by the SAVE button and CSV/XLSX import. Does NOT touch auth, RLS,
+// or realtime channels — purely a new write helper.
+// ─────────────────────────────────────────────────────────────────────────────
+(function () {
+  const _orig = window.servicesDB;
+  if (!_orig) { console.error('[services] bulkUpsertRows patch: servicesDB not found'); return; }
+
+  _orig.bulkUpsertRows = async function bulkUpsertRows(sheetId, rowsArray) {
+    if (!rowsArray || rowsArray.length === 0) return { error: null };
+    const c = _orig.client;
+    if (!c) return { error: 'No Supabase client' };
+    const payload = rowsArray.map(function (r) {
+      return { sheet_id: sheetId, row_index: r.row_index, data: r.data || {} };
+    });
+    const { error } = await c
+      .from('services_rows')
+      .upsert(payload, { onConflict: 'sheet_id,row_index', ignoreDuplicates: false });
+    if (error) console.error('[services] bulkUpsertRows:', error.message);
+    return { error: error || null };
+  };
+})();

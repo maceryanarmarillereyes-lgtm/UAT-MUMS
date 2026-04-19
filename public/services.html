@@ -7,6 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/services.css" />
+  <!-- SheetJS for XLSX import -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body class="services-body">
 
@@ -59,7 +61,9 @@
           <button class="svc-btn" id="svcAddCol">+ Column</button>
           <button class="svc-btn ghost" id="svcUndo" title="Undo">↶ Undo</button>
           <button class="svc-btn ghost" id="svcRedo" title="Redo">↷ Redo</button>
+          <button class="svc-btn svc-import-btn" id="svcUploadBtn" title="Import XLSX or CSV">⬆ Import</button>
           <button class="svc-btn accent" id="svcExportCsv">⬇ CSV</button>
+          <button class="svc-btn svc-save-btn" id="svcSaveBtn" title="Force-save all rows to Supabase">💾 SAVE</button>
         </div>
       </div>
 
@@ -110,6 +114,59 @@
 
   </main>
 
+  <!-- ── TOAST CONTAINER ─────────────────────────────────────────────────── -->
+  <div id="svcToastContainer" class="svc-toast-container" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- ── IMPORT MODAL ─────────────────────────────────────────────────────── -->
+  <div id="svcImportModal" class="svc-modal-overlay" hidden>
+    <div class="svc-modal">
+      <div class="svc-modal-header">
+        <span class="svc-modal-title">📥 Import XLSX / CSV</span>
+        <button class="svc-modal-close" id="svcImportClose" title="Close">✕</button>
+      </div>
+
+      <!-- Drop zone -->
+      <div class="svc-import-drop" id="svcImportDrop">
+        <div class="svc-import-drop-icon">📂</div>
+        <p class="svc-import-drop-label">Drop your <strong>.xlsx</strong> or <strong>.csv</strong> here</p>
+        <p class="svc-import-drop-sub">Row 1 headers are auto-mapped to sheet columns</p>
+        <label class="svc-btn accent svc-import-browse-btn" for="svcImportFile">Browse File</label>
+        <input type="file" id="svcImportFile" accept=".xlsx,.xls,.csv" style="display:none" />
+      </div>
+
+      <!-- Preview panel (hidden until file parsed) -->
+      <div id="svcImportPreview" class="svc-import-preview" hidden>
+        <div class="svc-import-file-info" id="svcImportFileInfo"></div>
+        <div class="svc-import-mapping-wrap" id="svcImportMappingWrap">
+          <div class="svc-import-mapping-title">Column Mapping</div>
+          <div id="svcImportMapping" class="svc-import-mapping"></div>
+        </div>
+        <div class="svc-import-preview-title">
+          Preview <span id="svcImportPreviewCount"></span>
+        </div>
+        <div class="svc-import-table-wrap" id="svcImportTableWrap"></div>
+        <div class="svc-import-mode-wrap">
+          <label class="svc-import-radio">
+            <input type="radio" name="importMode" value="append" checked />
+            Append after existing rows
+          </label>
+          <label class="svc-import-radio">
+            <input type="radio" name="importMode" value="overwrite" />
+            Overwrite from row 1
+          </label>
+        </div>
+        <div class="svc-import-actions">
+          <button class="svc-btn ghost" id="svcImportReset">← Change File</button>
+          <button class="svc-btn svc-import-confirm" id="svcImportConfirm">✓ Import to Sheet</button>
+        </div>
+        <div id="svcImportProgress" class="svc-import-progress" hidden>
+          <div class="svc-import-progress-bar" id="svcImportProgressBar"></div>
+          <span id="svcImportProgressLabel">Importing…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!--
     SCRIPT LOAD ORDER — DO NOT REORDER
     ====================================
@@ -148,8 +205,10 @@
       loadScript('/js/services-supabase.js', function () {
         loadScript('/js/services-dashboard.js', function () {
           loadScript('/js/services-grid.js', function () {
-            loadScript('/js/services-sheet-manager.js', function () {
-              loadScript('/js/services.js');
+            loadScript('/js/services-import.js', function () {
+              loadScript('/js/services-sheet-manager.js', function () {
+                loadScript('/js/services.js');
+              });
             });
           });
         });
