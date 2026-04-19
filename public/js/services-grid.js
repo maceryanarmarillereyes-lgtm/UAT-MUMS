@@ -128,8 +128,10 @@
       mkEl('td', { className: 'row-num', textContent: String(i + 1) }, tr);
       cols.forEach(function (c) {
         var td  = mkEl('td', null, tr);
+        var inputType = (c.format === 'date') ? 'date' : (c.format === 'number') ? 'number' : 'text';
         var inp = mkEl('input', {
           className    : 'cell',
+          type         : inputType,
           autocomplete : 'off',
           spellcheck   : false,
           value        : (rowData.data[c.key] != null ? rowData.data[c.key] : '').toString()
@@ -191,6 +193,14 @@
 
         var menu = document.createElement('div');
         menu.className = 'svc-col-ctx-menu';
+
+        /* ── Close (X) button ── */
+        var closeBtn = document.createElement('button');
+        closeBtn.className = 'ctx-close-btn';
+        closeBtn.textContent = '✕';
+        closeBtn.title = 'Close menu';
+        closeBtn.addEventListener('click', function (ev) { ev.stopPropagation(); closeAllCtxMenus(); });
+        menu.appendChild(closeBtn);
 
         /* ── helpers ── */
         function mkEl(tag, props, parent) {
@@ -283,6 +293,28 @@
           disabled: colIdx >= cols.length - 1
         });
 
+        addSep();
+
+        /* ── CELL FORMAT ── */
+        addSectionHeader('CELL FORMAT');
+        var currentFormat = cols[colIdx].format || 'auto';
+        var cellFormats = [
+          { icon: '📅', label: 'Date',            format: 'date',   hint: 'Calendar date picker' },
+          { icon: '🔢', label: 'Numbers',          format: 'number', hint: 'Numeric input' },
+          { icon: '🔤', label: 'Text',             format: 'text',   hint: 'Plain text' },
+          { icon: '🔄', label: 'Automatic',        format: 'auto',   hint: 'Default — auto detect' }
+        ];
+        cellFormats.forEach(function (f) {
+          var isActive = currentFormat === f.format;
+          var item = buildItem(menu, {
+            icon   : f.icon,
+            label  : f.label,
+            action : 'cell-format-' + f.format,
+            badge  : isActive ? '✓' : ''
+          });
+          if (isActive) item.classList.add('ctx-active');
+        });
+
         /* ── Position menu ── */
         menu.style.left = e.clientX + 'px';
         menu.style.top  = e.clientY + 'px';
@@ -317,6 +349,12 @@
             closeAllCtxMenus();
           } else if (action === 'conditional-format') {
             alert('Conditional Formatting — coming soon.');
+            closeAllCtxMenus();
+          } else if (action.indexOf('cell-format-') === 0) {
+            var fmt = action.replace('cell-format-', '');
+            cols[colIdx].format = fmt === 'auto' ? undefined : fmt;
+            await window.servicesDB.updateColumns(current.sheet.id, cols);
+            render();
             closeAllCtxMenus();
           }
         });

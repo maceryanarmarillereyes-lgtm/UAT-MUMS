@@ -100,14 +100,18 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   gap: 0;
   overflow: hidden;
   height: calc(100vh - 56px);
-  transition: grid-template-columns 0.25s ease;
+  /* Instant collapse — no CSS transition delay on grid columns */
+  transition: none;
 }
 /* FIX: Right sidebar collapse state */
 .svc-main.right-collapsed {
   grid-template-columns: 260px 1fr 0px;
 }
 .svc-main.right-collapsed .svc-right {
-  display: none;
+  overflow: hidden;
+  width: 0;
+  min-width: 0;
+  border-left: none;
 }
 /* Left sidebar collapse state (bonus) */
 .svc-main.left-collapsed {
@@ -613,6 +617,48 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
 }
 
 /* ============ COLUMN HEADER CONTEXT MENU ============ */
+
+/* Close (X) button at the top-right of the context menu */
+.ctx-close-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  background: rgba(148,163,184,0.08);
+  border: 1px solid rgba(148,163,184,0.15);
+  border-radius: 5px;
+  color: rgba(148,163,184,0.7);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  z-index: 1;
+}
+.ctx-close-btn:hover {
+  background: rgba(248,113,113,0.15);
+  border-color: rgba(248,113,113,0.4);
+  color: #f87171;
+}
+
+/* Active/selected state for cell format items */
+.ctx-item.ctx-active {
+  background: rgba(34,211,238,0.08);
+  color: #22d3ee;
+}
+.ctx-item.ctx-active .ctx-label {
+  color: #22d3ee;
+  font-weight: 600;
+}
+.ctx-item.ctx-active .ctx-badge {
+  background: rgba(34,211,238,0.2);
+  color: #22d3ee;
+  border-color: rgba(34,211,238,0.4);
+}
+
 .svc-col-ctx-menu {
   position: fixed;
   z-index: 9999;
@@ -620,6 +666,7 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 10px;
   padding: 6px;
+  padding-top: 32px; /* room for close button */
   min-width: 210px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(34,211,238,0.08);
   animation: ctx-appear 0.12s cubic-bezier(0.16,1,0.3,1);
