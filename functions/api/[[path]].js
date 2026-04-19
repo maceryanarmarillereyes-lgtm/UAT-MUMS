@@ -121,13 +121,15 @@ async function getRoutes(env) {
     'pin/policy':  unwrapCjs(await import('../../server/routes/pin.js')),
     'pin/status':  unwrapCjs(await import('../../server/routes/pin.js')),
 
-    // Studio QB — isolated from MUMS Global QB settings
+// Studio QB — isolated from MUMS Global QB settings
     'studio/qb_settings':        unwrapCjs(await import('../../server/routes/studio/qb_settings.js')),
     'studio/qb_data':            unwrapCjs(await import('../../server/routes/studio/qb_data.js')),
+    // BUG FIX 2026-04-19: studio/qb_fields was missing from Cloudflare router
+    // (present in api/handler.js Vercel but absent here — caused "Failed to load QB fields"
+    //  on the Services Page → Select Quickbase Field modal).
+    // Handler already exists at server/routes/studio/qb_fields.js — just needs registration.
+    'studio/qb_fields':          unwrapCjs(await import('../../server/routes/studio/qb_fields.js')),
     'studio/yct_data':           unwrapCjs(await import('../../server/routes/studio/yct_data.js')),
-    'studio/call_notes':         unwrapCjs(await import('../../server/routes/studio/call_notes.js')),
-    'studio/se2_bookmarks':      unwrapCjs(await import('../../server/routes/studio/se2_bookmarks.js')),
-    'studio/home_apps':          unwrapCjs(await import('../../server/routes/studio/home_apps.js')),
     // Back-compat alias for legacy clients still calling /api/home_apps
     'home_apps':                 unwrapCjs(await import('../../server/routes/studio/home_apps.js')),
     'studio/qb_settings_global': unwrapCjs(await import('../../server/routes/studio/qb_settings_global.js')),
