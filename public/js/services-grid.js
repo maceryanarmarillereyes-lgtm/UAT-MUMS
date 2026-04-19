@@ -16,6 +16,31 @@
   var saveTimers   = new Map();
   var undoStack    = [];
   var redoStack    = [];
+  var _columnRepairPromise = null;
+
+  function sanitizeHeaderLabel(label, fallbackIndex) {
+    var s = String(label == null ? '' : label)
+      // Strip BOM + zero-width marks that make labels look "blank/sabog"
+      .replace(/^\uFEFF/, '')
+      .replace(/[\u200B-\u200D\u2060]/g, '')
+      // Collapse line breaks/tabs and trim visual noise
+      .replace(/[\r\n\t]+/g, ' ')
+      .trim();
+    if (!s) return 'Column ' + String((fallbackIndex || 0) + 1);
+    return s;
+  }
+
+  function normalizeColumnDefs(columnDefs) {
+    var changed = false;
+    var normalized = (columnDefs || []).map(function (c, idx) {
+      var next = Object.assign({}, c || {});
+      var safeLabel = sanitizeHeaderLabel(next.label, idx);
+      if (next.label !== safeLabel) changed = true;
+      next.label = safeLabel;
+      return next;
+    });
+    return { normalized: normalized, changed: changed };
+  }
 
   function setStatus(state, text) {
     if (!statusSaved) return;
@@ -34,6 +59,14 @@
   async function load(sheet) {
     if (subscription) { try { subscription.unsubscribe(); } catch (_) {} subscription = null; }
     current   = { sheet: JSON.parse(JSON.stringify(sheet)), rows: [] };
+    var colNorm = normalizeColumnDefs(current.sheet.column_defs);
+    current.sheet.column_defs = colNorm.normalized;
+    // One-time self-heal: persist sanitized labels so future loads stay clean
+    if (colNorm.changed && !_columnRepairPromise) {
+      _columnRepairPromise = window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs)
+        .catch(function (err) { console.error('[services-grid] updateColumns repair failed:', err); })
+        .finally(function () { _columnRepairPromise = null; });
+    }
     undoStack = [];
     redoStack = [];
     current.rows = await window.servicesDB.listRows(sheet.id);
@@ -84,7 +117,7 @@
     var headTr  = mkEl('tr', null, thead);
     var thCorner = mkEl('th', { className: 'row-num', textContent: '#' }, headTr);
     cols.forEach(function (c) {
-      var th = mkEl('th', { contentEditable: 'true', textContent: c.label }, headTr);
+      var th = mkEl('th', { contentEditable: 'true', textContent: sanitizeHeaderLabel(c.label, 0) }, headTr);
       th.dataset.key = c.key;
     });
 
@@ -128,10 +161,12 @@
     grid.querySelectorAll('thead th[data-key]').forEach(function (th) {
       th.addEventListener('blur', async function () {
         var key      = th.dataset.key;
-        var newLabel = th.innerText.trim();
+        var colIdx   = current.sheet.column_defs.findIndex(function (c) { return c.key === key; });
+        var newLabel = sanitizeHeaderLabel(th.innerText, colIdx);
         var col      = current.sheet.column_defs.find(function (c) { return c.key === key; });
         if (!col || col.label === newLabel) return;
         col.label = newLabel;
+        th.textContent = newLabel;
         await window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs);
       });
       th.addEventListener('keydown', function (e) {
@@ -330,7 +365,7 @@
     var label = prompt('Column name:', 'New Column');
     if (!label || !label.trim()) return;
     var key = 'col_' + Math.random().toString(36).slice(2, 8);
-    current.sheet.column_defs.push({ key: key, label: label.trim(), type: 'text', width: 160 });
+    current.sheet.column_defs.push({ key: key, label: sanitizeHeaderLabel(label, current.sheet.column_defs.length), type: 'text', width: 160 });
     await window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs);
     render();
   });
