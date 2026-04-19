@@ -94,6 +94,7 @@ const ROUTES = {
   // Studio QB — completely isolated from MUMS global QB settings
   'studio/qb_settings': require('../server/routes/studio/qb_settings'),
   'studio/qb_data':     require('../server/routes/studio/qb_data'),
+  'studio/qb_fields':   require('../server/routes/studio/qb_fields'),
   'studio/yct_data':    require('../server/routes/studio/yct_data'),
   'studio/call_notes':  require('../server/routes/studio/call_notes'),
   'studio/se2_bookmarks': require('../server/routes/studio/se2_bookmarks'),

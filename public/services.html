@@ -206,9 +206,11 @@
       loadScript('/js/services-supabase.js', function () {
         loadScript('/js/services-dashboard.js', function () {
           loadScript('/js/services-grid.js', function () {
-            loadScript('/js/services-import.js', function () {
-              loadScript('/js/services-sheet-manager.js', function () {
-                loadScript('/js/services.js');
+            loadScript('/js/services-qb-lookup.js', function () {
+              loadScript('/js/services-import.js', function () {
+                loadScript('/js/services-sheet-manager.js', function () {
+                  loadScript('/js/services.js');
+                });
               });
             });
           });
