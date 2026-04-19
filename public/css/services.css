@@ -275,7 +275,7 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   z-index: 3;
 }
 .svc-grid thead th {
-  background: var(--svc-panel-2);
+  background: var(--svc-panel);
   color: var(--svc-text-dim);
   font-weight: 600;
   font-size: 11px;
@@ -290,6 +290,7 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   text-align: left;
   min-width: 120px;
   cursor: text;
+  box-shadow: 0 1px 0 var(--svc-border-strong);
 }
 .svc-grid thead th:focus {
   outline: none;
