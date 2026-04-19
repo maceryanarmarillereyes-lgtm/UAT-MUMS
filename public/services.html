@@ -10,6 +10,16 @@
 </head>
 <body class="services-body">
 
+  <!-- Auth error banner (hidden by default) -->
+  <div id="svcAuthBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;
+    padding:12px 20px;background:#F87171;color:#1a0000;font-weight:600;font-size:13px;
+    text-align:center;">
+    ⚠ Session expired or not found.
+    <a href="/login.html?redirect=/services.html" style="color:#1a0000;text-decoration:underline;margin-left:8px;">
+      Log in again →
+    </a>
+  </div>
+
   <!-- TOP BAR -->
   <header class="svc-topbar">
     <a href="/index.html" class="svc-back">← MUMS</a>
@@ -19,7 +29,7 @@
     </div>
     <div class="svc-top-actions">
       <button id="svcSearchBtn" class="svc-icon-btn" title="Search sheets (Ctrl+K)">🔍</button>
-      <button id="svcSyncIndicator" class="svc-sync-chip">● Synced</button>
+      <button id="svcSyncIndicator" class="svc-sync-chip">◌ Connecting…</button>
       <div class="svc-user-chip" id="svcUserChip">—</div>
     </div>
   </header>
@@ -47,8 +57,8 @@
         <div class="svc-toolbar-actions">
           <button class="svc-btn" id="svcAddRow">+ Row</button>
           <button class="svc-btn" id="svcAddCol">+ Column</button>
-          <button class="svc-btn ghost" id="svcUndo" title="Undo (Ctrl+Z)">↶ Undo</button>
-          <button class="svc-btn ghost" id="svcRedo" title="Redo (Ctrl+Y)">↷ Redo</button>
+          <button class="svc-btn ghost" id="svcUndo" title="Undo">↶ Undo</button>
+          <button class="svc-btn ghost" id="svcRedo" title="Redo">↷ Redo</button>
           <button class="svc-btn accent" id="svcExportCsv">⬇ CSV</button>
         </div>
       </div>
@@ -58,7 +68,8 @@
           <div class="svc-empty-icon">📋</div>
           <h2>No sheet selected</h2>
           <p>Pick a sheet on the left or create a new one.</p>
-          <button class="svc-btn accent" onclick="document.getElementById('svcNewSheetBtn').click()">
+          <button class="svc-btn accent"
+            onclick="document.getElementById('svcNewSheetBtn').click()">
             + Create your first sheet
           </button>
         </div>
@@ -74,7 +85,6 @@
     <!-- RIGHT SIDEBAR: DASHBOARD -->
     <aside class="svc-right" id="svcRight">
       <div class="svc-right-header">DASHBOARD</div>
-
       <div class="svc-widget" id="svcWidgetStats">
         <div class="svc-widget-title">Overview</div>
         <div class="svc-stat-grid">
@@ -84,14 +94,12 @@
           <div class="svc-stat"><span id="svcStatUpdated">—</span><label>Updated</label></div>
         </div>
       </div>
-
       <div class="svc-widget" id="svcWidgetActivity">
         <div class="svc-widget-title">Recent Activity</div>
         <ul id="svcActivityList" class="svc-activity-list">
           <li class="muted">No activity yet.</li>
         </ul>
       </div>
-
       <div class="svc-widget" id="svcWidgetCollab">
         <div class="svc-widget-title">Online</div>
         <div id="svcCollabList" class="svc-collab-list">
@@ -102,48 +110,82 @@
 
   </main>
 
-  <!-- Load Supabase SDK first, then app modules in dependency order -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- MUMS env must be loaded before servicesDB can read SUPABASE_URL -->
-  <script src="/js/env_runtime.js"></script>
-  <script>
-    // Wait for MUMS env to be ready before booting the Services app
-    (function () {
-      function boot() {
-        var s = function (src) {
-          var el = document.createElement('script');
-          el.src = src;
-          document.body.appendChild(el);
-          return el;
-        };
-        // Chain scripts in strict load order
-        s('/js/services-supabase.js').onload = function () {
-          s('/js/services-dashboard.js').onload = function () {
-            s('/js/services-grid.js').onload = function () {
-              s('/js/services-sheet-manager.js').onload = function () {
-                s('/js/services.js');
-              };
-            };
-          };
-        };
-      }
+  <!--
+    SCRIPT LOAD ORDER — DO NOT REORDER
+    ====================================
+    1. Supabase SDK (CDN) — provides window.supabase
+    2. env_runtime.js     — populates window.MUMS_ENV (async, polls Cloudflare env)
+    3. services-supabase.js — defines window.servicesDB (including init())
+    4. services-dashboard.js, services-grid.js, services-sheet-manager.js
+    5. services.js         — calls servicesDB.init() then boots the UI
 
-      // MUMS_ENV is set asynchronously by env_runtime.js
-      var waited = 0;
-      function waitForEnv() {
-        if (window.MUMS_ENV && window.MUMS_ENV.SUPABASE_URL) {
-          boot();
-        } else if (waited < 5000) {
-          waited += 50;
-          setTimeout(waitForEnv, 50);
-        } else {
-          // Env not available — boot anyway so UI renders
-          console.warn('[services] MUMS_ENV not ready after 5s, booting without env.');
-          boot();
-        }
+    services.js waits for MUMS_ENV via a 5-second poll before calling init(),
+    so the load order here is safe even though env_runtime is async.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/env_runtime.js"></script>
+
+  <script>
+  (function () {
+    // Show auth error banner if init() redirects (but page hasn't navigated yet)
+    window.__svcShowAuthError = function () {
+      var b = document.getElementById('svcAuthBanner');
+      if (b) b.style.display = 'block';
+    };
+
+    function loadScript(src, cb) {
+      var el = document.createElement('script');
+      el.src = src;
+      el.onload = cb || function(){};
+      el.onerror = function() {
+        console.error('[services] Failed to load script:', src);
+      };
+      document.body.appendChild(el);
+    }
+
+    function bootModules() {
+      // Load in strict dependency order, chained via onload
+      loadScript('/js/services-supabase.js', function () {
+        loadScript('/js/services-dashboard.js', function () {
+          loadScript('/js/services-grid.js', function () {
+            loadScript('/js/services-sheet-manager.js', function () {
+              loadScript('/js/services.js');
+            });
+          });
+        });
+      });
+    }
+
+    // Wait up to 6 seconds for MUMS_ENV to be populated by env_runtime.js
+    var waited = 0;
+    var TIMEOUT = 6000;
+    var POLL    = 60;
+
+    function waitForEnv() {
+      if (window.MUMS_ENV && window.MUMS_ENV.SUPABASE_URL) {
+        bootModules();
+      } else if (waited < TIMEOUT) {
+        waited += POLL;
+        setTimeout(waitForEnv, POLL);
+      } else {
+        console.error('[services] MUMS_ENV not ready after ' + TIMEOUT + 'ms. ' +
+                      'Check Cloudflare Pages environment variables.');
+        // Boot anyway — servicesDB.init() will show the error banner
+        bootModules();
       }
-      waitForEnv();
-    })();
+    }
+
+    // If Supabase SDK itself failed to load, show error immediately
+    window.addEventListener('load', function () {
+      if (!window.supabase) {
+        console.error('[services] Supabase SDK did not load. Check CDN connectivity.');
+        window.__svcShowAuthError();
+      }
+    });
+
+    waitForEnv();
+  })();
   </script>
+
 </body>
 </html>

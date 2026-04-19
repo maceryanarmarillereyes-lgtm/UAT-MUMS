@@ -1,56 +1,47 @@
 (function () {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // services.js — Orchestrator
+  //
+  // BOOT ORDER (critical — must not fire DB calls before session is injected):
+  //   1. servicesDB.init()  → reads mums_supabase_session, calls setSession()
+  //   2. servicesSheetManager.refresh() → only after init() resolves true
+  //   3. Show user chip
+  // ─────────────────────────────────────────────────────────────────────────────
+
   window.servicesApp = {
     async openSheet(sheet) {
       window.servicesSheetManager.setActive(sheet.id);
       await window.servicesGrid.load(sheet);
-      // Sync chip: "Synced"
       setSyncState('synced');
     }
   };
 
-  // ── Sync chip helper ─────────────────────────────────────────────
+  // ── Sync chip ─────────────────────────────────────────────────────────────────
   const syncChip = document.getElementById('svcSyncIndicator');
   function setSyncState(state) {
     if (!syncChip) return;
-    if (state === 'synced') {
+    if (state === 'loading') {
+      syncChip.textContent = '◌ Connecting…';
+      syncChip.style.cssText = 'color:#94A3B8;background:rgba(148,163,184,0.1);border-color:rgba(148,163,184,0.3)';
+    } else if (state === 'synced') {
       syncChip.textContent = '● Synced';
-      syncChip.style.color = '#4ADE80';
-      syncChip.style.background = 'rgba(34,197,94,0.1)';
-      syncChip.style.borderColor = 'rgba(34,197,94,0.3)';
+      syncChip.style.cssText = 'color:#4ADE80;background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.3)';
     } else {
-      syncChip.textContent = '◌ Offline';
-      syncChip.style.color = '#F87171';
-      syncChip.style.background = 'rgba(248,113,113,0.1)';
-      syncChip.style.borderColor = 'rgba(248,113,113,0.3)';
+      syncChip.textContent = '✕ Auth Error';
+      syncChip.style.cssText = 'color:#F87171;background:rgba(248,113,113,0.1);border-color:rgba(248,113,113,0.3)';
     }
   }
 
-  // ── User chip ────────────────────────────────────────────────────
-  (async () => {
-    try {
-      const c = window.servicesDB.client;
-      if (!c) return;
-      const { data } = await c.auth.getUser();
-      if (data?.user) {
-        const chip = document.getElementById('svcUserChip');
-        if (chip) chip.textContent = data.user.email || data.user.id.slice(0, 8);
-      }
-    } catch (e) { /* not authenticated – fine */ }
-  })();
-
-  // ── Keyboard shortcuts ───────────────────────────────────────────
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────────
   document.addEventListener('keydown', (e) => {
     const tag = document.activeElement?.tagName;
     const editable = document.activeElement?.isContentEditable;
     const typing = tag === 'INPUT' || tag === 'TEXTAREA' || editable;
 
-    // Ctrl+N — new sheet (suppress when typing in cells)
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n' && !typing) {
       e.preventDefault();
       document.getElementById('svcNewSheetBtn').click();
     }
-
-    // Ctrl+K — focus sheet search
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       const s = document.getElementById('svcSheetSearch');
@@ -58,7 +49,26 @@
     }
   });
 
-  // ── Initial load ─────────────────────────────────────────────────
-  window.servicesSheetManager.refresh();
-  setSyncState('synced');
+  // ── Boot sequence ─────────────────────────────────────────────────────────────
+  setSyncState('loading');
+
+  (async () => {
+    // Step 1: inject session into Supabase client
+    const authed = await window.servicesDB.init();
+    if (!authed) return; // init() redirects to login if needed
+
+    // Step 2: show user email
+    try {
+      const { data } = await window.servicesDB.client.auth.getUser();
+      if (data?.user) {
+        const chip = document.getElementById('svcUserChip');
+        if (chip) chip.textContent = data.user.email || data.user.id.slice(0, 8);
+      }
+    } catch (_) {}
+
+    // Step 3: load sheet list (now authenticated)
+    await window.servicesSheetManager.refresh();
+
+    setSyncState('synced');
+  })();
 })();
