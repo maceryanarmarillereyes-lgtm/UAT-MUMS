@@ -269,7 +269,7 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   min-width: 100%;
 }
 .svc-grid thead th {
-  background: var(--svc-panel-2);
+  background: var(--svc-panel);
   color: var(--svc-text-dim);
   font-weight: 600;
   font-size: 11px;
@@ -280,10 +280,11 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   border-bottom: 1px solid var(--svc-border-strong);
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 4;
   text-align: left;
   min-width: 120px;
   cursor: text;
+  box-shadow: 0 1px 0 var(--svc-border-strong);
 }
 .svc-grid thead th:focus {
   outline: none;
@@ -296,6 +297,7 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   text-align: center;
   background: var(--svc-bg);
   cursor: default;
+  z-index: 5;
 }
 .svc-grid tbody td {
   padding: 0;
@@ -617,6 +619,9 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   align-items: center;
   justify-content: center;
   padding: 20px;
+}
+.svc-modal-overlay[hidden] {
+  display: none !important;
 }
 .svc-modal {
   background: var(--svc-panel);
