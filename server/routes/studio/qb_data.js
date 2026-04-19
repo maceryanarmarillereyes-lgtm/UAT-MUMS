@@ -297,7 +297,9 @@ module.exports = async (req, res) => {
         if (canon && !requestedByCanonical.has(canon)) requestedByCanonical.set(canon, id);
       });
 
-      const batchCachePrefix = `${realm}:${tableId}:${primaryCaseFieldId}`;
+      // Include candidate-set signature in cache key so stale nulls from older
+      // case-field resolution strategies don't poison newer fallback logic.
+      const batchCachePrefix = `${realm}:${tableId}:caseCandidates:${caseFieldCandidates.join('-')}`;
       const result   = {};
       const notFound = [];
       const toFetch  = [];
