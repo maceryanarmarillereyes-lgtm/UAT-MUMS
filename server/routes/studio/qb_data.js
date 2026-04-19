@@ -71,6 +71,19 @@ function normalizeQbValue(raw) {
 
 function encLit(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); }
 
+// Canonicalize Case # values so formatted/typed variants still match.
+// Examples that normalize to same key:
+//   "533762", "533,762", 533762, " 533762 ", "533762.0"
+function normalizeCaseKey(v) {
+  const raw = String(v == null ? '' : v).trim();
+  if (!raw) return '';
+  const compact = raw.replace(/,/g, '');
+  if (/^\d+(?:\.0+)?$/.test(compact)) {
+    return String(Number(compact));
+  }
+  return compact;
+}
+
 // ── Field list (cached per realm+table) ──────────────────────────────────────
 async function getFields({ realm, token, tableId }) {
   const cacheKey = `${realm}:${tableId}`;
@@ -251,6 +264,13 @@ module.exports = async (req, res) => {
 
       const caseFieldId = await resolveCaseFieldId({ realm, token, tableId });
 
+      // Map canonical value -> original requested id so response keys stay stable.
+      const requestedByCanonical = new Map();
+      ids.forEach((id) => {
+        const canon = normalizeCaseKey(id);
+        if (canon && !requestedByCanonical.has(canon)) requestedByCanonical.set(canon, id);
+      });
+
       const batchCachePrefix = `${realm}:${tableId}:${caseFieldId}`;
       const result   = {};
       const notFound = [];
@@ -301,12 +321,13 @@ module.exports = async (req, res) => {
           rows.forEach(row => {
             const caseCell  = row[String(caseFieldId)];
             const caseValue = caseCell ? normalizeQbValue(typeof caseCell === 'object' && 'value' in caseCell ? caseCell.value : caseCell) : '';
-            if (!caseValue) return;
+            const caseKey   = normalizeCaseKey(caseValue);
+            if (!caseKey) return;
 
             const { fieldValues, columnMap } = buildFieldMap(row, fieldsMeta);
             const rec = { fields: fieldValues, columnMap };
 
-            const matchedId = toFetch.find(id => String(id) === String(caseValue));
+            const matchedId = requestedByCanonical.get(caseKey);
             if (matchedId) {
               result[matchedId] = rec;
               foundIds.add(matchedId);
