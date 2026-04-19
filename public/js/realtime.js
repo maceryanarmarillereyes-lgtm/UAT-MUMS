@@ -505,11 +505,8 @@ function applyRemoteKey(key, value){
         window.__MUMS_SB_CLIENT.removeAllChannels();
       }
     } catch (_) {}
-    try {
-      if (forceClientRecreate && window.__MUMS_SB_CLIENT) {
-        window.__MUMS_SB_CLIENT = null;
-      }
-    } catch (_) {}
+    // FIX v3.9.31: No longer null the client here — we keep the singleton alive.
+    // forceClientRecreate is handled in trySupabaseRealtimeMandatory via realtime.disconnect().
     sbChannel = null;
     sbClient = null;
   }
@@ -553,8 +550,18 @@ function applyRemoteKey(key, value){
       lastAuthToken = token;
       // BUG FIX: was console.log — moved to debug-only to eliminate console spam
       try{ (window.MUMS_DEBUG||{}).log && MUMS_DEBUG.log('realtime.preparing_subscribe', { hasToken: !!token }); }catch(_){}
+      // FIX v3.9.31: NEVER null __MUMS_SB_CLIENT on forceClientRecreate.
+      // OLD: set null -> createClient() -> new GoTrueClient every reconnect cycle
+      //      -> Supabase SDK warns about multiple instances -> console spam.
+      // NEW: keep the singleton alive; reset only the realtime WebSocket transport
+      //      (the actual poisoned socket). setAuth() below refreshes the JWT so RLS works.
       if (forceClientRecreate && window.__MUMS_SB_CLIENT) {
-        try { window.__MUMS_SB_CLIENT = null; } catch (_) {}
+        try {
+          if (window.__MUMS_SB_CLIENT.realtime && typeof window.__MUMS_SB_CLIENT.realtime.disconnect === 'function') {
+            window.__MUMS_SB_CLIENT.realtime.disconnect();
+          }
+        } catch (_) {}
+        forceClientRecreate = false;
       }
       if (!window.__MUMS_SB_CLIENT) {
         window.__MUMS_SB_CLIENT = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {

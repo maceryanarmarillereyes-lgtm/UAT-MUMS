@@ -2930,16 +2930,31 @@ function updateClocksPreviewTimes(){
   }
 
   function _routePageIdFromHref(href){
+    // FIX v3.9.31: System sub-menu tab fix.
+    // Nav items for system sub-pages have href="/system_supabase" (built from n.id).
+    // _routePageIdFromRoutePath converts BOTH "/system_supabase" and "/system/supabase"
+    // to "system" — so navigateToPageId always got "system" and pushed /system to history,
+    // which means tabFromRoute() always returned "overview".
+    // FIX: Return the full "system_supabase" id from href so navigateToPageId can call
+    // _routePathForPageId("system_supabase") which correctly builds "/system/supabase",
+    // allowing tabFromRoute() inside Pages.system to read the correct tab from the URL.
+    // NOTE: resolveRoutePageId() uses _routePageIdFromRoutePath (not this fn) so it still
+    // returns "system" → Pages.system(main) is still called correctly. No regression.
     try{
       const h = String(href||'').trim();
       if(!h) return '';
 
-      if(h[0] === '#'){
+      if(h[0] === '#' || h[0] === '/'){
         const routePath = _normalizeRoutePath(h);
-        return _routePageIdFromRoutePath(routePath);
-      }
-      if(h[0] === '/'){
-        const routePath = _normalizeRoutePath(h);
+        // Preserve full system_tab id (e.g. "system_supabase") so navigateToPageId
+        // builds the correct /system/supabase URL instead of collapsing to /system.
+        if(routePath.startsWith('system_') && routePath.length > 'system_'.length){
+          return routePath.toLowerCase(); // "system_supabase", "system_requests", etc.
+        }
+        // /system/supabase format (hash or path): rebuild as system_tab
+        if(routePath.startsWith('system/') && routePath.split('/')[1]){
+          return 'system_' + routePath.split('/')[1].toLowerCase();
+        }
         return _routePageIdFromRoutePath(routePath);
       }
       return '';
