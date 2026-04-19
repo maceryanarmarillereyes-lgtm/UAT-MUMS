@@ -117,8 +117,10 @@
     var headTr  = mkEl('tr', null, thead);
     var thCorner = mkEl('th', { className: 'row-num', textContent: '#' }, headTr);
     cols.forEach(function (c) {
-      var th = mkEl('th', { contentEditable: 'true', textContent: sanitizeHeaderLabel(c.label, 0) }, headTr);
+      var th = mkEl('th', { textContent: sanitizeHeaderLabel(c.label, 0) }, headTr);
       th.dataset.key = c.key;
+      th.tabIndex = 0;
+      th.title = 'Right-click to rename column';
     });
 
     var tbody = mkEl('tbody');
@@ -128,7 +130,7 @@
       mkEl('td', { className: 'row-num', textContent: String(i + 1) }, tr);
       cols.forEach(function (c) {
         var td  = mkEl('td', null, tr);
-        var inputType = (c.format === 'date') ? 'date' : (c.format === 'number') ? 'number' : 'text';
+        var inputType = (c.format === 'date') ? 'date' : 'text';
         var inp = mkEl('input', {
           className    : 'cell',
           type         : inputType,
@@ -138,6 +140,8 @@
         }, td);
         inp.dataset.row = i;
         inp.dataset.key = c.key;
+        inp.dataset.format = (c && c.format) ? c.format : 'auto';
+        if (c.format === 'number') inp.inputMode = 'numeric';
       });
     }
 
@@ -146,7 +150,6 @@
     grid.appendChild(tbody);
 
     attachCellHandlers();
-    attachHeaderHandlers();
     attachHeaderContextMenu();
     updateStatusBar();
     autoResizeColumns();
@@ -156,24 +159,6 @@
     grid.querySelectorAll('input.cell').forEach(function (inp) {
       inp.addEventListener('input', onCellInput);
       inp.addEventListener('keydown', onCellKey);
-    });
-  }
-
-  function attachHeaderHandlers() {
-    grid.querySelectorAll('thead th[data-key]').forEach(function (th) {
-      th.addEventListener('blur', async function () {
-        var key      = th.dataset.key;
-        var colIdx   = current.sheet.column_defs.findIndex(function (c) { return c.key === key; });
-        var newLabel = sanitizeHeaderLabel(th.innerText, colIdx);
-        var col      = current.sheet.column_defs.find(function (c) { return c.key === key; });
-        if (!col || col.label === newLabel) return;
-        col.label = newLabel;
-        th.textContent = newLabel;
-        await window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs);
-      });
-      th.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); th.blur(); }
-      });
     });
   }
 
@@ -412,8 +397,14 @@
     var rowIdx = +e.target.dataset.row;
     var key    = e.target.dataset.key;
     var value  = e.target.value;
+    var format = e.target.dataset.format || 'auto';
     var rowObj = current.rows.find(function (r) { return r.row_index === rowIdx; });
     if (!rowObj) { rowObj = { row_index: rowIdx, data: {} }; current.rows.push(rowObj); }
+    if (format === 'number' && value && !/^\d+$/.test(value)) {
+      alert('Please input only Numbers if naka format ng numbers or change the format.');
+      e.target.value = rowObj.data[key] != null ? String(rowObj.data[key]) : '';
+      return;
+    }
     undoStack.push({ rowIdx: rowIdx, key: key, prev: rowObj.data[key] != null ? rowObj.data[key] : '', next: value });
     redoStack = [];
     rowObj.data[key] = value;
