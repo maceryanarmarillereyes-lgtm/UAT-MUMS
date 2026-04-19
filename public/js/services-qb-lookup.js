@@ -69,7 +69,10 @@
   var _NOT_FOUND_TTL = 60 * 1000;
 
   // ── Batch fetch engine ────────────────────────────────────────────────────────
-  var _BATCH_SIZE        = 100;
+  // FIX: Reduced from 100 to 50 — QB WHERE clause with 100 EX conditions can
+  // exceed QB's 4096-char limit for longer case numbers. 50 is safe and still
+  // results in only ~11 requests for 522 rows (vs 1 with 100, but safer).
+  var _BATCH_SIZE        = 50;
   var _BATCH_CONCURRENCY = 2;
   var _batchInFlight = {};
 

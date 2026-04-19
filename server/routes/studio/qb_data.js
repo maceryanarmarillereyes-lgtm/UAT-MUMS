@@ -330,9 +330,11 @@ module.exports = async (req, res) => {
             if (pendingIds.size === 0) break;
             const idsForThisPass = Array.from(pendingIds);
             const clauses = idsForThisPass.map(id => `{${caseFieldId}.EX.'${encLit(id)}'}`);
-            const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join('OR')})`;
+            // FIX-1: QB requires spaces around OR — missing space caused silent QB query failure
+            const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join(' OR ')})`;
             const body = { from: tableId, where: whereClause, options: { top: 100 } };
-            if (allFieldIds.length) body.select = allFieldIds;
+            // FIX-2: QB select array capped at 30 fields — exceeding silently drops entire request
+            if (allFieldIds.length) body.select = allFieldIds.slice(0, 30);
 
             const resp = await fetch('https://api.quickbase.com/v1/records/query', {
               method: 'POST',
@@ -347,7 +349,16 @@ module.exports = async (req, res) => {
 
             rows.forEach(row => {
               const caseCell  = row[String(caseFieldId)];
-              const caseValue = caseCell ? normalizeQbValue(typeof caseCell === 'object' && 'value' in caseCell ? caseCell.value : caseCell) : '';
+              // FIX-3: QB REST always wraps values as {value: X} — extract robustly
+              let rawCaseVal = '';
+              if (caseCell !== null && caseCell !== undefined) {
+                if (typeof caseCell === 'object' && 'value' in caseCell) {
+                  rawCaseVal = caseCell.value;
+                } else {
+                  rawCaseVal = caseCell;
+                }
+              }
+              const caseValue = normalizeQbValue(rawCaseVal);
               const caseKey   = normalizeCaseKey(caseValue);
               if (!caseKey) return;
 
