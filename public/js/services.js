@@ -105,3 +105,46 @@
     setSyncState('synced');
   })();
 })();
+/* ============================================================================
+ * Right Sidebar Collapse Toggle
+ * Fixes: toggle button did nothing due to missing handler + duplicate ID in HTML.
+ * ============================================================================ */
+(function initRightSidebarToggle() {
+  function bind() {
+    var btn = document.getElementById('svcRightToggle');
+    var main = document.querySelector('.svc-main');
+    if (!btn || !main) return false;
+
+    // Guard against double-binding
+    if (btn.dataset.bound === '1') return true;
+    btn.dataset.bound = '1';
+
+    // Restore persisted state
+    try {
+      if (localStorage.getItem('svc.rightCollapsed') === '1') {
+        main.classList.add('right-collapsed');
+        btn.textContent = '«';
+      }
+    } catch (e) { /* ignore */ }
+
+    btn.addEventListener('click', function () {
+      var collapsed = main.classList.toggle('right-collapsed');
+      btn.textContent = collapsed ? '«' : '»';
+      btn.title = collapsed ? 'Show right sidebar' : 'Hide right sidebar';
+      try { localStorage.setItem('svc.rightCollapsed', collapsed ? '1' : '0'); } catch (e) {}
+    });
+    return true;
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bind);
+  } else {
+    // Try immediately; if toggle button is injected later, retry briefly
+    if (!bind()) {
+      var tries = 0;
+      var iv = setInterval(function () {
+        if (bind() || ++tries > 20) clearInterval(iv);
+      }, 150);
+    }
+  }
+})();

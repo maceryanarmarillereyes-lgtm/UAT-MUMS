@@ -100,7 +100,51 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   gap: 0;
   overflow: hidden;
   height: calc(100vh - 56px);
+  transition: grid-template-columns 0.25s ease;
 }
+/* Collapsed right sidebar — center takes the space */
+.svc-main.right-collapsed {
+  grid-template-columns: 260px 1fr 0px;
+}
+.svc-main.right-collapsed .svc-right {
+  display: none;
+}
+/* Collapsed left sidebar (bonus, for parity) */
+.svc-main.left-collapsed {
+  grid-template-columns: 0px 1fr 320px;
+}
+.svc-main.left-collapsed .svc-left {
+  display: none;
+}
+
+/* Sidebar toggle button — visible floating pill on the right edge of center */
+.svc-sidebar-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  z-index: 40;
+  width: 28px;
+  height: 48px;
+  background: var(--svc-panel-2);
+  color: var(--svc-text-dim);
+  border: 1px solid var(--svc-border-strong);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.svc-sidebar-toggle:hover {
+  color: var(--svc-accent);
+  border-color: var(--svc-accent);
+  box-shadow: 0 0 12px var(--svc-accent-glow);
+}
+/* Ensure center is positioning context for the toggle */
+.svc-center { position: relative; }
 .svc-left, .svc-right {
   background: var(--svc-panel);
   display: flex;
@@ -243,17 +287,9 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   position: relative;
   isolation: isolate;
 }
-.svc-grid-wrap::before {
-  content: '';
-  display: block;
-  position: sticky;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 0;
-  z-index: 11;
-  box-shadow: 0 0 0 20px var(--svc-bg-2);
-}
+/* Removed — the 20px box-shadow ring was hiding Row 1 text.
+   Sticky thead already handles its own background + border. */
+.svc-grid-wrap::before { content: none; }
 .svc-empty-state {
   display: flex;
   flex-direction: column;
@@ -278,7 +314,9 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   box-shadow: var(--svc-shadow);
   font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 13px;
-  width: max-content;
+  /* Use auto layout so width: 1% on TH enables true fit-to-content columns */
+  table-layout: auto;
+  width: auto;
   min-width: 100%;
 }
 .svc-grid thead {
@@ -295,15 +333,18 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   text-transform: uppercase;
   padding: 10px 14px;
   border-right: 1px solid var(--svc-border);
-  border-bottom: 1px solid var(--svc-border-strong);
+  border-bottom: 2px solid var(--svc-border-strong);
   position: sticky;
   top: 0;
   z-index: 30;
-  clip-path: none;
   text-align: left;
-  min-width: 120px;
+  /* Auto-fit columns: 1% trick + nowrap lets the table shrink columns to content length */
+  min-width: 60px;
+  width: 1%;
+  white-space: nowrap;
   cursor: text;
-  box-shadow: 0 2px 0 var(--svc-border-strong), 0 -20px 0 20px var(--svc-panel);
+  /* REMOVED the -20px panel shadow — it was painting a 20px opaque strip over Row 1 text */
+  box-shadow: inset 0 -1px 0 var(--svc-border-strong);
 }
 .svc-grid thead th:focus {
   outline: none;
