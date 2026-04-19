@@ -81,6 +81,8 @@
   let reconnectBackoffMs = 1200;
   let pollingFallbackStop = null;
   let pollingFallbackActive = false;
+  let wsFailureCount = 0;
+  let forcePollingOnly = false;
   let lastRtStatusLogged = '';
   let lastAuthToken = '';
   let userExplicitlyLoggedOut = false;
@@ -726,6 +728,8 @@ function applyRemoteKey(key, value){
             lastRtStatusLogged = '';
           }
           if (status === 'SUBSCRIBED') {
+            wsFailureCount = 0;
+            forcePollingOnly = false;
             forceClientRecreate = false;
             resetRealtimeCircuit();
             cloudOkAt = Date.now();
@@ -757,11 +761,18 @@ function applyRemoteKey(key, value){
               }, intervalMs);
             } catch (_) {}
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            wsFailureCount += 1;
             try {
               window.dispatchEvent(new CustomEvent('mums:syncstatus', {
                 detail: { mode: 'offline', syncMode: 'offline', error: status, detail: String(status || 'CHANNEL_ERROR') }
               }));
             } catch(_) {}
+            if (wsFailureCount >= 2) {
+              forcePollingOnly = true;
+              if (!pollingFallbackStop) pollingFallbackStop = startPollingFallback();
+              dispatchStatus('polling', 'Realtime unavailable, polling fallback active');
+              return;
+            }
             // Treat transient channel errors as reconnecting (yellow), not offline (red), to avoid UI flicker.
             scheduleReconnect(status);
           } else if (status === 'CLOSED') {
@@ -776,6 +787,12 @@ function applyRemoteKey(key, value){
                   detail: { mode: 'offline', syncMode: 'offline', error: 'CLOSED', detail: 'CLOSED' }
                 }));
               } catch(_) {}
+              if (wsFailureCount >= 2) {
+                forcePollingOnly = true;
+                if (!pollingFallbackStop) pollingFallbackStop = startPollingFallback();
+                dispatchStatus('polling', 'Realtime closed, polling fallback active');
+                return;
+              }
               scheduleReconnect('closed');
             }
             // If seq !== activeSeq: this CLOSED came from our own unsubscribe — ignore silently.
@@ -821,6 +838,12 @@ function applyRemoteKey(key, value){
         // Debug-only: suppress noisy 'no token' log on cold boot
         try{ (window.MUMS_DEBUG||{}).log && MUMS_DEBUG.log('realtime.connect_skipped_no_token'); }catch(_){}
         dispatchStatus('offline', 'Not authenticated');
+        return;
+      }
+
+      if (forcePollingOnly) {
+        if (!pollingFallbackStop) pollingFallbackStop = startPollingFallback();
+        dispatchStatus('polling', 'Polling fallback active');
         return;
       }
 
@@ -1139,7 +1162,7 @@ function applyRemoteKey(key, value){
       } catch(_) { return []; }
     },
     flushQueue: (trigger)=>flushQueue(trigger||'manual'),
-    forceReconnect: ()=>{ try{ userExplicitlyLoggedOut = false; resetRealtimeCircuit(); connectCloudMandatory(); }catch(_){ } },
+    forceReconnect: ()=>{ try{ userExplicitlyLoggedOut = false; forcePollingOnly = false; wsFailureCount = 0; resetRealtimeCircuit(); connectCloudMandatory(); }catch(_){ } },
     resetCircuit: ()=>{ try{ resetRealtimeCircuit(); }catch(_){ } },
     init: ()=>{ try{ initRealtimeSync(); }catch(_){ } }
   };
