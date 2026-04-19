@@ -241,6 +241,7 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   overflow: auto;
   padding: 20px;
   position: relative;
+  isolation: isolate;
 }
 .svc-empty-state {
   display: flex;
@@ -286,7 +287,7 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   border-bottom: 1px solid var(--svc-border-strong);
   position: sticky;
   top: 0;
-  z-index: 4;
+  z-index: 30;
   text-align: left;
   min-width: 120px;
   cursor: text;
@@ -303,13 +304,13 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   text-align: center;
   background: var(--svc-bg);
   cursor: default;
-  z-index: 5;
+  z-index: 31;
 }
 .svc-grid tbody td {
   padding: 0;
+  background: var(--svc-panel);
   border-right: 1px solid var(--svc-border);
   border-bottom: 1px solid var(--svc-border);
-  position: relative;
 }
 .svc-grid tbody td.row-num {
   background: var(--svc-bg);
