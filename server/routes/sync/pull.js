@@ -7,7 +7,9 @@
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
 
-const { getUserFromJwt, getProfileForUserId, serviceSelect } = require('../../lib/supabase');
+const { getProfileForUserId, serviceSelect } = require('../../lib/supabase');
+const { verifyJwtCached } = require('../../lib/authCache');
+const { checkRateLimit, isCircuitOpen, record503AndMaybeOpen, log503Dedup } = require('../../lib/rateLimit');
 
 function setCors(res){
   try{
@@ -28,12 +30,25 @@ module.exports = async (req, res) => {
     }
     res.setHeader('Cache-Control', 'no-store');
 
+    if (isCircuitOpen()) {
+      res.statusCode = 503;
+      res.setHeader('Retry-After', '60');
+      return res.end(JSON.stringify({ ok: false, error: 'sync_unavailable', retryAfter: 60 }));
+    }
+
     const auth = req.headers.authorization || '';
     const jwt = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : '';
-    const u = await getUserFromJwt(jwt);
+    const u = req.authUser || await verifyJwtCached(jwt);
     if (!u) {
       res.statusCode = 401;
       return res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }));
+    }
+
+    const rl = checkRateLimit(u.id, 'sync/pull');
+    if (!rl.allowed) {
+      res.statusCode = 429;
+      res.setHeader('Retry-After', String(rl.retryAfterSeconds));
+      return res.end(JSON.stringify({ ok: false, error: 'rate_limited', retryAfter: rl.retryAfterSeconds }));
     }
 
     // Optional: role gating on read can be added later. For now, authenticated users can read.
@@ -46,6 +61,13 @@ module.exports = async (req, res) => {
     const out = await serviceSelect('mums_documents', q);
 
     if (!out.ok) {
+      if (out.status === 503) {
+        const opened = record503AndMaybeOpen();
+        log503Dedup('[sync/pull] upstream 503', { opened });
+        res.statusCode = 503;
+        res.setHeader('Retry-After', '15');
+        return res.end(JSON.stringify({ ok: false, error: 'sync_unavailable', retryAfter: 15 }));
+      }
       res.statusCode = 500;
       return res.end(JSON.stringify({ ok: false, error: 'Supabase select failed', details: out.json || out.text }));
     }
@@ -62,6 +84,14 @@ module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     return res.end(JSON.stringify({ ok: true, serverNow: Date.now(), docs: mapped }));
   } catch (e) {
+    if (e && Number(e.status) === 503) {
+      const opened = record503AndMaybeOpen();
+      log503Dedup('[sync/pull] caught 503', { opened });
+      res.statusCode = 503;
+      res.setHeader('Retry-After', '15');
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({ ok: false, error: 'sync_unavailable', retryAfter: 15 }));
+    }
     setCors(res);
     res.statusCode = 503;
     res.setHeader('Content-Type', 'application/json');
