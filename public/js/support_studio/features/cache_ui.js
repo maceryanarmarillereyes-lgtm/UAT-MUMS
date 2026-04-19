@@ -67,6 +67,18 @@
     if (dot) dot.style.display = '';
   }
 
+  function autoSyncOutdated() {
+    if (_isSyncing) return;
+    if (!_pendingOutdated || !_pendingOutdated.length) return;
+    // Defer slightly so banner/beacon can render first, then sync automatically.
+    setTimeout(function() {
+      if (_isSyncing) return;
+      if (window._cacheUI && typeof window._cacheUI.startSync === 'function') {
+        window._cacheUI.startSync(false);
+      }
+    }, 900);
+  }
+
   function showCriticalModal(critical, outdated, serverManifest) {
     _pendingOutdated = [].concat(critical || [], outdated || []);
     _pendingManifest = serverManifest;
@@ -302,6 +314,7 @@
     showSoftBanner(e.detail.outdated, e.detail.serverManifest);
     beaconSetState('stale');
     beaconRefreshPopup(e.detail.outdated, []);
+    autoSyncOutdated();
   });
 
   window.addEventListener('studiocache:critical', function(e) {
