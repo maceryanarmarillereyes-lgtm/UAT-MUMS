@@ -108,6 +108,7 @@
     attachCellHandlers();
     attachHeaderHandlers();
     updateStatusBar();
+    autoResizeColumns();
   }
 
   function attachCellHandlers() {
@@ -128,6 +129,166 @@
         await window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs);
       });
       th.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); th.blur(); } });
+    });
+    attachHeaderContextMenu();
+  }
+
+  function attachHeaderContextMenu() {
+    // Remove any previous context menu on each render
+    document.querySelectorAll('.svc-col-ctx-menu').forEach(function (m) { m.remove(); });
+
+    grid.querySelectorAll('thead th[data-key]').forEach(function (th) {
+      th.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        // Remove any existing menu
+        document.querySelectorAll('.svc-col-ctx-menu').forEach(function (m) { m.remove(); });
+
+        var key = th.dataset.key;
+        var cols = current.sheet.column_defs;
+        var colIdx = cols.findIndex(function (c) { return c.key === key; });
+        if (colIdx < 0) return;
+
+        var menu = document.createElement('div');
+        menu.className = 'svc-col-ctx-menu';
+        menu.innerHTML =
+          '<div class="ctx-item" data-action="rename">' +
+            '<span class="ctx-icon">✏️</span>' +
+            '<span class="ctx-label">Rename Column</span>' +
+          '</div>' +
+          '<div class="ctx-separator"></div>' +
+          '<div class="ctx-item">' +
+            '<span class="ctx-icon">⚙️</span>' +
+            '<span class="ctx-label">Set Program</span>' +
+            '<span class="ctx-arrow">▶</span>' +
+            '<div class="ctx-sub">' +
+              '<div class="ctx-item" data-action="lookup-qb">' +
+                '<span class="ctx-icon">🔗</span>' +
+                '<span class="ctx-label">Lookup to Global Quickbase</span>' +
+                '<span class="ctx-arrow">▶</span>' +
+                '<div class="ctx-sub">' +
+                  '<div class="ctx-item" data-action="select-qb-field">' +
+                    '<span class="ctx-icon">📋</span>' +
+                    '<span class="ctx-label">Select Quickbase Field</span>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="ctx-item" data-action="conditional-format">' +
+                '<span class="ctx-icon">🎨</span>' +
+                '<span class="ctx-label">Conditional Formatting</span>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="ctx-separator"></div>' +
+          '<div class="ctx-item">' +
+            '<span class="ctx-icon">↔️</span>' +
+            '<span class="ctx-label">Move Column</span>' +
+            '<span class="ctx-arrow">▶</span>' +
+            '<div class="ctx-sub">' +
+              '<div class="ctx-item" data-action="move-left">' +
+                '<span class="ctx-icon">⬅</span>' +
+                '<span class="ctx-label">To Left</span>' +
+              '</div>' +
+              '<div class="ctx-item" data-action="move-right">' +
+                '<span class="ctx-icon">➡</span>' +
+                '<span class="ctx-label">To Right</span>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+
+        // Position menu at cursor
+        menu.style.left = e.clientX + 'px';
+        menu.style.top = e.clientY + 'px';
+        document.body.appendChild(menu);
+
+        // Ensure menu stays within viewport
+        var rect = menu.getBoundingClientRect();
+        if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 8) + 'px';
+        if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 8) + 'px';
+
+        // Handle clicks
+        menu.addEventListener('click', async function (ev) {
+          var item = ev.target.closest('[data-action]');
+          if (!item) return;
+          var action = item.dataset.action;
+
+          if (action === 'rename') {
+            var newName = prompt('Rename column:', cols[colIdx].label);
+            if (newName && newName.trim()) {
+              cols[colIdx].label = newName.trim();
+              await window.servicesDB.updateColumns(current.sheet.id, cols);
+              render();
+            }
+          } else if (action === 'move-left' && colIdx > 0) {
+            var tmp = cols[colIdx];
+            cols[colIdx] = cols[colIdx - 1];
+            cols[colIdx - 1] = tmp;
+            await window.servicesDB.updateColumns(current.sheet.id, cols);
+            render();
+          } else if (action === 'move-right' && colIdx < cols.length - 1) {
+            var tmp2 = cols[colIdx];
+            cols[colIdx] = cols[colIdx + 1];
+            cols[colIdx + 1] = tmp2;
+            await window.servicesDB.updateColumns(current.sheet.id, cols);
+            render();
+          } else if (action === 'select-qb-field') {
+            // Open Quickbase field selector if available
+            if (window.svcQuickbaseFieldPicker) {
+              window.svcQuickbaseFieldPicker.open(key);
+            } else {
+              window.svcToast && window.svcToast.show('info', 'Quickbase', 'Quickbase field picker coming soon.');
+            }
+          } else if (action === 'conditional-format') {
+            window.svcToast && window.svcToast.show('info', 'Formatting', 'Conditional formatting coming soon.');
+          }
+
+          menu.remove();
+        });
+
+        // Close on outside click
+        function closeMenu(ev2) {
+          if (!menu.contains(ev2.target)) {
+            menu.remove();
+            document.removeEventListener('mousedown', closeMenu);
+          }
+        }
+        setTimeout(function () { document.addEventListener('mousedown', closeMenu); }, 0);
+      });
+    });
+  }
+
+  function autoResizeColumns() {
+    if (!current) return;
+    var cols = current.sheet.column_defs || [];
+    cols.forEach(function (c) {
+      var maxW = 0;
+      // Measure header text
+      var th = grid.querySelector('thead th[data-key="' + c.key + '"]');
+      if (th) {
+        var span = document.createElement('span');
+        span.style.cssText = 'visibility:hidden;position:absolute;white-space:nowrap;font:600 11px/1 "Inter",system-ui,sans-serif;letter-spacing:0.05em;text-transform:uppercase;';
+        span.textContent = th.innerText;
+        document.body.appendChild(span);
+        maxW = Math.max(maxW, span.offsetWidth + 32);
+        span.remove();
+      }
+      // Measure cell content
+      grid.querySelectorAll('input.cell[data-key="' + c.key + '"]').forEach(function (inp) {
+        if (!inp.value) return;
+        var span2 = document.createElement('span');
+        span2.style.cssText = 'visibility:hidden;position:absolute;white-space:nowrap;font:13px/1 "JetBrains Mono","Fira Code","Consolas",monospace;';
+        span2.textContent = inp.value;
+        document.body.appendChild(span2);
+        maxW = Math.max(maxW, span2.offsetWidth + 32);
+        span2.remove();
+      });
+      // Clamp between 80px and 500px
+      var finalW = Math.max(80, Math.min(500, maxW || 120));
+      if (th) th.style.width = finalW + 'px';
+      if (th) th.style.minWidth = finalW + 'px';
+      grid.querySelectorAll('td input.cell[data-key="' + c.key + '"]').forEach(function (inp) {
+        inp.parentElement.style.width = finalW + 'px';
+        inp.parentElement.style.minWidth = finalW + 'px';
+      });
     });
   }
 
