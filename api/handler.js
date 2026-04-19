@@ -6,6 +6,7 @@
 //
 // This handler routes all /api/* traffic (via vercel.json rewrites) to the
 // corresponding implementation under /server/routes.
+const { verifyJwtCached } = require('../server/lib/authCache');
 
 function sendJson(res, statusCode, body) {
   res.statusCode = statusCode;
@@ -141,6 +142,29 @@ function resolveRoute(routePath) {
   return { handler: null, params: {} };
 }
 
+function setRouteCacheHeaders(req, res, routePath) {
+  const method = String(req.method || '').toUpperCase();
+  if (method !== 'GET') return;
+  if (routePath.startsWith('settings/') || routePath.startsWith('catalog/')) {
+    res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=120');
+  }
+}
+
+async function runAuthMiddleware(req, res, routePath) {
+  const authRequiredRoutes = new Set(['sync/pull', 'sync/push']);
+  if (!authRequiredRoutes.has(routePath)) return true;
+
+  const auth = req.headers.authorization || '';
+  const jwt = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : '';
+  const user = await verifyJwtCached(jwt);
+  if (!user) {
+    sendJson(res, 401, { ok: false, error: 'Unauthorized' });
+    return false;
+  }
+  req.authUser = user;
+  return true;
+}
+
 module.exports = async (req, res) => {
   try {
     // Prefer rewrite-provided query param `path`.
@@ -163,8 +187,12 @@ module.exports = async (req, res) => {
       return sendJson(res, 404, { ok: false, error: 'not_found', path: routePath });
     }
 
+    setRouteCacheHeaders(req, res, routePath);
+    const passedAuth = await runAuthMiddleware(req, res, routePath);
+    if (!passedAuth) return;
+
     return await handler(req, res, resolved.params);
   } catch (err) {
-    return sendJson(res, 500, { ok: false, error: 'router_failed', message: String(err && err.message ? err.message : err) });
+    return sendJson(res, 500, { ok: false, error: 'router_failed' });
   }
 };
