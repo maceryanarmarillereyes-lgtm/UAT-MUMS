@@ -9,10 +9,23 @@
 
 const { getUserFromJwt, getProfileForUserId, serviceSelect } = require('../../lib/supabase');
 
+function setCors(res){
+  try{
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  }catch(_){}
+}
+
 // GET /api/sync/pull?since=<ms>&clientId=<id>
 // Returns updated collaborative docs since the given timestamp.
 module.exports = async (req, res) => {
   try {
+    setCors(res);
+    if (String(req.method || '').toUpperCase() === 'OPTIONS') {
+      res.statusCode = 204;
+      return res.end('');
+    }
     res.setHeader('Cache-Control', 'no-store');
 
     const auth = req.headers.authorization || '';
@@ -49,8 +62,9 @@ module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     return res.end(JSON.stringify({ ok: true, serverNow: Date.now(), docs: mapped }));
   } catch (e) {
-    res.statusCode = 500;
+    setCors(res);
+    res.statusCode = 503;
     res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ ok: false, error: 'Server error', details: String(e?.message || e) }));
+    return res.end(JSON.stringify({ ok: false, error: 'sync_unavailable', retryAfter: 30 }));
   }
 };

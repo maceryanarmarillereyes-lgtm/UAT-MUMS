@@ -125,9 +125,21 @@
 
     var state = el.querySelector('.state');
     if (state) {
-      state.textContent = (mode === 'realtime') ? 'Connected' : (mode === 'connecting') ? 'Connecting' : (mode === 'polling') ? 'Polling' : 'Offline';
+      state.textContent = (mode === 'realtime') ? 'Connected' : (mode === 'connecting') ? 'Connecting' : (mode === 'polling') ? 'Polling' : (mode === 'error') ? 'Offline ↺' : 'Offline';
     }
     if (detail) el.title = detail;
+    el.style.cursor = (mode === 'error') ? 'pointer' : '';
+    el.onclick = null;
+    if (mode === 'error') {
+      el.title = detail || 'Sync offline. Click to retry.';
+      el.onclick = function(){
+        try {
+          if (window.Realtime && typeof window.Realtime.forceReconnect === 'function') {
+            window.Realtime.forceReconnect();
+          }
+        } catch (_) {}
+      };
+    }
 
     // Mandatory realtime: block interactions unless connected.
     if (mode === 'realtime') setBlockerVisible(false);
