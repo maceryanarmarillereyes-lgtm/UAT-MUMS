@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   /**
-   * services-qb-lookup.js  v4.2  — BATCH + SAFE FALLBACK  (MACE CLEARED)
+   * services-qb-lookup.js  v4.3  — BATCH + SAFE FALLBACK  (MACE CLEARED)
    * ─────────────────────────────────────────────────────────────────────────
    * Free-Tier Safe Strategy:
    *
@@ -114,8 +114,10 @@
   var _cache         = {};   // nk → { fields, columnMap, at }
   var _notFound      = {};   // nk → timestamp  (only genuine misses)
   var _inFlight      = {};   // nk → Promise     (dedup concurrent fetches)
+  var _reportIdx     = null; // { byNk, at } one-shot fallback index from qb_data report mode
   var _CACHE_TTL     = 5 * 60 * 1000;
   var _NOT_FOUND_TTL = 30 * 1000;
+  var _REPORT_TTL    = 2 * 60 * 1000;
   var _BATCH_SIZE    = 50;
 
   // ── Rate limiter ──────────────────────────────────────────────────────────────
@@ -285,6 +287,73 @@
     });
   }
 
+  // ── _reportFallback ───────────────────────────────────────────────────────────
+  // Safety net when batch path reports "not found" for an entire chunk.
+  // Pulls one report snapshot (max 1000 rows on backend) and builds a local index.
+  // This avoids per-row overload while recovering from batch case-field mismatch.
+  function _reportFallback(nks) {
+    if (!nks || !nks.length) return Promise.resolve();
+    var now = Date.now();
+    if (_reportIdx && (now - _reportIdx.at) < _REPORT_TTL) {
+      nks.forEach(function (nk) {
+        if (_reportIdx.byNk[nk]) _cache[nk] = Object.assign({ at: now }, _reportIdx.byNk[nk]);
+      });
+      return Promise.resolve();
+    }
+
+    return apiHeadersAsync()
+      .then(function (headers) {
+        return _waitForGap().then(function () {
+          return fetch('/api/studio/qb_data', { headers: headers });
+        });
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || !data.ok || !Array.isArray(data.records) || !data.records.length) return;
+
+        var byNk = {};
+        var columns = Array.isArray(data.columns) ? data.columns : [];
+        var colMap = {};
+        columns.forEach(function (c) {
+          var id = String(c && c.id != null ? c.id : '').trim();
+          if (!id) return;
+          colMap[id] = String(c && c.label != null ? c.label : '').trim();
+        });
+
+        data.records.forEach(function (row) {
+          if (!row || typeof row !== 'object') return;
+          var rec = { fields: row, columnMap: colMap };
+          var keys = new Set();
+          Object.keys(row).forEach(function (fid) {
+            var cell = row[fid];
+            var val = cell && typeof cell === 'object' && 'value' in cell ? cell.value : cell;
+            var nk = normalizeCaseKey(val);
+            var label = String(colMap[fid] || '').toLowerCase();
+            if (!nk) return;
+            if (label.indexOf('case') !== -1) keys.add(nk);
+          });
+          // fallback if no labeled-case field found in this row
+          if (!keys.size) {
+            Object.keys(row).forEach(function (fid) {
+              var cell = row[fid];
+              var val = cell && typeof cell === 'object' && 'value' in cell ? cell.value : cell;
+              var nk = normalizeCaseKey(val);
+              if (nk) keys.add(nk);
+            });
+          }
+          keys.forEach(function (nk) {
+            if (!byNk[nk]) byNk[nk] = rec;
+          });
+        });
+
+        _reportIdx = { byNk: byNk, at: Date.now() };
+        nks.forEach(function (nk) {
+          if (byNk[nk]) _cache[nk] = Object.assign({ at: Date.now() }, byNk[nk]);
+        });
+      })
+      .catch(function () { /* silent: keeps original flow */ });
+  }
+
   // ── _processBatchPipeline ──────────────────────────────────────────────────────
   // Main pipeline: batch-fetch all nks in chunks of _BATCH_SIZE.
   // On transient failure: falls back to qb_search for that chunk.
@@ -306,6 +375,21 @@
             // QB API issue — use proven qb_search fallback for this chunk
             // Only for visible rows (chunk is already prioritized by caller)
             return _searchFallback(chunk);
+          }
+
+          var foundCount = Object.keys(result.found || {}).length;
+          var allMarkedNotFound = chunk.every(function (nk) {
+            return !!(result.notFound && result.notFound[nk]);
+          });
+          if (!foundCount && allMarkedNotFound) {
+            return _reportFallback(chunk).then(function () {
+              var probeNow = Date.now();
+              chunk.forEach(function (nk) {
+                if (_cache[nk] && (probeNow - _cache[nk].at) < _CACHE_TTL) {
+                  delete result.notFound[nk];
+                }
+              });
+            });
           }
 
           // Batch succeeded — write cache and genuine not-found entries.
@@ -727,6 +811,7 @@
       _notFound    = {};
       _inFlight    = {};
       _fieldsCache = null;
+      _reportIdx   = null;
     }
   };
 
