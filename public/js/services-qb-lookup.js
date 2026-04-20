@@ -64,12 +64,21 @@
   var _recordCache  = {};  // caseNum → { fields, columnMap, at }
   var _notFound     = {};  // caseNum → timestamp
   var _RECORD_TTL   = 5 * 60 * 1000;
-  var _NOT_FOUND_TTL = 10 * 60 * 1000;
+  // Keep not-found cache short so backend fixes / QB sync do not stay stale
+  // in the browser for long periods.
+  var _NOT_FOUND_TTL = 60 * 1000;
 
   // ── Batch fetch engine ────────────────────────────────────────────────────────
   var _BATCH_SIZE        = 100;
   var _BATCH_CONCURRENCY = 2;
   var _batchInFlight = {};
+
+  function _resolveLinkedFieldId(col) {
+    if (!col || !col.qbLookup) return '';
+    var raw = col.qbLookup.fieldId;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) raw = raw.fieldId;
+    return String(raw == null ? '' : raw).trim();
+  }
 
   function _chunkArray(arr, size) {
     var chunks = [];
@@ -89,13 +98,17 @@
       .then(function (data) {
         if (!data || !data.ok) return {};
         var recs = data.records || {};
+        var hasTransientError = !!(data.transientError || data.error);
         Object.keys(recs).forEach(function (caseNum) {
           var rec = { fields: recs[caseNum].fields || {}, columnMap: recs[caseNum].columnMap || {}, at: Date.now() };
           _recordCache[caseNum] = rec;
+          delete _notFound[caseNum];
         });
-        (data.notFound || []).forEach(function (caseNum) {
-          _notFound[caseNum] = Date.now();
-        });
+        if (!hasTransientError) {
+          (data.notFound || []).forEach(function (caseNum) {
+            _notFound[caseNum] = Date.now();
+          });
+        }
         return recs;
       })
       .catch(function () { return {}; })
@@ -152,7 +165,7 @@
     if (!current || !gridEl) return;
     var cols = current.sheet.column_defs || [];
 
-    var linkedCols = cols.filter(function (c) { return c.qbLookup && c.qbLookup.fieldId; });
+    var linkedCols = cols.filter(function (c) { return !!_resolveLinkedFieldId(c); });
     if (!linkedCols.length) return;
 
     var caseCol = cols[0];
@@ -227,7 +240,7 @@
             return;
           }
 
-          var fid       = String(col.qbLookup.fieldId);
+          var fid       = _resolveLinkedFieldId(col);
           var fieldCell = rec.fields[fid];
           var value     = fieldCell ? String(fieldCell.value != null ? fieldCell.value : '') : '';
 
@@ -287,7 +300,7 @@
 
     var col            = opts.cols && opts.cols[opts.colIdx];
     var colLabel       = col ? col.label : 'Column';
-    var currentFieldId = col && col.qbLookup ? String(col.qbLookup.fieldId) : null;
+    var currentFieldId = col && col.qbLookup ? _resolveLinkedFieldId(col) : null;
     var currentLabel   = col && col.qbLookup ? col.qbLookup.fieldLabel : null;
 
     var overlay = el('div', 'qb-fp-overlay');
