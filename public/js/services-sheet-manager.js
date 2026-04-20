@@ -49,9 +49,17 @@
 
       const el = document.createElement('div');
       el.className = 'svc-sheet-item' + (s.id === activeId ? ' active' : '');
+      var mainCount = '';
+      try {
+        if (window.servicesTreeview && typeof window.servicesTreeview.countMain === 'function') {
+          var c = window.servicesTreeview.countMain(s.id);
+          if (c != null) mainCount = String(c);
+        }
+      } catch (_) {}
       el.innerHTML =
         `<span class="icon">${s.icon || '📄'}</span>` +
         `<span class="title">${eh(s.title)}</span>` +
+        `<span class="svc-sheet-count svc-tv-count" data-sheet-id="${s.id}" style="${mainCount ? '' : 'display:none;'}">${mainCount}</span>` +
         `<span class="menu" data-id="${s.id}" title="Options (or right-click)">⋯</span>`;
 
       el.addEventListener('click', (e) => {
