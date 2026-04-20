@@ -212,7 +212,9 @@
               loadScript('/js/services-import.js', function () {
                 loadScript('/js/services-sheet-manager.js', function () {
                   loadScript('/js/services-treeview.js', function () {
-                    loadScript('/js/services.js');
+                    loadScript('/js/services-conditional-format.js', function () {
+                      loadScript('/js/services.js');
+                    });
                   });
                 });
               });

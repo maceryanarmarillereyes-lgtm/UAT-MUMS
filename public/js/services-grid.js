@@ -454,8 +454,18 @@
               alert('QB Lookup module not loaded. Please refresh.');
             }
           } else if (action === 'conditional-format') {
-            alert('Conditional Formatting — coming soon.');
             closeAllCtxMenus();
+            var cfCol = cols[colIdx];
+            if (window.svcConditionalFormat) {
+              window.svcConditionalFormat.open(
+                colIdx,
+                cfCol.key,
+                cfCol.label || ('Column ' + (colIdx + 1)),
+                cfCol.conditionalRules || []
+              );
+            } else {
+              window.svcToast && window.svcToast.show('error', 'Conditional Formatting', 'Module not loaded. Please refresh.');
+            }
           } else if (action === 'data-validation') {
             closeAllCtxMenus();
             var currentRules = cols[colIdx] && cols[colIdx].validation;

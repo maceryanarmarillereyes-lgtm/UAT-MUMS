@@ -61,6 +61,19 @@ The Services workspace is a spreadsheet-style module for authenticated users, ba
 - Rows, columns, fill %, updated time.
 - Recent row activity list.
 
+### H) Conditional Formatting (per column)
+- Rules stored in `column_defs[n].conditionalRules[]` — persisted via `servicesDB.updateColumns()`.
+- Five format types: Single Color, Color Scale, Data Bar, Icon Set, Custom Formula.
+- Single Color operators: text (contains/not contains/starts/ends/eq/neq/empty/not_empty), number (eq/neq/gt/gte/lt/lte/between/not_between), date (today/tomorrow/yesterday/past week/past month/before/after/exact), duplicate/unique.
+- Color Scale: 3-stop (min/mid/max) color interpolation across numeric column values.
+- Data Bar: proportional bar fill overlay with configurable bar color.
+- Icon Set: 6 presets (Traffic Lights, Arrows, Stars, Check Marks, Flags, Numbers) applied by value percentile.
+- Custom Formula: JS-expression evaluator using VALUE and ROW variables.
+- Style options: background color (palette + custom hex), text color (palette + custom hex), bold, italic, strikethrough, underline.
+- Rule priority: first matching rule wins (for single_color/formula/icon/data_bar). Color scale applies independently.
+- `paintGrid()` fires after every `render()` via a one-time hook on `window.servicesGrid.load` and `.render`.
+- Modal: `#svcCfModal` — enterprise 2-pane layout (rule list left, editor right). CSS scoped to `.svc-cf-*` / `.cf-rule-*`.
+
 ---
 
 ## 3) File-by-File Mapping
@@ -91,6 +104,9 @@ The Services workspace is a spreadsheet-style module for authenticated users, ba
   - Toast system + import modal pipeline (xlsx/csv parse, map, preview, bulk write).
 - `public/js/services-dashboard.js`
   - Right sidebar KPI/activity widgets.
+- `public/js/services-conditional-format.js`
+  - Conditional Formatting engine. Modal build, rule CRUD, evaluation engine, `paintGrid()` painter.
+  - Exposes `window.svcConditionalFormat = { open, paint, close }`.
 
 ## Styling
 - `public/css/services.css`
@@ -183,4 +199,10 @@ If step #3 is missing, task is incomplete.
   - **Fix 3 — Parallel batch pipeline (1-2s load):** Replaced sequential `chunks.reduce()` with parallel pipeline (`MAX_CONCURRENT=3`). Extracted `_processOneChunk()`. Added `_urgentMode` flag that drops rate gate from 200ms → 50ms during Update. Result: 520 rows in ~4 parallel rounds × ~400ms QB latency = 1.6s vs 5–8s before.
   - **Fix 4 — Row number click → Case Detail Modal:** Added `_initSvcCaseDetailModal()` IIFE in `services-grid.js`. LEFT-click on any row number opens a self-contained case detail overlay (`#svcCaseDetailModal` in `services.html`). Calls `svcQbLookup.lookupCase()` → cache-first, then QB fetch. Shows KB field groups (Assignment, Classification, Notes, Latest Update, Extra Fields) matching the my_quickbase deep-search case view design. Full CSS added to `services.css` under `svc-qbcd-*` scope.
   - **Files changed:** `server/routes/studio/qb_data.js`, `public/js/services-qb-lookup.js`, `public/js/services-grid.js`, `public/services.html`, `public/css/services.css`.
+
+- **2026-04-21 (CF)** — Conditional Formatting engine implemented (MACE CLEARED):
+  - **New File — `public/js/services-conditional-format.js`:** Complete Google Sheets-accurate CF engine. Supports: Single Color (text/number/date/duplicate operators), Color Scale (3-stop gradient), Data Bar (bar fill overlay), Icon Set (6 presets), Custom Formula (JS-expression evaluator). Rules persisted in `column_defs[n].conditionalRules[]` via `servicesDB.updateColumns()`. `paintGrid()` is called after every `render()` via hook. Modal scoped to `#svcCfModal` / `.svc-cf-*` / `.cf-rule-*` — zero conflict with existing DOM.
+  - **Edit — `public/js/services-grid.js`:** Replaced `alert('Conditional Formatting — coming soon.')` with `window.svcConditionalFormat.open(colIdx, key, label, existingRules)` call.
+  - **Edit — `public/services.html`:** Added `services-conditional-format.js` to boot chain (loads after treeview, before services.js).
+  - **Edit — `public/css/services.css`:** Appended `CONDITIONAL FORMATTING — Enterprise UI v1.0` block (~350 lines). Scoped to `#svcCfModal`, `.svc-cf-*`, `.cf-rule-*`. Zero override of existing rules.
 
