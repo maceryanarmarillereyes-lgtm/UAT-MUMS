@@ -94,13 +94,17 @@
       .then(function (data) {
         if (!data || !data.ok) return {};
         var recs = data.records || {};
+        var hasTransientError = !!(data.transientError || data.error);
         Object.keys(recs).forEach(function (caseNum) {
           var rec = { fields: recs[caseNum].fields || {}, columnMap: recs[caseNum].columnMap || {}, at: Date.now() };
           _recordCache[caseNum] = rec;
+          delete _notFound[caseNum];
         });
-        (data.notFound || []).forEach(function (caseNum) {
-          _notFound[caseNum] = Date.now();
-        });
+        if (!hasTransientError) {
+          (data.notFound || []).forEach(function (caseNum) {
+            _notFound[caseNum] = Date.now();
+          });
+        }
         return recs;
       })
       .catch(function () { return {}; })

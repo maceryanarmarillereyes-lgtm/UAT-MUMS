@@ -325,16 +325,15 @@ module.exports = async (req, res) => {
 
         const pendingIds = new Set(toFetch);
         const foundIds = new Set();
+        let hadSuccessfulQbQuery = false;
         try {
           for (const caseFieldId of caseFieldCandidates) {
             if (pendingIds.size === 0) break;
             const idsForThisPass = Array.from(pendingIds);
             const clauses = idsForThisPass.map(id => `{${caseFieldId}.EX.'${encLit(id)}'}`);
-            // FIX-1: QB requires spaces around OR — missing space caused silent QB query failure
-            const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join(' OR ')})`;
+            const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join('OR')})`;
             const body = { from: tableId, where: whereClause, options: { top: 100 } };
-            // FIX-2: QB select array capped at 30 fields — exceeding silently drops entire request
-            if (allFieldIds.length) body.select = allFieldIds.slice(0, 30);
+            if (allFieldIds.length) body.select = allFieldIds;
 
             const resp = await fetch('https://api.quickbase.com/v1/records/query', {
               method: 'POST',
@@ -342,6 +341,7 @@ module.exports = async (req, res) => {
               body: JSON.stringify(body),
             });
             if (!resp.ok) continue;
+            hadSuccessfulQbQuery = true;
 
             const json       = await resp.json().catch(() => ({}));
             const rows       = Array.isArray(json.data)   ? json.data   : [];
@@ -349,16 +349,7 @@ module.exports = async (req, res) => {
 
             rows.forEach(row => {
               const caseCell  = row[String(caseFieldId)];
-              // FIX-3: QB REST always wraps values as {value: X} — extract robustly
-              let rawCaseVal = '';
-              if (caseCell !== null && caseCell !== undefined) {
-                if (typeof caseCell === 'object' && 'value' in caseCell) {
-                  rawCaseVal = caseCell.value;
-                } else {
-                  rawCaseVal = caseCell;
-                }
-              }
-              const caseValue = normalizeQbValue(rawCaseVal);
+              const caseValue = caseCell ? normalizeQbValue(typeof caseCell === 'object' && 'value' in caseCell ? caseCell.value : caseCell) : '';
               const caseKey   = normalizeCaseKey(caseValue);
               if (!caseKey) return;
 
@@ -375,14 +366,20 @@ module.exports = async (req, res) => {
             });
           }
 
-          toFetch.forEach(id => {
-            if (!foundIds.has(id)) {
-              notFound.push(id);
-              BATCH_CACHE.set(`${batchCachePrefix}:${id}`, { at: Date.now(), value: null });
-            }
-          });
+          // Only mark as not found after at least one successful QB query.
+          // If QB is temporarily failing, avoid poisoning cache with false misses.
+          if (hadSuccessfulQbQuery) {
+            toFetch.forEach(id => {
+              if (!foundIds.has(id)) {
+                notFound.push(id);
+                BATCH_CACHE.set(`${batchCachePrefix}:${id}`, { at: Date.now(), value: null });
+              }
+            });
+          } else {
+            return sendJson(res, 200, { ok: true, records: result, notFound, transientError: 'qb_query_failed' });
+          }
         } catch (err) {
-          return sendJson(res, 200, { ok: true, records: result, notFound: [...notFound, ...toFetch], error: String(err?.message || err) });
+          return sendJson(res, 200, { ok: true, records: result, notFound, transientError: String(err?.message || err) });
         }
       }
 
