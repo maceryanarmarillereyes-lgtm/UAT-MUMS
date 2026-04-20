@@ -63,16 +63,28 @@
   function applyGridFilter(folderId, sheetId) {
     if (!window.servicesGrid) return;
     var folders = _cache[sheetId] || [];
+    if (folderId === '__main__') {
+      var stateMain = window.servicesGrid.getState && window.servicesGrid.getState();
+      var colsMain = stateMain && stateMain.sheet && stateMain.sheet.column_defs;
+      var matchers = folders
+        .filter(function (f) { return !!(f && f.condition_field); })
+        .map(function (f) { return buildFolderMatcher(f, colsMain); })
+        .filter(Boolean);
+      window.servicesGrid.setTreeFilter(function (row) {
+        if (!matchers.length) return true; // no folders = main shows all
+        return !matchers.some(function (fn) { return fn(row); });
+      });
+      return;
+    }
+
     var folder  = folders.find(function (f) { return f.id === folderId; });
     if (!folderId || !folder || !folder.condition_field) {
       window.servicesGrid.setTreeFilter(null);
       return;
     }
     var state = window.servicesGrid.getState && window.servicesGrid.getState();
-    var resolvedField = resolveConditionField(folder.condition_field, state && state.sheet && state.sheet.column_defs);
-    window.servicesGrid.setTreeFilter(function (row) {
-      return matchCondition(row.data || {}, resolvedField, folder.condition_op || 'eq', folder.condition_value);
-    });
+    var matcher = buildFolderMatcher(folder, state && state.sheet && state.sheet.column_defs);
+    window.servicesGrid.setTreeFilter(matcher || null);
   }
 
   // ── Count matching rows for a folder (for badges) ───────────────────────────
@@ -99,6 +111,14 @@
     });
     if (byLabel && byLabel.key) return byLabel.key;
     return want;
+  }
+
+  function buildFolderMatcher(folder, columnDefs) {
+    if (!folder || !folder.condition_field) return null;
+    var resolvedField = resolveConditionField(folder.condition_field, columnDefs);
+    return function (row) {
+      return matchCondition(row && row.data ? row.data : {}, resolvedField, folder.condition_op || 'eq', folder.condition_value);
+    };
   }
 
   // ── Render treeview nodes for one sheet ─────────────────────────────────────
@@ -724,11 +744,11 @@
      */
     onSheetOpened(sheetId) {
       _activeSheetId  = sheetId;
-      _activeFolderId = null;
-      window.servicesGrid && window.servicesGrid.setTreeFilter(null);
+      _activeFolderId = '__main__';
+      applyGridFilter('__main__', sheetId);
       document.querySelectorAll('.svc-tv-node').forEach(function (n) {
         n.classList.toggle('svc-tv-active',
-          n.dataset.sheetId === sheetId && n.dataset.folderId === '__all__');
+          n.dataset.sheetId === sheetId && n.dataset.folderId === '__main__');
       });
     },
 
