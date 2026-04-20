@@ -21,6 +21,7 @@
   var _activeFolderId = null;   // null → "All Records"
   var _ctxMenu        = null;   // currently open context menu DOM node
   var _modal          = null;   // currently open modal
+  var _loadTokens     = {};     // sheetId -> latest render token
 
   // ── Condition operators ──────────────────────────────────────────────────────
   var OPS = [
@@ -643,8 +644,14 @@
      * Called by sheet-manager after creating the tree container for a sheet.
      */
     async loadAndRender(sheetId, containerEl) {
+      var sid = String(sheetId);
+      var token = Date.now() + ':' + Math.random().toString(36).slice(2);
+      _loadTokens[sid] = token;
       await loadFolders(sheetId);
-      renderTree(sheetId, containerEl);
+      if (_loadTokens[sid] !== token) return;
+      var liveContainer = document.querySelector('.svc-tv-container[data-sheet-id="' + sid + '"]') || containerEl;
+      if (!liveContainer || !liveContainer.isConnected) return;
+      renderTree(sheetId, liveContainer);
     },
 
     /**

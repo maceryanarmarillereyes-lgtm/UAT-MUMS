@@ -726,18 +726,32 @@
     render();
   });
 
-  exportBtn.addEventListener('click', function () {
+  exportBtn.addEventListener('click', async function () {
     if (!current) return;
-    var cols   = current.sheet.column_defs;
-    var header = cols.map(function (c) { return JSON.stringify(c.label); }).join(',');
-    var lines  = current.rows
-      .sort(function (a, b) { return a.row_index - b.row_index; })
-      .map(function (r) {
-        return cols.map(function (c) { return JSON.stringify(r.data[c.key] != null ? r.data[c.key] : ''); }).join(',');
-      });
-    var blob = new Blob([header + '\n' + lines.join('\n')], { type: 'text/csv' });
-    var a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: current.sheet.title + '.csv' });
-    document.body.appendChild(a); a.click(); a.remove();
+    exportBtn.disabled = true;
+    var originalText = exportBtn.textContent;
+    exportBtn.textContent = '⏳ Exporting…';
+    try {
+      if (window.svcQbLookup && window.svcQbLookup.hydrateLinkedColumnsForExport) {
+        await window.svcQbLookup.hydrateLinkedColumnsForExport(current, grid);
+      }
+      await saveAllRows();
+      var cols   = current.sheet.column_defs;
+      var header = cols.map(function (c) { return JSON.stringify(c.label); }).join(',');
+      var lines  = current.rows
+        .sort(function (a, b) { return a.row_index - b.row_index; })
+        .map(function (r) {
+          return cols.map(function (c) { return JSON.stringify(r.data[c.key] != null ? r.data[c.key] : ''); }).join(',');
+        });
+      var blob = new Blob([header + '\n' + lines.join('\n')], { type: 'text/csv' });
+      var a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: current.sheet.title + '.csv' });
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (err) {
+      window.svcToast && window.svcToast.show('error', 'Export Failed', err && err.message ? err.message : 'Try again.');
+    } finally {
+      exportBtn.disabled = false;
+      exportBtn.textContent = originalText;
+    }
   });
 
   undoBtn.addEventListener('click', function () {
