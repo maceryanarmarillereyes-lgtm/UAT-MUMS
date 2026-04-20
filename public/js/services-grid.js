@@ -391,11 +391,24 @@
                 colIdx: colIdx,
                 cols  : cols,
                 onSelect: async function (fieldId, fieldLabel) {
-                  if (fieldId === null) {
+                  // Backward/forward compatible payload handling:
+                  // - legacy: onSelect(fieldId, fieldLabel)
+                  // - current picker: onSelect({ fieldId, fieldLabel })
+                  var selectedFieldId = fieldId;
+                  var selectedFieldLabel = fieldLabel;
+                  if (fieldId && typeof fieldId === 'object' && !Array.isArray(fieldId)) {
+                    selectedFieldId = fieldId.fieldId;
+                    selectedFieldLabel = fieldId.fieldLabel;
+                  }
+
+                  if (selectedFieldId === null) {
                     // Unlink
                     delete cols[colIdx].qbLookup;
                   } else {
-                    cols[colIdx].qbLookup = { fieldId: fieldId, fieldLabel: fieldLabel };
+                    cols[colIdx].qbLookup = {
+                      fieldId: String(selectedFieldId || '').trim(),
+                      fieldLabel: String(selectedFieldLabel || selectedFieldId || '').trim()
+                    };
                   }
                   await window.servicesDB.updateColumns(current.sheet.id, cols);
                   render();

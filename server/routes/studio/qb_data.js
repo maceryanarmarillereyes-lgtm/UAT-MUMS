@@ -286,36 +286,35 @@ module.exports = async (req, res) => {
           ? (fieldsOut.fields || []).map(f => ({ id: Number(f?.id), label: String(f?.label || '') })).filter(f => Number.isFinite(f.id))
           : [];
 
-        const body = { from: tableId, where: whereClause, options: { top: 50 } };
-        if (allFieldIds.length) body.select = allFieldIds;
-
-        let hadQbError = false;
+        const pendingIds = new Set(toFetch);
+        const foundIds = new Set();
+        let hadSuccessfulQbQuery = false;
         try {
-          const resp = await fetch('https://api.quickbase.com/v1/records/query', {
-            method: 'POST',
-            headers: { 'QB-Realm-Hostname': realm, Authorization: `QB-USER-TOKEN ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          });
+          for (const caseFieldId of caseFieldCandidates) {
+            if (pendingIds.size === 0) break;
+            const idsForThisPass = Array.from(pendingIds);
+            const clauses = idsForThisPass.map(id => `{${caseFieldId}.EX.'${encLit(id)}'}`);
+            const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join('OR')})`;
+            const body = { from: tableId, where: whereClause, options: { top: 100 } };
+            if (allFieldIds.length) body.select = allFieldIds;
 
-          if (!resp.ok) {
-            hadQbError = true;
-            return sendJson(res, 200, { ok: true, records: result, notFound: [...notFound, ...toFetch], transientError: true });
-          }
+            const resp = await fetch('https://api.quickbase.com/v1/records/query', {
+              method: 'POST',
+              headers: { 'QB-Realm-Hostname': realm, Authorization: `QB-USER-TOKEN ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            if (!resp.ok) continue;
+            hadSuccessfulQbQuery = true;
 
           const json       = await resp.json().catch(() => ({}));
           const rows       = Array.isArray(json.data)   ? json.data   : [];
           const fieldsMeta = Array.isArray(json.fields) ? json.fields : allFieldMeta;
 
-          // Build a lookup map: normalized QB case value → row record
-          const foundIds = new Set();
-          rows.forEach(row => {
-            const caseCell  = row[String(caseFieldId)];
-            const rawVal    = caseCell
-              ? (typeof caseCell === 'object' && 'value' in caseCell ? caseCell.value : caseCell)
-              : '';
-            // *** FIX: normalize QB's returned value the same way we normalize the request IDs ***
-            const caseValue = normalizeCaseKey(normalizeQbValue(rawVal));
-            if (!caseValue) return;
+            rows.forEach(row => {
+              const caseCell  = row[String(caseFieldId)];
+              const caseValue = caseCell ? normalizeQbValue(typeof caseCell === 'object' && 'value' in caseCell ? caseCell.value : caseCell) : '';
+              const caseKey   = normalizeCaseKey(caseValue);
+              if (!caseKey) return;
 
             const { fieldValues, columnMap } = buildFieldMap(row, fieldsMeta);
             const rec = { fields: fieldValues, columnMap };
@@ -329,17 +328,20 @@ module.exports = async (req, res) => {
             }
           });
 
-          // Only mark as not-found if QB responded successfully (no transient error)
-          toFetch.forEach(id => {
-            if (!foundIds.has(id)) {
-              notFound.push(id);
-              // Short TTL sentinel (2 min) — avoids stale not-found if QB data is updated
-              BATCH_CACHE.set(`${batchCachePrefix}:${id}`, { at: Date.now() - (CACHE_TTL_MS - 2 * 60 * 1000), value: null });
-            }
-          });
+          // Only mark as not found after at least one successful QB query.
+          // If QB is temporarily failing, avoid poisoning cache with false misses.
+          if (hadSuccessfulQbQuery) {
+            toFetch.forEach(id => {
+              if (!foundIds.has(id)) {
+                notFound.push(id);
+                BATCH_CACHE.set(`${batchCachePrefix}:${id}`, { at: Date.now(), value: null });
+              }
+            });
+          } else {
+            return sendJson(res, 200, { ok: true, records: result, notFound, transientError: 'qb_query_failed' });
+          }
         } catch (err) {
-          // Network/parse error — do NOT mark as not-found; let client retry
-          return sendJson(res, 200, { ok: true, records: result, notFound: [...notFound], transientError: true, error: String(err?.message || err) });
+          return sendJson(res, 200, { ok: true, records: result, notFound, transientError: String(err?.message || err) });
         }
       }
 

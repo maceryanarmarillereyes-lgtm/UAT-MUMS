@@ -70,16 +70,10 @@
   var _BATCH_CONCURRENCY = 2;
   var _batchInFlight = {};
 
-  // ── FIX: resolve fieldId from any stored format ───────────────────────────────
-  // Handles: "123", 123, { fieldId: "123" }, { fieldId: { fieldId: "123" } }
   function _resolveLinkedFieldId(col) {
     if (!col || !col.qbLookup) return '';
     var raw = col.qbLookup.fieldId;
-    // Unwrap nested object (defensive — handles double-wrap edge case)
-    var safety = 0;
-    while (raw && typeof raw === 'object' && !Array.isArray(raw) && safety++ < 5) {
-      raw = raw.fieldId || raw.id || '';
-    }
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) raw = raw.fieldId;
     return String(raw == null ? '' : raw).trim();
   }
 
@@ -87,15 +81,15 @@
     var list = Array.isArray(cols) ? cols : [];
     if (!list.length) return null;
     function norm(v) { return String(v || '').trim().toLowerCase(); }
-    function isExact(v) {
+    function isExactCaseLabel(v) {
       var n = norm(v);
       return n === 'case#' || n === 'case #' || n === 'case number' || n === 'case no' || n === 'case id';
     }
-    var exact  = list.find(function (c) { return isExact(c && c.label); });
+    var exact = list.find(function (c) { return isExactCaseLabel(c && c.label); });
     if (exact) return exact;
-    var byLbl  = list.find(function (c) { return norm(c && c.label).indexOf('case') !== -1; });
-    if (byLbl) return byLbl;
-    var byKey  = list.find(function (c) { return norm(c && c.key).indexOf('case') !== -1; });
+    var byLabel = list.find(function (c) { return norm(c && c.label).indexOf('case') !== -1; });
+    if (byLabel) return byLabel;
+    var byKey = list.find(function (c) { return norm(c && c.key).indexOf('case') !== -1; });
     if (byKey) return byKey;
     return list[0] || null;
   }
@@ -115,21 +109,17 @@
       .then(function (data) {
         if (!data || !data.ok) return {};
         var recs = data.records || {};
-        var isTransient = !!(data.transientError || data.error);
-
+        var hasTransientError = !!(data.transientError || data.error);
         Object.keys(recs).forEach(function (caseNum) {
           var normKey = normalizeCaseKey(caseNum);
           if (!normKey) return;
           var rec = { fields: recs[caseNum].fields || {}, columnMap: recs[caseNum].columnMap || {}, at: Date.now() };
-          _recordCache[normKey] = rec;
-          delete _notFound[normKey];
+          _recordCache[caseNum] = rec;
+          delete _notFound[caseNum];
         });
-
-        // Only cache not-found if QB confirmed it — not on transient errors
-        if (!isTransient) {
+        if (!hasTransientError) {
           (data.notFound || []).forEach(function (caseNum) {
-            var normKey = normalizeCaseKey(caseNum);
-            if (normKey) _notFound[normKey] = Date.now();
+            _notFound[caseNum] = Date.now();
           });
         }
         return recs;
@@ -259,7 +249,6 @@
             return;
           }
 
-          // *** FIX: use _resolveLinkedFieldId() — handles all stored fieldId formats ***
           var fid       = _resolveLinkedFieldId(col);
           var fieldCell = rec.fields[fid];
           var value     = fieldCell ? String(fieldCell.value != null ? fieldCell.value : '') : '';
