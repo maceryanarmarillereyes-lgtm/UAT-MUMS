@@ -1,20 +1,11 @@
 (function () {
   'use strict';
-  // ─────────────────────────────────────────────────────────────────────────────
-  // services-qb-lookup.js  v2.0 — QB Field Selector + Batch Auto-populate Engine
-  // ─────────────────────────────────────────────────────────────────────────────
-  // BATCH REFACTOR (MACE CLEARED 2026-04-19):
-  //   v1.0: 1 HTTP request per row → 500+ concurrent QB hits → mass 500 errors
-  //   v2.0: Collect ALL unique Case #s → chunk 100/req → 2 concurrent batches
-  //         ~6 total requests for 522 rows instead of 522 individual requests.
-  //
-  // Public API (window.svcQbLookup) — unchanged interface:
-  //   .openFieldPicker({ colIdx, cols, onSelect })
-  //   .autofillLinkedColumns(current, gridEl)
-  //   .clearCache()
-  // ─────────────────────────────────────────────────────────────────────────────
+  // services-qb-lookup.js v2.1 — QB Field Selector + Batch Auto-populate Engine
+  // FIX 2026-04-20:
+  //   - _resolveLinkedFieldId: handles all stored formats (string, number, nested obj)
+  //   - normalizeCaseKey: applied client-side before cache lookup & fetch
+  //   - _NOT_FOUND_TTL reduced to 30s so retries happen quickly after QB recovers
 
-  // ── JWT helper ────────────────────────────────────────────────────────────────
   function getJwt() {
     var LS = 'mums_supabase_session';
     var sources = [
@@ -39,7 +30,16 @@
     return jwt ? { Authorization: 'Bearer ' + jwt } : {};
   }
 
-  // ── Fields cache (client-side 5 min) ─────────────────────────────────────────
+  // ── Client-side case key normalization (mirrors server normalizeCaseKey) ──────
+  function normalizeCaseKey(v) {
+    var raw = String(v == null ? '' : v).trim();
+    if (!raw) return '';
+    var compact = raw.replace(/,/g, '');
+    if (/^\d+(?:\.0+)?$/.test(compact)) return String(Number(compact));
+    return compact;
+  }
+
+  // ── Fields cache (5 min) ──────────────────────────────────────────────────────
   var _fieldsCache = null;
   var _FIELDS_TTL  = 5 * 60 * 1000;
 
@@ -61,20 +61,44 @@
   }
 
   // ── Per-record client cache ───────────────────────────────────────────────────
-  var _recordCache  = {};  // caseNum → { fields, columnMap, at }
-  var _notFound     = {};  // caseNum → timestamp
+  var _recordCache  = {};  // normalizedCaseKey → { fields, columnMap, at }
+  var _notFound     = {};  // normalizedCaseKey → timestamp
   var _RECORD_TTL   = 5 * 60 * 1000;
-  // Keep not-found cache short so backend fixes / QB sync do not stay stale
-  // in the browser for long periods.
-  var _NOT_FOUND_TTL = 60 * 1000;
+  var _NOT_FOUND_TTL = 30 * 1000; // 30s — retry quickly so QB data is fresh
 
-  // ── Batch fetch engine ────────────────────────────────────────────────────────
-  // FIX: Reduced from 100 to 50 — QB WHERE clause with 100 EX conditions can
-  // exceed QB's 4096-char limit for longer case numbers. 50 is safe and still
-  // results in only ~11 requests for 522 rows (vs 1 with 100, but safer).
   var _BATCH_SIZE        = 50;
   var _BATCH_CONCURRENCY = 2;
   var _batchInFlight = {};
+
+  // ── FIX: resolve fieldId from any stored format ───────────────────────────────
+  // Handles: "123", 123, { fieldId: "123" }, { fieldId: { fieldId: "123" } }
+  function _resolveLinkedFieldId(col) {
+    if (!col || !col.qbLookup) return '';
+    var raw = col.qbLookup.fieldId;
+    // Unwrap nested object (defensive — handles double-wrap edge case)
+    var safety = 0;
+    while (raw && typeof raw === 'object' && !Array.isArray(raw) && safety++ < 5) {
+      raw = raw.fieldId || raw.id || '';
+    }
+    return String(raw == null ? '' : raw).trim();
+  }
+
+  function _resolveCaseColumn(cols) {
+    var list = Array.isArray(cols) ? cols : [];
+    if (!list.length) return null;
+    function norm(v) { return String(v || '').trim().toLowerCase(); }
+    function isExact(v) {
+      var n = norm(v);
+      return n === 'case#' || n === 'case #' || n === 'case number' || n === 'case no' || n === 'case id';
+    }
+    var exact  = list.find(function (c) { return isExact(c && c.label); });
+    if (exact) return exact;
+    var byLbl  = list.find(function (c) { return norm(c && c.label).indexOf('case') !== -1; });
+    if (byLbl) return byLbl;
+    var byKey  = list.find(function (c) { return norm(c && c.key).indexOf('case') !== -1; });
+    if (byKey) return byKey;
+    return list[0] || null;
+  }
 
   function _chunkArray(arr, size) {
     var chunks = [];
@@ -87,20 +111,27 @@
     if (_batchInFlight[key]) return _batchInFlight[key];
 
     var p = fetch('/api/studio/qb_data?recordIds=' + encodeURIComponent(ids.join(',')), { headers: apiHeaders() })
-      .then(function (r) {
-        if (!r.ok) return null;
-        return r.json();
-      })
+      .then(function (r) { if (!r.ok) return null; return r.json(); })
       .then(function (data) {
         if (!data || !data.ok) return {};
         var recs = data.records || {};
+        var isTransient = !!(data.transientError || data.error);
+
         Object.keys(recs).forEach(function (caseNum) {
+          var normKey = normalizeCaseKey(caseNum);
+          if (!normKey) return;
           var rec = { fields: recs[caseNum].fields || {}, columnMap: recs[caseNum].columnMap || {}, at: Date.now() };
-          _recordCache[caseNum] = rec;
+          _recordCache[normKey] = rec;
+          delete _notFound[normKey];
         });
-        (data.notFound || []).forEach(function (caseNum) {
-          _notFound[caseNum] = Date.now();
-        });
+
+        // Only cache not-found if QB confirmed it — not on transient errors
+        if (!isTransient) {
+          (data.notFound || []).forEach(function (caseNum) {
+            var normKey = normalizeCaseKey(caseNum);
+            if (normKey) _notFound[normKey] = Date.now();
+          });
+        }
         return recs;
       })
       .catch(function () { return {}; })
@@ -112,8 +143,7 @@
 
   function _runBatchesWithConcurrency(chunks, onChunkDone) {
     if (!chunks.length) return Promise.resolve();
-    var idx     = 0;
-    var running = 0;
+    var idx = 0, running = 0;
     return new Promise(function (resolve) {
       function next() {
         while (running < _BATCH_CONCURRENCY && idx < chunks.length) {
@@ -132,24 +162,22 @@
   }
 
   function fetchManyRecords(caseNums, onProgress) {
-    var toFetch = caseNums.filter(function (k) {
-      if (!k) return false;
-      var cached = _recordCache[k];
-      if (cached && (Date.now() - cached.at) < _RECORD_TTL) return false;
-      var nf = _notFound[k];
-      if (nf && (Date.now() - nf) < _NOT_FOUND_TTL) return false;
-      return true;
+    // Normalize all keys before checking cache
+    var toFetch = [];
+    var seen    = {};
+    caseNums.forEach(function (k) {
+      var nk = normalizeCaseKey(k);
+      if (!nk || seen[nk]) return;
+      seen[nk] = true;
+      if (_recordCache[nk] && (Date.now() - _recordCache[nk].at) < _RECORD_TTL) return;
+      if (_notFound[nk]    && (Date.now() - _notFound[nk])    < _NOT_FOUND_TTL) return;
+      toFetch.push(nk);
     });
-
-    var seen = {};
-    toFetch = toFetch.filter(function (k) { if (seen[k]) return false; seen[k] = true; return true; });
-
     if (!toFetch.length) return Promise.resolve();
     var chunks = _chunkArray(toFetch, _BATCH_SIZE);
     return _runBatchesWithConcurrency(chunks, onProgress);
   }
 
-  // ── Auto-fill engine ──────────────────────────────────────────────────────────
   var _autofillTimer = null;
   var _autofillAbort = null;
 
@@ -157,10 +185,10 @@
     if (!current || !gridEl) return;
     var cols = current.sheet.column_defs || [];
 
-    var linkedCols = cols.filter(function (c) { return c.qbLookup && c.qbLookup.fieldId; });
+    var linkedCols = cols.filter(function (c) { return !!_resolveLinkedFieldId(c); });
     if (!linkedCols.length) return;
 
-    var caseCol = cols[0];
+    var caseCol = _resolveCaseColumn(cols);
     if (!caseCol) return;
 
     var rowsWithCase = current.rows.filter(function (r) {
@@ -180,20 +208,18 @@
         linkedCols.forEach(function (col) {
           var inp = gridEl.querySelector('input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]');
           if (!inp || inp.classList.contains('cell-qb-linked')) return;
-          var caseNum = String(row.data[caseCol.key] || '').trim();
-          var cached  = _recordCache[caseNum];
-          if (cached && (Date.now() - cached.at) < _RECORD_TTL) return;
+          var nk = normalizeCaseKey(row.data[caseCol.key]);
+          if (_recordCache[nk] && (Date.now() - _recordCache[nk].at) < _RECORD_TTL) return;
           inp.classList.add('cell-qb-pending');
           inp.readOnly    = true;
           inp.placeholder = '⋯';
         });
       });
 
-      // Phase 2: split rows into visible / offscreen
+      // Phase 2: visible vs deferred
       var gridWrap    = document.getElementById('svcGridWrap') || gridEl.parentElement;
       var wrapRect    = gridWrap ? gridWrap.getBoundingClientRect() : null;
-      var visibleRows = [];
-      var deferredRows = [];
+      var visibleRows = [], deferredRows = [];
 
       rowsWithCase.forEach(function (row) {
         var anyInp = gridEl.querySelector('input.cell[data-row="' + row.row_index + '"]');
@@ -206,22 +232,23 @@
         }
       });
 
-      // Paint helper
+      // Paint helper — uses normalizeCaseKey for cache lookup
       function paintRow(row) {
         if (_autofillAbort !== runToken) return;
-        var caseNum = String(row.data[caseCol.key] || '').trim();
-        if (!caseNum) return;
+        var rawCase = String(row.data[caseCol.key] || '').trim();
+        if (!rawCase) return;
+        var nk  = normalizeCaseKey(rawCase);
+        var rec = _recordCache[nk];
 
-        var rec = _recordCache[caseNum];
         linkedCols.forEach(function (col) {
           var inp = gridEl.querySelector('input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]');
           if (!inp || inp === document.activeElement) return;
 
           if (!rec) {
-            if (_notFound[caseNum] && (Date.now() - _notFound[caseNum]) < _NOT_FOUND_TTL) {
+            if (_notFound[nk] && (Date.now() - _notFound[nk]) < _NOT_FOUND_TTL) {
               inp.value       = '—';
               inp.readOnly    = true;
-              inp.title       = '⚠ Not found in QB (Case #' + caseNum + ')';
+              inp.title       = '⚠ Not found in QB (Case #' + rawCase + ')';
               inp.classList.add('cell-qb-not-found');
               inp.classList.remove('cell-qb-pending', 'cell-qb-linked');
             } else {
@@ -232,19 +259,19 @@
             return;
           }
 
-          var fid       = String(col.qbLookup.fieldId);
+          // *** FIX: use _resolveLinkedFieldId() — handles all stored fieldId formats ***
+          var fid       = _resolveLinkedFieldId(col);
           var fieldCell = rec.fields[fid];
           var value     = fieldCell ? String(fieldCell.value != null ? fieldCell.value : '') : '';
 
           inp.value    = value;
           inp.readOnly = true;
-          inp.title    = '🔗 QB: ' + col.qbLookup.fieldLabel + ' (Case #' + caseNum + ')';
+          inp.title    = '🔗 QB: ' + (col.qbLookup.fieldLabel || fid) + ' (Case #' + rawCase + ')';
           inp.classList.add('cell-qb-linked');
           inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
         });
       }
 
-      // Phase 3: fetch visible first, defer offscreen
       var visibleIds  = visibleRows.map(function (r) { return String(r.data[caseCol.key] || '').trim(); });
       var deferredIds = deferredRows.map(function (r) { return String(r.data[caseCol.key] || '').trim(); });
 
@@ -254,7 +281,6 @@
       }).then(function () {
         if (_autofillAbort !== runToken) return;
         visibleRows.forEach(paintRow);
-
         if (!deferredRows.length) return;
         setTimeout(function () {
           if (_autofillAbort !== runToken) return;
@@ -272,45 +298,26 @@
   }
 
   // ── DOM helpers ───────────────────────────────────────────────────────────────
-  function el(tag, cls) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    return e;
-  }
-
+  function el(tag, cls) { var e = document.createElement(tag); if (cls) e.className = cls; return e; }
   function closeFieldPicker() {
     var ov = document.getElementById('svcQbFieldOverlay');
-    if (ov) {
-      ov.classList.add('qb-fp-leaving');
-      setTimeout(function () { if (ov.parentNode) ov.remove(); }, 180);
-    }
+    if (ov) { ov.classList.add('qb-fp-leaving'); setTimeout(function () { if (ov.parentNode) ov.remove(); }, 180); }
   }
 
-  // ── Field Picker Modal ────────────────────────────────────────────────────────
   function openFieldPicker(opts) {
     closeFieldPicker();
-
     var col            = opts.cols && opts.cols[opts.colIdx];
     var colLabel       = col ? col.label : 'Column';
-    var currentFieldId = col && col.qbLookup ? String(col.qbLookup.fieldId) : null;
+    var currentFieldId = col && col.qbLookup ? _resolveLinkedFieldId(col) : null;
     var currentLabel   = col && col.qbLookup ? col.qbLookup.fieldLabel : null;
 
-    var overlay = el('div', 'qb-fp-overlay');
-    overlay.id  = 'svcQbFieldOverlay';
-    overlay.setAttribute('data-picker-v2', '1'); // use opacity transition, not animation
-
-    var panel = el('div', 'qb-fp-panel');
-    overlay.appendChild(panel);
+    var overlay = el('div', 'qb-fp-overlay'); overlay.id = 'svcQbFieldOverlay';
+    var panel   = el('div', 'qb-fp-panel'); overlay.appendChild(panel);
 
     var hdr    = el('div', 'qb-fp-header');
-    var htitle = el('div', 'qb-fp-title');
-    htitle.textContent = '🔗 Link QB Field → ' + colLabel;
-    var hclose = el('button', 'qb-fp-close');
-    hclose.textContent = '✕';
-    hclose.onclick = closeFieldPicker;
-    hdr.appendChild(htitle);
-    hdr.appendChild(hclose);
-    panel.appendChild(hdr);
+    var htitle = el('div', 'qb-fp-title'); htitle.textContent = '🔗 Link QB Field → ' + colLabel;
+    var hclose = el('button', 'qb-fp-close'); hclose.textContent = '✕'; hclose.onclick = closeFieldPicker;
+    hdr.appendChild(htitle); hdr.appendChild(hclose); panel.appendChild(hdr);
 
     if (currentLabel) {
       var cur = el('div', 'qb-fp-current');
@@ -321,39 +328,26 @@
     if (col && col.qbLookup) {
       var removeBtn = el('button', 'qb-fp-remove-btn');
       removeBtn.textContent = '🔗✕ Remove QB link';
-      removeBtn.onclick = function () {
-        opts.onSelect(null);
-        closeFieldPicker();
-      };
+      removeBtn.onclick = function () { opts.onSelect(null); closeFieldPicker(); };
       panel.appendChild(removeBtn);
     }
 
     var searchWrap = el('div', 'qb-fp-search-wrap');
     var searchInp  = el('input', 'qb-fp-search');
-    searchInp.type        = 'text';
-    searchInp.placeholder = 'Search fields…';
-    searchWrap.appendChild(searchInp);
-    panel.appendChild(searchWrap);
+    searchInp.type = 'text'; searchInp.placeholder = 'Search fields…';
+    searchWrap.appendChild(searchInp); panel.appendChild(searchWrap);
 
-    var listEl = el('div', 'qb-fp-list');
-    panel.appendChild(listEl);
-
-    var statusEl = el('div', 'qb-fp-status');
-    statusEl.textContent = 'Loading QB fields…';
-    panel.appendChild(statusEl);
+    var listEl   = el('div', 'qb-fp-list');   panel.appendChild(listEl);
+    var statusEl = el('div', 'qb-fp-status'); statusEl.textContent = 'Loading QB fields…'; panel.appendChild(statusEl);
 
     document.body.appendChild(overlay);
     searchInp.focus();
-
     requestAnimationFrame(function () { overlay.classList.add('qb-fp-open'); });
     overlay.addEventListener('click', function (e) { if (e.target === overlay) closeFieldPicker(); });
 
     loadFields(false).then(function (fields) {
       statusEl.textContent = '';
-      if (!fields || !fields.length) {
-        statusEl.textContent = '⚠ No QB fields found. Check Studio QB settings.';
-        return;
-      }
+      if (!fields || !fields.length) { statusEl.textContent = '⚠ No QB fields found. Check Studio QB settings.'; return; }
 
       function renderList(filter) {
         listEl.innerHTML = '';
@@ -364,48 +358,32 @@
         if (!filtered.length) {
           var empty = el('div', 'qb-fp-empty');
           empty.textContent = 'No fields match "' + filter + '"';
-          listEl.appendChild(empty);
-          return;
+          listEl.appendChild(empty); return;
         }
 
         filtered.forEach(function (f) {
           var fid      = String(f.id);
           var isActive = fid === currentFieldId;
           var item     = el('div', 'qb-fp-item' + (isActive ? ' qb-fp-item-active' : ''));
-          var iLabel   = el('span', 'qb-fp-item-label');
-          iLabel.textContent = f.label || '(unnamed)';
-          var iId = el('span', 'qb-fp-item-id');
-          iId.textContent = 'Field ' + fid;
-          item.appendChild(iLabel);
-          item.appendChild(iId);
-          if (isActive) {
-            var tick = el('span', 'qb-fp-item-tick');
-            tick.textContent = '✓';
-            item.appendChild(tick);
-          }
-          item.onclick = function () {
-            // FIX: Always call onSelect(fieldId, fieldLabel) — 2 separate string args.
-            // The grid handler (services-grid.js) expects: onSelect(fieldId, fieldLabel)
-            // Previous code passed a single object which broke QB link saving.
-            opts.onSelect(fid, f.label || fid);
-            closeFieldPicker();
-          };
+          var iLabel   = el('span', 'qb-fp-item-label'); iLabel.textContent = f.label || '(unnamed)';
+          var iId      = el('span', 'qb-fp-item-id');    iId.textContent    = 'Field ' + fid;
+          item.appendChild(iLabel); item.appendChild(iId);
+          if (isActive) { var tick = el('span', 'qb-fp-item-tick'); tick.textContent = '✓'; item.appendChild(tick); }
+          item.onclick = function () { opts.onSelect({ fieldId: fid, fieldLabel: f.label || fid }); closeFieldPicker(); };
           listEl.appendChild(item);
         });
       }
 
       renderList('');
       searchInp.addEventListener('input', function () { renderList(searchInp.value.trim()); });
-
     }).catch(function (err) {
       statusEl.textContent = '⚠ Failed to load fields: ' + (err && err.message ? err.message : String(err));
     });
   }
 
-  // ── Public API ────────────────────────────────────────────────────────────────
   window.svcQbLookup = {
-    openFieldPicker: openFieldPicker,
-    autofillLinkedColumns: autofillLinkedColumns,
+    openFieldPicker:          openFieldPicker,
+    autofillLinkedColumns:    autofillLinkedColumns,
     clearCache: function () {
       _recordCache   = {};
       _notFound      = {};

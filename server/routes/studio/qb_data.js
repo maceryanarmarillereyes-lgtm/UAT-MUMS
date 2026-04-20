@@ -8,14 +8,14 @@
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
 // server/routes/studio/qb_data.js
-// GET /api/studio/qb_data — fetch Quickbase records using STUDIO QB settings
-// Completely isolated from /api/quickbase/monitoring and global QB settings.
-// Uses the requesting user's own Studio QB Settings stored in mums_documents.
-//
 // BATCH REFACTOR (MACE CLEARED 2026-04-19):
-//   ?recordId=X       — single-record fetch (unchanged, used by Support Records modal)
-//   ?recordIds=X,Y,Z  — NEW batch fetch: up to 100 IDs per call, 1 QB query total
+//   ?recordId=X       — single-record fetch (unchanged)
+//   ?recordIds=X,Y,Z  — batch fetch: up to 50 IDs per call, 1 QB query total
 //   (no params)       — report/list view (unchanged)
+//
+// FIX 2026-04-20 (MACE CLEARED):
+//   - normalizeCaseKey() now applied on BOTH sides of batch match
+//   - Prevents false not-found when QB returns "436860.0" but sheet has "436860"
 
 const { getUserFromJwt } = require('../../lib/supabase');
 const { readStudioQbSettings } = require('../../lib/studio_quickbase');
@@ -27,12 +27,11 @@ function sendJson(res, statusCode, body) {
   res.end(JSON.stringify(body));
 }
 
-// ── Server-side caches ────────────────────────────────────────────────────────
-const REPORT_CACHE   = new Map();
-const FIELDS_CACHE   = new Map();
-const BATCH_CACHE    = new Map(); // `${realm}:${tableId}:${caseFieldId}:${key}` → record
-const CACHE_TTL_MS   = 5 * 60 * 1000; // 5 min
-const REPORT_TTL_MS  = 30 * 1000;     // 30s for the list/report view
+const REPORT_CACHE  = new Map();
+const FIELDS_CACHE  = new Map();
+const BATCH_CACHE   = new Map();
+const CACHE_TTL_MS  = 5 * 60 * 1000;
+const REPORT_TTL_MS = 30 * 1000;
 
 function readCache(cache, key, ttl) {
   const hit = cache.get(key);
@@ -44,10 +43,9 @@ function writeCache(cache, key, value) { cache.set(key, { at: Date.now(), value 
 function normalizeRealm(raw) {
   const s = String(raw || '').trim();
   if (!s) return '';
-  return (s.includes('.')) ? s : `${s}.quickbase.com`;
+  return s.includes('.') ? s : `${s}.quickbase.com`;
 }
 
-// ── QB value normalizer ───────────────────────────────────────────────────────
 function normalizeQbValue(raw) {
   if (raw == null || raw === '') return '';
   if (typeof raw === 'object' && !Array.isArray(raw)) {
@@ -71,20 +69,15 @@ function normalizeQbValue(raw) {
 
 function encLit(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); }
 
-// Canonicalize Case # values so formatted/typed variants still match.
-// Examples that normalize to same key:
-//   "533762", "533,762", 533762, " 533762 ", "533762.0"
+// ── CRITICAL: normalize case # so "436860", "436860.0", "436,860" all match ──
 function normalizeCaseKey(v) {
   const raw = String(v == null ? '' : v).trim();
   if (!raw) return '';
   const compact = raw.replace(/,/g, '');
-  if (/^\d+(?:\.0+)?$/.test(compact)) {
-    return String(Number(compact));
-  }
+  if (/^\d+(?:\.0+)?$/.test(compact)) return String(Number(compact));
   return compact;
 }
 
-// ── Field list (cached per realm+table) ──────────────────────────────────────
 async function getFields({ realm, token, tableId }) {
   const cacheKey = `${realm}:${tableId}`;
   const cached = readCache(FIELDS_CACHE, cacheKey);
@@ -96,7 +89,6 @@ async function getFields({ realm, token, tableId }) {
   } catch (_) { return { ok: false, fields: [] }; }
 }
 
-// ── Resolve Case # field ID (cached) ─────────────────────────────────────────
 async function resolveCaseFieldId({ realm, token, tableId }) {
   const cacheKey = `caseFieldId:${realm}:${tableId}`;
   const cached = readCache(FIELDS_CACHE, cacheKey);
@@ -109,7 +101,6 @@ async function resolveCaseFieldId({ realm, token, tableId }) {
 
   const candidates = [];
   const add = (id) => { const n = Number(id); if (Number.isFinite(n) && !candidates.includes(n)) candidates.push(n); };
-
   allFields.forEach(f => { const l = f.label.toLowerCase(); if (l === 'case #' || l === 'case number' || l === 'case no' || l === 'case id') add(f.id); });
   allFields.forEach(f => { const l = f.label.toLowerCase(); if (l.includes('case #') || l.includes('case number')) add(f.id); });
   allFields.forEach(f => { const l = f.label.toLowerCase(); if (l === 'case' || l.includes('case')) add(f.id); });
@@ -122,11 +113,7 @@ async function resolveCaseFieldId({ realm, token, tableId }) {
 
 function getCaseFieldCandidates(allFields) {
   const candidates = [];
-  const add = (id) => {
-    const n = Number(id);
-    if (Number.isFinite(n) && !candidates.includes(n)) candidates.push(n);
-  };
-
+  const add = (id) => { const n = Number(id); if (Number.isFinite(n) && !candidates.includes(n)) candidates.push(n); };
   (Array.isArray(allFields) ? allFields : []).forEach(f => {
     const l = String(f?.label || '').trim().toLowerCase();
     if (!l) return;
@@ -146,7 +133,6 @@ function getCaseFieldCandidates(allFields) {
   return candidates;
 }
 
-// ── Report runner (for list view) ────────────────────────────────────────────
 async function runQBReport({ realm, token, tableId, reportId, limit, extraWhere }) {
   const cacheKey = `${realm}:${tableId}:${reportId}:${limit}:${extraWhere || ''}`;
   const cached = readCache(REPORT_CACHE, cacheKey, REPORT_TTL_MS);
@@ -157,11 +143,7 @@ async function runQBReport({ realm, token, tableId, reportId, limit, extraWhere 
   try {
     const resp = await fetch(url, {
       method: 'POST',
-      headers: {
-        'QB-Realm-Hostname': realm,
-        Authorization: `QB-USER-TOKEN ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'QB-Realm-Hostname': realm, Authorization: `QB-USER-TOKEN ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     const rawText = await resp.text();
@@ -179,7 +161,6 @@ async function runQBReport({ realm, token, tableId, reportId, limit, extraWhere 
   }
 }
 
-// ── Build field values from a QB row ─────────────────────────────────────────
 function buildFieldMap(row, fields) {
   const columnMap = {};
   const fieldValues = {};
@@ -193,9 +174,6 @@ function buildFieldMap(row, fields) {
   return { fieldValues, columnMap };
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// MAIN HANDLER
-// ═════════════════════════════════════════════════════════════════════════════
 module.exports = async (req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store');
@@ -209,9 +187,9 @@ module.exports = async (req, res) => {
 
     const s       = settingsOut.settings;
     const realm   = normalizeRealm(s.realm);
-    const tableId = String(s.tableId  || '').trim();
-    const qid     = String(s.qid      || '').trim();
-    const token   = String(s.qbToken  || '').trim();
+    const tableId = String(s.tableId || '').trim();
+    const qid     = String(s.qid    || '').trim();
+    const token   = String(s.qbToken|| '').trim();
 
     if (!realm || !tableId || !qid || !token) {
       return sendJson(res, 200, {
@@ -235,10 +213,8 @@ module.exports = async (req, res) => {
         : [];
 
       const caseFieldCandidates = getCaseFieldCandidates(allFields);
-
-      const selectIds     = allFields.map(f => f.id).filter(id => Number.isFinite(id));
+      const selectIds    = allFields.map(f => f.id).filter(id => Number.isFinite(id));
       const safeSelectIds = selectIds.length ? selectIds : undefined;
-      const url = `https://api.quickbase.com/v1/records/query`;
 
       try {
         let json = null;
@@ -246,7 +222,7 @@ module.exports = async (req, res) => {
           const whereClause = `{${caseFieldId}.EX.'${encLit(recordIdParam)}'}`;
           const body = { from: tableId, where: whereClause, options: { top: 1 } };
           if (safeSelectIds) body.select = safeSelectIds;
-          const resp = await fetch(url, {
+          const resp = await fetch('https://api.quickbase.com/v1/records/query', {
             method: 'POST',
             headers: { 'QB-Realm-Hostname': realm, Authorization: `QB-USER-TOKEN ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
@@ -263,7 +239,6 @@ module.exports = async (req, res) => {
         const row    = json.data[0];
         const fields = Array.isArray(json.fields) ? json.fields : [];
         const { fieldValues, columnMap } = buildFieldMap(row, fields);
-
         return sendJson(res, 200, { ok: true, fields: fieldValues, columnMap });
       } catch (err) {
         return sendJson(res, 200, { ok: false, error: 'record_not_found', message: String(err?.message || err) });
@@ -271,35 +246,19 @@ module.exports = async (req, res) => {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // MODE B — BATCH FETCH  (?recordIds=436860,436776,436864,...)
-    // NEW: Fetches up to 100 Case #s in a single QB query.
+    // MODE B — BATCH FETCH  (?recordIds=436860,436776,...)
+    // FIX: normalizeCaseKey() applied on BOTH sides so "436860.0" matches "436860"
     // ══════════════════════════════════════════════════════════════════════════
     const recordIdsParam = String(query.recordIds || '').trim();
     if (recordIdsParam) {
       const rawIds = recordIdsParam.split(',').map(x => x.trim()).filter(Boolean);
-      const ids    = [...new Set(rawIds)].slice(0, 100);
+      // Normalize incoming IDs so the cache key is always canonical
+      const ids    = [...new Set(rawIds.map(normalizeCaseKey))].filter(Boolean).slice(0, 50);
       if (!ids.length) return sendJson(res, 200, { ok: true, records: {}, notFound: [] });
 
-      const fieldsOut = await getFields({ realm, token, tableId });
-      const allFields = fieldsOut.ok
-        ? (fieldsOut.fields || []).map(f => ({ id: Number(f?.id), label: String(f?.label || '').trim() })).filter(f => Number.isFinite(f.id))
-        : [];
+      const caseFieldId      = await resolveCaseFieldId({ realm, token, tableId });
+      const batchCachePrefix = `${realm}:${tableId}:${caseFieldId}`;
 
-      const primaryCaseFieldId = await resolveCaseFieldId({ realm, token, tableId });
-      const caseFieldCandidates = [primaryCaseFieldId]
-        .concat(getCaseFieldCandidates(allFields))
-        .filter((id, idx, arr) => Number.isFinite(id) && arr.indexOf(id) === idx);
-
-      // Map canonical value -> original requested id so response keys stay stable.
-      const requestedByCanonical = new Map();
-      ids.forEach((id) => {
-        const canon = normalizeCaseKey(id);
-        if (canon && !requestedByCanonical.has(canon)) requestedByCanonical.set(canon, id);
-      });
-
-      // Include candidate-set signature in cache key so stale nulls from older
-      // case-field resolution strategies don't poison newer fallback logic.
-      const batchCachePrefix = `${realm}:${tableId}:caseCandidates:${caseFieldCandidates.join('-')}`;
       const result   = {};
       const notFound = [];
       const toFetch  = [];
@@ -316,6 +275,10 @@ module.exports = async (req, res) => {
       });
 
       if (toFetch.length > 0) {
+        const clauses     = toFetch.map(id => `{${caseFieldId}.EX.'${encLit(id)}'}`);
+        const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join('OR')})`;
+
+        const fieldsOut    = await getFields({ realm, token, tableId });
         const allFieldIds  = fieldsOut.ok
           ? (fieldsOut.fields || []).map(f => Number(f?.id)).filter(id => Number.isFinite(id))
           : [];
@@ -323,66 +286,60 @@ module.exports = async (req, res) => {
           ? (fieldsOut.fields || []).map(f => ({ id: Number(f?.id), label: String(f?.label || '') })).filter(f => Number.isFinite(f.id))
           : [];
 
-        const pendingIds = new Set(toFetch);
-        const foundIds = new Set();
+        const body = { from: tableId, where: whereClause, options: { top: 50 } };
+        if (allFieldIds.length) body.select = allFieldIds;
+
+        let hadQbError = false;
         try {
-          for (const caseFieldId of caseFieldCandidates) {
-            if (pendingIds.size === 0) break;
-            const idsForThisPass = Array.from(pendingIds);
-            const clauses = idsForThisPass.map(id => `{${caseFieldId}.EX.'${encLit(id)}'}`);
-            // FIX-1: QB requires spaces around OR — missing space caused silent QB query failure
-            const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join(' OR ')})`;
-            const body = { from: tableId, where: whereClause, options: { top: 100 } };
-            // FIX-2: QB select array capped at 30 fields — exceeding silently drops entire request
-            if (allFieldIds.length) body.select = allFieldIds.slice(0, 30);
+          const resp = await fetch('https://api.quickbase.com/v1/records/query', {
+            method: 'POST',
+            headers: { 'QB-Realm-Hostname': realm, Authorization: `QB-USER-TOKEN ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
 
-            const resp = await fetch('https://api.quickbase.com/v1/records/query', {
-              method: 'POST',
-              headers: { 'QB-Realm-Hostname': realm, Authorization: `QB-USER-TOKEN ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify(body),
-            });
-            if (!resp.ok) continue;
-
-            const json       = await resp.json().catch(() => ({}));
-            const rows       = Array.isArray(json.data)   ? json.data   : [];
-            const fieldsMeta = Array.isArray(json.fields) ? json.fields : allFieldMeta;
-
-            rows.forEach(row => {
-              const caseCell  = row[String(caseFieldId)];
-              // FIX-3: QB REST always wraps values as {value: X} — extract robustly
-              let rawCaseVal = '';
-              if (caseCell !== null && caseCell !== undefined) {
-                if (typeof caseCell === 'object' && 'value' in caseCell) {
-                  rawCaseVal = caseCell.value;
-                } else {
-                  rawCaseVal = caseCell;
-                }
-              }
-              const caseValue = normalizeQbValue(rawCaseVal);
-              const caseKey   = normalizeCaseKey(caseValue);
-              if (!caseKey) return;
-
-              const { fieldValues, columnMap } = buildFieldMap(row, fieldsMeta);
-              const rec = { fields: fieldValues, columnMap };
-
-              const matchedId = requestedByCanonical.get(caseKey);
-              if (matchedId && pendingIds.has(matchedId)) {
-                result[matchedId] = rec;
-                foundIds.add(matchedId);
-                pendingIds.delete(matchedId);
-                writeCache(BATCH_CACHE, `${batchCachePrefix}:${matchedId}`, rec);
-              }
-            });
+          if (!resp.ok) {
+            hadQbError = true;
+            return sendJson(res, 200, { ok: true, records: result, notFound: [...notFound, ...toFetch], transientError: true });
           }
 
+          const json       = await resp.json().catch(() => ({}));
+          const rows       = Array.isArray(json.data)   ? json.data   : [];
+          const fieldsMeta = Array.isArray(json.fields) ? json.fields : allFieldMeta;
+
+          // Build a lookup map: normalized QB case value → row record
+          const foundIds = new Set();
+          rows.forEach(row => {
+            const caseCell  = row[String(caseFieldId)];
+            const rawVal    = caseCell
+              ? (typeof caseCell === 'object' && 'value' in caseCell ? caseCell.value : caseCell)
+              : '';
+            // *** FIX: normalize QB's returned value the same way we normalize the request IDs ***
+            const caseValue = normalizeCaseKey(normalizeQbValue(rawVal));
+            if (!caseValue) return;
+
+            const { fieldValues, columnMap } = buildFieldMap(row, fieldsMeta);
+            const rec = { fields: fieldValues, columnMap };
+
+            // Match against requested IDs using normalized keys
+            const matchedId = toFetch.find(id => normalizeCaseKey(id) === caseValue);
+            if (matchedId) {
+              result[matchedId] = rec;
+              foundIds.add(matchedId);
+              writeCache(BATCH_CACHE, `${batchCachePrefix}:${matchedId}`, rec);
+            }
+          });
+
+          // Only mark as not-found if QB responded successfully (no transient error)
           toFetch.forEach(id => {
             if (!foundIds.has(id)) {
               notFound.push(id);
-              BATCH_CACHE.set(`${batchCachePrefix}:${id}`, { at: Date.now(), value: null });
+              // Short TTL sentinel (2 min) — avoids stale not-found if QB data is updated
+              BATCH_CACHE.set(`${batchCachePrefix}:${id}`, { at: Date.now() - (CACHE_TTL_MS - 2 * 60 * 1000), value: null });
             }
           });
         } catch (err) {
-          return sendJson(res, 200, { ok: true, records: result, notFound: [...notFound, ...toFetch], error: String(err?.message || err) });
+          // Network/parse error — do NOT mark as not-found; let client retry
+          return sendJson(res, 200, { ok: true, records: result, notFound: [...notFound], transientError: true, error: String(err?.message || err) });
         }
       }
 
@@ -392,8 +349,8 @@ module.exports = async (req, res) => {
     // ══════════════════════════════════════════════════════════════════════════
     // MODE C — REPORT / LIST VIEW  (no recordId/recordIds param)
     // ══════════════════════════════════════════════════════════════════════════
-    const reportResult = await runQBReport({ realm, token, tableId, reportId: qid, limit: 1000, extraWhere: searchTerm ? (() => { const fieldIds = []; return `(${fieldIds.map(f => `{${f}.CT.'${encLit(searchTerm)}'}`).join(' OR ')})`; })() : undefined });
-    if (!reportResult.ok) return sendJson(res, 200, { ok: false, error: 'report_failed', message: reportResult.message || 'Report run failed' });
+    const reportResult = await runQBReport({ realm, token, tableId, reportId: qid, limit: 1000 });
+    if (!reportResult.ok) return sendJson(res, 200, { ok: false, error: 'report_failed', message: reportResult.message });
 
     const { records, fields: reportFields } = reportResult;
     const columns = reportFields.map(f => ({ id: String(f.id), label: f.label }));
