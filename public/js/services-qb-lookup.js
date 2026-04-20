@@ -389,6 +389,18 @@
                   delete result.notFound[nk];
                 }
               });
+              var stillMissing = unresolved.filter(function (nk) {
+                return !(_cache[nk] && (probeNow - _cache[nk].at) < _CACHE_TTL);
+              });
+              if (!stillMissing.length) return;
+              return _searchFallback(stillMissing).then(function () {
+                var afterSearch = Date.now();
+                stillMissing.forEach(function (nk) {
+                  if (_cache[nk] && (afterSearch - _cache[nk].at) < _CACHE_TTL) {
+                    delete result.notFound[nk];
+                  }
+                });
+              });
             });
           }
 
