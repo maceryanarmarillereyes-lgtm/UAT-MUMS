@@ -114,12 +114,12 @@
           var normKey = normalizeCaseKey(caseNum);
           if (!normKey) return;
           var rec = { fields: recs[caseNum].fields || {}, columnMap: recs[caseNum].columnMap || {}, at: Date.now() };
-          _recordCache[caseNum] = rec;
-          delete _notFound[caseNum];
+          _recordCache[normKey] = rec;
+          delete _notFound[normKey];
         });
         if (!hasTransientError) {
           (data.notFound || []).forEach(function (caseNum) {
-            _notFound[caseNum] = Date.now();
+            _notFound[normalizeCaseKey(caseNum)] = Date.now();
           });
         }
         return recs;
