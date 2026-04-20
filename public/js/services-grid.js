@@ -149,6 +149,12 @@
       cols.forEach(function (c) {
         var td  = mkEl('td', null, tr);
         var inputType = (c.format === 'date') ? 'date' : 'text';
+        var validation = c && c.validation && c.validation.type === 'list' && Array.isArray(c.validation.options)
+          ? c.validation.options.filter(function (v) { return String(v || '').trim() !== ''; })
+          : null;
+        var listId = validation && validation.length
+          ? ('svc-dv-' + String(c.key || i) + '-' + String(rowIndex))
+          : '';
         var inp = mkEl('input', {
           className    : 'cell',
           type         : inputType,
@@ -156,6 +162,19 @@
           spellcheck   : false,
           value        : (rowData.data[c.key] != null ? rowData.data[c.key] : '').toString()
         }, td);
+        if (validation && validation.length) {
+          inp.setAttribute('list', listId);
+          inp.dataset.validationList = validation.join('\n');
+          inp.dataset.validationStrict = '1';
+          var dl = document.createElement('datalist');
+          dl.id = listId;
+          validation.forEach(function (opt) {
+            var o = document.createElement('option');
+            o.value = String(opt);
+            dl.appendChild(o);
+          });
+          td.appendChild(dl);
+        }
         inp.dataset.row = rowIndex;
         inp.dataset.key = c.key;
         inp.dataset.format = (c && c.format) ? c.format : 'auto';
@@ -318,6 +337,12 @@
             { icon: '📋', label: qbLinked ? 'Change Field (' + qbLinked.fieldLabel + ')' : 'Select Quickbase Field', action: 'select-qb-field', badge: 'QB' }
           ]
         });
+        buildItem(menu, {
+          icon: '🧾',
+          label: 'Data Validation',
+          action: 'data-validation',
+          badge: (cols[colIdx] && cols[colIdx].validation && cols[colIdx].validation.type === 'list') ? '✓' : ''
+        });
         buildItem(menu, { icon: '🎨', label: 'Conditional Formatting', action: 'conditional-format' });
 
         addSep();
@@ -431,6 +456,29 @@
           } else if (action === 'conditional-format') {
             alert('Conditional Formatting — coming soon.');
             closeAllCtxMenus();
+          } else if (action === 'data-validation') {
+            closeAllCtxMenus();
+            var currentRules = cols[colIdx] && cols[colIdx].validation;
+            var currentList = (currentRules && Array.isArray(currentRules.options)) ? currentRules.options.join(', ') : '';
+            var entered = prompt(
+              'Set dropdown options for "' + (cols[colIdx].label || 'Column') + '".\n' +
+              'Use comma-separated values.\n' +
+              'Leave blank to remove validation.',
+              currentList
+            );
+            if (entered === null) return;
+            var opts = String(entered)
+              .split(',')
+              .map(function (v) { return String(v || '').trim(); })
+              .filter(function (v) { return !!v; });
+            if (!opts.length) {
+              delete cols[colIdx].validation;
+            } else {
+              cols[colIdx].validation = { type: 'list', strict: true, options: opts };
+            }
+            await window.servicesDB.updateColumns(current.sheet.id, cols);
+            render();
+            window.svcToast && window.svcToast.show('success', 'Data Validation', opts.length ? ('Dropdown set (' + opts.length + ' options).') : 'Dropdown removed.');
           } else if (action === 'delete-column') {
             var colName = cols[colIdx] ? (cols[colIdx].label || 'this column') : 'this column';
             if (!confirm('Delete column "' + colName + '"?\n\nAll data in this column will be permanently removed from every row. This cannot be undone.')) {
@@ -664,6 +712,19 @@
     var key    = e.target.dataset.key;
     var value  = e.target.value;
     var format = e.target.dataset.format || 'auto';
+    var strictList = (e.target.dataset.validationStrict === '1');
+    if (strictList) {
+      var allowed = String(e.target.dataset.validationList || '')
+        .split('\n')
+        .map(function (v) { return String(v || '').trim(); })
+        .filter(function (v) { return !!v; });
+      if (value && allowed.length && allowed.indexOf(value) === -1) {
+        window.svcToast && window.svcToast.show('warning', 'Invalid Value', 'Please select from the dropdown list.');
+        var rowExisting = current.rows.find(function (r) { return r.row_index === rowIdx; });
+        e.target.value = rowExisting && rowExisting.data && rowExisting.data[key] != null ? String(rowExisting.data[key]) : '';
+        return;
+      }
+    }
     var rowObj = current.rows.find(function (r) { return r.row_index === rowIdx; });
     if (!rowObj) { rowObj = { row_index: rowIdx, data: {} }; current.rows.push(rowObj); }
     if (format === 'number' && value && !/^\d+$/.test(value)) {
