@@ -257,6 +257,13 @@ module.exports = async (req, res) => {
       if (!ids.length) return sendJson(res, 200, { ok: true, records: {}, notFound: [] });
 
       const caseFieldId      = await resolveCaseFieldId({ realm, token, tableId });
+
+      const fieldsOutForCase = await getFields({ realm, token, tableId });
+      const allFieldsForCase = fieldsOutForCase.ok
+        ? (fieldsOutForCase.fields || []).map(f => ({ id: Number(f?.id), label: String(f?.label || '').trim() })).filter(f => Number.isFinite(f.id) && f.label)
+        : [];
+      const caseFieldCandidates = getCaseFieldCandidates(allFieldsForCase);
+
       const batchCachePrefix = `${realm}:${tableId}:${caseFieldId}`;
 
       const result   = {};
@@ -275,9 +282,6 @@ module.exports = async (req, res) => {
       });
 
       if (toFetch.length > 0) {
-        const clauses     = toFetch.map(id => `{${caseFieldId}.EX.'${encLit(id)}'}`);
-        const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join('OR')})`;
-
         const fieldsOut    = await getFields({ realm, token, tableId });
         const allFieldIds  = fieldsOut.ok
           ? (fieldsOut.fields || []).map(f => Number(f?.id)).filter(id => Number.isFinite(id))
@@ -320,7 +324,7 @@ module.exports = async (req, res) => {
             const rec = { fields: fieldValues, columnMap };
 
             // Match against requested IDs using normalized keys
-            const matchedId = toFetch.find(id => normalizeCaseKey(id) === caseValue);
+            const matchedId = toFetch.find(id => normalizeCaseKey(id) === caseKey);
             if (matchedId) {
               result[matchedId] = rec;
               foundIds.add(matchedId);
