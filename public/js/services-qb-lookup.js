@@ -67,6 +67,23 @@
     return jwt ? { Authorization: 'Bearer ' + jwt } : {};
   }
 
+  function apiHeadersAsync() {
+    var direct = apiHeaders();
+    if (direct.Authorization) return Promise.resolve(direct);
+
+    var sb = (window.servicesDB && window.servicesDB.client) || window.__MUMS_SB_CLIENT;
+    if (!sb || !sb.auth || typeof sb.auth.getSession !== 'function') {
+      return Promise.resolve({});
+    }
+
+    return sb.auth.getSession()
+      .then(function (out) {
+        var token = out && out.data && out.data.session && out.data.session.access_token;
+        return token ? { Authorization: 'Bearer ' + token } : {};
+      })
+      .catch(function () { return {}; });
+  }
+
   // ── Case key normalization ─────────────────────────────────────────────────────
   // "436,860.0", "Case# 436860", "436860" → "436860"
   function normalizeCaseKey(v) {
@@ -124,12 +141,14 @@
     if (!nks || !nks.length) return Promise.resolve({ found: {}, notFound: {}, transient: false });
     var ids = nks.slice(0, _BATCH_SIZE);
 
-    return _waitForGap()
-      .then(function () {
-        return fetch(
-          '/api/studio/qb_data?recordIds=' + ids.map(encodeURIComponent).join(','),
-          { headers: apiHeaders() }
-        );
+    return apiHeadersAsync()
+      .then(function (headers) {
+        return _waitForGap().then(function () {
+          return fetch(
+            '/api/studio/qb_data?recordIds=' + ids.map(encodeURIComponent).join(','),
+            { headers: headers }
+          );
+        });
       })
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -175,6 +194,13 @@
           if (nk) notFound[nk] = true;
         });
 
+        // Guard: if backend returned an ambiguous empty payload
+        // (no found and no explicit notFound), treat as transient so
+        // pipeline can recover using qb_search fallback.
+        if (!Object.keys(found).length && !Object.keys(notFound).length && ids.length) {
+          return { found: {}, notFound: {}, transient: true };
+        }
+
         return { found: found, notFound: notFound, transient: false };
       })
       .catch(function () {
@@ -194,12 +220,14 @@
     var idx     = 0;
 
     function fetchOne(nk) {
-      return _waitForGap()
-        .then(function () {
-          return fetch(
-            '/api/studio/qb_search?q=' + encodeURIComponent(nk) + '&top=5',
-            { headers: apiHeaders() }
-          );
+      return apiHeadersAsync()
+        .then(function (headers) {
+          return _waitForGap().then(function () {
+            return fetch(
+              '/api/studio/qb_search?q=' + encodeURIComponent(nk) + '&top=5',
+              { headers: headers }
+            );
+          });
         })
         .then(function (r) { return r.json(); })
         .then(function (data) {
@@ -385,7 +413,8 @@
       return Promise.resolve(_fieldsCache.fields);
     }
     var url = '/api/studio/qb_fields' + (forceRefresh ? '?forceRefresh=1' : '');
-    return fetch(url, { headers: apiHeaders() })
+    return apiHeadersAsync()
+      .then(function (headers) { return fetch(url, { headers: headers }); })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (!data.ok) {
