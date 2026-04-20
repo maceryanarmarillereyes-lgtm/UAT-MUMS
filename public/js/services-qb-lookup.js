@@ -381,8 +381,9 @@
           var allMarkedNotFound = chunk.every(function (nk) {
             return !!(result.notFound && result.notFound[nk]);
           });
+          var reconcile = Promise.resolve();
           if (!foundCount && allMarkedNotFound) {
-            return _reportFallback(chunk).then(function () {
+            reconcile = _reportFallback(chunk).then(function () {
               var probeNow = Date.now();
               chunk.forEach(function (nk) {
                 if (_cache[nk] && (probeNow - _cache[nk].at) < _CACHE_TTL) {
@@ -392,23 +393,25 @@
             });
           }
 
-          // Batch succeeded — write cache and genuine not-found entries.
-          // IMPORTANT: only trust explicit backend notFound list to avoid false
-          // negatives on partial/transitional QB responses.
-          chunk.forEach(function (nk) {
-            var rec = result.found[nk];
-            if (rec) {
-              _cache[nk]    = Object.assign({ at: now }, rec);
-              delete _notFound[nk];
-            } else if (result.notFound && result.notFound[nk]) {
-              // QB responded and explicitly confirmed this case is missing
-              _notFound[nk] = now;
-            } else {
-              // Unresolved key with no explicit notFound signal:
-              // do not poison cache; allow retry on next pass.
-              delete _notFound[nk];
-            }
-            delete _inFlight[nk];
+          return reconcile.then(function () {
+            // Batch succeeded — write cache and genuine not-found entries.
+            // IMPORTANT: only trust explicit backend notFound list to avoid false
+            // negatives on partial/transitional QB responses.
+            chunk.forEach(function (nk) {
+              var rec = result.found[nk] || _cache[nk];
+              if (rec) {
+                _cache[nk]    = Object.assign({ at: now }, rec);
+                delete _notFound[nk];
+              } else if (result.notFound && result.notFound[nk]) {
+                // QB responded and explicitly confirmed this case is missing
+                _notFound[nk] = now;
+              } else {
+                // Unresolved key with no explicit notFound signal:
+                // do not poison cache; allow retry on next pass.
+                delete _notFound[nk];
+              }
+              delete _inFlight[nk];
+            });
           });
         });
       });
