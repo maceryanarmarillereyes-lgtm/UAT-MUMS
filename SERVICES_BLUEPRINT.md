@@ -177,3 +177,10 @@ If step #3 is missing, task is incomplete.
 
 - **2026-04-20** — Initial blueprint created. Added mandatory update protocol, feature inventory, logic contracts, file-location mapping, API/DB mapping, and dual-platform checklist.
 
+- **2026-04-21** — Services Lookup + Case Detail Modal overhaul (all MACE CLEARED):
+  - **Fix 1 — Server cache bust on Update:** `server/routes/studio/qb_data.js` now accepts `?bust=1` to bypass `BATCH_CACHE` on Update button click. Forces fresh QB data without affecting normal load-time caching.
+  - **Fix 2 — Force-refresh rowNeedsLookup:** `services-qb-lookup.js` clears `_rowCaseSeen` when `refreshCache:true` so Update button re-fetches ALL rows, including rows that already had values painted.
+  - **Fix 3 — Parallel batch pipeline (1-2s load):** Replaced sequential `chunks.reduce()` with parallel pipeline (`MAX_CONCURRENT=3`). Extracted `_processOneChunk()`. Added `_urgentMode` flag that drops rate gate from 200ms → 50ms during Update. Result: 520 rows in ~4 parallel rounds × ~400ms QB latency = 1.6s vs 5–8s before.
+  - **Fix 4 — Row number click → Case Detail Modal:** Added `_initSvcCaseDetailModal()` IIFE in `services-grid.js`. LEFT-click on any row number opens a self-contained case detail overlay (`#svcCaseDetailModal` in `services.html`). Calls `svcQbLookup.lookupCase()` → cache-first, then QB fetch. Shows KB field groups (Assignment, Classification, Notes, Latest Update, Extra Fields) matching the my_quickbase deep-search case view design. Full CSS added to `services.css` under `svc-qbcd-*` scope.
+  - **Files changed:** `server/routes/studio/qb_data.js`, `public/js/services-qb-lookup.js`, `public/js/services-grid.js`, `public/services.html`, `public/css/services.css`.
+

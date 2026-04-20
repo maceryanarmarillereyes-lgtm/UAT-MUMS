@@ -282,6 +282,9 @@ module.exports = async (req, res) => {
       const ids    = [...new Set(rawIds.map(normalizeCaseKey))].filter(Boolean).slice(0, 50);
       if (!ids.length) return sendJson(res, 200, { ok: true, records: {}, notFound: [] });
 
+      // bust=1 is sent by the Update button — skip BATCH_CACHE to force a fresh QB fetch
+      const bustCache = String(query.bust || '') === '1';
+
       const caseFieldId      = await resolveCaseFieldId({ realm, token, tableId });
 
       const fieldsOutForCase = await getFields({ realm, token, tableId });
@@ -297,6 +300,8 @@ module.exports = async (req, res) => {
       const toFetch  = [];
 
       ids.forEach(id => {
+        // When bust=1, skip cache entirely — send everything to toFetch
+        if (bustCache) { toFetch.push(id); return; }
         const cached = readCache(BATCH_CACHE, `${batchCachePrefix}:${id}`);
         if (cached === null) {
           notFound.push(id);

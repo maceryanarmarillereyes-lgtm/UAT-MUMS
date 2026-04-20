@@ -145,7 +145,7 @@
       var tr = mkEl('tr', null, tbody);
       var rowNumTd = mkEl('td', { className: 'row-num', textContent: String(rowIndex + 1) }, tr);
       rowNumTd.dataset.rowIndex = rowIndex;
-      rowNumTd.title = 'Right-click to delete row';
+      rowNumTd.title = 'Click to view case details · Right-click to delete row';
       cols.forEach(function (c) {
         var td  = mkEl('td', null, tr);
         var inputType = (c.format === 'date') ? 'date' : 'text';
@@ -530,11 +530,242 @@
     });
   }
 
+  // ── Services Case Detail Modal ───────────────────────────────────────────────
+  // Opens when user LEFT-CLICKS a row number in the grid.
+  // Fetches QB data for the case# found in that row, then populates the
+  // #svcCaseDetailModal overlay (HTML is in services.html).
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  (function _initSvcCaseDetailModal() {
+    var modal = document.getElementById('svcCaseDetailModal');
+    if (!modal) return;
+
+    function _esc(v) {
+      return String(v == null ? '' : v)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+    function _set(id, v)  { var el = document.getElementById(id); if (el) el.textContent = v; }
+    function _html(id, h) { var el = document.getElementById(id); if (el) el.innerHTML  = h;  }
+
+    function _dur(val) {
+      var n = Number(val);
+      if (!isFinite(n) || n < 0) return String(val == null ? '' : val);
+      var d = Math.round(n / (1000 * 60 * 60 * 24));
+      if (d < 1) return '< 1 day';
+      return d + ' day' + (d === 1 ? '' : 's');
+    }
+
+    function _badge(s) {
+      var sl = (s || '').toLowerCase();
+      var cls = 'svc-qb-status-default';
+      if      (sl.includes('investigating'))                               cls = 'svc-qb-status-investigating';
+      else if (sl.includes('waiting'))                                     cls = 'svc-qb-status-waiting';
+      else if (sl.includes('initial'))                                     cls = 'svc-qb-status-initial';
+      else if (sl.includes('soft close') || sl.includes('soft-close'))    cls = 'svc-qb-status-soft-close';
+      else if (sl.includes('response received') || sl.includes('for support')) cls = 'svc-qb-status-response';
+      else if (sl.includes('closed') || sl.startsWith('c -'))             cls = 'svc-qb-status-closed';
+      else if (sl.startsWith('s -'))                                       cls = 'svc-qb-status-soft-close';
+      else if (sl.startsWith('o -'))                                       cls = 'svc-qb-status-investigating';
+      return '<span class="svc-qb-status-badge ' + cls + '">' +
+             '<span class="svc-qb-status-dot"></span>' + _esc(s || '—') + '</span>';
+    }
+
+    var GROUPS = {
+      desc:    ['short description','description','concern','subject','title'],
+      assign:  ['assigned to','assigned','agent'],
+      contact: ['contact','full name','customer name'],
+      endUser: ['end user','client','account','customer'],
+      type:    ['type','category'],
+      status:  ['case status','status'],
+      age:     ['age'],
+      lastUpd: ['last update days','last update','update days'],
+      latest:  ['latest update on the case','latest update','last update','last comment','most recent update','update on the case','latest'],
+      notes:   ['case notes detail','case notes','case note','case details','resolution details','notes'],
+    };
+
+    function _matchGroup(rec, keys) {
+      if (!rec || !rec.columnMap) return null;
+      return Object.keys(rec.columnMap).find(function (id) {
+        var lbl = (rec.columnMap[id] || '').toLowerCase();
+        return keys.some(function (k) { return lbl.includes(k); });
+      }) || null;
+    }
+
+    function _populate(caseNum, rec) {
+      var knownColIds = new Set();
+      var resolved = {};
+      Object.keys(GROUPS).forEach(function (key) {
+        var colId = _matchGroup(rec, GROUPS[key]);
+        resolved[key] = colId;
+        if (colId) knownColIds.add(colId);
+      });
+      function getVal(key) {
+        var colId = resolved[key];
+        if (!colId) return '';
+        var f = rec.fields[colId];
+        return f && f.value != null ? String(f.value) : '';
+      }
+      var desc    = getVal('desc')    || '—';
+      var assign  = getVal('assign')  || '—';
+      var contact = getVal('contact') || '—';
+      var endUser = getVal('endUser') || '—';
+      var type    = getVal('type')    || '—';
+      var status  = getVal('status')  || '—';
+      var age     = getVal('age');
+      var lastUpd = getVal('lastUpd');
+      var latest  = getVal('latest')  || '—';
+      var notes   = getVal('notes');
+
+      _set('svcQbcdRowBadge',  caseNum);
+      _set('svcQbcdCaseId',    caseNum);
+      _set('svcQbcdCaseId2',   caseNum);
+      _set('svcQbcdDesc',      desc);
+      _html('svcQbcdStatusBadge', _badge(status));
+      _html('svcQbcdStatus2',     _badge(status));
+      _set('svcQbcdMeta',      endUser);
+      _set('svcQbcdKpiAge',    age     ? _dur(age)     : '—');
+      _set('svcQbcdKpiLast',   lastUpd ? _dur(lastUpd) : '—');
+      _set('svcQbcdKpiType',   type);
+      _set('svcQbcdKpiEndUser', endUser);
+      _set('svcQbcdAssigned',  assign);
+      _set('svcQbcdContact',   contact);
+      _set('svcQbcdEndUser',   endUser);
+      _set('svcQbcdType2',     type);
+      _set('svcQbcdLatest',    latest);
+
+      var notesBlock = document.getElementById('svcQbcdNotesBlock');
+      if (notes && notes !== 'N/A') {
+        _set('svcQbcdNotes', notes);
+        if (notesBlock) notesBlock.style.display = '';
+      } else {
+        if (notesBlock) notesBlock.style.display = 'none';
+      }
+
+      var extraContainer = document.getElementById('svcQbcdExtraFields');
+      var extraBlock     = document.getElementById('svcQbcdExtraBlock');
+      if (extraContainer && rec.columnMap) {
+        var extraCols = Object.keys(rec.columnMap).filter(function (id) { return !knownColIds.has(id); });
+        var extraHtml = extraCols.map(function (colId) {
+          var label = rec.columnMap[colId] || ('Field #' + colId);
+          var f     = rec.fields[colId];
+          var val   = (f && f.value != null) ? String(f.value) : '';
+          if (!val || val === 'N/A' || val === '—') return '';
+          return '<div class="svc-qbcd-kv"><span class="svc-qbcd-kv-lbl">' + _esc(label) +
+            '</span><span class="svc-qbcd-kv-val">' + _esc(val) + '</span></div>';
+        }).filter(Boolean).join('');
+        extraContainer.innerHTML = extraHtml || '';
+        if (extraBlock) extraBlock.style.display = extraHtml ? '' : 'none';
+      }
+
+      var loading = document.getElementById('svcQbcdLoading');
+      var content = document.getElementById('svcQbcdContent');
+      if (loading) loading.style.display = 'none';
+      if (content) content.style.display = '';
+    }
+
+    function _showError(msg) {
+      var loading = document.getElementById('svcQbcdLoading');
+      if (loading) {
+        loading.innerHTML = '<span style="font-size:22px">⚠️</span>' +
+          '<span style="color:rgba(239,68,68,.8);font-size:12px;">' + _esc(msg) + '</span>';
+        loading.style.display = '';
+      }
+      var content = document.getElementById('svcQbcdContent');
+      if (content) content.style.display = 'none';
+    }
+
+    function _closeSvcModal() {
+      modal.classList.remove('svc-cdm-open');
+    }
+
+    window._openSvcCaseDetailModal = function (rowIndex) {
+      if (!current) return;
+
+      var CASE_EXACT = ['case#','case #','case number','case no','case id','case'];
+      var cols = (current.sheet && current.sheet.column_defs) || [];
+      var caseCol = cols.find(function (c) {
+        return CASE_EXACT.indexOf(String(c.label || '').trim().toLowerCase()) !== -1;
+      });
+      if (!caseCol) caseCol = cols.find(function (c) {
+        return String(c.label || '').toLowerCase().includes('case');
+      });
+      if (!caseCol) caseCol = cols[0];
+
+      var rowObj  = caseCol ? current.rows.find(function (r) { return r.row_index === rowIndex; }) : null;
+      var caseNum = (rowObj && caseCol) ? String(rowObj.data[caseCol.key] || '').trim() : '';
+
+      // Reset & show modal in loading state immediately
+      _set('svcQbcdRowBadge', caseNum || String(rowIndex + 1));
+      _set('svcQbcdCaseId',   caseNum || '—');
+      _set('svcQbcdDesc',     '');
+      _html('svcQbcdStatusBadge', '');
+      _set('svcQbcdMeta', '');
+      var loading = document.getElementById('svcQbcdLoading');
+      var content = document.getElementById('svcQbcdContent');
+      if (loading) {
+        loading.innerHTML = '<div class="svc-qbcd-spinner"></div><span>Fetching QB data…</span>';
+        loading.style.display = '';
+      }
+      if (content) content.style.display = 'none';
+
+      modal.classList.add('svc-cdm-open');
+      if (modal.parentElement !== document.body) document.body.appendChild(modal);
+
+      if (!caseNum) { _showError('No Case # found in this row.'); return; }
+      if (!window.svcQbLookup) { _showError('QB Lookup module not loaded.'); return; }
+
+      window.svcQbLookup.lookupCase(caseNum).then(function (rec) {
+        if (!modal.classList.contains('svc-cdm-open')) return;
+        if (!rec) { _showError('Case #' + caseNum + ' not found in QuickBase.'); return; }
+        _populate(caseNum, rec);
+      }).catch(function (err) {
+        if (!modal.classList.contains('svc-cdm-open')) return;
+        _showError('Failed: ' + (err && err.message ? err.message : String(err)));
+      });
+    };
+
+    // Wire close buttons
+    ['svcQbcdCloseBtn','svcQbcdCloseBtn2'].forEach(function (id) {
+      var btn = document.getElementById(id);
+      if (btn) btn.addEventListener('click', _closeSvcModal);
+    });
+
+    var copyBtn = document.getElementById('svcQbcdCopyBtn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function () {
+        var id = (document.getElementById('svcQbcdCaseId') || {}).textContent || '';
+        if (!id || id === '—') return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(id).then(function () {
+            copyBtn.textContent = 'Copied!';
+            setTimeout(function () { copyBtn.textContent = 'Copy Case #'; }, 1800);
+          }).catch(function () {});
+        }
+      });
+    }
+
+    modal.addEventListener('mousedown', function (e) { if (e.target === modal) _closeSvcModal(); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal.classList.contains('svc-cdm-open')) _closeSvcModal();
+    });
+  })();
+
   // ── Row number right-click context menu ────────────────────────────────────────
   // Right-clicking any row-num td shows "Delete this row" action.
   // Deletes from current.rows + re-indexes all rows below + persists to Supabase.
   function attachRowContextMenu() {
     grid.querySelectorAll('tbody td.row-num').forEach(function (td) {
+      // LEFT-CLICK → open case detail modal
+      td.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var rowIndex = parseInt(td.dataset.rowIndex, 10);
+        if (isNaN(rowIndex)) return;
+        if (typeof window._openSvcCaseDetailModal === 'function') {
+          window._openSvcCaseDetailModal(rowIndex);
+        }
+      });
+
       td.addEventListener('contextmenu', function (e) {
         e.preventDefault();
         e.stopPropagation();

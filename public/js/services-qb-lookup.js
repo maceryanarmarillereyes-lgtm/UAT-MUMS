@@ -124,11 +124,13 @@
   // ── Rate limiter ──────────────────────────────────────────────────────────────
   var _lastApiAt    = 0;
   var _MIN_API_GAP  = 200; // ms between any consecutive API calls
+  var _urgentMode   = false; // true during refreshAllLinkedColumns (Update button)
 
   function _waitForGap() {
     var now     = Date.now();
     var elapsed = now - _lastApiAt;
-    var wait    = elapsed < _MIN_API_GAP ? _MIN_API_GAP - elapsed : 0;
+    var gap     = _urgentMode ? 50 : _MIN_API_GAP;
+    var wait    = elapsed < gap ? gap - elapsed : 0;
     _lastApiAt  = now + wait;
     return wait > 0
       ? new Promise(function (res) { setTimeout(res, wait); })
@@ -148,7 +150,7 @@
       .then(function (headers) {
         return _waitForGap().then(function () {
           return fetch(
-            '/api/studio/qb_data?recordIds=' + ids.map(encodeURIComponent).join(','),
+            '/api/studio/qb_data?recordIds=' + ids.map(encodeURIComponent).join(',') + (_urgentMode ? '&bust=1' : ''),
             { headers: headers }
           );
         });
@@ -359,6 +361,64 @@
   // Main pipeline: batch-fetch all nks in chunks of _BATCH_SIZE.
   // On transient failure: falls back to qb_search for that chunk.
   // Only marks _notFound when QB confirmed the record doesn't exist.
+  // ── _processOneChunk ──────────────────────────────────────────────────────────
+  // Handles a single batch chunk: fetch → reconcile → cache-write.
+  function _processOneChunk(chunk) {
+    return _batchFetch(chunk).then(function (result) {
+      var now = Date.now();
+
+      if (result.transient) {
+        return _searchFallback(chunk);
+      }
+
+      var unresolved = chunk.filter(function (nk) {
+        return !(result.found && result.found[nk]);
+      });
+      var reconcile = Promise.resolve();
+      if (unresolved.length) {
+        reconcile = _reportFallback(unresolved).then(function () {
+          var probeNow = Date.now();
+          unresolved.forEach(function (nk) {
+            if (_cache[nk] && (probeNow - _cache[nk].at) < _CACHE_TTL) {
+              delete result.notFound[nk];
+            }
+          });
+          var stillMissing = unresolved.filter(function (nk) {
+            return !(_cache[nk] && (probeNow - _cache[nk].at) < _CACHE_TTL);
+          });
+          if (!stillMissing.length) return;
+          return _searchFallback(stillMissing).then(function () {
+            var afterSearch = Date.now();
+            stillMissing.forEach(function (nk) {
+              if (_cache[nk] && (afterSearch - _cache[nk].at) < _CACHE_TTL) {
+                delete result.notFound[nk];
+              }
+            });
+          });
+        });
+      }
+
+      return reconcile.then(function () {
+        chunk.forEach(function (nk) {
+          var rec = result.found[nk] || _cache[nk];
+          if (rec) {
+            _cache[nk]    = Object.assign({ at: now }, rec);
+            delete _notFound[nk];
+          } else if (result.notFound && result.notFound[nk]) {
+            _notFound[nk] = now;
+          } else {
+            delete _notFound[nk];
+          }
+          delete _inFlight[nk];
+        });
+      });
+    });
+  }
+
+  // ── _processBatchPipeline ──────────────────────────────────────────────────────
+  // Parallel pipeline: runs up to 3 chunks concurrently for 1-2 second load.
+  // Falls back to sequential on transient errors (qb_search path).
+  // Replaced sequential reduce() — no regressions to cache/notFound logic.
   function _processBatchPipeline(nks) {
     if (!nks || !nks.length) return Promise.resolve();
 
@@ -367,67 +427,33 @@
       chunks.push(nks.slice(i, i + _BATCH_SIZE));
     }
 
-    return chunks.reduce(function (chain, chunk) {
-      return chain.then(function () {
-        return _batchFetch(chunk).then(function (result) {
-          var now = Date.now();
+    // Parallel with max 3 concurrent batches (free-tier safe: still only ~11 total)
+    var MAX_CONCURRENT = 3;
+    var idx = 0;
+    var running = 0;
 
-          if (result.transient) {
-            // QB API issue — use proven qb_search fallback for this chunk
-            // Only for visible rows (chunk is already prioritized by caller)
-            return _searchFallback(chunk);
-          }
-
-          var unresolved = chunk.filter(function (nk) {
-            return !(result.found && result.found[nk]);
-          });
-          var reconcile = Promise.resolve();
-          if (unresolved.length) {
-            reconcile = _reportFallback(unresolved).then(function () {
-              var probeNow = Date.now();
-              unresolved.forEach(function (nk) {
-                if (_cache[nk] && (probeNow - _cache[nk].at) < _CACHE_TTL) {
-                  delete result.notFound[nk];
-                }
-              });
-              var stillMissing = unresolved.filter(function (nk) {
-                return !(_cache[nk] && (probeNow - _cache[nk].at) < _CACHE_TTL);
-              });
-              if (!stillMissing.length) return;
-              return _searchFallback(stillMissing).then(function () {
-                var afterSearch = Date.now();
-                stillMissing.forEach(function (nk) {
-                  if (_cache[nk] && (afterSearch - _cache[nk].at) < _CACHE_TTL) {
-                    delete result.notFound[nk];
-                  }
-                });
-              });
+    return new Promise(function (resolve) {
+      function next() {
+        while (running < MAX_CONCURRENT && idx < chunks.length) {
+          /* eslint-disable no-loop-func */
+          (function (chunk) {
+            running++;
+            _processOneChunk(chunk).then(function () {
+              running--;
+              if (idx < chunks.length) next();
+              else if (running === 0) resolve();
+            }, function () {
+              running--;
+              if (idx < chunks.length) next();
+              else if (running === 0) resolve();
             });
-          }
-
-          return reconcile.then(function () {
-            // Batch succeeded — write cache and genuine not-found entries.
-            // IMPORTANT: only trust explicit backend notFound list to avoid false
-            // negatives on partial/transitional QB responses.
-            chunk.forEach(function (nk) {
-              var rec = result.found[nk] || _cache[nk];
-              if (rec) {
-                _cache[nk]    = Object.assign({ at: now }, rec);
-                delete _notFound[nk];
-              } else if (result.notFound && result.notFound[nk]) {
-                // QB responded and explicitly confirmed this case is missing
-                _notFound[nk] = now;
-              } else {
-                // Unresolved key with no explicit notFound signal:
-                // do not poison cache; allow retry on next pass.
-                delete _notFound[nk];
-              }
-              delete _inFlight[nk];
-            });
-          });
-        });
-      });
-    }, Promise.resolve());
+          })(chunks[idx++]);
+          /* eslint-enable no-loop-func */
+        }
+        if (idx >= chunks.length && running === 0) resolve();
+      }
+      next();
+    });
   }
 
   // ── lookupCase ─────────────────────────────────────────────────────────────────
@@ -568,7 +594,10 @@
       _notFound = {};
       _inFlight = {};
       _reportIdx = null;
+      _rowCaseSeen = {}; // Clear paint state so force re-fetches all rows
     }
+    // Set urgent mode for the duration of this call (disables 200ms rate gap)
+    _urgentMode = !!force;
     var cols = current.sheet.column_defs || [];
 
     var linkedCols = cols.filter(function (c) {
@@ -891,7 +920,10 @@
         allRows: true,
         refreshCache: true
       });
-      return waitForLookupIdle(120000);
+      var idleP = waitForLookupIdle(120000);
+      // Reset urgent mode once idle (after all batches complete)
+      idleP.then(function () { _urgentMode = false; }).catch(function () { _urgentMode = false; });
+      return idleP;
     },
     hydrateLinkedColumnsForExport: function (current, gridEl) {
       autofillLinkedColumns(current, gridEl, { force: false, allRows: true });
