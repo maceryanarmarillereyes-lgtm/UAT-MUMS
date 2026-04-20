@@ -18,6 +18,9 @@
   var undoStack    = [];
   var redoStack    = [];
   var _columnRepairPromise = null;
+  // ── Sort State ──────────────────────────────────────────────────────────────
+  // key: column key string | null (no sort), dir: 'asc' | 'desc'
+  var _sortState   = { key: null, dir: 'asc' };
 
   function sanitizeHeaderLabel(label, fallbackIndex) {
     var s = String(label == null ? '' : label)
@@ -115,8 +118,25 @@
     var isFilteredView = Array.isArray(current.__treeFilteredRows);
     var viewRows = isFilteredView
       ? current.__treeFilteredRows.slice().sort(function (a, b) { return a.row_index - b.row_index; })
-      : current.rows;
-    var totalRows = isFilteredView ? Math.max(viewRows.length, 1) : Math.max(current.rows.length + 2, 10);
+      : current.rows.slice();
+
+    // ── Apply sort if active ─────────────────────────────────────────────────
+    var isSorted = !!_sortState.key;
+    if (isSorted) {
+      var _sk = _sortState.key;
+      var _sd = _sortState.dir;
+      viewRows = viewRows.slice().sort(function (a, b) {
+        var va = (a.data && a.data[_sk] != null) ? String(a.data[_sk]).trim() : '';
+        var vb = (b.data && b.data[_sk] != null) ? String(b.data[_sk]).trim() : '';
+        var na = parseFloat(va), nb = parseFloat(vb);
+        var cmp = (!isNaN(na) && !isNaN(nb)) ? (na - nb) : va.toLowerCase().localeCompare(vb.toLowerCase());
+        return _sd === 'desc' ? -cmp : cmp;
+      });
+    }
+
+    var totalRows = (isFilteredView || isSorted)
+      ? Math.max(viewRows.length, 1)
+      : Math.max(current.rows.length + 2, 10);
 
     var thead   = mkEl('thead');
     var headTr  = mkEl('tr', null, thead);
@@ -125,7 +145,15 @@
       var th = mkEl('th', { textContent: sanitizeHeaderLabel(c.label, 0) }, headTr);
       th.dataset.key = c.key;
       th.tabIndex = 0;
-      th.title = 'Right-click to rename column';
+      th.title = 'Right-click for column options · Right-click to sort';
+      // Sort indicator
+      if (_sortState.key === c.key) {
+        var sortBadge = document.createElement('span');
+        sortBadge.className = 'th-sort-badge';
+        sortBadge.textContent = _sortState.dir === 'asc' ? ' ▲' : ' ▼';
+        sortBadge.title = _sortState.dir === 'asc' ? 'Sorted A→Z (click header menu to change)' : 'Sorted Z→A (click header menu to change)';
+        th.appendChild(sortBadge);
+      }
       // QB Lookup badge
       if (c.qbLookup && c.qbLookup.fieldLabel) {
         var badge = document.createElement('span');
@@ -138,7 +166,7 @@
 
     var tbody = mkEl('tbody');
     for (var i = 0; i < totalRows; i++) {
-      var rowData = isFilteredView
+      var rowData = (isFilteredView || isSorted)
         ? (viewRows[i] || { row_index: i, data: {} })
         : (current.rows.find(function (r) { return r.row_index === i; }) || { row_index: i, data: {} });
       var rowIndex = Number.isFinite(rowData.row_index) ? rowData.row_index : i;
@@ -347,6 +375,32 @@
 
         addSep();
 
+        /* ── SORT COLUMN ── */
+        addSectionHeader('SORT');
+        var isAscActive  = (_sortState.key === key && _sortState.dir === 'asc');
+        var isDescActive = (_sortState.key === key && _sortState.dir === 'desc');
+        buildItem(menu, {
+          icon: '↑',
+          label: 'Sort A → Z  (Ascending)',
+          action: 'sort-asc',
+          badge: isAscActive ? '✓' : ''
+        });
+        buildItem(menu, {
+          icon: '↓',
+          label: 'Sort Z → A  (Descending)',
+          action: 'sort-desc',
+          badge: isDescActive ? '✓' : ''
+        });
+        if (_sortState.key) {
+          buildItem(menu, {
+            icon: '✕',
+            label: 'Clear Sort',
+            action: 'sort-clear'
+          });
+        }
+
+        addSep();
+
         /* ── MOVE COLUMN ── */
         addSectionHeader('MOVE COLUMN');
         buildItem(menu, {
@@ -410,7 +464,17 @@
           if (!target || !target.dataset.action) return;
           var action = target.dataset.action;
 
-          if (action === 'move-left' && colIdx > 0) {
+          // ── SORT ACTIONS ────────────────────────────────────────────────────
+          if (action === 'sort-asc') {
+            _sortState = { key: key, dir: 'asc' };
+            render(); closeAllCtxMenus();
+          } else if (action === 'sort-desc') {
+            _sortState = { key: key, dir: 'desc' };
+            render(); closeAllCtxMenus();
+          } else if (action === 'sort-clear') {
+            _sortState = { key: null, dir: 'asc' };
+            render(); closeAllCtxMenus();
+          } else if (action === 'move-left' && colIdx > 0) {
             var tmp = cols[colIdx]; cols[colIdx] = cols[colIdx-1]; cols[colIdx-1] = tmp;
             await window.servicesDB.updateColumns(current.sheet.id, cols);
             render();

@@ -295,6 +295,7 @@
       td.style.outline = '';
       td.style.position = '';
       td.style.paddingLeft = '';
+      td.style.boxShadow = '';
       var inp = td.querySelector('input.cell');
       if (inp) {
         inp.style.color = '';
@@ -314,6 +315,8 @@
         td.style.background = '';
         td.style.borderTop = '';
         td.style.borderBottom = '';
+        td.style.borderLeft = '';
+        td.style.boxShadow = '';
         var inp = td.querySelector('input.cell');
         if (inp) {
           inp.style.color = '';
@@ -454,7 +457,8 @@
     });
 
     // ── Apply row-level highlights ──────────────────────────────────────────
-    // Row highlights override per-cell styles for the whole tr
+    // Uses semi-transparent fill (enterprise look) + left accent bar on row-num
+    // Grid lines are preserved via explicit box-shadow reinforcement
     Object.keys(rowHighlights).forEach(function (rowIdxStr) {
       var rowIdx = parseInt(rowIdxStr, 10);
       var hl = rowHighlights[rowIdx];
@@ -467,24 +471,50 @@
 
       tr.setAttribute('data-cf-row', '1');
 
-      // Paint ALL td in this row (skip row-num td)
-      tr.querySelectorAll('td').forEach(function (td) {
+      // ── Compute semi-transparent background (13% opacity) ─────────────────
+      var semiBg = hl.bgColor ? hexToRgba(hl.bgColor, 0.13) : '';
+      // ── Accent color for the left bar ─────────────────────────────────────
+      var accentColor = hl.borderColor || hl.bgColor || '';
+
+      // Paint ALL td in this row
+      var tds = tr.querySelectorAll('td');
+      tds.forEach(function (td, tdIdx) {
         if (td.classList.contains('row-num')) {
-          // Paint a left accent bar on row-num
-          if (hl.borderColor || hl.bgColor) {
-            td.style.borderLeft = '3px solid ' + (hl.borderColor || hl.bgColor);
+          // Row number cell: solid left accent bar + subtle fill
+          if (accentColor) {
+            td.style.boxShadow = 'inset 4px 0 0 ' + accentColor;
+          }
+          if (semiBg) {
+            td.style.background = semiBg;
           }
           return;
         }
-        if (hl.bgColor) td.style.background = hl.bgColor;
+
+        // Data cells: semi-transparent fill + faint bottom/right borders preserved
         td.setAttribute('data-cf-applied', '1');
+        if (semiBg) {
+          td.style.background = semiBg;
+        }
+        // Reinforce grid lines so they stay visible over colored background
+        // Uses box-shadow instead of border overrides (non-destructive)
+        td.style.boxShadow = [
+          'inset -1px 0 0 rgba(148,163,184,0.18)',   // right divider
+          'inset 0 -1px 0 rgba(148,163,184,0.18)'    // bottom divider
+        ].join(', ');
 
         var inp = td.querySelector('input.cell');
         if (inp) {
           if (hl.textColor) {
             inp.style.color = hl.textColor;
           } else if (hl.bgColor) {
-            inp.style.color = contrastColor(hl.bgColor);
+            // Auto-contrast text, but softer (not full contrast — premium feel)
+            var luminance = (function (hex) {
+              var c = hex.replace('#','');
+              if (c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+              var r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);
+              return (0.299*r+0.587*g+0.114*b)/255;
+            })(hl.bgColor);
+            inp.style.color = luminance > 0.55 ? '#1e293b' : '#f1f5f9';
           }
           inp.style.fontWeight     = hl.bold        ? '700' : '';
           inp.style.fontStyle      = hl.italic      ? 'italic' : '';
@@ -494,15 +524,6 @@
           inp.style.textDecoration = dec2.join(' ') || '';
         }
       });
-
-      // Top+bottom border accent for the whole row
-      if (hl.borderColor) {
-        var tds = tr.querySelectorAll('td');
-        tds.forEach(function (td, i) {
-          td.style.borderTop    = '1px solid ' + hl.borderColor;
-          td.style.borderBottom = '1px solid ' + hl.borderColor;
-        });
-      }
     });
   }
 
@@ -514,7 +535,14 @@
     var strike    = !!rule.strikethrough;
     var underline = !!rule.underline;
 
-    if (bgColor) td.style.background = bgColor;
+    if (bgColor) {
+      td.style.background = bgColor;
+      // Reinforce cell borders so they remain visible over solid CF background
+      td.style.boxShadow = [
+        'inset -1px 0 0 rgba(148,163,184,0.22)',
+        'inset 0 -1px 0 rgba(148,163,184,0.22)'
+      ].join(', ');
+    }
     td.setAttribute('data-cf-applied', '1');
 
     var inp = td.querySelector('input.cell');
@@ -522,7 +550,7 @@
       if (textColor) inp.style.color = textColor;
       else if (bgColor) inp.style.color = contrastColor(bgColor);
       inp.style.fontWeight     = bold    ? '700' : '';
-      inp.style.fontStyle      = italic  ? 'italic' : '';
+      inp.style.fontStyle      = italic  ? 'italic' : ''  ;
       var dec = [];
       if (strike)    dec.push('line-through');
       if (underline) dec.push('underline');
@@ -1226,11 +1254,23 @@
      DRAFT SYNC
   ───────────────────────────────────────────────────────────────────────── */
 
+  /** Push _state.rules into state.sheet.column_defs so paintGrid() live-preview
+   *  reflects ALL rules in the current editing session (not just last-saved). */
+  function syncToColumnDefs() {
+    if (!window.servicesGrid) return;
+    var st = window.servicesGrid.getState();
+    if (!st || !st.sheet || !Array.isArray(st.sheet.column_defs)) return;
+    if (_state.colIdx < 0 || _state.colIdx >= st.sheet.column_defs.length) return;
+    var liveCol = st.sheet.column_defs[_state.colIdx];
+    if (liveCol) liveCol.conditionalRules = deepClone(_state.rules);
+  }
+
   function syncDraftToRule() {
     if (_state.activeRuleIdx >= 0 && _state.draft) {
       _state.rules[_state.activeRuleIdx] = deepClone(_state.draft);
     }
-    paintGrid(); // live preview on the grid
+    syncToColumnDefs(); // ← KEY FIX: push ALL rules into live column_defs before paint
+    paintGrid();
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
@@ -1267,28 +1307,56 @@
   }
 
   async function saveRules() {
-    if (!window.servicesGrid || !window.servicesDB) { closeModal(); return; }
+    // ── Guard: need grid + DB ──────────────────────────────────────────────
+    if (!window.servicesGrid) {
+      window.svcToast && window.svcToast.show('error', 'Save Failed', 'Grid not ready. Please refresh.');
+      return;
+    }
+    if (!window.servicesDB) {
+      window.svcToast && window.svcToast.show('error', 'Save Failed', 'DB not ready. Please refresh.');
+      return;
+    }
+
     var state = window.servicesGrid.getState();
-    if (!state || !state.sheet) { closeModal(); return; }
+    if (!state || !state.sheet) {
+      window.svcToast && window.svcToast.show('error', 'Save Failed', 'No sheet loaded.');
+      closeModal();
+      return;
+    }
 
     var cols = state.sheet.column_defs || [];
-    var col = cols[_state.colIdx];
-    if (!col) { closeModal(); return; }
+    var col  = cols[_state.colIdx];
+    if (!col) {
+      window.svcToast && window.svcToast.show('error', 'Save Failed', 'Column not found.');
+      closeModal();
+      return;
+    }
 
-    // Commit draft
+    // ── Commit current draft into _state.rules ─────────────────────────────
     if (_state.activeRuleIdx >= 0 && _state.draft) {
       _state.rules[_state.activeRuleIdx] = deepClone(_state.draft);
     }
 
-    col.conditionalRules = deepClone(_state.rules);
+    // Strip internal-only keys before persisting
+    var rulesForSave = deepClone(_state.rules).map(function (r) {
+      delete r._opCat;
+      delete r._evalRowData;
+      delete r._evalColLabelMap;
+      return r;
+    });
 
+    // ── Write into local column_defs ───────────────────────────────────────
+    col.conditionalRules = rulesForSave;
+
+    // ── Persist to Supabase ────────────────────────────────────────────────
     try {
       await window.servicesDB.updateColumns(state.sheet.id, cols);
-      window.svcToast && window.svcToast.show('success', 'Conditional Formatting', 'Rules saved successfully.');
-      paintGrid();
+      window.svcToast && window.svcToast.show('success', 'Conditional Formatting', 'Rules saved — ' + rulesForSave.length + ' rule(s) active.');
     } catch (err) {
       window.svcToast && window.svcToast.show('error', 'CF Save Failed', err && err.message ? err.message : 'Try again.');
     }
+
+    paintGrid();
     closeModal();
   }
 
@@ -1297,6 +1365,7 @@
     _state.rules = [];
     _state.activeRuleIdx = -1;
     _state.draft = null;
+    syncToColumnDefs(); // clear from live column_defs too
     renderRulesList();
     renderEditor(null);
     paintGrid();
@@ -1320,6 +1389,8 @@
     _state.rules.push(newRule);
     _state.activeRuleIdx = _state.rules.length - 1;
     _state.draft = deepClone(newRule);
+    syncToColumnDefs(); // ← push new rule into live column_defs immediately
+    paintGrid();
     renderRulesList();
     renderEditor(_state.draft);
   }

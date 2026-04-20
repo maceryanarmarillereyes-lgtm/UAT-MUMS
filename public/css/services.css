@@ -2989,8 +2989,10 @@ input.cell.cell-qb-not-found {
 }
 
 /* ── SCROLLBAR FOR EDITOR ───────────────────────────────── */
+/* NOTE: overflow is already set to overflow-y:auto in the primary rule above.
+   This duplicate was overriding it with hidden — fixed. */
 .svc-cf-editor-pane {
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* Divider line between panes */
@@ -3146,6 +3148,101 @@ input.cell.cell-qb-not-found {
 #svcGrid tr[data-cf-row] td.row-num {
   border-left-width: 3px !important;
   border-left-style: solid !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SORT FEATURE — Column Header Sort Indicators
+   ═══════════════════════════════════════════════════════════ */
+
+/* Sort indicator badge on column headers */
+.th-sort-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  background: linear-gradient(135deg, rgba(34,211,238,0.28), rgba(129,140,248,0.22));
+  border: 1px solid rgba(34,211,238,0.4);
+  color: #22d3ee;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+  cursor: default;
+  position: relative;
+  top: -1px;
+  box-shadow: 0 0 8px rgba(34,211,238,0.2);
+  animation: sort-badge-pop 0.2s cubic-bezier(0.34,1.56,0.64,1);
+  flex-shrink: 0;
+}
+@keyframes sort-badge-pop {
+  from { opacity: 0; transform: scale(0.6) translateY(2px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Active sorted column header accent */
+.svc-grid thead th[data-key].th-sorted {
+  color: #22d3ee;
+  background: rgba(34,211,238,0.07);
+}
+
+/* Sort context menu items — direction arrows */
+.ctx-item[data-action="sort-asc"] .ctx-icon,
+.ctx-item[data-action="sort-desc"] .ctx-icon {
+  font-size: 13px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+.ctx-item[data-action="sort-asc"]:hover .ctx-icon,
+.ctx-item[data-action="sort-desc"]:hover .ctx-icon {
+  color: #22d3ee;
+}
+.ctx-item[data-action="sort-clear"] .ctx-icon {
+  color: #f87171;
+  font-size: 11px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CONDITIONAL FORMATTING — Premium Row Highlight Redesign
+   Enterprise-grade semi-transparent row highlighting
+   ═══════════════════════════════════════════════════════════ */
+
+/* Row highlight: the row-num column gets a solid left accent bar via box-shadow
+   (set inline by paintGrid). This CSS ensures the row-num td is position:relative
+   so the accent renders correctly and provides the "active row" visual cue. */
+#svcGrid tbody tr[data-cf-row] td.row-num {
+  position: relative;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+/* Data cells in highlighted rows: remove the default hover bg so CF bg wins */
+#svcGrid tbody tr[data-cf-row]:hover td:not(.row-num) {
+  /* box-shadow set by JS takes precedence over hover bg
+     — no override needed here, but reset hover background */
+  background: inherit;
+}
+
+/* When row is highlighted, make the row-num separator line tinted */
+#svcGrid tbody tr[data-cf-row] td {
+  /* transition for smooth paint/unpaint */
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* CF-applied single-cell highlight — reinforced grid lines */
+.svc-grid td[data-cf-applied]:not(.row-num) {
+  /* box-shadow grid reinforcement is applied inline by JS.
+     This ensures the input inside is always transparent over the td bg. */
+}
+.svc-grid td[data-cf-applied] > input.cell {
+  background: transparent !important;
+}
+
+/* ── Premium row highlight: left accent pulse animation ──── */
+@keyframes cf-row-accent-in {
+  from { box-shadow: inset 0 0 0 transparent; }
+  to   { box-shadow: inset 4px 0 0 currentColor; }
 }
 
 /* ENDCSS */
