@@ -800,6 +800,27 @@
     });
   }
 
+  // ── TreeView filter hook ─────────────────────────────────────────────────────
+  // setTreeFilter(fn) — fn receives a row object {row_index, data}, returns bool.
+  // Pass null to remove filter (show all rows).
+  var _treeFilter = null;
+  function setTreeFilter(fn) {
+    _treeFilter = fn || null;
+    render();
+  }
+
+  // Patch render() to honour _treeFilter —————————————————————————————————————
+  // We intercept current.rows at render time; original rows stay intact so that
+  // swapping filters does NOT lose data.
+  var _origRender = render;
+  render = function renderFiltered() {
+    if (!current || !_treeFilter) { _origRender(); return; }
+    var _allRows = current.rows;
+    current.rows = _allRows.filter(_treeFilter);
+    _origRender();
+    current.rows = _allRows; // restore immediately after render
+  };
+
   function getState() { return current; }
   window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter };
 })();
