@@ -377,15 +377,14 @@
             return _searchFallback(chunk);
           }
 
-          var foundCount = Object.keys(result.found || {}).length;
-          var allMarkedNotFound = chunk.every(function (nk) {
-            return !!(result.notFound && result.notFound[nk]);
+          var unresolved = chunk.filter(function (nk) {
+            return !(result.found && result.found[nk]);
           });
           var reconcile = Promise.resolve();
-          if (!foundCount && allMarkedNotFound) {
-            reconcile = _reportFallback(chunk).then(function () {
+          if (unresolved.length) {
+            reconcile = _reportFallback(unresolved).then(function () {
               var probeNow = Date.now();
-              chunk.forEach(function (nk) {
+              unresolved.forEach(function (nk) {
                 if (_cache[nk] && (probeNow - _cache[nk].at) < _CACHE_TTL) {
                   delete result.notFound[nk];
                 }
