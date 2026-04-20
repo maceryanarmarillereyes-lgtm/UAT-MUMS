@@ -112,7 +112,11 @@
     empty.style.display = 'none';
     grid.hidden = false;
     var cols      = current.sheet.column_defs || [];
-    var totalRows = Math.max(current.rows.length + 2, 10);
+    var isFilteredView = Array.isArray(current.__treeFilteredRows);
+    var viewRows = isFilteredView
+      ? current.__treeFilteredRows.slice().sort(function (a, b) { return a.row_index - b.row_index; })
+      : current.rows;
+    var totalRows = isFilteredView ? Math.max(viewRows.length, 1) : Math.max(current.rows.length + 2, 10);
 
     var thead   = mkEl('thead');
     var headTr  = mkEl('tr', null, thead);
@@ -134,10 +138,13 @@
 
     var tbody = mkEl('tbody');
     for (var i = 0; i < totalRows; i++) {
-      var rowData = current.rows.find(function (r) { return r.row_index === i; }) || { data: {} };
+      var rowData = isFilteredView
+        ? (viewRows[i] || { row_index: i, data: {} })
+        : (current.rows.find(function (r) { return r.row_index === i; }) || { row_index: i, data: {} });
+      var rowIndex = Number.isFinite(rowData.row_index) ? rowData.row_index : i;
       var tr = mkEl('tr', null, tbody);
-      var rowNumTd = mkEl('td', { className: 'row-num', textContent: String(i + 1) }, tr);
-      rowNumTd.dataset.rowIndex = i;
+      var rowNumTd = mkEl('td', { className: 'row-num', textContent: String(rowIndex + 1) }, tr);
+      rowNumTd.dataset.rowIndex = rowIndex;
       rowNumTd.title = 'Right-click to delete row';
       cols.forEach(function (c) {
         var td  = mkEl('td', null, tr);
@@ -149,7 +156,7 @@
           spellcheck   : false,
           value        : (rowData.data[c.key] != null ? rowData.data[c.key] : '').toString()
         }, td);
-        inp.dataset.row = i;
+        inp.dataset.row = rowIndex;
         inp.dataset.key = c.key;
         inp.dataset.format = (c && c.format) ? c.format : 'auto';
         if (c.format === 'number') inp.inputMode = 'numeric';
@@ -828,11 +835,13 @@
   // swapping filters does NOT lose data.
   var _origRender = render;
   render = function renderFiltered() {
-    if (!current || !_treeFilter) { _origRender(); return; }
-    var _allRows = current.rows;
-    current.rows = _allRows.filter(_treeFilter);
+    if (!current || !_treeFilter) {
+      if (current) delete current.__treeFilteredRows;
+      _origRender();
+      return;
+    }
+    current.__treeFilteredRows = (current.rows || []).filter(_treeFilter);
     _origRender();
-    current.rows = _allRows; // restore immediately after render
   };
 
   function getState() { return current; }
