@@ -861,17 +861,50 @@
     }
   }
 
+  function countUnresolvedLinkedCells(state) {
+    if (!state || !state.sheet || !Array.isArray(state.rows)) return 0;
+    var cols = state.sheet.column_defs || [];
+    var linkedCols = cols.filter(function (c) { return c && c.qbLookup && c.qbLookup.fieldId; });
+    if (!linkedCols.length) return 0;
+    var caseCol = cols.find(function (c) {
+      var label = String(c && c.label || '').trim().toLowerCase();
+      return label === 'case#' || label === 'case #' || label === 'case number' || label === 'case no' || label === 'case id' || label === 'case';
+    }) || cols.find(function (c) { return String(c && c.label || '').toLowerCase().indexOf('case') !== -1; }) || cols[0];
+    if (!caseCol) return 0;
+
+    var unresolved = 0;
+    state.rows.forEach(function (row) {
+      if (!row || !row.data) return;
+      var caseVal = String(row.data[caseCol.key] || '').trim();
+      if (!caseVal) return;
+      linkedCols.forEach(function (c) {
+        var v = row.data[c.key];
+        if (v == null || String(v).trim() === '' || String(v).trim() === '—') unresolved++;
+      });
+    });
+    return unresolved;
+  }
+
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
 
   if (qbUpdateBtn) {
     qbUpdateBtn.addEventListener('click', async function () {
       if (!current || !window.svcQbLookup) return;
+      var targetSheetId = current.sheet && current.sheet.id;
       qbUpdateBtn.disabled = true;
       var originalText = qbUpdateBtn.textContent;
       qbUpdateBtn.textContent = '⏳ Updating…';
       setStatus('saving', 'Updating lookup…');
       try {
         await window.svcQbLookup.refreshAllLinkedColumns(current, grid);
+        var unresolved = countUnresolvedLinkedCells(current);
+        if (unresolved > 0) {
+          // second pass for transient misses on large sheets
+          await window.svcQbLookup.refreshAllLinkedColumns(current, grid);
+        }
+        if (!current || !current.sheet || current.sheet.id !== targetSheetId) {
+          throw new Error('Sheet changed while updating. Please click Update again on the selected sheet.');
+        }
         await saveAllRows();
         setStatus('saved', '✓ Lookup updated');
         window.svcToast && window.svcToast.show('success', 'Lookup Updated', 'All linked QB values refreshed.');

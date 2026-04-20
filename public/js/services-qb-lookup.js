@@ -891,31 +891,11 @@
         allRows: true,
         refreshCache: true
       });
-      return new Promise(function (resolve) {
-        var started = Date.now();
-        (function probe() {
-          var idle = !_autofillTimer && Object.keys(_inFlight).length === 0;
-          if (idle || (Date.now() - started) > 15000) {
-            resolve();
-            return;
-          }
-          setTimeout(probe, 120);
-        })();
-      });
+      return waitForLookupIdle(120000);
     },
     hydrateLinkedColumnsForExport: function (current, gridEl) {
       autofillLinkedColumns(current, gridEl, { force: false, allRows: true });
-      return new Promise(function (resolve) {
-        var started = Date.now();
-        (function probe() {
-          var idle = !_autofillTimer && Object.keys(_inFlight).length === 0;
-          if (idle || (Date.now() - started) > 10000) {
-            resolve();
-            return;
-          }
-          setTimeout(probe, 120);
-        })();
-      });
+      return waitForLookupIdle(90000);
     },
     clearCache: function () {
       _cache       = {};
@@ -926,5 +906,21 @@
       _rowCaseSeen = {};
     }
   };
+
+  function waitForLookupIdle(timeoutMs) {
+    timeoutMs = Number(timeoutMs || 90000);
+    return new Promise(function (resolve) {
+      var started = Date.now();
+      var lastBusyAt = Date.now();
+      (function probe() {
+        var busy = !!_autofillTimer || Object.keys(_inFlight).length > 0;
+        if (busy) lastBusyAt = Date.now();
+        var idleFor = Date.now() - lastBusyAt;
+        if (!busy && idleFor >= 250) { resolve(); return; }
+        if ((Date.now() - started) > timeoutMs) { resolve(); return; }
+        setTimeout(probe, 120);
+      })();
+    });
+  }
 
 })();
