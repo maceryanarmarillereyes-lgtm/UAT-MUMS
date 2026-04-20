@@ -73,8 +73,11 @@ function encLit(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); }
 function normalizeCaseKey(v) {
   const raw = String(v == null ? '' : v).trim();
   if (!raw) return '';
-  const compact = raw.replace(/,/g, '');
+  const noPrefix = raw.replace(/^\s*case(?:\s*(?:#|no\.?|number|id))?\s*[:\-]?\s*/i, '').trim();
+  const compact = noPrefix.replace(/,/g, '');
   if (/^\d+(?:\.0+)?$/.test(compact)) return String(Number(compact));
+  const numericToken = compact.match(/\b(\d{3,})(?:\.0+)?\b/);
+  if (numericToken && numericToken[1]) return String(Number(numericToken[1]));
   return compact;
 }
 

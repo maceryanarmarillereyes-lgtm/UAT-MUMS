@@ -34,8 +34,12 @@
   function normalizeCaseKey(v) {
     var raw = String(v == null ? '' : v).trim();
     if (!raw) return '';
-    var compact = raw.replace(/,/g, '');
+    var noPrefix = raw.replace(/^\s*case(?:\s*(?:#|no\.?|number|id))?\s*[:\-]?\s*/i, '').trim();
+    var compact = noPrefix.replace(/,/g, '');
     if (/^\d+(?:\.0+)?$/.test(compact)) return String(Number(compact));
+    // If a row contains "Case# 123456" or "Case Number: 123456", extract the numeric key.
+    var numericToken = compact.match(/\b(\d{3,})(?:\.0+)?\b/);
+    if (numericToken && numericToken[1]) return String(Number(numericToken[1]));
     return compact;
   }
 
