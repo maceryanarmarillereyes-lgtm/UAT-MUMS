@@ -217,6 +217,46 @@
       );
     },
 
+    // ── TreeView Folder CRUD ──────────────────────────────────────────────────
+    async listTreeFolders(sheetId) {
+      const c = await db(); if (!c) return [];
+      const { data, error } = await c
+        .from('services_treeview_folders').select('*')
+        .eq('sheet_id', sheetId)
+        .order('sort_order', { ascending: true });
+      if (error) console.error('[services] listTreeFolders:', error.message);
+      return data || [];
+    },
+
+    async createTreeFolder(sheetId, { name, icon = '📁', color = '#22D3EE',
+      condition_field = null, condition_op = 'eq', condition_value = '', sort_order = 0 } = {}) {
+      const c = await db(); if (!c) return null;
+      const { data, error } = await c
+        .from('services_treeview_folders')
+        .insert({ sheet_id: sheetId, name, icon, color, condition_field, condition_op, condition_value, sort_order })
+        .select().single();
+      if (error) console.error('[services] createTreeFolder:', error.message);
+      return data;
+    },
+
+    async renameTreeFolder(id, name) {
+      const c = await db(); if (!c) return;
+      const { error } = await c.from('services_treeview_folders').update({ name }).eq('id', id);
+      if (error) console.error('[services] renameTreeFolder:', error.message);
+    },
+
+    async updateTreeFolder(id, patch) {
+      const c = await db(); if (!c) return;
+      const { error } = await c.from('services_treeview_folders').update(patch).eq('id', id);
+      if (error) console.error('[services] updateTreeFolder:', error.message);
+    },
+
+    async deleteTreeFolder(id) {
+      const c = await db(); if (!c) return;
+      const { error } = await c.from('services_treeview_folders').delete().eq('id', id);
+      if (error) console.error('[services] deleteTreeFolder:', error.message);
+    },
+
     // Graceful teardown — call on page unload to free server-side channels
     cleanup() {
       const c = window.__MUMS_SB_CLIENT;

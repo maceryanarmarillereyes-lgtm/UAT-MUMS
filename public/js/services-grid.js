@@ -8,6 +8,7 @@
   var undoBtn     = document.getElementById('svcUndo');
   var redoBtn     = document.getElementById('svcRedo');
   var saveBtn     = document.getElementById('svcSaveBtn');
+  var qbUpdateBtn = document.getElementById('svcQbUpdateBtn');
   var statusCells = document.getElementById('svcStatusCells');
   var statusSaved = document.getElementById('svcStatusSaved');
   var SAVE_DEBOUNCE_MS = 800;
@@ -777,6 +778,49 @@
 
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
 
+  if (qbUpdateBtn) {
+    qbUpdateBtn.addEventListener('click', async function () {
+      if (!current || !window.svcQbLookup) return;
+      qbUpdateBtn.disabled = true;
+      var originalText = qbUpdateBtn.textContent;
+      qbUpdateBtn.textContent = '⏳ Updating…';
+      setStatus('saving', 'Updating lookup…');
+      try {
+        await window.svcQbLookup.refreshAllLinkedColumns(current, grid);
+        await saveAllRows();
+        setStatus('saved', '✓ Lookup updated');
+        window.svcToast && window.svcToast.show('success', 'Lookup Updated', 'All linked QB values refreshed.');
+      } catch (err) {
+        setStatus('error', '✕ Lookup update failed');
+        window.svcToast && window.svcToast.show('error', 'Lookup Update Failed', err && err.message ? err.message : 'Try again.');
+      } finally {
+        qbUpdateBtn.disabled = false;
+        qbUpdateBtn.textContent = originalText;
+      }
+    });
+  }
+
+  // ── TreeView filter hook ─────────────────────────────────────────────────────
+  // setTreeFilter(fn) — fn receives a row object {row_index, data}, returns bool.
+  // Pass null to remove filter (show all rows).
+  var _treeFilter = null;
+  function setTreeFilter(fn) {
+    _treeFilter = fn || null;
+    render();
+  }
+
+  // Patch render() to honour _treeFilter —————————————————————————————————————
+  // We intercept current.rows at render time; original rows stay intact so that
+  // swapping filters does NOT lose data.
+  var _origRender = render;
+  render = function renderFiltered() {
+    if (!current || !_treeFilter) { _origRender(); return; }
+    var _allRows = current.rows;
+    current.rows = _allRows.filter(_treeFilter);
+    _origRender();
+    current.rows = _allRows; // restore immediately after render
+  };
+
   function getState() { return current; }
-  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows };
+  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter };
 })();

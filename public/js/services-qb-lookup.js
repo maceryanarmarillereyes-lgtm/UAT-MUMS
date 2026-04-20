@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   /**
-   * services-qb-lookup.js  v4.1  — BATCH + SAFE FALLBACK  (MACE CLEARED)
+   * services-qb-lookup.js  v4.3  — BATCH + SAFE FALLBACK  (MACE CLEARED)
    * ─────────────────────────────────────────────────────────────────────────
    * Free-Tier Safe Strategy:
    *
@@ -67,6 +67,23 @@
     return jwt ? { Authorization: 'Bearer ' + jwt } : {};
   }
 
+  function apiHeadersAsync() {
+    var direct = apiHeaders();
+    if (direct.Authorization) return Promise.resolve(direct);
+
+    var sb = (window.servicesDB && window.servicesDB.client) || window.__MUMS_SB_CLIENT;
+    if (!sb || !sb.auth || typeof sb.auth.getSession !== 'function') {
+      return Promise.resolve({});
+    }
+
+    return sb.auth.getSession()
+      .then(function (out) {
+        var token = out && out.data && out.data.session && out.data.session.access_token;
+        return token ? { Authorization: 'Bearer ' + token } : {};
+      })
+      .catch(function () { return {}; });
+  }
+
   // ── Case key normalization ─────────────────────────────────────────────────────
   // "436,860.0", "Case# 436860", "436860" → "436860"
   function normalizeCaseKey(v) {
@@ -97,8 +114,11 @@
   var _cache         = {};   // nk → { fields, columnMap, at }
   var _notFound      = {};   // nk → timestamp  (only genuine misses)
   var _inFlight      = {};   // nk → Promise     (dedup concurrent fetches)
+  var _reportIdx     = null; // { byNk, at } one-shot fallback index from qb_data report mode
+  var _rowCaseSeen   = {};   // row_index -> normalized case key last painted
   var _CACHE_TTL     = 5 * 60 * 1000;
   var _NOT_FOUND_TTL = 30 * 1000;
+  var _REPORT_TTL    = 2 * 60 * 1000;
   var _BATCH_SIZE    = 50;
 
   // ── Rate limiter ──────────────────────────────────────────────────────────────
@@ -116,47 +136,50 @@
   }
 
   // ── _batchFetch ───────────────────────────────────────────────────────────────
-  // Returns { found: { nk: rec, ... }, transient: bool }
+  // Returns { found: { nk: rec, ... }, notFound: { nk:true }, transient: bool }
   //   found.transient = true  → QB API error / QB not configured / network fail
   //                             → DO NOT write _notFound (will retry on next scroll)
   //   found.transient = false → QB responded; any missing IDs are genuine not-found
   function _batchFetch(nks) {
-    if (!nks || !nks.length) return Promise.resolve({ found: {}, transient: false });
+    if (!nks || !nks.length) return Promise.resolve({ found: {}, notFound: {}, transient: false });
     var ids = nks.slice(0, _BATCH_SIZE);
 
-    return _waitForGap()
-      .then(function () {
-        return fetch(
-          '/api/studio/qb_data?recordIds=' + ids.map(encodeURIComponent).join(','),
-          { headers: apiHeaders() }
-        );
+    return apiHeadersAsync()
+      .then(function (headers) {
+        return _waitForGap().then(function () {
+          return fetch(
+            '/api/studio/qb_data?recordIds=' + ids.map(encodeURIComponent).join(','),
+            { headers: headers }
+          );
+        });
       })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         // QB not configured for this user — transient (not a real miss)
         if (data.warning === 'studio_qb_not_configured') {
-          return { found: {}, transient: true };
+          return { found: {}, notFound: {}, transient: true };
         }
 
         // Server-side QB API error — transient
         if (data.transientError) {
-          return { found: {}, transient: true };
+          return { found: {}, notFound: {}, transient: true };
         }
 
         // Non-ok (auth, settings read fail, etc.) — transient
         if (!data.ok) {
-          return { found: {}, transient: true };
+          return { found: {}, notFound: {}, transient: true };
         }
 
         // ok:true but records is an Array (misconfigured path) — transient
         var recs = data.records;
         if (!recs || Array.isArray(recs)) {
-          return { found: {}, transient: true };
+          return { found: {}, notFound: {}, transient: true };
         }
 
         // Valid batch response — parse results
-        var found   = {};
-        var normIdx = {};
+        var found    = {};
+        var normIdx  = {};
+        var notFound = {};
         Object.keys(recs).forEach(function (rawKey) {
           var nk  = normalizeCaseKey(rawKey);
           var rec = recs[rawKey];
@@ -167,11 +190,25 @@
         ids.forEach(function (id) {
           if (normIdx[id]) found[id] = normIdx[id];
         });
-        return { found: found, transient: false };
+
+        var nf = Array.isArray(data.notFound) ? data.notFound : [];
+        nf.forEach(function (rawId) {
+          var nk = normalizeCaseKey(rawId);
+          if (nk) notFound[nk] = true;
+        });
+
+        // Guard: if backend returned an ambiguous empty payload
+        // (no found and no explicit notFound), treat as transient so
+        // pipeline can recover using qb_search fallback.
+        if (!Object.keys(found).length && !Object.keys(notFound).length && ids.length) {
+          return { found: {}, notFound: {}, transient: true };
+        }
+
+        return { found: found, notFound: notFound, transient: false };
       })
       .catch(function () {
         // Network failure or parse error — transient, never poison cache
-        return { found: {}, transient: true };
+        return { found: {}, notFound: {}, transient: true };
       });
   }
 
@@ -186,12 +223,14 @@
     var idx     = 0;
 
     function fetchOne(nk) {
-      return _waitForGap()
-        .then(function () {
-          return fetch(
-            '/api/studio/qb_search?q=' + encodeURIComponent(nk) + '&top=5',
-            { headers: apiHeaders() }
-          );
+      return apiHeadersAsync()
+        .then(function (headers) {
+          return _waitForGap().then(function () {
+            return fetch(
+              '/api/studio/qb_search?q=' + encodeURIComponent(nk) + '&top=5',
+              { headers: headers }
+            );
+          });
         })
         .then(function (r) { return r.json(); })
         .then(function (data) {
@@ -249,6 +288,73 @@
     });
   }
 
+  // ── _reportFallback ───────────────────────────────────────────────────────────
+  // Safety net when batch path reports "not found" for an entire chunk.
+  // Pulls one report snapshot (max 1000 rows on backend) and builds a local index.
+  // This avoids per-row overload while recovering from batch case-field mismatch.
+  function _reportFallback(nks) {
+    if (!nks || !nks.length) return Promise.resolve();
+    var now = Date.now();
+    if (_reportIdx && (now - _reportIdx.at) < _REPORT_TTL) {
+      nks.forEach(function (nk) {
+        if (_reportIdx.byNk[nk]) _cache[nk] = Object.assign({ at: now }, _reportIdx.byNk[nk]);
+      });
+      return Promise.resolve();
+    }
+
+    return apiHeadersAsync()
+      .then(function (headers) {
+        return _waitForGap().then(function () {
+          return fetch('/api/studio/qb_data', { headers: headers });
+        });
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || !data.ok || !Array.isArray(data.records) || !data.records.length) return;
+
+        var byNk = {};
+        var columns = Array.isArray(data.columns) ? data.columns : [];
+        var colMap = {};
+        columns.forEach(function (c) {
+          var id = String(c && c.id != null ? c.id : '').trim();
+          if (!id) return;
+          colMap[id] = String(c && c.label != null ? c.label : '').trim();
+        });
+
+        data.records.forEach(function (row) {
+          if (!row || typeof row !== 'object') return;
+          var rec = { fields: row, columnMap: colMap };
+          var keys = new Set();
+          Object.keys(row).forEach(function (fid) {
+            var cell = row[fid];
+            var val = cell && typeof cell === 'object' && 'value' in cell ? cell.value : cell;
+            var nk = normalizeCaseKey(val);
+            var label = String(colMap[fid] || '').toLowerCase();
+            if (!nk) return;
+            if (label.indexOf('case') !== -1) keys.add(nk);
+          });
+          // fallback if no labeled-case field found in this row
+          if (!keys.size) {
+            Object.keys(row).forEach(function (fid) {
+              var cell = row[fid];
+              var val = cell && typeof cell === 'object' && 'value' in cell ? cell.value : cell;
+              var nk = normalizeCaseKey(val);
+              if (nk) keys.add(nk);
+            });
+          }
+          keys.forEach(function (nk) {
+            if (!byNk[nk]) byNk[nk] = rec;
+          });
+        });
+
+        _reportIdx = { byNk: byNk, at: Date.now() };
+        nks.forEach(function (nk) {
+          if (byNk[nk]) _cache[nk] = Object.assign({ at: Date.now() }, byNk[nk]);
+        });
+      })
+      .catch(function () { /* silent: keeps original flow */ });
+  }
+
   // ── _processBatchPipeline ──────────────────────────────────────────────────────
   // Main pipeline: batch-fetch all nks in chunks of _BATCH_SIZE.
   // On transient failure: falls back to qb_search for that chunk.
@@ -272,17 +378,52 @@
             return _searchFallback(chunk);
           }
 
-          // Batch succeeded — write cache and genuine not-found entries
-          chunk.forEach(function (nk) {
-            var rec = result.found[nk];
-            if (rec) {
-              _cache[nk]    = Object.assign({ at: now }, rec);
-              delete _notFound[nk];
-            } else {
-              // QB responded but this case# genuinely doesn't exist
-              _notFound[nk] = now;
-            }
-            delete _inFlight[nk];
+          var unresolved = chunk.filter(function (nk) {
+            return !(result.found && result.found[nk]);
+          });
+          var reconcile = Promise.resolve();
+          if (unresolved.length) {
+            reconcile = _reportFallback(unresolved).then(function () {
+              var probeNow = Date.now();
+              unresolved.forEach(function (nk) {
+                if (_cache[nk] && (probeNow - _cache[nk].at) < _CACHE_TTL) {
+                  delete result.notFound[nk];
+                }
+              });
+              var stillMissing = unresolved.filter(function (nk) {
+                return !(_cache[nk] && (probeNow - _cache[nk].at) < _CACHE_TTL);
+              });
+              if (!stillMissing.length) return;
+              return _searchFallback(stillMissing).then(function () {
+                var afterSearch = Date.now();
+                stillMissing.forEach(function (nk) {
+                  if (_cache[nk] && (afterSearch - _cache[nk].at) < _CACHE_TTL) {
+                    delete result.notFound[nk];
+                  }
+                });
+              });
+            });
+          }
+
+          return reconcile.then(function () {
+            // Batch succeeded — write cache and genuine not-found entries.
+            // IMPORTANT: only trust explicit backend notFound list to avoid false
+            // negatives on partial/transitional QB responses.
+            chunk.forEach(function (nk) {
+              var rec = result.found[nk] || _cache[nk];
+              if (rec) {
+                _cache[nk]    = Object.assign({ at: now }, rec);
+                delete _notFound[nk];
+              } else if (result.notFound && result.notFound[nk]) {
+                // QB responded and explicitly confirmed this case is missing
+                _notFound[nk] = now;
+              } else {
+                // Unresolved key with no explicit notFound signal:
+                // do not poison cache; allow retry on next pass.
+                delete _notFound[nk];
+              }
+              delete _inFlight[nk];
+            });
           });
         });
       });
@@ -365,13 +506,43 @@
   // ── QB Field list for picker (5-min cache) ────────────────────────────────────
   var _fieldsCache = null;
   var _FIELDS_TTL  = 5 * 60 * 1000;
+  var _persistTimer = null;
+  var _persistRows  = new Map(); // row_index -> { sheetId, rowIndex, data }
+
+  function queuePersistRow(sheetId, row) {
+    if (!sheetId || !row || typeof row.row_index !== 'number' || !row.data) return;
+    _persistRows.set(String(sheetId) + ':' + String(row.row_index), {
+      sheetId: String(sheetId),
+      rowIndex: row.row_index,
+      data: JSON.parse(JSON.stringify(row.data))
+    });
+    clearTimeout(_persistTimer);
+    _persistTimer = setTimeout(function () {
+      var jobs = Array.from(_persistRows.values());
+      _persistRows.clear();
+      if (!jobs.length || !window.servicesDB || !window.servicesDB.bulkUpsertRows) return;
+      var grouped = {};
+      jobs.forEach(function (j) {
+        if (!grouped[j.sheetId]) grouped[j.sheetId] = [];
+        grouped[j.sheetId].push({ row_index: j.rowIndex, data: j.data });
+      });
+      Object.keys(grouped).forEach(function (sid) {
+        window.servicesDB.bulkUpsertRows(sid, grouped[sid]).catch(function () {});
+      });
+    }, 900);
+  }
+
+  function isBlankValue(v) {
+    return v == null || String(v).trim() === '';
+  }
 
   function loadFields(forceRefresh) {
     if (!forceRefresh && _fieldsCache && (Date.now() - _fieldsCache.at) < _FIELDS_TTL) {
       return Promise.resolve(_fieldsCache.fields);
     }
     var url = '/api/studio/qb_fields' + (forceRefresh ? '?forceRefresh=1' : '');
-    return fetch(url, { headers: apiHeaders() })
+    return apiHeadersAsync()
+      .then(function (headers) { return fetch(url, { headers: headers }); })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (!data.ok) {
@@ -387,8 +558,17 @@
   var _autofillToken = null;
   var _autofillTimer = null;
 
-  function autofillLinkedColumns(current, gridEl) {
+  function autofillLinkedColumns(current, gridEl, opts) {
     if (!current || !gridEl) return;
+    opts = opts || {};
+    var force = !!opts.force;
+    var allRowsMode = !!opts.allRows;
+    if (opts.refreshCache) {
+      _cache = {};
+      _notFound = {};
+      _inFlight = {};
+      _reportIdx = null;
+    }
     var cols = current.sheet.column_defs || [];
 
     var linkedCols = cols.filter(function (c) {
@@ -418,9 +598,9 @@
       rowsWithCase.forEach(function (row) {
         var nk = normalizeCaseKey(row.data[caseCol.key]);
         if (!nk) return;
-        var resolved = (_cache[nk]    && (now - _cache[nk].at)    < _CACHE_TTL)
+        var resolved = !force && ((_cache[nk]    && (now - _cache[nk].at)    < _CACHE_TTL)
                     || (_notFound[nk] && (now - _notFound[nk])    < _NOT_FOUND_TTL)
-                    || !!_inFlight[nk];
+                    || !!_inFlight[nk]);
         if (resolved) return;
         linkedCols.forEach(function (col) {
           var inp = gridEl.querySelector(
@@ -446,9 +626,11 @@
         if (!nk || seenNks.has(nk)) return;
         seenNks.add(nk);
 
-        if (_cache[nk]    && (Date.now() - _cache[nk].at)    < _CACHE_TTL) return;
-        if (_notFound[nk] && (Date.now() - _notFound[nk])    < _NOT_FOUND_TTL) return;
-        if (_inFlight[nk]) return;
+        if (!force) {
+          if (_cache[nk]    && (Date.now() - _cache[nk].at)    < _CACHE_TTL) return;
+          if (_notFound[nk] && (Date.now() - _notFound[nk])    < _NOT_FOUND_TTL) return;
+          if (_inFlight[nk]) return;
+        }
 
         var anyInp  = gridEl.querySelector('input.cell[data-row="' + row.row_index + '"]');
         var visible = true;
@@ -456,7 +638,7 @@
           var r = anyInp.getBoundingClientRect();
           visible = r.bottom >= wrapRect.top && r.top <= wrapRect.bottom;
         }
-        (visible ? visibleNks : deferredNks).push(nk);
+        (allRowsMode || visible ? visibleNks : deferredNks).push(nk);
       });
 
       // paintRow: reads _cache, updates DOM
@@ -493,20 +675,31 @@
           }
 
           var value = getFieldValue(rec, fid, label);
+          var caseChanged = _rowCaseSeen[row.row_index] !== nk;
+          var shouldWrite = force || caseChanged || isBlankValue(row.data[col.key]);
           if (value === null) {
-            inp.value       = '';
+            if (shouldWrite) {
+              row.data[col.key] = '';
+              queuePersistRow(current.sheet.id, row);
+            }
+            inp.value       = shouldWrite ? '' : (row.data[col.key] != null ? String(row.data[col.key]) : '');
             inp.readOnly    = true;
             inp.title       = '⚠ Field "' + label + '" not available for Case #' + rawCase;
             inp.classList.add('cell-qb-linked');
             inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
           } else {
-            inp.value       = value;
+            if (shouldWrite) {
+              row.data[col.key] = value;
+              queuePersistRow(current.sheet.id, row);
+            }
+            inp.value       = shouldWrite ? value : (row.data[col.key] != null ? String(row.data[col.key]) : value);
             inp.readOnly    = true;
             inp.title       = '🔗 QB: ' + label + ' (Case #' + rawCase + ')';
             inp.classList.add('cell-qb-linked');
             inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
           }
         });
+        _rowCaseSeen[row.row_index] = nk;
       }
 
       // Phase 3: Instant paint for already-cached rows (zero API calls)
@@ -530,7 +723,7 @@
           if (visibleNks.indexOf(nk) !== -1) paintRow(row);
         });
 
-        if (!deferredNks.length) return;
+        if (!deferredNks.length || allRowsMode) return;
 
         // Phase 5: Deferred rows after 400ms
         setTimeout(function () {
@@ -679,11 +872,20 @@
   window.svcQbLookup = {
     openFieldPicker:       openFieldPicker,
     autofillLinkedColumns: autofillLinkedColumns,
+    refreshAllLinkedColumns: function (current, gridEl) {
+      return autofillLinkedColumns(current, gridEl, {
+        force: true,
+        allRows: true,
+        refreshCache: true
+      });
+    },
     clearCache: function () {
       _cache       = {};
       _notFound    = {};
       _inFlight    = {};
       _fieldsCache = null;
+      _reportIdx   = null;
+      _rowCaseSeen = {};
     }
   };
 
