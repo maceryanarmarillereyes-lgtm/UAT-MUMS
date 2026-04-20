@@ -20,14 +20,36 @@ create index if not exists idx_svc_tv_folders_sheet
 
 alter table public.services_treeview_folders enable row level security;
 
-create policy if not exists "svc_tv_folders_read"
-  on public.services_treeview_folders
-  for select using (auth.role() = 'authenticated');
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'services_treeview_folders'
+      and policyname = 'svc_tv_folders_read'
+  ) then
+    create policy "svc_tv_folders_read"
+      on public.services_treeview_folders
+      for select using (auth.role() = 'authenticated');
+  end if;
+end $$;
 
-create policy if not exists "svc_tv_folders_write"
-  on public.services_treeview_folders
-  for all using (auth.role() = 'authenticated')
-  with check (auth.role() = 'authenticated');
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'services_treeview_folders'
+      and policyname = 'svc_tv_folders_write'
+  ) then
+    create policy "svc_tv_folders_write"
+      on public.services_treeview_folders
+      for all using (auth.role() = 'authenticated')
+      with check (auth.role() = 'authenticated');
+  end if;
+end $$;
 
 do $$
 begin
