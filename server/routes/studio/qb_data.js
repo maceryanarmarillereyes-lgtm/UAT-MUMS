@@ -328,6 +328,8 @@ module.exports = async (req, res) => {
             }
           });
 
+          }
+
           // Only mark as not found after at least one successful QB query.
           // If QB is temporarily failing, avoid poisoning cache with false misses.
           if (hadSuccessfulQbQuery) {
