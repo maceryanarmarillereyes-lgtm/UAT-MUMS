@@ -172,6 +172,9 @@
     attachRowContextMenu();
     updateStatusBar();
     autoResizeColumns();
+    if (window.servicesTreeview && typeof window.servicesTreeview.refreshCounts === 'function') {
+      window.servicesTreeview.refreshCounts(current.sheet.id);
+    }
 
     // QB auto-populate: paint linked column values from QB data (read-only)
     if (window.svcQbLookup) {

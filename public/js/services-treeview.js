@@ -99,6 +99,22 @@
     }).length;
   }
 
+  function countForMain(sheetId) {
+    var state = window.servicesGrid && window.servicesGrid.getState();
+    if (!state || !state.sheet || state.sheet.id !== sheetId) return null;
+    var rows = state.rows || [];
+    var folders = _cache[sheetId] || [];
+    var cols = state.sheet.column_defs || [];
+    var matchers = folders
+      .filter(function (f) { return !!(f && f.condition_field); })
+      .map(function (f) { return buildFolderMatcher(f, cols); })
+      .filter(Boolean);
+    if (!matchers.length) return rows.length;
+    return rows.filter(function (row) {
+      return !matchers.some(function (fn) { return fn(row); });
+    }).length;
+  }
+
   function resolveConditionField(rawField, columnDefs) {
     var want = String(rawField || '').trim();
     if (!want) return '';
@@ -666,6 +682,20 @@
     document.querySelectorAll('.svc-tv-container[data-sheet-id="' + sheetId + '"]').forEach(function (c) {
       renderTree(sheetId, c);
     });
+    updateSheetCountBadge(sheetId);
+  }
+
+  function updateSheetCountBadge(sheetId) {
+    var mainCount = countForMain(sheetId);
+    document.querySelectorAll('.svc-sheet-count[data-sheet-id="' + sheetId + '"]').forEach(function (el) {
+      if (mainCount == null) {
+        el.textContent = '';
+        el.style.display = 'none';
+      } else {
+        el.textContent = String(mainCount);
+        el.style.display = '';
+      }
+    });
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -705,6 +735,7 @@
       var liveContainer = document.querySelector('.svc-tv-container[data-sheet-id="' + sid + '"]') || containerEl;
       if (!liveContainer || !liveContainer.isConnected) return;
       renderTree(sheetId, liveContainer);
+      updateSheetCountBadge(sheetId);
     },
 
     /**
@@ -719,6 +750,10 @@
      */
     getFolders(sheetId) {
       return _cache[sheetId] || [];
+    },
+
+    countMain(sheetId) {
+      return countForMain(sheetId);
     },
 
     /**
@@ -750,6 +785,11 @@
         n.classList.toggle('svc-tv-active',
           n.dataset.sheetId === sheetId && n.dataset.folderId === '__main__');
       });
+      updateSheetCountBadge(sheetId);
+    },
+
+    refreshCounts(sheetId) {
+      rerenderAllTrees(sheetId);
     },
 
     /**
