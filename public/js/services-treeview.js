@@ -21,6 +21,7 @@
   var _activeFolderId = null;   // null → "All Records"
   var _ctxMenu        = null;   // currently open context menu DOM node
   var _modal          = null;   // currently open modal
+  var _loadTokens     = {};     // sheetId -> latest render token
 
   // ── Condition operators ──────────────────────────────────────────────────────
   var OPS = [
@@ -67,8 +68,10 @@
       window.servicesGrid.setTreeFilter(null);
       return;
     }
+    var state = window.servicesGrid.getState && window.servicesGrid.getState();
+    var resolvedField = resolveConditionField(folder.condition_field, state && state.sheet && state.sheet.column_defs);
     window.servicesGrid.setTreeFilter(function (row) {
-      return matchCondition(row.data || {}, folder.condition_field, folder.condition_op, folder.condition_value);
+      return matchCondition(row.data || {}, resolvedField, folder.condition_op || 'eq', folder.condition_value);
     });
   }
 
@@ -78,9 +81,24 @@
     if (!state || state.sheet.id !== sheetId) return null;
     var rows = state.rows || [];
     if (!folder.condition_field) return rows.length;
+    var resolvedField = resolveConditionField(folder.condition_field, state.sheet && state.sheet.column_defs);
     return rows.filter(function (r) {
-      return matchCondition(r.data || {}, folder.condition_field, folder.condition_op, folder.condition_value);
+      return matchCondition(r.data || {}, resolvedField, folder.condition_op || 'eq', folder.condition_value);
     }).length;
+  }
+
+  function resolveConditionField(rawField, columnDefs) {
+    var want = String(rawField || '').trim();
+    if (!want) return '';
+    var cols = Array.isArray(columnDefs) ? columnDefs : [];
+    var direct = cols.find(function (c) { return String(c && c.key || '') === want; });
+    if (direct && direct.key) return direct.key;
+    var wantNorm = want.toLowerCase();
+    var byLabel = cols.find(function (c) {
+      return String(c && c.label || '').trim().toLowerCase() === wantNorm;
+    });
+    if (byLabel && byLabel.key) return byLabel.key;
+    return want;
   }
 
   // ── Render treeview nodes for one sheet ─────────────────────────────────────
@@ -456,15 +474,21 @@
       };
 
       try {
+        var created = null;
         if (isEdit) {
           await window.servicesDB.updateTreeFolder(existingFolder.id, payload);
         } else {
-          await window.servicesDB.createTreeFolder(sheetId, payload);
+          created = await window.servicesDB.createTreeFolder(sheetId, payload);
+          if (!created || !created.id) throw new Error('TreeView folder was not saved. Check DB migration/policies.');
+          if (!_cache[sheetId]) _cache[sheetId] = [];
+          _cache[sheetId].push(created);
+          _cache[sheetId].sort(function (a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
         }
-        await loadFolders(sheetId);
         rerenderAllTrees(sheetId);
         closeModal();
         window.svcToast && window.svcToast.show('success', 'TreeView', isEdit ? 'Folder updated.' : 'Folder "' + name + '" created.');
+        // async reconcile cache from DB, but do not block modal close UX
+        loadFolders(sheetId).then(function () { rerenderAllTrees(sheetId); }).catch(function () {});
       } catch (err) {
         saveBtn.disabled = false;
         saveBtn.textContent = isEdit ? '✓ Save Changes' : '✓ Create Folder';
@@ -512,10 +536,15 @@
         var n = inp.value.trim();
         if (!n) return;
         ok.disabled = true; ok.textContent = '⏳';
-        await window.servicesDB.renameTreeFolder(folder.id, n);
-        await loadFolders(sheetId);
-        rerenderAllTrees(sheetId);
-        closeModal();
+        try {
+          await window.servicesDB.renameTreeFolder(folder.id, n);
+          await loadFolders(sheetId);
+          rerenderAllTrees(sheetId);
+          closeModal();
+        } catch (err) {
+          ok.disabled = false; ok.textContent = '✓ Rename';
+          window.svcToast && window.svcToast.show('error', 'Rename Failed', err && err.message ? err.message : 'Could not rename folder.');
+        }
       });
       footer.appendChild(cancel);
       footer.appendChild(ok);
@@ -549,16 +578,21 @@
       del.textContent = '🗑 Delete';
       del.addEventListener('click', async function () {
         del.disabled = true; del.textContent = '⏳';
-        await window.servicesDB.deleteTreeFolder(folder.id);
-        // If deleted folder was selected, reset filter
-        if (_activeFolderId === folder.id) {
-          _activeFolderId = null;
-          window.servicesGrid && window.servicesGrid.setTreeFilter(null);
+        try {
+          await window.servicesDB.deleteTreeFolder(folder.id);
+          // If deleted folder was selected, reset filter
+          if (_activeFolderId === folder.id) {
+            _activeFolderId = null;
+            window.servicesGrid && window.servicesGrid.setTreeFilter(null);
+          }
+          await loadFolders(sheetId);
+          rerenderAllTrees(sheetId);
+          closeModal();
+          window.svcToast && window.svcToast.show('info', 'Folder Deleted', '"' + folder.name + '" removed.');
+        } catch (err) {
+          del.disabled = false; del.textContent = '🗑 Delete';
+          window.svcToast && window.svcToast.show('error', 'Delete Failed', err && err.message ? err.message : 'Could not delete folder.');
         }
-        await loadFolders(sheetId);
-        rerenderAllTrees(sheetId);
-        closeModal();
-        window.svcToast && window.svcToast.show('info', 'Folder Deleted', '"' + folder.name + '" removed.');
       });
       footer.appendChild(cancel);
       footer.appendChild(del);
@@ -643,8 +677,14 @@
      * Called by sheet-manager after creating the tree container for a sheet.
      */
     async loadAndRender(sheetId, containerEl) {
+      var sid = String(sheetId);
+      var token = Date.now() + ':' + Math.random().toString(36).slice(2);
+      _loadTokens[sid] = token;
       await loadFolders(sheetId);
-      renderTree(sheetId, containerEl);
+      if (_loadTokens[sid] !== token) return;
+      var liveContainer = document.querySelector('.svc-tv-container[data-sheet-id="' + sid + '"]') || containerEl;
+      if (!liveContainer || !liveContainer.isConnected) return;
+      renderTree(sheetId, liveContainer);
     },
 
     /**
