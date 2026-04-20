@@ -1,31 +1,37 @@
 (function () {
   'use strict';
   /**
-   * services-qb-lookup.js  v4.0  — BATCH REWRITE  (MACE CLEARED)
-   * ─────────────────────────────────────────────────────────────────
+   * services-qb-lookup.js  v4.1  — BATCH + SAFE FALLBACK  (MACE CLEARED)
+   * ─────────────────────────────────────────────────────────────────────────
    * Free-Tier Safe Strategy:
    *
-   *   BATCH     — /api/studio/qb_data?recordIds=<id1>,<id2>,...
-   *               Groups up to 50 case numbers per HTTP call.
-   *               1 batch request = up to 50 row lookups.
-   *               Replaces the old per-row qb_search approach.
+   *   BATCH FIRST — /api/studio/qb_data?recordIds=<id1>,<id2>,...
+   *     Groups up to 50 case numbers per HTTP call.
+   *     1 batch = up to 50 row lookups. 98% fewer requests vs v3.0.
    *
-   *   CACHE     — Per-case 5-min TTL (in-memory map).
-   *               NOT_FOUND short-TTL 30s to avoid re-hitting bad IDs.
-   *               Scroll re-triggers paint from cache (zero new requests).
+   *   SMART FALLBACK — /api/studio/qb_search?q=<caseNum>&top=5
+   *     Only fires when:
+   *       a) batch returns transientError (QB API hiccup)
+   *       b) batch returns warning (QB not configured for this user)
+   *       c) individual lookupCase() for a single row
+   *     Falls back to the proven v3.0 path — no regressions.
    *
-   *   IN-FLIGHT — Promise dedup map prevents duplicate concurrent fetches
-   *               for the same case number across scroll/render cycles.
+   *   SAFE NOT-FOUND CACHE — Only poisons _notFound[nk] when QB API
+   *     confirmed "this record does not exist". Transient failures
+   *     (network, QB API error, unconfigured) do NOT poison the cache,
+   *     so the next scroll/render retries correctly.
    *
-   *   RATE GATE — Min 200ms gap between consecutive batch API calls.
-   *               Max 50 IDs per batch. Deferred rows fetch 400ms later.
+   *   IN-FLIGHT DEDUP — Promise map prevents duplicate concurrent fetches
+   *     for the same case number across scroll/render cycles.
    *
-   * Free-Tier Impact (30 users/day x 520 rows):
-   *   Before: 520 qb_search calls per load  = ~15,600 CF requests/day
-   *   After:  ~11 batch calls per load       = ~330   CF requests/day
-   *   Reduction: 98%
+   *   RATE GATE — 200ms min gap between consecutive API calls.
    *
-   * Public API surface (UNCHANGED - required by services-grid.js):
+   * Free-Tier Impact (30 users/day × 520 rows):
+   *   v3.0: 520 qb_search calls per load  = ~15,600 CF hits/day
+   *   v4.1: ~11 batch calls per load       = ~330   CF hits/day
+   *   Reduction: 98% (with safe fallback for error cases)
+   *
+   * Public API surface (UNCHANGED — required by services-grid.js):
    *   window.svcQbLookup.openFieldPicker(opts)
    *   window.svcQbLookup.autofillLinkedColumns(current, gridEl)
    *   window.svcQbLookup.clearCache()
@@ -35,11 +41,13 @@
   function getJwt() {
     var LS = 'mums_supabase_session';
     var sources = [
-      function () { return localStorage.getItem(LS); },
-      function () { return sessionStorage.getItem(LS); },
+      function () { try { return localStorage.getItem(LS); } catch(_) { return null; } },
+      function () { try { return sessionStorage.getItem(LS); } catch(_) { return null; } },
       function () {
-        var m = document.cookie.match('(?:^|;)\\s*' + LS + '=([^;]*)');
-        return m ? decodeURIComponent(m[1]) : null;
+        try {
+          var m = document.cookie.match('(?:^|;)\\s*' + LS + '=([^;]*)');
+          return m ? decodeURIComponent(m[1]) : null;
+        } catch(_) { return null; }
       }
     ];
     for (var i = 0; i < sources.length; i++) {
@@ -77,8 +85,8 @@
     var list = Array.isArray(cols) ? cols : [];
     if (!list.length) return null;
     function norm(v) { return String(v || '').trim().toLowerCase(); }
-    var EXACT_LABELS = ['case#', 'case #', 'case number', 'case no', 'case id', 'case'];
-    var byExact = list.find(function (c) { return EXACT_LABELS.indexOf(norm(c.label)) !== -1; });
+    var EXACT = ['case#', 'case #', 'case number', 'case no', 'case id', 'case'];
+    var byExact = list.find(function (c) { return EXACT.indexOf(norm(c.label)) !== -1; });
     if (byExact) return byExact;
     var byFuzzy = list.find(function (c) { return norm(c.label).indexOf('case') !== -1; });
     if (byFuzzy) return byFuzzy;
@@ -86,33 +94,36 @@
   }
 
   // ── Caches ─────────────────────────────────────────────────────────────────────
-  var _cache         = {};   // nk -> { fields, columnMap, at }
-  var _notFound      = {};   // nk -> timestamp (miss cache)
-  var _inFlight      = {};   // nk -> Promise<rec|null> (dedup)
+  var _cache         = {};   // nk → { fields, columnMap, at }
+  var _notFound      = {};   // nk → timestamp  (only genuine misses)
+  var _inFlight      = {};   // nk → Promise     (dedup concurrent fetches)
   var _CACHE_TTL     = 5 * 60 * 1000;
   var _NOT_FOUND_TTL = 30 * 1000;
   var _BATCH_SIZE    = 50;
 
   // ── Rate limiter ──────────────────────────────────────────────────────────────
-  var _lastBatchAt  = 0;
-  var _MIN_BATCH_GAP = 200; // ms between batch API calls
+  var _lastApiAt    = 0;
+  var _MIN_API_GAP  = 200; // ms between any consecutive API calls
 
   function _waitForGap() {
     var now     = Date.now();
-    var elapsed = now - _lastBatchAt;
-    var wait    = elapsed < _MIN_BATCH_GAP ? _MIN_BATCH_GAP - elapsed : 0;
-    _lastBatchAt = now + wait;
+    var elapsed = now - _lastApiAt;
+    var wait    = elapsed < _MIN_API_GAP ? _MIN_API_GAP - elapsed : 0;
+    _lastApiAt  = now + wait;
     return wait > 0
       ? new Promise(function (res) { setTimeout(res, wait); })
       : Promise.resolve();
   }
 
-  // ── Low-level batch fetch ─────────────────────────────────────────────────────
-  // Calls /api/studio/qb_data?recordIds=436860,436776,...
-  // Returns { nk: { fields, columnMap } } — only found records.
+  // ── _batchFetch ───────────────────────────────────────────────────────────────
+  // Returns { found: { nk: rec, ... }, transient: bool }
+  //   found.transient = true  → QB API error / QB not configured / network fail
+  //                             → DO NOT write _notFound (will retry on next scroll)
+  //   found.transient = false → QB responded; any missing IDs are genuine not-found
   function _batchFetch(nks) {
-    if (!nks || !nks.length) return Promise.resolve({});
+    if (!nks || !nks.length) return Promise.resolve({ found: {}, transient: false });
     var ids = nks.slice(0, _BATCH_SIZE);
+
     return _waitForGap()
       .then(function () {
         return fetch(
@@ -122,10 +133,29 @@
       })
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        if (!data.ok) return {};
-        var out      = {};
-        var recs     = data.records || {};
-        // Normalize all returned keys so "436860.0" matches "436860"
+        // QB not configured for this user — transient (not a real miss)
+        if (data.warning === 'studio_qb_not_configured') {
+          return { found: {}, transient: true };
+        }
+
+        // Server-side QB API error — transient
+        if (data.transientError) {
+          return { found: {}, transient: true };
+        }
+
+        // Non-ok (auth, settings read fail, etc.) — transient
+        if (!data.ok) {
+          return { found: {}, transient: true };
+        }
+
+        // ok:true but records is an Array (misconfigured path) — transient
+        var recs = data.records;
+        if (!recs || Array.isArray(recs)) {
+          return { found: {}, transient: true };
+        }
+
+        // Valid batch response — parse results
+        var found   = {};
         var normIdx = {};
         Object.keys(recs).forEach(function (rawKey) {
           var nk  = normalizeCaseKey(rawKey);
@@ -135,32 +165,121 @@
           }
         });
         ids.forEach(function (id) {
-          if (normIdx[id]) out[id] = normIdx[id];
+          if (normIdx[id]) found[id] = normIdx[id];
         });
-        return out;
+        return { found: found, transient: false };
       })
-      .catch(function () { return {}; });
+      .catch(function () {
+        // Network failure or parse error — transient, never poison cache
+        return { found: {}, transient: true };
+      });
   }
 
-  // ── Batch pipeline ────────────────────────────────────────────────────────────
-  // Splits nks into _BATCH_SIZE chunks, fetches sequentially (rate-safe),
-  // writes results to _cache/_notFound, clears _inFlight on completion.
+  // ── _searchFallback ───────────────────────────────────────────────────────────
+  // Proven v3.0 path: qb_search per case number.
+  // Used when batch returns transient=true for a group of keys.
+  // Concurrency limited to 2 to protect free tier.
+  function _searchFallback(nks) {
+    if (!nks || !nks.length) return Promise.resolve();
+
+    var running = 0;
+    var idx     = 0;
+
+    function fetchOne(nk) {
+      return _waitForGap()
+        .then(function () {
+          return fetch(
+            '/api/studio/qb_search?q=' + encodeURIComponent(nk) + '&top=5',
+            { headers: apiHeaders() }
+          );
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok || !Array.isArray(data.records) || !data.records.length) {
+            // Not found or QB issue — do NOT write _notFound (could be transient)
+            return;
+          }
+          // Find exact record
+          var match = null;
+          var i;
+          for (i = 0; i < data.records.length; i++) {
+            if (normalizeCaseKey(data.records[i].qbRecordId) === nk) {
+              match = data.records[i]; break;
+            }
+          }
+          if (!match) {
+            for (i = 0; i < data.records.length; i++) {
+              var flds = data.records[i].fields || {};
+              var hit = Object.keys(flds).some(function (fid) {
+                return normalizeCaseKey(String(
+                  flds[fid] && flds[fid].value != null ? flds[fid].value : ''
+                )) === nk;
+              });
+              if (hit) { match = data.records[i]; break; }
+            }
+          }
+          if (!match) return; // Not found — don't mark, may retry
+
+          var cm = Object.assign({}, data.columnMap || {}, match.columnMap || {});
+          _cache[nk] = { fields: match.fields || {}, columnMap: cm, at: Date.now() };
+          delete _notFound[nk];
+        })
+        .catch(function () { /* network error — silent, will retry */ });
+    }
+
+    return new Promise(function (resolve) {
+      function next() {
+        while (running < 2 && idx < nks.length) {
+          /* eslint-disable no-loop-func */
+          (function (nk) {
+            running++;
+            var done = function () {
+              running--;
+              delete _inFlight[nk];
+              if (idx >= nks.length && running === 0) resolve();
+              else next();
+            };
+            try { fetchOne(nk).then(done, done); } catch (_) { done(); }
+          })(nks[idx++]);
+          /* eslint-enable no-loop-func */
+        }
+        if (idx >= nks.length && running === 0) resolve();
+      }
+      next();
+    });
+  }
+
+  // ── _processBatchPipeline ──────────────────────────────────────────────────────
+  // Main pipeline: batch-fetch all nks in chunks of _BATCH_SIZE.
+  // On transient failure: falls back to qb_search for that chunk.
+  // Only marks _notFound when QB confirmed the record doesn't exist.
   function _processBatchPipeline(nks) {
     if (!nks || !nks.length) return Promise.resolve();
+
     var chunks = [];
     for (var i = 0; i < nks.length; i += _BATCH_SIZE) {
       chunks.push(nks.slice(i, i + _BATCH_SIZE));
     }
+
     return chunks.reduce(function (chain, chunk) {
       return chain.then(function () {
-        return _batchFetch(chunk).then(function (results) {
+        return _batchFetch(chunk).then(function (result) {
           var now = Date.now();
+
+          if (result.transient) {
+            // QB API issue — use proven qb_search fallback for this chunk
+            // Only for visible rows (chunk is already prioritized by caller)
+            return _searchFallback(chunk);
+          }
+
+          // Batch succeeded — write cache and genuine not-found entries
           chunk.forEach(function (nk) {
-            var rec = results[nk];
+            var rec = result.found[nk];
             if (rec) {
               _cache[nk]    = Object.assign({ at: now }, rec);
               delete _notFound[nk];
             } else {
+              // QB responded but this case# genuinely doesn't exist
               _notFound[nk] = now;
             }
             delete _inFlight[nk];
@@ -171,7 +290,7 @@
   }
 
   // ── lookupCase ─────────────────────────────────────────────────────────────────
-  // Returns Promise<record | null>. Used by code that needs a single-case lookup.
+  // Public helper: Returns Promise<record | null>.
   function lookupCase(caseNum) {
     var nk = normalizeCaseKey(caseNum);
     if (!nk) return Promise.resolve(null);
@@ -183,13 +302,17 @@
       return Promise.resolve(null);
     }
     if (_inFlight[nk]) {
-      // Piggyback on existing request
       return _inFlight[nk].then(function () { return _cache[nk] || null; });
     }
 
-    var p = _batchFetch([nk]).then(function (results) {
+    // Single-key batch with search fallback
+    var p = _batchFetch([nk]).then(function (result) {
       delete _inFlight[nk];
-      var rec = results[nk];
+      if (result.transient) {
+        // Batch failed — try qb_search fallback directly
+        return _searchFallback([nk]).then(function () { return _cache[nk] || null; });
+      }
+      var rec = result.found[nk];
       if (rec) {
         _cache[nk] = Object.assign({ at: Date.now() }, rec);
         delete _notFound[nk];
@@ -236,7 +359,6 @@
         return raw2 != null ? String(raw2) : '';
       }
     }
-
     return null;
   }
 
@@ -282,7 +404,7 @@
     });
     if (!rowsWithCase.length) return;
 
-    // Debounce — cancel previous pending cycle
+    // Debounce
     var token = {};
     _autofillToken = token;
     clearTimeout(_autofillTimer);
@@ -292,7 +414,7 @@
 
       var now = Date.now();
 
-      // Phase 1: Spinner on uncached cells
+      // Phase 1: Spinner on uncached/unfetched cells
       rowsWithCase.forEach(function (row) {
         var nk = normalizeCaseKey(row.data[caseCol.key]);
         if (!nk) return;
@@ -311,7 +433,7 @@
         });
       });
 
-      // Phase 2: Collect unique uncached keys, categorize visible vs deferred
+      // Phase 2: Categorize unique uncached keys → visible vs deferred
       var gridWrap = document.getElementById('svcGridWrap') || gridEl.parentElement;
       var wrapRect = gridWrap ? gridWrap.getBoundingClientRect() : null;
 
@@ -362,6 +484,7 @@
               inp.classList.add('cell-qb-not-found');
               inp.classList.remove('cell-qb-pending', 'cell-qb-linked');
             } else {
+              // Not in notFound = transient failure — reset to editable, retry next scroll
               inp.classList.remove('cell-qb-pending');
               inp.readOnly    = false;
               inp.placeholder = '';
@@ -386,7 +509,7 @@
         });
       }
 
-      // Phase 3: Instant paint for already-cached rows
+      // Phase 3: Instant paint for already-cached rows (zero API calls)
       rowsWithCase.forEach(function (row) {
         var nk = normalizeCaseKey(row.data[caseCol.key]);
         if (_cache[nk] && (Date.now() - _cache[nk].at) < _CACHE_TTL) paintRow(row);
@@ -394,8 +517,7 @@
 
       if (!visibleNks.length && !deferredNks.length) return;
 
-      // Phase 4: Batch-fetch visible rows, then paint them
-      // Tag as in-flight to prevent lookupCase dedup conflicts
+      // Phase 4: Batch-fetch visible rows → paint
       var placeholder = Promise.resolve();
       visibleNks.forEach(function (nk) {
         if (!_inFlight[nk]) _inFlight[nk] = placeholder;
@@ -410,7 +532,7 @@
 
         if (!deferredNks.length) return;
 
-        // Phase 5: Deferred rows 400ms later (saves resources on fast navigation)
+        // Phase 5: Deferred rows after 400ms
         setTimeout(function () {
           if (_autofillToken !== token) return;
           deferredNks.forEach(function (nk) {
@@ -426,7 +548,7 @@
         }, 400);
       });
 
-    }, 150); // debounce
+    }, 150);
   }
 
   // ── DOM helper ────────────────────────────────────────────────────────────────
@@ -445,8 +567,6 @@
   }
 
   // ── Field Picker UI ───────────────────────────────────────────────────────────
-  // Uses /api/studio/qb_fields (metadata only, NOT a lookup endpoint).
-  // Logic unchanged — only the lookup internals above changed.
   function openFieldPicker(opts) {
     closeFieldPicker();
 
