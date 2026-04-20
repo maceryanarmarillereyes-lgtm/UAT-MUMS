@@ -83,6 +83,23 @@
     return String(raw == null ? '' : raw).trim();
   }
 
+  function _resolveCaseColumn(cols) {
+    var list = Array.isArray(cols) ? cols : [];
+    if (!list.length) return null;
+    function norm(v) { return String(v || '').trim().toLowerCase(); }
+    function isExactCaseLabel(v) {
+      var n = norm(v);
+      return n === 'case#' || n === 'case #' || n === 'case number' || n === 'case no' || n === 'case id';
+    }
+    var exact = list.find(function (c) { return isExactCaseLabel(c && c.label); });
+    if (exact) return exact;
+    var byLabel = list.find(function (c) { return norm(c && c.label).indexOf('case') !== -1; });
+    if (byLabel) return byLabel;
+    var byKey = list.find(function (c) { return norm(c && c.key).indexOf('case') !== -1; });
+    if (byKey) return byKey;
+    return list[0] || null;
+  }
+
   function _chunkArray(arr, size) {
     var chunks = [];
     for (var i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
@@ -171,7 +188,7 @@
     var linkedCols = cols.filter(function (c) { return !!_resolveLinkedFieldId(c); });
     if (!linkedCols.length) return;
 
-    var caseCol = cols[0];
+    var caseCol = _resolveCaseColumn(cols);
     if (!caseCol) return;
 
     var rowsWithCase = current.rows.filter(function (r) {
