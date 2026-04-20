@@ -73,7 +73,18 @@
   function _resolveLinkedFieldId(col) {
     if (!col || !col.qbLookup) return '';
     var raw = col.qbLookup.fieldId;
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) raw = raw.fieldId;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      raw = raw.fieldId != null ? raw.fieldId
+        : raw.id != null ? raw.id
+        : raw.value != null ? raw.value
+        : '';
+    }
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      raw = raw.fieldId != null ? raw.fieldId
+        : raw.id != null ? raw.id
+        : raw.value != null ? raw.value
+        : '';
+    }
     return String(raw == null ? '' : raw).trim();
   }
 
@@ -251,6 +262,15 @@
 
           var fid       = _resolveLinkedFieldId(col);
           var fieldCell = rec.fields[fid];
+          if (!fieldCell && rec.columnMap && col.qbLookup && col.qbLookup.fieldLabel) {
+            var targetLabel = String(col.qbLookup.fieldLabel || '').trim().toLowerCase();
+            Object.keys(rec.columnMap).some(function (mapFid) {
+              var lbl = String(rec.columnMap[mapFid] || '').trim().toLowerCase();
+              if (!lbl || lbl !== targetLabel) return false;
+              fieldCell = rec.fields[mapFid];
+              return !!fieldCell;
+            });
+          }
           var value     = fieldCell ? String(fieldCell.value != null ? fieldCell.value : '') : '';
 
           inp.value    = value;
