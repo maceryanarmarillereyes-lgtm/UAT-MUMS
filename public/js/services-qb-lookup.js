@@ -368,7 +368,11 @@
       var now = Date.now();
 
       if (result.transient) {
-        return _searchFallback(chunk);
+        // CRITICAL: In urgent mode (Update button) use _reportFallback (1 QB bulk call).
+        // _searchFallback fires 50 individual qb_search calls per chunk — at 520 rows
+        // that takes 13-15 minutes. _reportFallback fetches all records in 1 call.
+        // In normal scroll mode, _searchFallback is fine for small chunks.
+        return _urgentMode ? _reportFallback(chunk) : _searchFallback(chunk);
       }
 
       var unresolved = chunk.filter(function (nk) {
@@ -387,6 +391,9 @@
             return !(_cache[nk] && (probeNow - _cache[nk].at) < _CACHE_TTL);
           });
           if (!stillMissing.length) return;
+          // In urgent mode (Update button), skip per-record search — _reportFallback
+          // already ran above and would have found them. Avoid 50+ extra QB calls.
+          if (_urgentMode) return;
           return _searchFallback(stillMissing).then(function () {
             var afterSearch = Date.now();
             stillMissing.forEach(function (nk) {
@@ -695,23 +702,27 @@
           var inp = gridEl.querySelector(
             'input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]'
           );
-          if (!inp || inp === document.activeElement) return;
+          // inp === null when row is off-DOM (filtered out by TreeView, e.g. COMPLETED folder).
+          // ALWAYS update row.data + persist first (fixes COMPLETED view missing data after Update).
+          // Then update DOM only if inp exists and is not focused.
 
           var fid   = String(col.qbLookup.fieldId   || '').trim();
           var label = String(col.qbLookup.fieldLabel || '').trim();
 
           if (!rec) {
-            if (_notFound[nk] && (Date.now() - _notFound[nk]) < _NOT_FOUND_TTL) {
-              inp.value       = '—';
-              inp.readOnly    = true;
-              inp.title       = '⚠ Case #' + rawCase + ' not found in QB';
-              inp.classList.add('cell-qb-not-found');
-              inp.classList.remove('cell-qb-pending', 'cell-qb-linked');
-            } else {
-              // Not in notFound = transient failure — reset to editable, retry next scroll
-              inp.classList.remove('cell-qb-pending');
-              inp.readOnly    = false;
-              inp.placeholder = '';
+            // No QB record — only touch DOM, don't write blank over existing good data
+            if (inp && inp !== document.activeElement) {
+              if (_notFound[nk] && (Date.now() - _notFound[nk]) < _NOT_FOUND_TTL) {
+                inp.value       = '—';
+                inp.readOnly    = true;
+                inp.title       = '⚠ Case #' + rawCase + ' not found in QB';
+                inp.classList.add('cell-qb-not-found');
+                inp.classList.remove('cell-qb-pending', 'cell-qb-linked');
+              } else {
+                inp.classList.remove('cell-qb-pending');
+                inp.readOnly    = false;
+                inp.placeholder = '';
+              }
             }
             return;
           }
@@ -719,26 +730,31 @@
           var value = getFieldValue(rec, fid, label);
           var caseChanged = _rowCaseSeen[row.row_index] !== nk;
           var shouldWrite = force || caseChanged || isBlankValue(row.data[col.key]);
+
           if (value === null) {
             if (shouldWrite) {
               row.data[col.key] = '';
-              queuePersistRow(current.sheet.id, row);
+              queuePersistRow(current.sheet.id, row); // ← persists even if inp is null
             }
-            inp.value       = shouldWrite ? '' : (row.data[col.key] != null ? String(row.data[col.key]) : '');
-            inp.readOnly    = true;
-            inp.title       = '⚠ Field "' + label + '" not available for Case #' + rawCase;
-            inp.classList.add('cell-qb-linked');
-            inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
+            if (inp && inp !== document.activeElement) {
+              inp.value       = shouldWrite ? '' : (row.data[col.key] != null ? String(row.data[col.key]) : '');
+              inp.readOnly    = true;
+              inp.title       = '⚠ Field "' + label + '" not available for Case #' + rawCase;
+              inp.classList.add('cell-qb-linked');
+              inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
+            }
           } else {
             if (shouldWrite) {
               row.data[col.key] = value;
-              queuePersistRow(current.sheet.id, row);
+              queuePersistRow(current.sheet.id, row); // ← persists even if inp is null
             }
-            inp.value       = shouldWrite ? value : (row.data[col.key] != null ? String(row.data[col.key]) : value);
-            inp.readOnly    = true;
-            inp.title       = '🔗 QB: ' + label + ' (Case #' + rawCase + ')';
-            inp.classList.add('cell-qb-linked');
-            inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
+            if (inp && inp !== document.activeElement) {
+              inp.value       = shouldWrite ? value : (row.data[col.key] != null ? String(row.data[col.key]) : value);
+              inp.readOnly    = true;
+              inp.title       = '🔗 QB: ' + label + ' (Case #' + rawCase + ')';
+              inp.classList.add('cell-qb-linked');
+              inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
+            }
           }
         });
         _rowCaseSeen[row.row_index] = nk;
@@ -914,13 +930,43 @@
   window.svcQbLookup = {
     openFieldPicker:       openFieldPicker,
     autofillLinkedColumns: autofillLinkedColumns,
+    // fetchCaseRecord: Direct MODE A single-record fetch for Case Detail modal.
+    // Independent of the batch pipeline — never blocked by in-flight 520-row Update.
+    // Cache-first: if record already in _cache, returns instantly.
+    fetchCaseRecord: function (caseNum) {
+      var nk = normalizeCaseKey(caseNum);
+      if (!nk) return Promise.resolve(null);
+      // Cache hit
+      if (_cache[nk] && (Date.now() - _cache[nk].at) < _CACHE_TTL) {
+        return Promise.resolve(_cache[nk]);
+      }
+      // Direct single-record fetch (MODE A: ?recordId=X)
+      return apiHeadersAsync()
+        .then(function (headers) {
+          return _waitForGap().then(function () {
+            return fetch(
+              '/api/studio/qb_data?recordId=' + encodeURIComponent(nk),
+              { headers: headers }
+            );
+          });
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data || !data.ok || !data.fields) return null;
+          var rec = { fields: data.fields, columnMap: data.columnMap || {}, at: Date.now() };
+          _cache[nk] = rec;
+          delete _notFound[nk];
+          return rec;
+        })
+        .catch(function () { return null; });
+    },
     refreshAllLinkedColumns: function (current, gridEl) {
       autofillLinkedColumns(current, gridEl, {
         force: true,
         allRows: true,
         refreshCache: true
       });
-      var idleP = waitForLookupIdle(120000);
+      var idleP = waitForLookupIdle(30000); // 30s max — reportFallback is 1 QB call
       // Reset urgent mode once idle (after all batches complete)
       idleP.then(function () { _urgentMode = false; }).catch(function () { _urgentMode = false; });
       return idleP;

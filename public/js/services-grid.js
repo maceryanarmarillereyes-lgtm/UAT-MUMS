@@ -572,6 +572,7 @@
     }
 
     var GROUPS = {
+      caseId:  ['case #','case#','case number','case no','case id'], // prevents Case# duplication in Additional Fields
       desc:    ['short description','description','concern','subject','title'],
       assign:  ['assigned to','assigned','agent'],
       contact: ['contact','full name','customer name'],
@@ -582,6 +583,7 @@
       lastUpd: ['last update days','last update','update days'],
       latest:  ['latest update on the case','latest update','last update','last comment','most recent update','update on the case','latest'],
       notes:   ['case notes detail','case notes','case note','case details','resolution details','notes'],
+      email:   ['e-mail','email','mail address'], // prevent email appearing redundantly
     };
 
     function _matchGroup(rec, keys) {
@@ -695,12 +697,18 @@
       var rowObj  = caseCol ? current.rows.find(function (r) { return r.row_index === rowIndex; }) : null;
       var caseNum = (rowObj && caseCol) ? String(rowObj.data[caseCol.key] || '').trim() : '';
 
+      // Grab SITE column for instant description display (no QB wait needed)
+      var siteCol = cols.find(function (c) { return /^site$/i.test(String(c.label || '').trim()); });
+      if (!siteCol) siteCol = cols.find(function (c) { return String(c.label || '').toLowerCase().includes('site'); });
+      var siteVal = (rowObj && siteCol) ? String(rowObj.data[siteCol.key] || '').trim() : '';
+      var displayRowNum = rowIndex + 1; // 1-based display number for badge
+
       // Reset & show modal in loading state immediately
-      _set('svcQbcdRowBadge', caseNum || String(rowIndex + 1));
+      _set('svcQbcdRowBadge', String(displayRowNum)); // Row number badge (96, 460…), not case#
       _set('svcQbcdCaseId',   caseNum || '—');
-      _set('svcQbcdDesc',     '');
+      _set('svcQbcdDesc',     siteVal);               // Show site instantly from local data
       _html('svcQbcdStatusBadge', '');
-      _set('svcQbcdMeta', '');
+      _set('svcQbcdMeta', 'Row ' + displayRowNum);
       var loading = document.getElementById('svcQbcdLoading');
       var content = document.getElementById('svcQbcdContent');
       if (loading) {
@@ -715,7 +723,10 @@
       if (!caseNum) { _showError('No Case # found in this row.'); return; }
       if (!window.svcQbLookup) { _showError('QB Lookup module not loaded.'); return; }
 
-      window.svcQbLookup.lookupCase(caseNum).then(function (rec) {
+      // Use fetchCaseRecord (MODE A direct) — independent of the batch pipeline.
+      // lookupCase() can block if a 520-row Update batch is in-flight.
+      // fetchCaseRecord() goes straight to /api/studio/qb_data?recordId=X — always fast.
+      window.svcQbLookup.fetchCaseRecord(caseNum).then(function (rec) {
         if (!modal.classList.contains('svc-cdm-open')) return;
         if (!rec) { _showError('Case #' + caseNum + ' not found in QuickBase.'); return; }
         _populate(caseNum, rec);
