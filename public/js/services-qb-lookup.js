@@ -584,12 +584,23 @@
     });
     if (!rowsWithCase.length) return;
 
+    function rowNeedsLookup(row, nk) {
+      if (force) return true;
+      if (!Object.prototype.hasOwnProperty.call(_rowCaseSeen, row.row_index)) {
+        _rowCaseSeen[row.row_index] = nk; // bootstrap on first paint after reload
+      }
+      var caseChanged = _rowCaseSeen[row.row_index] !== nk;
+      if (caseChanged) return true; // new/changed case number in this session
+      return linkedCols.some(function (col) { return isBlankValue(row.data[col.key]); });
+    }
+
     // Debounce
     var token = {};
     _autofillToken = token;
     clearTimeout(_autofillTimer);
 
     _autofillTimer = setTimeout(function () {
+      _autofillTimer = null;
       if (_autofillToken !== token) return;
 
       var now = Date.now();
@@ -598,6 +609,7 @@
       rowsWithCase.forEach(function (row) {
         var nk = normalizeCaseKey(row.data[caseCol.key]);
         if (!nk) return;
+        if (!rowNeedsLookup(row, nk)) return;
         var resolved = !force && ((_cache[nk]    && (now - _cache[nk].at)    < _CACHE_TTL)
                     || (_notFound[nk] && (now - _notFound[nk])    < _NOT_FOUND_TTL)
                     || !!_inFlight[nk]);
@@ -624,6 +636,7 @@
       rowsWithCase.forEach(function (row) {
         var nk = normalizeCaseKey(row.data[caseCol.key]);
         if (!nk || seenNks.has(nk)) return;
+        if (!rowNeedsLookup(row, nk)) return;
         seenNks.add(nk);
 
         if (!force) {
@@ -873,10 +886,35 @@
     openFieldPicker:       openFieldPicker,
     autofillLinkedColumns: autofillLinkedColumns,
     refreshAllLinkedColumns: function (current, gridEl) {
-      return autofillLinkedColumns(current, gridEl, {
+      autofillLinkedColumns(current, gridEl, {
         force: true,
         allRows: true,
         refreshCache: true
+      });
+      return new Promise(function (resolve) {
+        var started = Date.now();
+        (function probe() {
+          var idle = !_autofillTimer && Object.keys(_inFlight).length === 0;
+          if (idle || (Date.now() - started) > 15000) {
+            resolve();
+            return;
+          }
+          setTimeout(probe, 120);
+        })();
+      });
+    },
+    hydrateLinkedColumnsForExport: function (current, gridEl) {
+      autofillLinkedColumns(current, gridEl, { force: false, allRows: true });
+      return new Promise(function (resolve) {
+        var started = Date.now();
+        (function probe() {
+          var idle = !_autofillTimer && Object.keys(_inFlight).length === 0;
+          if (idle || (Date.now() - started) > 10000) {
+            resolve();
+            return;
+          }
+          setTimeout(probe, 120);
+        })();
       });
     },
     clearCache: function () {
