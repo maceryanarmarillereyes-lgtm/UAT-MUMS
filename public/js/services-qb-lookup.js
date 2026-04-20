@@ -76,6 +76,13 @@
   var _BATCH_CONCURRENCY = 2;
   var _batchInFlight = {};
 
+  function _resolveLinkedFieldId(col) {
+    if (!col || !col.qbLookup) return '';
+    var raw = col.qbLookup.fieldId;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) raw = raw.fieldId;
+    return String(raw == null ? '' : raw).trim();
+  }
+
   function _chunkArray(arr, size) {
     var chunks = [];
     for (var i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
@@ -161,7 +168,7 @@
     if (!current || !gridEl) return;
     var cols = current.sheet.column_defs || [];
 
-    var linkedCols = cols.filter(function (c) { return c.qbLookup && c.qbLookup.fieldId; });
+    var linkedCols = cols.filter(function (c) { return !!_resolveLinkedFieldId(c); });
     if (!linkedCols.length) return;
 
     var caseCol = cols[0];
@@ -236,7 +243,7 @@
             return;
           }
 
-          var fid       = String(col.qbLookup.fieldId);
+          var fid       = _resolveLinkedFieldId(col);
           var fieldCell = rec.fields[fid];
           var value     = fieldCell ? String(fieldCell.value != null ? fieldCell.value : '') : '';
 
@@ -296,7 +303,7 @@
 
     var col            = opts.cols && opts.cols[opts.colIdx];
     var colLabel       = col ? col.label : 'Column';
-    var currentFieldId = col && col.qbLookup ? String(col.qbLookup.fieldId) : null;
+    var currentFieldId = col && col.qbLookup ? _resolveLinkedFieldId(col) : null;
     var currentLabel   = col && col.qbLookup ? col.qbLookup.fieldLabel : null;
 
     var overlay = el('div', 'qb-fp-overlay');
