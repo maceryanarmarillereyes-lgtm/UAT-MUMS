@@ -74,3 +74,12 @@ For any change related to Support Studio (`public/support_studio.html`, `public/
 3. Include a completed PR checklist item confirming Support Studio blueprint update.
 
 If Support Studio-related code changes are present but `SUPPORT_STUDIO_BLUEPRINT.md` is not updated, the task is **incomplete**.
+
+## Global Feature Blueprint Protocol (MANDATORY)
+
+For all core app features outside Services and Support Studio, use the `blueprints/FEATURE_BLUEPRINT_INDEX.md` map.
+
+Rules:
+1. Before editing a feature, open its mapped blueprint from the index.
+2. Update that blueprint in the same commit if behavior, mappings, or contracts changed.
+3. If a new feature is introduced, add a new blueprint and register it in `blueprints/FEATURE_BLUEPRINT_INDEX.md`.
