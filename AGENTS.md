@@ -54,3 +54,32 @@ using a **dynamic segment** so the extension becomes part of the parameter value
 
 - Vercel UAT endpoints live under: `/api/...`
 - Cloudflare PROD endpoints live under: `/functions/...`
+
+## Services Blueprint Enforcement (MANDATORY)
+
+For any change related to the Services page/workspace (`public/services.html`, `public/css/services.css`, `public/js/services*.js`, Services QB endpoints, or Services DB schema), the agent **MUST**:
+
+1. Read `SERVICES_BLUEPRINT.md` before editing.
+2. Update `SERVICES_BLUEPRINT.md` in the same commit/PR.
+3. Add/keep a completed checklist item in PR notes confirming the blueprint was updated.
+
+If Services-related code changes are present but `SERVICES_BLUEPRINT.md` is not updated, the task is considered **incomplete**.
+
+## Support Studio Blueprint Enforcement (MANDATORY)
+
+For any change related to Support Studio (`public/support_studio.html`, `public/js/support_studio/**`, `public/js/studio_cache.js`, Support Studio `/api/studio/*` routes, or related settings/state persistence), the agent **MUST**:
+
+1. Read `SUPPORT_STUDIO_BLUEPRINT.md` before editing.
+2. Update `SUPPORT_STUDIO_BLUEPRINT.md` in the same commit/PR.
+3. Include a completed PR checklist item confirming Support Studio blueprint update.
+
+If Support Studio-related code changes are present but `SUPPORT_STUDIO_BLUEPRINT.md` is not updated, the task is **incomplete**.
+
+## Global Feature Blueprint Protocol (MANDATORY)
+
+For all core app features outside Services and Support Studio, use the `blueprints/FEATURE_BLUEPRINT_INDEX.md` map.
+
+Rules:
+1. Before editing a feature, open its mapped blueprint from the index.
+2. Update that blueprint in the same commit if behavior, mappings, or contracts changed.
+3. If a new feature is introduced, add a new blueprint and register it in `blueprints/FEATURE_BLUEPRINT_INDEX.md`.
