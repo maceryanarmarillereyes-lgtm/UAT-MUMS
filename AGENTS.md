@@ -54,3 +54,13 @@ using a **dynamic segment** so the extension becomes part of the parameter value
 
 - Vercel UAT endpoints live under: `/api/...`
 - Cloudflare PROD endpoints live under: `/functions/...`
+
+## Services Blueprint Enforcement (MANDATORY)
+
+For any change related to the Services page/workspace (`public/services.html`, `public/css/services.css`, `public/js/services*.js`, Services QB endpoints, or Services DB schema), the agent **MUST**:
+
+1. Read `SERVICES_BLUEPRINT.md` before editing.
+2. Update `SERVICES_BLUEPRINT.md` in the same commit/PR.
+3. Add/keep a completed checklist item in PR notes confirming the blueprint was updated.
+
+If Services-related code changes are present but `SERVICES_BLUEPRINT.md` is not updated, the task is considered **incomplete**.

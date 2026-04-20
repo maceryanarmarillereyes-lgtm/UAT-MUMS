@@ -1,4 +1,5 @@
 (function () {
+  // AI MAINTENANCE NOTE: If you edit Services modules, update /SERVICES_BLUEPRINT.md in same commit.
   // ─────────────────────────────────────────────────────────────────────────────
   // services.js — Orchestrator
   //
