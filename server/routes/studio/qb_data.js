@@ -174,6 +174,29 @@ function buildFieldMap(row, fields) {
   return { fieldValues, columnMap };
 }
 
+function getRowCaseKeys(row, caseFieldCandidates) {
+  const keys = new Set();
+  const rowObj = row && typeof row === 'object' ? row : {};
+  (Array.isArray(caseFieldCandidates) ? caseFieldCandidates : []).forEach(fid => {
+    const cell = rowObj[String(fid)];
+    const raw = (cell && typeof cell === 'object' && 'value' in cell) ? cell.value : cell;
+    const nk = normalizeCaseKey(normalizeQbValue(raw));
+    if (nk) keys.add(nk);
+  });
+  return Array.from(keys);
+}
+
+function buildCaseExactClauses(caseFieldId, ids) {
+  const clauses = [];
+  (Array.isArray(ids) ? ids : []).forEach(id => {
+    const nk = normalizeCaseKey(id);
+    if (!nk) return;
+    clauses.push(`{${caseFieldId}.EX.'${encLit(nk)}'}`);
+    if (/^\d+$/.test(nk)) clauses.push(`{${caseFieldId}.EX.'${encLit(`${nk}.0`)}'}`);
+  });
+  return clauses;
+}
+
 module.exports = async (req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store');
@@ -257,6 +280,13 @@ module.exports = async (req, res) => {
       if (!ids.length) return sendJson(res, 200, { ok: true, records: {}, notFound: [] });
 
       const caseFieldId      = await resolveCaseFieldId({ realm, token, tableId });
+
+      const fieldsOutForCase = await getFields({ realm, token, tableId });
+      const allFieldsForCase = fieldsOutForCase.ok
+        ? (fieldsOutForCase.fields || []).map(f => ({ id: Number(f?.id), label: String(f?.label || '').trim() })).filter(f => Number.isFinite(f.id) && f.label)
+        : [];
+      const caseFieldCandidates = getCaseFieldCandidates(allFieldsForCase);
+
       const batchCachePrefix = `${realm}:${tableId}:${caseFieldId}`;
 
       const result   = {};
@@ -275,9 +305,6 @@ module.exports = async (req, res) => {
       });
 
       if (toFetch.length > 0) {
-        const clauses     = toFetch.map(id => `{${caseFieldId}.EX.'${encLit(id)}'}`);
-        const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join('OR')})`;
-
         const fieldsOut    = await getFields({ realm, token, tableId });
         const allFieldIds  = fieldsOut.ok
           ? (fieldsOut.fields || []).map(f => Number(f?.id)).filter(id => Number.isFinite(id))
@@ -287,13 +314,15 @@ module.exports = async (req, res) => {
           : [];
 
         const pendingIds = new Set(toFetch);
+        const requestedIdSet = new Set(toFetch.map(id => normalizeCaseKey(id)).filter(Boolean));
         const foundIds = new Set();
         let hadSuccessfulQbQuery = false;
         try {
           for (const caseFieldId of caseFieldCandidates) {
             if (pendingIds.size === 0) break;
             const idsForThisPass = Array.from(pendingIds);
-            const clauses = idsForThisPass.map(id => `{${caseFieldId}.EX.'${encLit(id)}'}`);
+            const clauses = buildCaseExactClauses(caseFieldId, idsForThisPass);
+            if (!clauses.length) continue;
             const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join('OR')})`;
             const body = { from: tableId, where: whereClause, options: { top: 100 } };
             if (allFieldIds.length) body.select = allFieldIds;
@@ -311,21 +340,30 @@ module.exports = async (req, res) => {
           const fieldsMeta = Array.isArray(json.fields) ? json.fields : allFieldMeta;
 
             rows.forEach(row => {
-              const caseCell  = row[String(caseFieldId)];
-              const caseValue = caseCell ? normalizeQbValue(typeof caseCell === 'object' && 'value' in caseCell ? caseCell.value : caseCell) : '';
-              const caseKey   = normalizeCaseKey(caseValue);
-              if (!caseKey) return;
+              const rowCaseKeys = getRowCaseKeys(row, caseFieldCandidates);
+              if (!rowCaseKeys.length) return;
 
             const { fieldValues, columnMap } = buildFieldMap(row, fieldsMeta);
             const rec = { fields: fieldValues, columnMap };
 
             // Match against requested IDs using normalized keys
-            const matchedId = toFetch.find(id => normalizeCaseKey(id) === caseValue);
+            const matchedId = toFetch.find(id => rowCaseKeys.includes(normalizeCaseKey(id)));
             if (matchedId) {
               result[matchedId] = rec;
               foundIds.add(matchedId);
+              pendingIds.delete(matchedId);
               writeCache(BATCH_CACHE, `${batchCachePrefix}:${matchedId}`, rec);
+              return;
             }
+
+            // Secondary guard: if QB row has a valid case key that is in the request set,
+            // map it back directly (handles formatting edge-cases not preserved in toFetch).
+            const directKey = rowCaseKeys.find(k => requestedIdSet.has(k));
+            if (!directKey) return;
+            result[directKey] = rec;
+            foundIds.add(directKey);
+            pendingIds.delete(directKey);
+            writeCache(BATCH_CACHE, `${batchCachePrefix}:${directKey}`, rec);
           });
 
           }
