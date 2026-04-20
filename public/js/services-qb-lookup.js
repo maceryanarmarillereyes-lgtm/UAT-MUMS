@@ -69,7 +69,10 @@
   var _NOT_FOUND_TTL = 60 * 1000;
 
   // ── Batch fetch engine ────────────────────────────────────────────────────────
-  var _BATCH_SIZE        = 100;
+  // FIX: Reduced from 100 to 50 — QB WHERE clause with 100 EX conditions can
+  // exceed QB's 4096-char limit for longer case numbers. 50 is safe and still
+  // results in only ~11 requests for 522 rows (vs 1 with 100, but safer).
+  var _BATCH_SIZE        = 50;
   var _BATCH_CONCURRENCY = 2;
   var _batchInFlight = {};
 
@@ -322,6 +325,7 @@
 
     var overlay = el('div', 'qb-fp-overlay');
     overlay.id  = 'svcQbFieldOverlay';
+    overlay.setAttribute('data-picker-v2', '1'); // use opacity transition, not animation
 
     var panel = el('div', 'qb-fp-panel');
     overlay.appendChild(panel);
@@ -408,7 +412,10 @@
             item.appendChild(tick);
           }
           item.onclick = function () {
-            opts.onSelect({ fieldId: fid, fieldLabel: f.label || fid });
+            // FIX: Always call onSelect(fieldId, fieldLabel) — 2 separate string args.
+            // The grid handler (services-grid.js) expects: onSelect(fieldId, fieldLabel)
+            // Previous code passed a single object which broke QB link saving.
+            opts.onSelect(fid, f.label || fid);
             closeFieldPicker();
           };
           listEl.appendChild(item);

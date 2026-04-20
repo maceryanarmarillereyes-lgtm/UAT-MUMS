@@ -135,7 +135,9 @@
     for (var i = 0; i < totalRows; i++) {
       var rowData = current.rows.find(function (r) { return r.row_index === i; }) || { data: {} };
       var tr = mkEl('tr', null, tbody);
-      mkEl('td', { className: 'row-num', textContent: String(i + 1) }, tr);
+      var rowNumTd = mkEl('td', { className: 'row-num', textContent: String(i + 1) }, tr);
+      rowNumTd.dataset.rowIndex = i;
+      rowNumTd.title = 'Right-click to delete row';
       cols.forEach(function (c) {
         var td  = mkEl('td', null, tr);
         var inputType = (c.format === 'date') ? 'date' : 'text';
@@ -159,6 +161,7 @@
 
     attachCellHandlers();
     attachHeaderContextMenu();
+    attachRowContextMenu();
     updateStatusBar();
     autoResizeColumns();
 
@@ -343,6 +346,15 @@
           if (isActive) item.classList.add('ctx-active');
         });
 
+        addSep();
+
+        /* ── DELETE COLUMN ── */
+        addSectionHeader('DANGER ZONE');
+        buildItem(menu, {
+          icon: '🗑️', label: 'Delete This Column',
+          action: 'delete-column'
+        });
+
         /* ── Position menu ── */
         menu.style.left = e.clientX + 'px';
         menu.style.top  = e.clientY + 'px';
@@ -408,6 +420,34 @@
           } else if (action === 'conditional-format') {
             alert('Conditional Formatting — coming soon.');
             closeAllCtxMenus();
+          } else if (action === 'delete-column') {
+            var colName = cols[colIdx] ? (cols[colIdx].label || 'this column') : 'this column';
+            if (!confirm('Delete column "' + colName + '"?\n\nAll data in this column will be permanently removed from every row. This cannot be undone.')) {
+              closeAllCtxMenus();
+              return;
+            }
+            closeAllCtxMenus();
+            // Remove column def
+            cols.splice(colIdx, 1);
+            // Strip that key from every row's data object
+            current.rows.forEach(function (row) {
+              if (row.data) delete row.data[key];
+            });
+            // Persist column defs + all rows
+            try {
+              await window.servicesDB.updateColumns(current.sheet.id, cols);
+              var nonEmpty = current.rows.filter(function (r) {
+                return r.data && Object.keys(r.data).length > 0;
+              });
+              if (nonEmpty.length) {
+                await window.servicesDB.bulkUpsertRows(current.sheet.id,
+                  nonEmpty.map(function (r) { return { row_index: r.row_index, data: r.data }; }));
+              }
+            } catch (err) {
+              window.svcToast && window.svcToast.show('error', 'Delete Failed', err.message);
+            }
+            render();
+            window.svcToast && window.svcToast.show('success', 'Column Deleted', '"' + colName + '" removed.');
           } else if (action.indexOf('cell-format-') === 0) {
             var fmt = action.replace('cell-format-', '');
             cols[colIdx].format = fmt === 'auto' ? undefined : fmt;
@@ -431,8 +471,135 @@
     });
   }
 
+  // ── Row number right-click context menu ────────────────────────────────────────
+  // Right-clicking any row-num td shows "Delete this row" action.
+  // Deletes from current.rows + re-indexes all rows below + persists to Supabase.
+  function attachRowContextMenu() {
+    grid.querySelectorAll('tbody td.row-num').forEach(function (td) {
+      td.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeAllCtxMenus();
+
+        var rowIndex = parseInt(td.dataset.rowIndex, 10);
+        var displayNum = rowIndex + 1;
+
+        // Check if this row actually has data
+        var rowObj = current.rows.find(function (r) { return r.row_index === rowIndex; });
+        var hasData = rowObj && rowObj.data && Object.values(rowObj.data).some(function (v) {
+          return v !== '' && v != null;
+        });
+
+        var menu = document.createElement('div');
+        menu.className = 'svc-col-ctx-menu svc-row-ctx-menu';
+
+        // Close button
+        var closeBtn = document.createElement('button');
+        closeBtn.className = 'ctx-close-btn';
+        closeBtn.textContent = '✕';
+        closeBtn.title = 'Close';
+        closeBtn.addEventListener('click', function (ev) { ev.stopPropagation(); closeAllCtxMenus(); });
+        menu.appendChild(closeBtn);
+
+        // Section header
+        var hdr = document.createElement('div');
+        hdr.className = 'ctx-section-header';
+        hdr.textContent = 'ROW ' + displayNum;
+        menu.appendChild(hdr);
+
+        // Delete row item
+        var delItem = document.createElement('div');
+        delItem.className = 'ctx-item ctx-item-danger';
+        delItem.innerHTML = '<span class="ctx-icon">🗑️</span><span class="ctx-label">Delete this row</span>';
+        delItem.title = hasData ? 'Permanently delete row ' + displayNum + ' and its data' : 'Remove empty row ' + displayNum;
+        delItem.addEventListener('click', async function (ev) {
+          ev.stopPropagation();
+          closeAllCtxMenus();
+
+          if (hasData) {
+            var confirmed = confirm(
+              'Delete Row ' + displayNum + '?\n\n' +
+              'All data in this row will be permanently removed. This cannot be undone.'
+            );
+            if (!confirmed) return;
+          }
+
+          // 1. Find the row in current.rows
+          var rowIdx = current.rows.findIndex(function (r) { return r.row_index === rowIndex; });
+
+          // If row has a DB record, delete it; otherwise just remove from local state
+          if (rowIdx >= 0) {
+            var targetRow = current.rows[rowIdx];
+            // Remove from local state immediately for snappy UX
+            current.rows.splice(rowIdx, 1);
+
+            // Re-index all rows that were below this one
+            current.rows.forEach(function (r) {
+              if (r.row_index > rowIndex) r.row_index -= 1;
+            });
+
+            // Persist: delete from Supabase by sheet_id + row_index, then re-save shifted rows
+            try {
+              var c = window.servicesDB.client;
+              if (c) {
+                // Delete the specific row
+                await c.from('services_rows')
+                  .delete()
+                  .eq('sheet_id', current.sheet.id)
+                  .eq('row_index', rowIndex);
+
+                // Bulk-update shifted rows (rows that had rowIndex > deleted one)
+                var shiftedRows = current.rows.filter(function (r) { return r.row_index >= rowIndex; });
+                if (shiftedRows.length) {
+                  await window.servicesDB.bulkUpsertRows(current.sheet.id,
+                    shiftedRows.map(function (r) { return { row_index: r.row_index, data: r.data || {} }; }));
+                }
+              }
+            } catch (err) {
+              console.error('[services-grid] deleteRow error:', err);
+              window.svcToast && window.svcToast.show('error', 'Delete Failed', err.message || 'Could not delete row.');
+              // Re-render anyway — local state already updated
+            }
+          } else {
+            // Empty/virtual row — just re-render with no DB call needed
+          }
+
+          render();
+          window.servicesDashboard && window.servicesDashboard.update(current);
+          window.svcToast && window.svcToast.show('success', 'Row Deleted', 'Row ' + displayNum + ' removed.');
+        });
+        menu.appendChild(delItem);
+
+        // Position menu
+        menu.style.left = e.clientX + 'px';
+        menu.style.top  = e.clientY + 'px';
+        document.body.appendChild(menu);
+
+        // Flip if overflows viewport
+        var rect = menu.getBoundingClientRect();
+        if (rect.right  > window.innerWidth  - 8) menu.style.left = (e.clientX - rect.width)  + 'px';
+        if (rect.bottom > window.innerHeight - 8) menu.style.top  = (e.clientY - rect.height) + 'px';
+
+        // Close on outside click / Esc
+        setTimeout(function () {
+          function onOut(ev) {
+            if (!ev.target.closest('.svc-row-ctx-menu')) {
+              closeAllCtxMenus();
+              document.removeEventListener('mousedown', onOut);
+            }
+          }
+          function onEsc(ev) {
+            if (ev.key === 'Escape') { closeAllCtxMenus(); document.removeEventListener('keydown', onEsc); }
+          }
+          document.addEventListener('mousedown', onOut);
+          document.addEventListener('keydown', onEsc);
+        }, 0);
+      });
+    });
+  }
+
   function closeAllCtxMenus() {
-    document.querySelectorAll('.svc-col-ctx-menu').forEach(function (m) { m.remove(); });
+    document.querySelectorAll('.svc-col-ctx-menu, .svc-row-ctx-menu').forEach(function (m) { m.remove(); });
   }
 
   function autoResizeColumns() {
