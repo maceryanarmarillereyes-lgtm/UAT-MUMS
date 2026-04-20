@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   /**
-   * services-qb-lookup.js  v4.1  — BATCH + SAFE FALLBACK  (MACE CLEARED)
+   * services-qb-lookup.js  v4.2  — BATCH + SAFE FALLBACK  (MACE CLEARED)
    * ─────────────────────────────────────────────────────────────────────────
    * Free-Tier Safe Strategy:
    *
@@ -116,12 +116,12 @@
   }
 
   // ── _batchFetch ───────────────────────────────────────────────────────────────
-  // Returns { found: { nk: rec, ... }, transient: bool }
+  // Returns { found: { nk: rec, ... }, notFound: { nk:true }, transient: bool }
   //   found.transient = true  → QB API error / QB not configured / network fail
   //                             → DO NOT write _notFound (will retry on next scroll)
   //   found.transient = false → QB responded; any missing IDs are genuine not-found
   function _batchFetch(nks) {
-    if (!nks || !nks.length) return Promise.resolve({ found: {}, transient: false });
+    if (!nks || !nks.length) return Promise.resolve({ found: {}, notFound: {}, transient: false });
     var ids = nks.slice(0, _BATCH_SIZE);
 
     return _waitForGap()
@@ -135,28 +135,29 @@
       .then(function (data) {
         // QB not configured for this user — transient (not a real miss)
         if (data.warning === 'studio_qb_not_configured') {
-          return { found: {}, transient: true };
+          return { found: {}, notFound: {}, transient: true };
         }
 
         // Server-side QB API error — transient
         if (data.transientError) {
-          return { found: {}, transient: true };
+          return { found: {}, notFound: {}, transient: true };
         }
 
         // Non-ok (auth, settings read fail, etc.) — transient
         if (!data.ok) {
-          return { found: {}, transient: true };
+          return { found: {}, notFound: {}, transient: true };
         }
 
         // ok:true but records is an Array (misconfigured path) — transient
         var recs = data.records;
         if (!recs || Array.isArray(recs)) {
-          return { found: {}, transient: true };
+          return { found: {}, notFound: {}, transient: true };
         }
 
         // Valid batch response — parse results
-        var found   = {};
-        var normIdx = {};
+        var found    = {};
+        var normIdx  = {};
+        var notFound = {};
         Object.keys(recs).forEach(function (rawKey) {
           var nk  = normalizeCaseKey(rawKey);
           var rec = recs[rawKey];
@@ -167,11 +168,18 @@
         ids.forEach(function (id) {
           if (normIdx[id]) found[id] = normIdx[id];
         });
-        return { found: found, transient: false };
+
+        var nf = Array.isArray(data.notFound) ? data.notFound : [];
+        nf.forEach(function (rawId) {
+          var nk = normalizeCaseKey(rawId);
+          if (nk) notFound[nk] = true;
+        });
+
+        return { found: found, notFound: notFound, transient: false };
       })
       .catch(function () {
         // Network failure or parse error — transient, never poison cache
-        return { found: {}, transient: true };
+        return { found: {}, notFound: {}, transient: true };
       });
   }
 
@@ -272,15 +280,21 @@
             return _searchFallback(chunk);
           }
 
-          // Batch succeeded — write cache and genuine not-found entries
+          // Batch succeeded — write cache and genuine not-found entries.
+          // IMPORTANT: only trust explicit backend notFound list to avoid false
+          // negatives on partial/transitional QB responses.
           chunk.forEach(function (nk) {
             var rec = result.found[nk];
             if (rec) {
               _cache[nk]    = Object.assign({ at: now }, rec);
               delete _notFound[nk];
-            } else {
-              // QB responded but this case# genuinely doesn't exist
+            } else if (result.notFound && result.notFound[nk]) {
+              // QB responded and explicitly confirmed this case is missing
               _notFound[nk] = now;
+            } else {
+              // Unresolved key with no explicit notFound signal:
+              // do not poison cache; allow retry on next pass.
+              delete _notFound[nk];
             }
             delete _inFlight[nk];
           });
