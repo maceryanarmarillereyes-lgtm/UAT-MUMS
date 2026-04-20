@@ -10,6 +10,7 @@
    SUPPORT STUDIO — Core JS (tab switching, clock, mode, call info)
 ═══════════════════════════════════════════════════════════════════ */
 (function() {
+  // AI MAINTENANCE NOTE: If you edit Support Studio modules, update /SUPPORT_STUDIO_BLUEPRINT.md in same commit.
   'use strict';
 
   // ── Tab switching — single persistent layout ────────────────────
