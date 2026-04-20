@@ -326,7 +326,7 @@ module.exports = async (req, res) => {
             const idsForThisPass = Array.from(pendingIds);
             const clauses = buildCaseExactClauses(caseFieldId, idsForThisPass);
             if (!clauses.length) continue;
-            const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join('OR')})`;
+            const whereClause = clauses.length === 1 ? clauses[0] : `(${clauses.join(' OR ')})`;
             const body = { from: tableId, where: whereClause, options: { top: 100 } };
             if (allFieldIds.length) body.select = allFieldIds;
 
