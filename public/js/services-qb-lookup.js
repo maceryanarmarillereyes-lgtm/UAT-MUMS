@@ -1,21 +1,31 @@
 (function () {
   'use strict';
   /**
-   * services-qb-lookup.js  v3.0  — FULL REWRITE  (MACE CLEARED)
+   * services-qb-lookup.js  v4.0  — BATCH REWRITE  (MACE CLEARED)
    * ─────────────────────────────────────────────────────────────────
-   * Strategy:
-   *   PRIMARY  — /api/studio/qb_search?q=<caseNum>&top=5
-   *              Same Deep Search endpoint used by the working QB panel.
-   *              Finds the exact record by case number.
+   * Free-Tier Safe Strategy:
    *
-   *   FALLBACK — /api/studio/qb_data?recordId=<caseNum>
-   *              Fires only when the user-selected field is not present
-   *              in the Deep Search results (non-priority / rare field).
-   *              Returns ALL QB fields for that record.
+   *   BATCH     — /api/studio/qb_data?recordIds=<id1>,<id2>,...
+   *               Groups up to 50 case numbers per HTTP call.
+   *               1 batch request = up to 50 row lookups.
+   *               Replaces the old per-row qb_search approach.
    *
-   *   CACHE    — Per-case 5-min TTL so repeated renders never re-hit QB.
+   *   CACHE     — Per-case 5-min TTL (in-memory map).
+   *               NOT_FOUND short-TTL 30s to avoid re-hitting bad IDs.
+   *               Scroll re-triggers paint from cache (zero new requests).
    *
-   * Public API (unchanged surface — required by services-grid.js):
+   *   IN-FLIGHT — Promise dedup map prevents duplicate concurrent fetches
+   *               for the same case number across scroll/render cycles.
+   *
+   *   RATE GATE — Min 200ms gap between consecutive batch API calls.
+   *               Max 50 IDs per batch. Deferred rows fetch 400ms later.
+   *
+   * Free-Tier Impact (30 users/day x 520 rows):
+   *   Before: 520 qb_search calls per load  = ~15,600 CF requests/day
+   *   After:  ~11 batch calls per load       = ~330   CF requests/day
+   *   Reduction: 98%
+   *
+   * Public API surface (UNCHANGED - required by services-grid.js):
    *   window.svcQbLookup.openFieldPicker(opts)
    *   window.svcQbLookup.autofillLinkedColumns(current, gridEl)
    *   window.svcQbLookup.clearCache()
@@ -55,7 +65,7 @@
     var raw = String(v == null ? '' : v).trim();
     if (!raw) return '';
     var noPrefix = raw.replace(/^\s*case(?:\s*(?:#|no\.?|number|id))?\s*[:\-]?\s*/i, '').trim();
-    var compact = noPrefix.replace(/,/g, '');
+    var compact  = noPrefix.replace(/,/g, '');
     if (/^\d+(?:\.0+)?$/.test(compact)) return String(Number(compact));
     var tok = compact.match(/\b(\d{3,})(?:\.0+)?\b/);
     if (tok && tok[1]) return String(Number(tok[1]));
@@ -63,8 +73,6 @@
   }
 
   // ── Resolve Case Column ────────────────────────────────────────────────────────
-  // Basis per spec: case number is in Column 1 (index 0).
-  // Priority order: exact label → 'case' fuzzy → first column.
   function resolveCaseColumn(cols) {
     var list = Array.isArray(cols) ? cols : [];
     if (!list.length) return null;
@@ -74,146 +82,128 @@
     if (byExact) return byExact;
     var byFuzzy = list.find(function (c) { return norm(c.label).indexOf('case') !== -1; });
     if (byFuzzy) return byFuzzy;
-    return list[0] || null; // Default: first column = Column 1
+    return list[0] || null;
   }
 
-  // ── Per-case record cache ─────────────────────────────────────────────────────
-  // { fields: { "fid": { value: "..." } }, columnMap: { "fid": "Label" }, at: ts }
-  var _cache        = {};
-  var _notFound     = {};
+  // ── Caches ─────────────────────────────────────────────────────────────────────
+  var _cache         = {};   // nk -> { fields, columnMap, at }
+  var _notFound      = {};   // nk -> timestamp (miss cache)
+  var _inFlight      = {};   // nk -> Promise<rec|null> (dedup)
   var _CACHE_TTL     = 5 * 60 * 1000;
   var _NOT_FOUND_TTL = 30 * 1000;
+  var _BATCH_SIZE    = 50;
 
-  // ── PRIMARY: Deep Search  ─────────────────────────────────────────────────────
-  function _deepSearch(nk) {
-    return fetch(
-      '/api/studio/qb_search?q=' + encodeURIComponent(nk) + '&top=5',
-      { headers: apiHeaders() }
-    )
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (!data.ok || !Array.isArray(data.records) || !data.records.length) return null;
+  // ── Rate limiter ──────────────────────────────────────────────────────────────
+  var _lastBatchAt  = 0;
+  var _MIN_BATCH_GAP = 200; // ms between batch API calls
 
-      // Find exact record: prefer qbRecordId match, then field value scan
-      var match = null;
-      var i;
-      for (i = 0; i < data.records.length; i++) {
-        if (normalizeCaseKey(data.records[i].qbRecordId) === nk) {
-          match = data.records[i]; break;
-        }
-      }
-      if (!match) {
-        for (i = 0; i < data.records.length; i++) {
-          var rec = data.records[i];
-          var flds = rec.fields || {};
-          var hit = Object.keys(flds).some(function (fid) {
-            return normalizeCaseKey(String(
-              flds[fid] && flds[fid].value != null ? flds[fid].value : ''
-            )) === nk;
-          });
-          if (hit) { match = rec; break; }
-        }
-      }
-      if (!match) return null;
-
-      return {
-        fields: match.fields || {},
-        columnMap: Object.assign({}, data.columnMap || {}, match.columnMap || {})
-      };
-    })
-    .catch(function () { return null; });
+  function _waitForGap() {
+    var now     = Date.now();
+    var elapsed = now - _lastBatchAt;
+    var wait    = elapsed < _MIN_BATCH_GAP ? _MIN_BATCH_GAP - elapsed : 0;
+    _lastBatchAt = now + wait;
+    return wait > 0
+      ? new Promise(function (res) { setTimeout(res, wait); })
+      : Promise.resolve();
   }
 
-  // ── FALLBACK: Full single-record fetch ────────────────────────────────────────
-  // Returns ALL QB fields — used when needed field not in Deep Search result set.
-  function _fullFetch(nk) {
-    return fetch(
-      '/api/studio/qb_data?recordId=' + encodeURIComponent(nk),
-      { headers: apiHeaders() }
-    )
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (!data.ok || !data.fields) return null;
-      return { fields: data.fields || {}, columnMap: data.columnMap || {} };
-    })
-    .catch(function () { return null; });
+  // ── Low-level batch fetch ─────────────────────────────────────────────────────
+  // Calls /api/studio/qb_data?recordIds=436860,436776,...
+  // Returns { nk: { fields, columnMap } } — only found records.
+  function _batchFetch(nks) {
+    if (!nks || !nks.length) return Promise.resolve({});
+    var ids = nks.slice(0, _BATCH_SIZE);
+    return _waitForGap()
+      .then(function () {
+        return fetch(
+          '/api/studio/qb_data?recordIds=' + ids.map(encodeURIComponent).join(','),
+          { headers: apiHeaders() }
+        );
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) return {};
+        var out      = {};
+        var recs     = data.records || {};
+        // Normalize all returned keys so "436860.0" matches "436860"
+        var normIdx = {};
+        Object.keys(recs).forEach(function (rawKey) {
+          var nk  = normalizeCaseKey(rawKey);
+          var rec = recs[rawKey];
+          if (nk && rec && rec.fields) {
+            normIdx[nk] = { fields: rec.fields, columnMap: rec.columnMap || {} };
+          }
+        });
+        ids.forEach(function (id) {
+          if (normIdx[id]) out[id] = normIdx[id];
+        });
+        return out;
+      })
+      .catch(function () { return {}; });
   }
 
-  // ── Check if record has the needed field ──────────────────────────────────────
-  function _hasField(rec, fieldId, fieldLabel) {
-    if (!rec) return false;
-    var flds   = rec.fields    || {};
-    var colMap = rec.columnMap || {};
-    if (fieldId && flds[String(fieldId)] != null) return true;
-    if (fieldLabel) {
-      var target = String(fieldLabel).trim().toLowerCase();
-      return Object.keys(colMap).some(function (fid) {
-        return String(colMap[fid] || '').trim().toLowerCase() === target
-            && flds[fid] != null;
-      });
+  // ── Batch pipeline ────────────────────────────────────────────────────────────
+  // Splits nks into _BATCH_SIZE chunks, fetches sequentially (rate-safe),
+  // writes results to _cache/_notFound, clears _inFlight on completion.
+  function _processBatchPipeline(nks) {
+    if (!nks || !nks.length) return Promise.resolve();
+    var chunks = [];
+    for (var i = 0; i < nks.length; i += _BATCH_SIZE) {
+      chunks.push(nks.slice(i, i + _BATCH_SIZE));
     }
-    return false;
+    return chunks.reduce(function (chain, chunk) {
+      return chain.then(function () {
+        return _batchFetch(chunk).then(function (results) {
+          var now = Date.now();
+          chunk.forEach(function (nk) {
+            var rec = results[nk];
+            if (rec) {
+              _cache[nk]    = Object.assign({ at: now }, rec);
+              delete _notFound[nk];
+            } else {
+              _notFound[nk] = now;
+            }
+            delete _inFlight[nk];
+          });
+        });
+      });
+    }, Promise.resolve());
   }
 
-  // ── Main lookup: Deep Search → fallback if field missing ─────────────────────
-  function lookupCase(caseNum, neededFieldId, neededFieldLabel) {
+  // ── lookupCase ─────────────────────────────────────────────────────────────────
+  // Returns Promise<record | null>. Used by code that needs a single-case lookup.
+  function lookupCase(caseNum) {
     var nk = normalizeCaseKey(caseNum);
     if (!nk) return Promise.resolve(null);
 
-    // Cache hit
-    var cached = _cache[nk];
-    if (cached && (Date.now() - cached.at) < _CACHE_TTL) {
-      if (_hasField(cached, neededFieldId, neededFieldLabel)) {
-        return Promise.resolve(cached);
-      }
-      // Partial hit: field missing — upgrade with full fetch
-      return _fullFetch(nk).then(function (fr) {
-        if (fr) {
-          _cache[nk] = {
-            fields:    Object.assign({}, cached.fields,    fr.fields),
-            columnMap: Object.assign({}, cached.columnMap, fr.columnMap),
-            at: Date.now()
-          };
-        }
-        return _cache[nk] || null;
-      });
+    if (_cache[nk] && (Date.now() - _cache[nk].at) < _CACHE_TTL) {
+      return Promise.resolve(_cache[nk]);
     }
-
-    // Known not-found (short TTL)
     if (_notFound[nk] && (Date.now() - _notFound[nk]) < _NOT_FOUND_TTL) {
       return Promise.resolve(null);
     }
+    if (_inFlight[nk]) {
+      // Piggyback on existing request
+      return _inFlight[nk].then(function () { return _cache[nk] || null; });
+    }
 
-    // Step 1: Deep Search (same endpoint as working QB panel)
-    return _deepSearch(nk).then(function (ds) {
-      if (!ds) {
-        // Deep Search found nothing — try full fetch before marking not-found
-        return _fullFetch(nk).then(function (fr) {
-          if (!fr) { _notFound[nk] = Date.now(); return null; }
-          _cache[nk] = Object.assign({ at: Date.now() }, fr);
-          delete _notFound[nk];
-          return _cache[nk];
-        });
-      }
-
-      // Step 2: Field present in Deep Search result? → done
-      if (_hasField(ds, neededFieldId, neededFieldLabel)) {
-        _cache[nk] = Object.assign({ at: Date.now() }, ds);
+    var p = _batchFetch([nk]).then(function (results) {
+      delete _inFlight[nk];
+      var rec = results[nk];
+      if (rec) {
+        _cache[nk] = Object.assign({ at: Date.now() }, rec);
         delete _notFound[nk];
         return _cache[nk];
       }
-
-      // Step 3: Record found but field not in result — upgrade to full fetch
-      return _fullFetch(nk).then(function (fr) {
-        _cache[nk] = {
-          fields:    Object.assign({}, ds.fields,    (fr || {}).fields    || {}),
-          columnMap: Object.assign({}, ds.columnMap, (fr || {}).columnMap || {}),
-          at: Date.now()
-        };
-        delete _notFound[nk];
-        return _cache[nk];
-      });
+      _notFound[nk] = Date.now();
+      return null;
+    }).catch(function () {
+      delete _inFlight[nk];
+      return null;
     });
+
+    _inFlight[nk] = p;
+    return p;
   }
 
   // ── Extract value from cached record ─────────────────────────────────────────
@@ -222,7 +212,6 @@
     var flds   = rec.fields    || {};
     var colMap = rec.columnMap || {};
 
-    // Direct field ID
     if (fieldId) {
       var fid = String(fieldId).trim();
       if (flds[fid] != null) {
@@ -232,13 +221,12 @@
       }
     }
 
-    // Label scan via columnMap
     if (fieldLabel) {
       var target = String(fieldLabel).trim().toLowerCase();
       var mFid   = null;
-      Object.keys(colMap).some(function (fid) {
-        if (String(colMap[fid] || '').trim().toLowerCase() === target) {
-          mFid = fid; return true;
+      Object.keys(colMap).some(function (f) {
+        if (String(colMap[f] || '').trim().toLowerCase() === target) {
+          mFid = f; return true;
         }
         return false;
       });
@@ -249,32 +237,7 @@
       }
     }
 
-    return null; // Field not in this snapshot
-  }
-
-  // ── Concurrency queue ─────────────────────────────────────────────────────────
-  function runWithConcurrency(items, fn, concurrency) {
-    if (!items || !items.length) return Promise.resolve();
-    var idx = 0, running = 0;
-    return new Promise(function (resolve) {
-      function next() {
-        while (running < concurrency && idx < items.length) {
-          /* eslint-disable no-loop-func */
-          (function (item) {
-            running++;
-            var done = function () {
-              running--;
-              if (idx >= items.length && running === 0) resolve();
-              else next();
-            };
-            try { fn(item).then(done, done); } catch (_) { done(); }
-          })(items[idx++]);
-          /* eslint-enable no-loop-func */
-        }
-        if (idx >= items.length && running === 0) resolve();
-      }
-      next();
-    });
+    return null;
   }
 
   // ── QB Field list for picker (5-min cache) ────────────────────────────────────
@@ -319,7 +282,7 @@
     });
     if (!rowsWithCase.length) return;
 
-    // Debounce
+    // Debounce — cancel previous pending cycle
     var token = {};
     _autofillToken = token;
     clearTimeout(_autofillTimer);
@@ -327,11 +290,16 @@
     _autofillTimer = setTimeout(function () {
       if (_autofillToken !== token) return;
 
-      // Phase 1 — mark uncached cells as pending (spinner placeholder)
+      var now = Date.now();
+
+      // Phase 1: Spinner on uncached cells
       rowsWithCase.forEach(function (row) {
         var nk = normalizeCaseKey(row.data[caseCol.key]);
-        if (_cache[nk]    && (Date.now() - _cache[nk].at)    < _CACHE_TTL)     return;
-        if (_notFound[nk] && (Date.now() - _notFound[nk])    < _NOT_FOUND_TTL) return;
+        if (!nk) return;
+        var resolved = (_cache[nk]    && (now - _cache[nk].at)    < _CACHE_TTL)
+                    || (_notFound[nk] && (now - _notFound[nk])    < _NOT_FOUND_TTL)
+                    || !!_inFlight[nk];
+        if (resolved) return;
         linkedCols.forEach(function (col) {
           var inp = gridEl.querySelector(
             'input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]'
@@ -343,22 +311,33 @@
         });
       });
 
-      // Phase 2 — split visible vs off-screen rows
+      // Phase 2: Collect unique uncached keys, categorize visible vs deferred
       var gridWrap = document.getElementById('svcGridWrap') || gridEl.parentElement;
       var wrapRect = gridWrap ? gridWrap.getBoundingClientRect() : null;
-      var visibleRows = [], deferredRows = [];
+
+      var visibleNks  = [];
+      var deferredNks = [];
+      var seenNks     = new Set();
+
       rowsWithCase.forEach(function (row) {
-        var anyInp = gridEl.querySelector('input.cell[data-row="' + row.row_index + '"]');
+        var nk = normalizeCaseKey(row.data[caseCol.key]);
+        if (!nk || seenNks.has(nk)) return;
+        seenNks.add(nk);
+
+        if (_cache[nk]    && (Date.now() - _cache[nk].at)    < _CACHE_TTL) return;
+        if (_notFound[nk] && (Date.now() - _notFound[nk])    < _NOT_FOUND_TTL) return;
+        if (_inFlight[nk]) return;
+
+        var anyInp  = gridEl.querySelector('input.cell[data-row="' + row.row_index + '"]');
+        var visible = true;
         if (anyInp && wrapRect) {
           var r = anyInp.getBoundingClientRect();
-          (r.bottom >= wrapRect.top && r.top <= wrapRect.bottom)
-            ? visibleRows.push(row) : deferredRows.push(row);
-        } else {
-          visibleRows.push(row);
+          visible = r.bottom >= wrapRect.top && r.top <= wrapRect.bottom;
         }
+        (visible ? visibleNks : deferredNks).push(nk);
       });
 
-      // Paint a single row (reads from cache, does not fetch)
+      // paintRow: reads _cache, updates DOM
       function paintRow(row) {
         if (_autofillToken !== token) return;
         var rawCase = String(row.data[caseCol.key] || '').trim();
@@ -407,29 +386,47 @@
         });
       }
 
-      // Lookup + paint one row
-      function processRow(row) {
-        if (_autofillToken !== token) return Promise.resolve();
-        var rawCase   = String(row.data[caseCol.key] || '').trim();
-        var firstCol  = linkedCols[0];
-        var neededFid = String(firstCol.qbLookup.fieldId   || '').trim();
-        var neededLbl = String(firstCol.qbLookup.fieldLabel || '').trim();
-        return lookupCase(rawCase, neededFid, neededLbl).then(function () {
-          paintRow(row);
-        });
-      }
+      // Phase 3: Instant paint for already-cached rows
+      rowsWithCase.forEach(function (row) {
+        var nk = normalizeCaseKey(row.data[caseCol.key]);
+        if (_cache[nk] && (Date.now() - _cache[nk].at) < _CACHE_TTL) paintRow(row);
+      });
 
-      // Phase 3 — visible rows first, concurrency 4
-      runWithConcurrency(visibleRows, processRow, 4).then(function () {
-        if (_autofillToken !== token || !deferredRows.length) return;
-        // Phase 4 — off-screen rows after 400 ms delay
+      if (!visibleNks.length && !deferredNks.length) return;
+
+      // Phase 4: Batch-fetch visible rows, then paint them
+      // Tag as in-flight to prevent lookupCase dedup conflicts
+      var placeholder = Promise.resolve();
+      visibleNks.forEach(function (nk) {
+        if (!_inFlight[nk]) _inFlight[nk] = placeholder;
+      });
+
+      _processBatchPipeline(visibleNks).then(function () {
+        if (_autofillToken !== token) return;
+        rowsWithCase.forEach(function (row) {
+          var nk = normalizeCaseKey(row.data[caseCol.key]);
+          if (visibleNks.indexOf(nk) !== -1) paintRow(row);
+        });
+
+        if (!deferredNks.length) return;
+
+        // Phase 5: Deferred rows 400ms later (saves resources on fast navigation)
         setTimeout(function () {
           if (_autofillToken !== token) return;
-          runWithConcurrency(deferredRows, processRow, 4);
+          deferredNks.forEach(function (nk) {
+            if (!_inFlight[nk]) _inFlight[nk] = placeholder;
+          });
+          _processBatchPipeline(deferredNks).then(function () {
+            if (_autofillToken !== token) return;
+            rowsWithCase.forEach(function (row) {
+              var nk = normalizeCaseKey(row.data[caseCol.key]);
+              if (deferredNks.indexOf(nk) !== -1) paintRow(row);
+            });
+          });
         }, 400);
       });
 
-    }, 150);
+    }, 150); // debounce
   }
 
   // ── DOM helper ────────────────────────────────────────────────────────────────
@@ -448,6 +445,8 @@
   }
 
   // ── Field Picker UI ───────────────────────────────────────────────────────────
+  // Uses /api/studio/qb_fields (metadata only, NOT a lookup endpoint).
+  // Logic unchanged — only the lookup internals above changed.
   function openFieldPicker(opts) {
     closeFieldPicker();
 
@@ -563,6 +562,7 @@
     clearCache: function () {
       _cache       = {};
       _notFound    = {};
+      _inFlight    = {};
       _fieldsCache = null;
     }
   };
