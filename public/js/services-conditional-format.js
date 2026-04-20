@@ -224,17 +224,26 @@
       case 'is_unique':
         return false; // handled specially in paint()
 
-      /* FORMULA */
+      /* FORMULA — supports VALUE, NUMVAL, ROW_DATA{}, COL('colName') */
       case 'formula':
         try {
           var formula = rule.formula || '';
           if (!formula.trim()) return false;
-          // Replace = prefix
           if (formula.startsWith('=')) formula = formula.slice(1);
-          // Expose cell value as A1 proxy — allow simple expressions
           /* jshint evil:true */
-          var fn = new Function('VALUE', 'ROW', 'try{return !!('+formula+')}catch(e){return false}');
-          return fn(isNaN(parseFloat(v)) ? v : parseFloat(v), 0);
+          var fn = new Function(
+            'VALUE', 'NUMVAL', 'ROW_DATA', 'COL',
+            'try{return !!('+formula+')}catch(e){return false}'
+          );
+          var numValF = parseFloat(v);
+          var rowDataF = rule._evalRowData || {};
+          var colLabelMapF = rule._evalColLabelMap || {};
+          var colFn = function (colName) {
+            var key = colLabelMapF[colName] || colName;
+            var raw = rowDataF[key];
+            return raw != null ? String(raw).trim() : '';
+          };
+          return fn(isNaN(numValF) ? v : numValF, numValF, rowDataF, colFn);
         } catch (e) { return false; }
 
       default: return false;
@@ -256,6 +265,10 @@
 
   /* ─────────────────────────────────────────────────────────────────────────
      PAINT ENGINE — applies CF rules to the live grid DOM
+     Supports:
+       - Per-cell styling (single_color, color_scale, data_bar, icon_set)
+       - ROW-LEVEL highlight: rule.highlightRow=true paints ALL tds in the row
+       - Formula rules get full ROW_DATA + COL('colName') access
   ───────────────────────────────────────────────────────────────────────── */
 
   function paintGrid() {
@@ -268,11 +281,20 @@
     var rows = state.rows || [];
     if (state.__treeFilteredRows) rows = state.__treeFilteredRows;
 
-    // Clear all previous CF styles
+    // Build a label→key map for COL() formula function
+    var colLabelMap = {};
+    cols.forEach(function (c) {
+      if (c && c.label && c.key) colLabelMap[c.label] = c.key;
+    });
+
+    // Clear ALL previous CF styles (cells + row-level)
     grid.querySelectorAll('td[data-cf-applied]').forEach(function (td) {
       td.removeAttribute('data-cf-applied');
       td.style.background = '';
       td.style.borderLeft = '';
+      td.style.outline = '';
+      td.style.position = '';
+      td.style.paddingLeft = '';
       var inp = td.querySelector('input.cell');
       if (inp) {
         inp.style.color = '';
@@ -282,7 +304,29 @@
         inp.style.fontFamily = '';
         inp.dataset.cfIcon = '';
       }
+      var badge = td.querySelector('.cf-icon-badge');
+      if (badge) badge.remove();
     });
+    // Also clear row-level highlights set on <tr>
+    grid.querySelectorAll('tr[data-cf-row]').forEach(function (tr) {
+      tr.removeAttribute('data-cf-row');
+      tr.querySelectorAll('td').forEach(function (td) {
+        td.style.background = '';
+        td.style.borderTop = '';
+        td.style.borderBottom = '';
+        var inp = td.querySelector('input.cell');
+        if (inp) {
+          inp.style.color = '';
+          inp.style.fontWeight = '';
+          inp.style.fontStyle = '';
+          inp.style.textDecoration = '';
+        }
+      });
+    });
+
+    // ── Collect which rows need row-highlight so we can apply after per-cell pass
+    // Map: rowIdx → {bgColor, textColor, bold, italic, strikethrough, underline, borderColor}
+    var rowHighlights = {};
 
     cols.forEach(function (col) {
       if (!col || !Array.isArray(col.conditionalRules) || !col.conditionalRules.length) return;
@@ -290,17 +334,14 @@
       var rules = col.conditionalRules.filter(function (r) { return r && !r.disabled; });
       if (!rules.length) return;
 
-      // Gather all values for this column (for color scale / duplicate detection)
+      // Gather all values for this column (color scale / duplicate)
       var colValues = rows.map(function (row) {
         return row && row.data ? (row.data[col.key] != null ? String(row.data[col.key]).trim() : '') : '';
       });
-
       var numericValues = colValues.map(parseFloat).filter(function (n) { return !isNaN(n); });
       var minVal = numericValues.length ? Math.min.apply(null, numericValues) : 0;
       var maxVal = numericValues.length ? Math.max.apply(null, numericValues) : 1;
-      var midVal = (minVal + maxVal) / 2;
 
-      // Count duplicates
       var valueCounts = {};
       colValues.forEach(function (v) {
         if (v !== '') valueCounts[v] = (valueCounts[v] || 0) + 1;
@@ -316,7 +357,6 @@
         if (td) td = td.parentElement;
         if (!td) return;
 
-        // Try each rule in order (first match wins for single_color/icon/data_bar)
         for (var ri = 0; ri < rules.length; ri++) {
           var rule = rules[ri];
           var matched = false;
@@ -327,44 +367,58 @@
             } else if (rule.operator === 'is_unique') {
               matched = cellStr !== '' && (valueCounts[cellStr] || 0) === 1;
             } else if (rule.type === 'formula') {
+              // Inject full row context for COL() and ROW_DATA access
+              rule._evalRowData = row.data;
+              rule._evalColLabelMap = colLabelMap;
               matched = evalRule(rule, cellValue);
+              delete rule._evalRowData;
+              delete rule._evalColLabelMap;
             } else {
               matched = evalRule(rule, cellValue);
             }
 
             if (matched) {
-              applyStyleToTd(td, rule);
+              if (rule.highlightRow) {
+                // Queue row-level highlight — applied after per-cell loop
+                if (!rowHighlights[rowIdx]) {
+                  rowHighlights[rowIdx] = {
+                    bgColor: rule.bgColor || '',
+                    textColor: rule.textColor || '',
+                    bold: !!rule.bold,
+                    italic: !!rule.italic,
+                    strikethrough: !!rule.strikethrough,
+                    underline: !!rule.underline,
+                    borderColor: rule.rowBorderColor || ''
+                  };
+                }
+              } else {
+                applyStyleToTd(td, rule);
+              }
               break; // first match wins
             }
 
           } else if (rule.type === 'color_scale') {
-            // Color scale applies to all cells — no break
             var numV = parseFloat(cellStr);
             if (!isNaN(numV) && maxVal !== minVal) {
               var t = (numV - minVal) / (maxVal - minVal);
-              var color;
-              var minC = rule.scaleMin  || '#f87171';
-              var midC = rule.scaleMid  || '#fde047';
-              var maxC = rule.scaleMax  || '#4ade80';
-              if (t <= 0.5) {
-                color = interpolateHex(minC, midC, t * 2);
-              } else {
-                color = interpolateHex(midC, maxC, (t - 0.5) * 2);
-              }
+              var minC = rule.scaleMin || '#f87171';
+              var midC = rule.scaleMid || '#fde047';
+              var maxC = rule.scaleMax || '#4ade80';
+              var color = t <= 0.5
+                ? interpolateHex(minC, midC, t * 2)
+                : interpolateHex(midC, maxC, (t - 0.5) * 2);
               td.style.background = color;
               td.setAttribute('data-cf-applied', '1');
               var inp2 = td.querySelector('input.cell');
               if (inp2) inp2.style.color = contrastColor(color);
-            } else if (cellStr === '' && rule.applyToEmpty) {
-              td.style.background = rule.scaleMin || '#f87171';
-              td.setAttribute('data-cf-applied', '1');
             }
-            // color scale does NOT break — only one color scale rule can exist sensibly
 
           } else if (rule.type === 'data_bar') {
             var numV2 = parseFloat(cellStr);
             if (!isNaN(numV2)) {
-              var pct = maxVal !== minVal ? Math.max(0, Math.min(100, ((numV2 - minVal) / (maxVal - minVal)) * 100)) : 50;
+              var pct = maxVal !== minVal
+                ? Math.max(0, Math.min(100, ((numV2 - minVal) / (maxVal - minVal)) * 100))
+                : 50;
               var barColor = rule.barColor || '#22d3ee';
               td.style.background = 'linear-gradient(to right, ' + hexToRgba(barColor, 0.45) + ' ' + pct + '%, transparent ' + pct + '%)';
               td.style.borderLeft = '3px solid ' + barColor;
@@ -382,7 +436,6 @@
               var inp3 = td.querySelector('input.cell');
               if (inp3) {
                 inp3.dataset.cfIcon = icon;
-                // Inject icon visually via a positioned element
                 var existing = td.querySelector('.cf-icon-badge');
                 if (existing) existing.remove();
                 var badge = document.createElement('span');
@@ -398,6 +451,58 @@
           }
         }
       });
+    });
+
+    // ── Apply row-level highlights ──────────────────────────────────────────
+    // Row highlights override per-cell styles for the whole tr
+    Object.keys(rowHighlights).forEach(function (rowIdxStr) {
+      var rowIdx = parseInt(rowIdxStr, 10);
+      var hl = rowHighlights[rowIdx];
+
+      // Find the <tr> that contains this row's cells
+      var anyCell = grid.querySelector('td input.cell[data-row="'+rowIdx+'"]');
+      if (!anyCell) return;
+      var tr = anyCell.closest('tr');
+      if (!tr) return;
+
+      tr.setAttribute('data-cf-row', '1');
+
+      // Paint ALL td in this row (skip row-num td)
+      tr.querySelectorAll('td').forEach(function (td) {
+        if (td.classList.contains('row-num')) {
+          // Paint a left accent bar on row-num
+          if (hl.borderColor || hl.bgColor) {
+            td.style.borderLeft = '3px solid ' + (hl.borderColor || hl.bgColor);
+          }
+          return;
+        }
+        if (hl.bgColor) td.style.background = hl.bgColor;
+        td.setAttribute('data-cf-applied', '1');
+
+        var inp = td.querySelector('input.cell');
+        if (inp) {
+          if (hl.textColor) {
+            inp.style.color = hl.textColor;
+          } else if (hl.bgColor) {
+            inp.style.color = contrastColor(hl.bgColor);
+          }
+          inp.style.fontWeight     = hl.bold        ? '700' : '';
+          inp.style.fontStyle      = hl.italic      ? 'italic' : '';
+          var dec2 = [];
+          if (hl.strikethrough) dec2.push('line-through');
+          if (hl.underline)     dec2.push('underline');
+          inp.style.textDecoration = dec2.join(' ') || '';
+        }
+      });
+
+      // Top+bottom border accent for the whole row
+      if (hl.borderColor) {
+        var tds = tr.querySelectorAll('td');
+        tds.forEach(function (td, i) {
+          td.style.borderTop    = '1px solid ' + hl.borderColor;
+          td.style.borderBottom = '1px solid ' + hl.borderColor;
+        });
+      }
     });
   }
 
@@ -676,6 +781,28 @@
       var styleSection = mkEl('div', { className: 'svc-cf-section' }, editor);
       mkEl('div', { className: 'svc-cf-section-title', textContent: 'Formatting Style' }, styleSection);
       renderStylePicker(styleSection, rule);
+
+      /* ── ROW HIGHLIGHT TOGGLE (single_color) ── */
+      if (rule.type === 'single_color') {
+        var rowHlSection = mkEl('div', { className: 'svc-cf-section' }, editor);
+        mkEl('div', { className: 'svc-cf-section-title', textContent: 'Row Highlight' }, rowHlSection);
+        var rowToggleWrapSC = mkEl('div', { className: 'svc-cf-row-toggle-wrap' }, rowHlSection);
+        var rowToggleSC = mkEl('label', { className: 'svc-cf-row-toggle-label' }, rowToggleWrapSC);
+        var rowChkSC = mkEl('input', {
+          type: 'checkbox',
+          className: 'svc-cf-row-chk',
+          checked: !!rule.highlightRow
+        }, rowToggleSC);
+        mkEl('span', { className: 'svc-cf-toggle-slider' }, rowToggleSC);
+        mkEl('span', {
+          className: 'svc-cf-toggle-text',
+          textContent: '🌈 Highlight the entire row when condition is met'
+        }, rowToggleSC);
+        rowChkSC.addEventListener('change', function () {
+          _state.draft.highlightRow = rowChkSC.checked;
+          syncDraftToRule();
+        });
+      }
     }
 
     /* ── PREVIEW ── */
@@ -850,22 +977,103 @@
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
-     FORMULA
+     FORMULA EDITOR — with ROW HIGHLIGHT toggle + column reference builder
   ───────────────────────────────────────────────────────────────────────── */
 
   function renderFormula(parent, rule) {
+    // ── Column reference quick-insert ──────────────────────────────────────
+    var state2 = window.servicesGrid ? window.servicesGrid.getState() : null;
+    var availCols = (state2 && state2.sheet && state2.sheet.column_defs) ? state2.sheet.column_defs : [];
+
+    if (availCols.length) {
+      var refSection = mkEl('div', { className: 'svc-cf-formula-ref-wrap' }, parent);
+      mkEl('div', { className: 'svc-cf-formula-ref-label', textContent: '📋 Quick-insert column reference:' }, refSection);
+      var chips = mkEl('div', { className: 'svc-cf-formula-ref-chips' }, refSection);
+      availCols.forEach(function (col) {
+        if (!col || !col.label) return;
+        var chip = mkEl('button', {
+          className: 'svc-cf-formula-ref-chip',
+          textContent: col.label,
+          title: 'Insert COL("' + col.label + '")'
+        }, chips);
+        chip.addEventListener('click', function () {
+          var ta2 = parent.querySelector('.svc-cf-formula-input');
+          if (!ta2) return;
+          var ins = 'COL("' + col.label + '")';
+          var start = ta2.selectionStart || 0;
+          var end   = ta2.selectionEnd   || 0;
+          ta2.value = ta2.value.slice(0, start) + ins + ta2.value.slice(end);
+          ta2.selectionStart = ta2.selectionEnd = start + ins.length;
+          ta2.dispatchEvent(new Event('input'));
+          ta2.focus();
+        });
+      });
+    }
+
+    // ── Formula textarea ───────────────────────────────────────────────────
     var wrap = mkEl('div', { className: 'svc-cf-formula-wrap' }, parent);
     var ta = mkEl('textarea', {
       className: 'svc-cf-formula-input',
-      placeholder: '=VALUE > 100\n=VALUE = "Active"\n=LEN(VALUE) > 0',
+      placeholder: [
+        '// Match a specific value in this column:',
+        'VALUE === "O - Investigating"',
+        '',
+        '// Match value in ANOTHER column (row-level):',
+        'COL("STATUS") === "O - Waiting for Customer"',
+        'COL("Assigned To").includes("Mace")',
+        '',
+        '// Number comparisons:',
+        'NUMVAL > 100',
+        'NUMVAL >= 50 && NUMVAL <= 200'
+      ].join('\n'),
       value: rule.formula || ''
     }, wrap);
+
+    // ── Highlight entire row toggle ────────────────────────────────────────
+    var rowToggleWrap = mkEl('div', { className: 'svc-cf-row-toggle-wrap' }, parent);
+    var rowToggle = mkEl('label', { className: 'svc-cf-row-toggle-label' }, rowToggleWrap);
+    var rowChk = mkEl('input', {
+      type: 'checkbox',
+      className: 'svc-cf-row-chk',
+      checked: !!rule.highlightRow
+    }, rowToggle);
+    var toggleSlider = mkEl('span', { className: 'svc-cf-toggle-slider' }, rowToggle);
+    var toggleText = mkEl('span', {
+      className: 'svc-cf-toggle-text',
+      textContent: '🌈 Highlight Entire Row (like Google Sheets row highlight)'
+    }, rowToggle);
+
+    // ── Variables reference card ───────────────────────────────────────────
+    var varsCard = mkEl('div', { className: 'svc-cf-vars-card' }, parent);
+    mkEl('div', { className: 'svc-cf-vars-title', textContent: '📖 Available Variables' }, varsCard);
+    var varsList = [
+      { name: 'VALUE',            desc: 'Cell value (string or number)',                 example: 'VALUE === "Active"' },
+      { name: 'NUMVAL',           desc: 'Cell value as number (NaN if not numeric)',      example: 'NUMVAL > 100' },
+      { name: 'COL("ColName")',   desc: 'Value of another column in the same row',        example: 'COL("STATUS") === "Submitted"' },
+      { name: 'ROW_DATA',         desc: 'Full row data object (access by column key)',    example: 'ROW_DATA["col_key"]' }
+    ];
+    var varsTable = mkEl('div', { className: 'svc-cf-vars-table' }, varsCard);
+    varsList.forEach(function (v) {
+      var row2 = mkEl('div', { className: 'svc-cf-vars-row' }, varsTable);
+      mkEl('code', { className: 'svc-cf-vars-name', textContent: v.name }, row2);
+      mkEl('span', { className: 'svc-cf-vars-desc', textContent: v.desc }, row2);
+      mkEl('code', { className: 'svc-cf-vars-example', textContent: v.example }, row2);
+    });
+
+    // ── Hint ──────────────────────────────────────────────────────────────
     mkEl('div', {
       className: 'svc-cf-formula-hint',
-      textContent: 'Use VALUE as the cell value. Prefix with = optional. Supports JS expressions.'
-    }, wrap);
+      textContent: 'JS expression — returns true/false. No semicolons needed. Use COL("Column Name") to reference other columns in the same row.'
+    }, parent);
+
+    // ── Events ────────────────────────────────────────────────────────────
     ta.addEventListener('input', function () {
       _state.draft.formula = ta.value;
+      syncDraftToRule();
+      updatePreview();
+    });
+    rowChk.addEventListener('change', function () {
+      _state.draft.highlightRow = rowChk.checked;
       syncDraftToRule();
       updatePreview();
     });
