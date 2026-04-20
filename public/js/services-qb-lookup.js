@@ -115,6 +115,7 @@
   var _notFound      = {};   // nk → timestamp  (only genuine misses)
   var _inFlight      = {};   // nk → Promise     (dedup concurrent fetches)
   var _reportIdx     = null; // { byNk, at } one-shot fallback index from qb_data report mode
+  var _rowCaseSeen   = {};   // row_index -> normalized case key last painted
   var _CACHE_TTL     = 5 * 60 * 1000;
   var _NOT_FOUND_TTL = 30 * 1000;
   var _REPORT_TTL    = 2 * 60 * 1000;
@@ -505,6 +506,35 @@
   // ── QB Field list for picker (5-min cache) ────────────────────────────────────
   var _fieldsCache = null;
   var _FIELDS_TTL  = 5 * 60 * 1000;
+  var _persistTimer = null;
+  var _persistRows  = new Map(); // row_index -> { sheetId, rowIndex, data }
+
+  function queuePersistRow(sheetId, row) {
+    if (!sheetId || !row || typeof row.row_index !== 'number' || !row.data) return;
+    _persistRows.set(String(sheetId) + ':' + String(row.row_index), {
+      sheetId: String(sheetId),
+      rowIndex: row.row_index,
+      data: JSON.parse(JSON.stringify(row.data))
+    });
+    clearTimeout(_persistTimer);
+    _persistTimer = setTimeout(function () {
+      var jobs = Array.from(_persistRows.values());
+      _persistRows.clear();
+      if (!jobs.length || !window.servicesDB || !window.servicesDB.bulkUpsertRows) return;
+      var grouped = {};
+      jobs.forEach(function (j) {
+        if (!grouped[j.sheetId]) grouped[j.sheetId] = [];
+        grouped[j.sheetId].push({ row_index: j.rowIndex, data: j.data });
+      });
+      Object.keys(grouped).forEach(function (sid) {
+        window.servicesDB.bulkUpsertRows(sid, grouped[sid]).catch(function () {});
+      });
+    }, 900);
+  }
+
+  function isBlankValue(v) {
+    return v == null || String(v).trim() === '';
+  }
 
   function loadFields(forceRefresh) {
     if (!forceRefresh && _fieldsCache && (Date.now() - _fieldsCache.at) < _FIELDS_TTL) {
@@ -528,8 +558,17 @@
   var _autofillToken = null;
   var _autofillTimer = null;
 
-  function autofillLinkedColumns(current, gridEl) {
+  function autofillLinkedColumns(current, gridEl, opts) {
     if (!current || !gridEl) return;
+    opts = opts || {};
+    var force = !!opts.force;
+    var allRowsMode = !!opts.allRows;
+    if (opts.refreshCache) {
+      _cache = {};
+      _notFound = {};
+      _inFlight = {};
+      _reportIdx = null;
+    }
     var cols = current.sheet.column_defs || [];
 
     var linkedCols = cols.filter(function (c) {
@@ -559,9 +598,9 @@
       rowsWithCase.forEach(function (row) {
         var nk = normalizeCaseKey(row.data[caseCol.key]);
         if (!nk) return;
-        var resolved = (_cache[nk]    && (now - _cache[nk].at)    < _CACHE_TTL)
+        var resolved = !force && ((_cache[nk]    && (now - _cache[nk].at)    < _CACHE_TTL)
                     || (_notFound[nk] && (now - _notFound[nk])    < _NOT_FOUND_TTL)
-                    || !!_inFlight[nk];
+                    || !!_inFlight[nk]);
         if (resolved) return;
         linkedCols.forEach(function (col) {
           var inp = gridEl.querySelector(
@@ -587,9 +626,11 @@
         if (!nk || seenNks.has(nk)) return;
         seenNks.add(nk);
 
-        if (_cache[nk]    && (Date.now() - _cache[nk].at)    < _CACHE_TTL) return;
-        if (_notFound[nk] && (Date.now() - _notFound[nk])    < _NOT_FOUND_TTL) return;
-        if (_inFlight[nk]) return;
+        if (!force) {
+          if (_cache[nk]    && (Date.now() - _cache[nk].at)    < _CACHE_TTL) return;
+          if (_notFound[nk] && (Date.now() - _notFound[nk])    < _NOT_FOUND_TTL) return;
+          if (_inFlight[nk]) return;
+        }
 
         var anyInp  = gridEl.querySelector('input.cell[data-row="' + row.row_index + '"]');
         var visible = true;
@@ -597,7 +638,7 @@
           var r = anyInp.getBoundingClientRect();
           visible = r.bottom >= wrapRect.top && r.top <= wrapRect.bottom;
         }
-        (visible ? visibleNks : deferredNks).push(nk);
+        (allRowsMode || visible ? visibleNks : deferredNks).push(nk);
       });
 
       // paintRow: reads _cache, updates DOM
@@ -634,20 +675,31 @@
           }
 
           var value = getFieldValue(rec, fid, label);
+          var caseChanged = _rowCaseSeen[row.row_index] !== nk;
+          var shouldWrite = force || caseChanged || isBlankValue(row.data[col.key]);
           if (value === null) {
-            inp.value       = '';
+            if (shouldWrite) {
+              row.data[col.key] = '';
+              queuePersistRow(current.sheet.id, row);
+            }
+            inp.value       = shouldWrite ? '' : (row.data[col.key] != null ? String(row.data[col.key]) : '');
             inp.readOnly    = true;
             inp.title       = '⚠ Field "' + label + '" not available for Case #' + rawCase;
             inp.classList.add('cell-qb-linked');
             inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
           } else {
-            inp.value       = value;
+            if (shouldWrite) {
+              row.data[col.key] = value;
+              queuePersistRow(current.sheet.id, row);
+            }
+            inp.value       = shouldWrite ? value : (row.data[col.key] != null ? String(row.data[col.key]) : value);
             inp.readOnly    = true;
             inp.title       = '🔗 QB: ' + label + ' (Case #' + rawCase + ')';
             inp.classList.add('cell-qb-linked');
             inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
           }
         });
+        _rowCaseSeen[row.row_index] = nk;
       }
 
       // Phase 3: Instant paint for already-cached rows (zero API calls)
@@ -671,7 +723,7 @@
           if (visibleNks.indexOf(nk) !== -1) paintRow(row);
         });
 
-        if (!deferredNks.length) return;
+        if (!deferredNks.length || allRowsMode) return;
 
         // Phase 5: Deferred rows after 400ms
         setTimeout(function () {
@@ -820,12 +872,20 @@
   window.svcQbLookup = {
     openFieldPicker:       openFieldPicker,
     autofillLinkedColumns: autofillLinkedColumns,
+    refreshAllLinkedColumns: function (current, gridEl) {
+      return autofillLinkedColumns(current, gridEl, {
+        force: true,
+        allRows: true,
+        refreshCache: true
+      });
+    },
     clearCache: function () {
       _cache       = {};
       _notFound    = {};
       _inFlight    = {};
       _fieldsCache = null;
       _reportIdx   = null;
+      _rowCaseSeen = {};
     }
   };
 

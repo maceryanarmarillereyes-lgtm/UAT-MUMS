@@ -8,6 +8,7 @@
   var undoBtn     = document.getElementById('svcUndo');
   var redoBtn     = document.getElementById('svcRedo');
   var saveBtn     = document.getElementById('svcSaveBtn');
+  var qbUpdateBtn = document.getElementById('svcQbUpdateBtn');
   var statusCells = document.getElementById('svcStatusCells');
   var statusSaved = document.getElementById('svcStatusSaved');
   var SAVE_DEBOUNCE_MS = 800;
@@ -776,6 +777,28 @@
   }
 
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
+
+  if (qbUpdateBtn) {
+    qbUpdateBtn.addEventListener('click', async function () {
+      if (!current || !window.svcQbLookup) return;
+      qbUpdateBtn.disabled = true;
+      var originalText = qbUpdateBtn.textContent;
+      qbUpdateBtn.textContent = '⏳ Updating…';
+      setStatus('saving', 'Updating lookup…');
+      try {
+        await window.svcQbLookup.refreshAllLinkedColumns(current, grid);
+        await saveAllRows();
+        setStatus('saved', '✓ Lookup updated');
+        window.svcToast && window.svcToast.show('success', 'Lookup Updated', 'All linked QB values refreshed.');
+      } catch (err) {
+        setStatus('error', '✕ Lookup update failed');
+        window.svcToast && window.svcToast.show('error', 'Lookup Update Failed', err && err.message ? err.message : 'Try again.');
+      } finally {
+        qbUpdateBtn.disabled = false;
+        qbUpdateBtn.textContent = originalText;
+      }
+    });
+  }
 
   function getState() { return current; }
   window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows };
