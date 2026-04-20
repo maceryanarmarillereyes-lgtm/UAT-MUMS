@@ -474,19 +474,21 @@
       };
 
       try {
+        var created = null;
         if (isEdit) {
           await window.servicesDB.updateTreeFolder(existingFolder.id, payload);
         } else {
-          var created = await window.servicesDB.createTreeFolder(sheetId, payload);
+          created = await window.servicesDB.createTreeFolder(sheetId, payload);
           if (!created || !created.id) throw new Error('TreeView folder was not saved. Check DB migration/policies.');
-        }
-        var latest = await loadFolders(sheetId);
-        if (!isEdit && !latest.some(function (f) { return f && f.name === name; })) {
-          throw new Error('Folder save returned no record. Please refresh and retry.');
+          if (!_cache[sheetId]) _cache[sheetId] = [];
+          _cache[sheetId].push(created);
+          _cache[sheetId].sort(function (a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
         }
         rerenderAllTrees(sheetId);
         closeModal();
         window.svcToast && window.svcToast.show('success', 'TreeView', isEdit ? 'Folder updated.' : 'Folder "' + name + '" created.');
+        // async reconcile cache from DB, but do not block modal close UX
+        loadFolders(sheetId).then(function () { rerenderAllTrees(sheetId); }).catch(function () {});
       } catch (err) {
         saveBtn.disabled = false;
         saveBtn.textContent = isEdit ? '✓ Save Changes' : '✓ Create Folder';
@@ -534,10 +536,15 @@
         var n = inp.value.trim();
         if (!n) return;
         ok.disabled = true; ok.textContent = '⏳';
-        await window.servicesDB.renameTreeFolder(folder.id, n);
-        await loadFolders(sheetId);
-        rerenderAllTrees(sheetId);
-        closeModal();
+        try {
+          await window.servicesDB.renameTreeFolder(folder.id, n);
+          await loadFolders(sheetId);
+          rerenderAllTrees(sheetId);
+          closeModal();
+        } catch (err) {
+          ok.disabled = false; ok.textContent = '✓ Rename';
+          window.svcToast && window.svcToast.show('error', 'Rename Failed', err && err.message ? err.message : 'Could not rename folder.');
+        }
       });
       footer.appendChild(cancel);
       footer.appendChild(ok);
@@ -571,16 +578,21 @@
       del.textContent = '🗑 Delete';
       del.addEventListener('click', async function () {
         del.disabled = true; del.textContent = '⏳';
-        await window.servicesDB.deleteTreeFolder(folder.id);
-        // If deleted folder was selected, reset filter
-        if (_activeFolderId === folder.id) {
-          _activeFolderId = null;
-          window.servicesGrid && window.servicesGrid.setTreeFilter(null);
+        try {
+          await window.servicesDB.deleteTreeFolder(folder.id);
+          // If deleted folder was selected, reset filter
+          if (_activeFolderId === folder.id) {
+            _activeFolderId = null;
+            window.servicesGrid && window.servicesGrid.setTreeFilter(null);
+          }
+          await loadFolders(sheetId);
+          rerenderAllTrees(sheetId);
+          closeModal();
+          window.svcToast && window.svcToast.show('info', 'Folder Deleted', '"' + folder.name + '" removed.');
+        } catch (err) {
+          del.disabled = false; del.textContent = '🗑 Delete';
+          window.svcToast && window.svcToast.show('error', 'Delete Failed', err && err.message ? err.message : 'Could not delete folder.');
         }
-        await loadFolders(sheetId);
-        rerenderAllTrees(sheetId);
-        closeModal();
-        window.svcToast && window.svcToast.show('info', 'Folder Deleted', '"' + folder.name + '" removed.');
       });
       footer.appendChild(cancel);
       footer.appendChild(del);
