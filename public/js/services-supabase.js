@@ -224,7 +224,10 @@
         .from('services_treeview_folders').select('*')
         .eq('sheet_id', sheetId)
         .order('sort_order', { ascending: true });
-      if (error) console.error('[services] listTreeFolders:', error.message);
+      if (error) {
+        console.error('[services] listTreeFolders:', error.message);
+        throw new Error(error.message || 'list_tree_folders_failed');
+      }
       return data || [];
     },
 
@@ -235,26 +238,38 @@
         .from('services_treeview_folders')
         .insert({ sheet_id: sheetId, name, icon, color, condition_field, condition_op, condition_value, sort_order })
         .select().single();
-      if (error) console.error('[services] createTreeFolder:', error.message);
+      if (error) {
+        console.error('[services] createTreeFolder:', error.message);
+        throw new Error(error.message || 'create_tree_folder_failed');
+      }
       return data;
     },
 
     async renameTreeFolder(id, name) {
       const c = await db(); if (!c) return;
       const { error } = await c.from('services_treeview_folders').update({ name }).eq('id', id);
-      if (error) console.error('[services] renameTreeFolder:', error.message);
+      if (error) {
+        console.error('[services] renameTreeFolder:', error.message);
+        throw new Error(error.message || 'rename_tree_folder_failed');
+      }
     },
 
     async updateTreeFolder(id, patch) {
       const c = await db(); if (!c) return;
       const { error } = await c.from('services_treeview_folders').update(patch).eq('id', id);
-      if (error) console.error('[services] updateTreeFolder:', error.message);
+      if (error) {
+        console.error('[services] updateTreeFolder:', error.message);
+        throw new Error(error.message || 'update_tree_folder_failed');
+      }
     },
 
     async deleteTreeFolder(id) {
       const c = await db(); if (!c) return;
       const { error } = await c.from('services_treeview_folders').delete().eq('id', id);
-      if (error) console.error('[services] deleteTreeFolder:', error.message);
+      if (error) {
+        console.error('[services] deleteTreeFolder:', error.message);
+        throw new Error(error.message || 'delete_tree_folder_failed');
+      }
     },
 
     // Graceful teardown — call on page unload to free server-side channels
