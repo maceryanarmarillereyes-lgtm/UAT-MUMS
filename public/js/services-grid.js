@@ -112,7 +112,11 @@
     empty.style.display = 'none';
     grid.hidden = false;
     var cols      = current.sheet.column_defs || [];
-    var totalRows = Math.max(current.rows.length + 2, 10);
+    var isFilteredView = Array.isArray(current.__treeFilteredRows);
+    var viewRows = isFilteredView
+      ? current.__treeFilteredRows.slice().sort(function (a, b) { return a.row_index - b.row_index; })
+      : current.rows;
+    var totalRows = isFilteredView ? Math.max(viewRows.length, 1) : Math.max(current.rows.length + 2, 10);
 
     var thead   = mkEl('thead');
     var headTr  = mkEl('tr', null, thead);
@@ -134,14 +138,23 @@
 
     var tbody = mkEl('tbody');
     for (var i = 0; i < totalRows; i++) {
-      var rowData = current.rows.find(function (r) { return r.row_index === i; }) || { data: {} };
+      var rowData = isFilteredView
+        ? (viewRows[i] || { row_index: i, data: {} })
+        : (current.rows.find(function (r) { return r.row_index === i; }) || { row_index: i, data: {} });
+      var rowIndex = Number.isFinite(rowData.row_index) ? rowData.row_index : i;
       var tr = mkEl('tr', null, tbody);
-      var rowNumTd = mkEl('td', { className: 'row-num', textContent: String(i + 1) }, tr);
-      rowNumTd.dataset.rowIndex = i;
+      var rowNumTd = mkEl('td', { className: 'row-num', textContent: String(rowIndex + 1) }, tr);
+      rowNumTd.dataset.rowIndex = rowIndex;
       rowNumTd.title = 'Right-click to delete row';
       cols.forEach(function (c) {
         var td  = mkEl('td', null, tr);
         var inputType = (c.format === 'date') ? 'date' : 'text';
+        var validation = c && c.validation && c.validation.type === 'list' && Array.isArray(c.validation.options)
+          ? c.validation.options.filter(function (v) { return String(v || '').trim() !== ''; })
+          : null;
+        var listId = validation && validation.length
+          ? ('svc-dv-' + String(c.key || i) + '-' + String(rowIndex))
+          : '';
         var inp = mkEl('input', {
           className    : 'cell',
           type         : inputType,
@@ -149,7 +162,20 @@
           spellcheck   : false,
           value        : (rowData.data[c.key] != null ? rowData.data[c.key] : '').toString()
         }, td);
-        inp.dataset.row = i;
+        if (validation && validation.length) {
+          inp.setAttribute('list', listId);
+          inp.dataset.validationList = validation.join('\n');
+          inp.dataset.validationStrict = '1';
+          var dl = document.createElement('datalist');
+          dl.id = listId;
+          validation.forEach(function (opt) {
+            var o = document.createElement('option');
+            o.value = String(opt);
+            dl.appendChild(o);
+          });
+          td.appendChild(dl);
+        }
+        inp.dataset.row = rowIndex;
         inp.dataset.key = c.key;
         inp.dataset.format = (c && c.format) ? c.format : 'auto';
         if (c.format === 'number') inp.inputMode = 'numeric';
@@ -165,6 +191,9 @@
     attachRowContextMenu();
     updateStatusBar();
     autoResizeColumns();
+    if (window.servicesTreeview && typeof window.servicesTreeview.refreshCounts === 'function') {
+      window.servicesTreeview.refreshCounts(current.sheet.id);
+    }
 
     // QB auto-populate: paint linked column values from QB data (read-only)
     if (window.svcQbLookup) {
@@ -308,6 +337,12 @@
             { icon: '📋', label: qbLinked ? 'Change Field (' + qbLinked.fieldLabel + ')' : 'Select Quickbase Field', action: 'select-qb-field', badge: 'QB' }
           ]
         });
+        buildItem(menu, {
+          icon: '🧾',
+          label: 'Data Validation',
+          action: 'data-validation',
+          badge: (cols[colIdx] && cols[colIdx].validation && cols[colIdx].validation.type === 'list') ? '✓' : ''
+        });
         buildItem(menu, { icon: '🎨', label: 'Conditional Formatting', action: 'conditional-format' });
 
         addSep();
@@ -421,6 +456,29 @@
           } else if (action === 'conditional-format') {
             alert('Conditional Formatting — coming soon.');
             closeAllCtxMenus();
+          } else if (action === 'data-validation') {
+            closeAllCtxMenus();
+            var currentRules = cols[colIdx] && cols[colIdx].validation;
+            var currentList = (currentRules && Array.isArray(currentRules.options)) ? currentRules.options.join(', ') : '';
+            var entered = prompt(
+              'Set dropdown options for "' + (cols[colIdx].label || 'Column') + '".\n' +
+              'Use comma-separated values.\n' +
+              'Leave blank to remove validation.',
+              currentList
+            );
+            if (entered === null) return;
+            var opts = String(entered)
+              .split(',')
+              .map(function (v) { return String(v || '').trim(); })
+              .filter(function (v) { return !!v; });
+            if (!opts.length) {
+              delete cols[colIdx].validation;
+            } else {
+              cols[colIdx].validation = { type: 'list', strict: true, options: opts };
+            }
+            await window.servicesDB.updateColumns(current.sheet.id, cols);
+            render();
+            window.svcToast && window.svcToast.show('success', 'Data Validation', opts.length ? ('Dropdown set (' + opts.length + ' options).') : 'Dropdown removed.');
           } else if (action === 'delete-column') {
             var colName = cols[colIdx] ? (cols[colIdx].label || 'this column') : 'this column';
             if (!confirm('Delete column "' + colName + '"?\n\nAll data in this column will be permanently removed from every row. This cannot be undone.')) {
@@ -654,6 +712,19 @@
     var key    = e.target.dataset.key;
     var value  = e.target.value;
     var format = e.target.dataset.format || 'auto';
+    var strictList = (e.target.dataset.validationStrict === '1');
+    if (strictList) {
+      var allowed = String(e.target.dataset.validationList || '')
+        .split('\n')
+        .map(function (v) { return String(v || '').trim(); })
+        .filter(function (v) { return !!v; });
+      if (value && allowed.length && allowed.indexOf(value) === -1) {
+        window.svcToast && window.svcToast.show('warning', 'Invalid Value', 'Please select from the dropdown list.');
+        var rowExisting = current.rows.find(function (r) { return r.row_index === rowIdx; });
+        e.target.value = rowExisting && rowExisting.data && rowExisting.data[key] != null ? String(rowExisting.data[key]) : '';
+        return;
+      }
+    }
     var rowObj = current.rows.find(function (r) { return r.row_index === rowIdx; });
     if (!rowObj) { rowObj = { row_index: rowIdx, data: {} }; current.rows.push(rowObj); }
     if (format === 'number' && value && !/^\d+$/.test(value)) {
@@ -726,18 +797,32 @@
     render();
   });
 
-  exportBtn.addEventListener('click', function () {
+  exportBtn.addEventListener('click', async function () {
     if (!current) return;
-    var cols   = current.sheet.column_defs;
-    var header = cols.map(function (c) { return JSON.stringify(c.label); }).join(',');
-    var lines  = current.rows
-      .sort(function (a, b) { return a.row_index - b.row_index; })
-      .map(function (r) {
-        return cols.map(function (c) { return JSON.stringify(r.data[c.key] != null ? r.data[c.key] : ''); }).join(',');
-      });
-    var blob = new Blob([header + '\n' + lines.join('\n')], { type: 'text/csv' });
-    var a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: current.sheet.title + '.csv' });
-    document.body.appendChild(a); a.click(); a.remove();
+    exportBtn.disabled = true;
+    var originalText = exportBtn.textContent;
+    exportBtn.textContent = '⏳ Exporting…';
+    try {
+      if (window.svcQbLookup && window.svcQbLookup.hydrateLinkedColumnsForExport) {
+        await window.svcQbLookup.hydrateLinkedColumnsForExport(current, grid);
+      }
+      await saveAllRows();
+      var cols   = current.sheet.column_defs;
+      var header = cols.map(function (c) { return JSON.stringify(c.label); }).join(',');
+      var lines  = current.rows
+        .sort(function (a, b) { return a.row_index - b.row_index; })
+        .map(function (r) {
+          return cols.map(function (c) { return JSON.stringify(r.data[c.key] != null ? r.data[c.key] : ''); }).join(',');
+        });
+      var blob = new Blob([header + '\n' + lines.join('\n')], { type: 'text/csv' });
+      var a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: current.sheet.title + '.csv' });
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (err) {
+      window.svcToast && window.svcToast.show('error', 'Export Failed', err && err.message ? err.message : 'Try again.');
+    } finally {
+      exportBtn.disabled = false;
+      exportBtn.textContent = originalText;
+    }
   });
 
   undoBtn.addEventListener('click', function () {
@@ -776,17 +861,50 @@
     }
   }
 
+  function countUnresolvedLinkedCells(state) {
+    if (!state || !state.sheet || !Array.isArray(state.rows)) return 0;
+    var cols = state.sheet.column_defs || [];
+    var linkedCols = cols.filter(function (c) { return c && c.qbLookup && c.qbLookup.fieldId; });
+    if (!linkedCols.length) return 0;
+    var caseCol = cols.find(function (c) {
+      var label = String(c && c.label || '').trim().toLowerCase();
+      return label === 'case#' || label === 'case #' || label === 'case number' || label === 'case no' || label === 'case id' || label === 'case';
+    }) || cols.find(function (c) { return String(c && c.label || '').toLowerCase().indexOf('case') !== -1; }) || cols[0];
+    if (!caseCol) return 0;
+
+    var unresolved = 0;
+    state.rows.forEach(function (row) {
+      if (!row || !row.data) return;
+      var caseVal = String(row.data[caseCol.key] || '').trim();
+      if (!caseVal) return;
+      linkedCols.forEach(function (c) {
+        var v = row.data[c.key];
+        if (v == null || String(v).trim() === '' || String(v).trim() === '—') unresolved++;
+      });
+    });
+    return unresolved;
+  }
+
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
 
   if (qbUpdateBtn) {
     qbUpdateBtn.addEventListener('click', async function () {
       if (!current || !window.svcQbLookup) return;
+      var targetSheetId = current.sheet && current.sheet.id;
       qbUpdateBtn.disabled = true;
       var originalText = qbUpdateBtn.textContent;
       qbUpdateBtn.textContent = '⏳ Updating…';
       setStatus('saving', 'Updating lookup…');
       try {
         await window.svcQbLookup.refreshAllLinkedColumns(current, grid);
+        var unresolved = countUnresolvedLinkedCells(current);
+        if (unresolved > 0) {
+          // second pass for transient misses on large sheets
+          await window.svcQbLookup.refreshAllLinkedColumns(current, grid);
+        }
+        if (!current || !current.sheet || current.sheet.id !== targetSheetId) {
+          throw new Error('Sheet changed while updating. Please click Update again on the selected sheet.');
+        }
         await saveAllRows();
         setStatus('saved', '✓ Lookup updated');
         window.svcToast && window.svcToast.show('success', 'Lookup Updated', 'All linked QB values refreshed.');
@@ -814,11 +932,13 @@
   // swapping filters does NOT lose data.
   var _origRender = render;
   render = function renderFiltered() {
-    if (!current || !_treeFilter) { _origRender(); return; }
-    var _allRows = current.rows;
-    current.rows = _allRows.filter(_treeFilter);
+    if (!current || !_treeFilter) {
+      if (current) delete current.__treeFilteredRows;
+      _origRender();
+      return;
+    }
+    current.__treeFilteredRows = (current.rows || []).filter(_treeFilter);
     _origRender();
-    current.rows = _allRows; // restore immediately after render
   };
 
   function getState() { return current; }
