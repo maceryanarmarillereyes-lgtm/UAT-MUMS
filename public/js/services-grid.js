@@ -527,41 +527,56 @@
           // 1. Find the row in current.rows
           var rowIdx = current.rows.findIndex(function (r) { return r.row_index === rowIndex; });
 
-          // If row has a DB record, delete it; otherwise just remove from local state
+          // If row has a DB record, delete it and shift rows below it.
+          // IMPORTANT: do NOT use bulk upsert for shifting indexes because it can leave stale
+          // rows at old indexes and make deleted row appear to "come back".
           if (rowIdx >= 0) {
             var targetRow = current.rows[rowIdx];
+            var shiftedPlan = current.rows
+              .filter(function (r) { return r.row_index > rowIndex; })
+              .map(function (r) {
+                return {
+                  id: r.id,
+                  oldRowIndex: r.row_index,
+                  newRowIndex: r.row_index - 1,
+                  data: r.data || {}
+                };
+              });
+
             // Remove from local state immediately for snappy UX
             current.rows.splice(rowIdx, 1);
-
-            // Re-index all rows that were below this one
             current.rows.forEach(function (r) {
               if (r.row_index > rowIndex) r.row_index -= 1;
             });
 
-            // Persist: delete from Supabase by sheet_id + row_index, then re-save shifted rows
             try {
               var c = window.servicesDB.client;
               if (c) {
-                // Delete the specific row
-                await c.from('services_rows')
-                  .delete()
-                  .eq('sheet_id', current.sheet.id)
-                  .eq('row_index', rowIndex);
+                // Delete target row by stable DB id first (fallback to row_index if id missing)
+                var delQ = c.from('services_rows').delete().eq('sheet_id', current.sheet.id);
+                if (targetRow && targetRow.id != null) delQ = delQ.eq('id', targetRow.id);
+                else delQ = delQ.eq('row_index', rowIndex);
+                var delOut = await delQ;
+                if (delOut && delOut.error) throw delOut.error;
 
-                // Bulk-update shifted rows (rows that had rowIndex > deleted one)
-                var shiftedRows = current.rows.filter(function (r) { return r.row_index >= rowIndex; });
-                if (shiftedRows.length) {
-                  await window.servicesDB.bulkUpsertRows(current.sheet.id,
-                    shiftedRows.map(function (r) { return { row_index: r.row_index, data: r.data || {} }; }));
+                // Shift rows by id so old row_index records do not remain in DB.
+                for (var s = 0; s < shiftedPlan.length; s++) {
+                  var step = shiftedPlan[s];
+                  if (step.id == null) continue;
+                  var updOut = await c.from('services_rows')
+                    .update({ row_index: step.newRowIndex, data: step.data })
+                    .eq('id', step.id)
+                    .eq('sheet_id', current.sheet.id);
+                  if (updOut && updOut.error) throw updOut.error;
                 }
               }
             } catch (err) {
               console.error('[services-grid] deleteRow error:', err);
               window.svcToast && window.svcToast.show('error', 'Delete Failed', err.message || 'Could not delete row.');
-              // Re-render anyway — local state already updated
+              // Keep local update to avoid UX freeze; realtime/db sync will reconcile.
             }
           } else {
-            // Empty/virtual row — just re-render with no DB call needed
+            // Empty/virtual row — no DB record, local render only
           }
 
           render();

@@ -34,8 +34,12 @@
   function normalizeCaseKey(v) {
     var raw = String(v == null ? '' : v).trim();
     if (!raw) return '';
-    var compact = raw.replace(/,/g, '');
+    var noPrefix = raw.replace(/^\s*case(?:\s*(?:#|no\.?|number|id))?\s*[:\-]?\s*/i, '').trim();
+    var compact = noPrefix.replace(/,/g, '');
     if (/^\d+(?:\.0+)?$/.test(compact)) return String(Number(compact));
+    // If a row contains "Case# 123456" or "Case Number: 123456", extract the numeric key.
+    var numericToken = compact.match(/\b(\d{3,})(?:\.0+)?\b/);
+    if (numericToken && numericToken[1]) return String(Number(numericToken[1]));
     return compact;
   }
 
@@ -73,7 +77,18 @@
   function _resolveLinkedFieldId(col) {
     if (!col || !col.qbLookup) return '';
     var raw = col.qbLookup.fieldId;
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) raw = raw.fieldId;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      raw = raw.fieldId != null ? raw.fieldId
+        : raw.id != null ? raw.id
+        : raw.value != null ? raw.value
+        : '';
+    }
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      raw = raw.fieldId != null ? raw.fieldId
+        : raw.id != null ? raw.id
+        : raw.value != null ? raw.value
+        : '';
+    }
     return String(raw == null ? '' : raw).trim();
   }
 
@@ -114,12 +129,12 @@
           var normKey = normalizeCaseKey(caseNum);
           if (!normKey) return;
           var rec = { fields: recs[caseNum].fields || {}, columnMap: recs[caseNum].columnMap || {}, at: Date.now() };
-          _recordCache[caseNum] = rec;
-          delete _notFound[caseNum];
+          _recordCache[normKey] = rec;
+          delete _notFound[normKey];
         });
         if (!hasTransientError) {
           (data.notFound || []).forEach(function (caseNum) {
-            _notFound[caseNum] = Date.now();
+            _notFound[normalizeCaseKey(caseNum)] = Date.now();
           });
         }
         return recs;
@@ -251,6 +266,15 @@
 
           var fid       = _resolveLinkedFieldId(col);
           var fieldCell = rec.fields[fid];
+          if (!fieldCell && rec.columnMap && col.qbLookup && col.qbLookup.fieldLabel) {
+            var targetLabel = String(col.qbLookup.fieldLabel || '').trim().toLowerCase();
+            Object.keys(rec.columnMap).some(function (mapFid) {
+              var lbl = String(rec.columnMap[mapFid] || '').trim().toLowerCase();
+              if (!lbl || lbl !== targetLabel) return false;
+              fieldCell = rec.fields[mapFid];
+              return !!fieldCell;
+            });
+          }
           var value     = fieldCell ? String(fieldCell.value != null ? fieldCell.value : '') : '';
 
           inp.value    = value;
