@@ -32,6 +32,25 @@ function sendJson(res, statusCode, body) {
   res.end(JSON.stringify(body));
 }
 
+async function readBody(req) {
+  try {
+    if (req && typeof req.body === 'string') return JSON.parse(req.body || '{}');
+    if (req && req.body && typeof req.body === 'object') return req.body;
+  } catch (_) {}
+  return await new Promise((resolve) => {
+    try {
+      let raw = '';
+      req.on('data', (c) => { raw += String(c || ''); });
+      req.on('end', () => {
+        try { resolve(raw ? JSON.parse(raw) : {}); } catch (_) { resolve({}); }
+      });
+      req.on('error', () => resolve({}));
+    } catch (_) {
+      resolve({});
+    }
+  });
+}
+
 const BULK_CACHE    = new Map();
 const BULK_CACHE_MS = 30 * 1000; // 30-second TTL — same as report mode
 
@@ -81,7 +100,8 @@ function detectCaseFieldId(fields) {
 }
 
 module.exports = async function handler(req, res) {
-  if (req.method !== 'GET') return sendJson(res, 405, { ok: false, error: 'method_not_allowed' });
+  const method = String(req.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'POST') return sendJson(res, 405, { ok: false, error: 'method_not_allowed' });
 
   // ── Auth ─────────────────────────────────────────────────────────────────────
   let user;
@@ -102,12 +122,17 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 200, { ok: false, error: 'studio_qb_not_configured', warning: 'studio_qb_not_configured' });
   }
 
+  const body = method === 'POST' ? await readBody(req) : {};
+  const requestedCaseFieldId = String((body && body.caseFieldId) || '').trim();
+  const requestedFields = Array.isArray(body && body.fields) ? body.fields : [];
+
   // ── Cache check (skip if bust=1) ─────────────────────────────────────────────
-  const bust     = String(req.query && req.query.bust || '').trim() === '1';
-  const cacheKey = `${realm}:${tableId}:${qid}`;
+  const bust     = String((req.query && req.query.bust) || '').trim() === '1';
+  const cacheKey = `${realm}:${tableId}:${qid}:${method === 'POST' ? 'post' : 'get'}`;
   if (!bust) {
     const hit = BULK_CACHE.get(cacheKey);
     if (hit && (Date.now() - hit.at) < BULK_CACHE_MS) {
+      if (method === 'POST') return sendJson(res, 200, hit.value || {});
       return sendJson(res, 200, { ok: true, caseMap: hit.value, cached: true });
     }
   }
@@ -146,9 +171,14 @@ module.exports = async function handler(req, res) {
   fields.forEach(f => { columnMap[String(f.id)] = String(f.label || ''); });
 
   // ── Detect case# field ───────────────────────────────────────────────────────
-  const caseFieldId = detectCaseFieldId(fields);
+  const caseFieldId = requestedCaseFieldId || detectCaseFieldId(fields);
 
-  // ── Build caseMap: { normalizedCaseNum → { fields, columnMap } } ─────────────
+  // Request contract accepted for client compatibility; current POST response
+  // returns all field IDs so cache remains deterministic across calls.
+  void requestedFields;
+
+  // ── Build caseMap: { normalizedCaseNum → { fieldId: value } } for POST
+  //                OR { normalizedCaseNum → { fields, columnMap } } for GET
   const caseMap = {};
   rows.forEach(row => {
     const caseCell = row[caseFieldId];
@@ -157,7 +187,18 @@ module.exports = async function handler(req, res) {
     const nk       = normalizeCaseKey(caseStr);
     if (!nk) return;
 
-    // Normalize all field values into the same shape as Mode B
+    if (method === 'POST') {
+      const fieldValueMap = {};
+      fields.forEach(f => {
+        const fid = String(f.id);
+        const cell = row[fid];
+        const raw = (cell && typeof cell === 'object' && 'value' in cell) ? cell.value : cell;
+        fieldValueMap[fid] = normalizeQbValue(raw);
+      });
+      caseMap[nk] = fieldValueMap;
+      return;
+    }
+
     const fieldMap = {};
     fields.forEach(f => {
       const fid  = String(f.id);
@@ -165,11 +206,11 @@ module.exports = async function handler(req, res) {
       const raw  = (cell && typeof cell === 'object' && 'value' in cell) ? cell.value : cell;
       fieldMap[fid] = { value: normalizeQbValue(raw), label: f.label || fid };
     });
-
     caseMap[nk] = { fields: fieldMap, columnMap };
   });
 
   // ── Cache and return ─────────────────────────────────────────────────────────
   BULK_CACHE.set(cacheKey, { at: Date.now(), value: caseMap });
+  if (method === 'POST') return sendJson(res, 200, caseMap);
   return sendJson(res, 200, { ok: true, caseMap, total: rows.length });
 };
