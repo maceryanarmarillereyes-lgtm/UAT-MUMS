@@ -2,7 +2,7 @@ export async function onRequestPost(context) {
   const { request, env } = context;
 
   try {
-    let { cases = [], fieldIds = [3, 25, 13] } = await request.json();
+    const { cases = [], fieldIds = [3,25,13] } = await request.json();
 
     if (!Array.isArray(cases) || cases.length === 0) {
       return new Response(JSON.stringify({ error: 'cases array required' }), {
@@ -23,9 +23,9 @@ export async function onRequestPost(context) {
     }
 
     const uniqueCases = [...new Set(cases.map(String).filter(Boolean))];
-    fieldIds = [...new Set((Array.isArray(fieldIds) ? fieldIds : []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))];
+    const normalizedFieldIds = [...new Set((Array.isArray(fieldIds) ? fieldIds : []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))];
 
-    if (!fieldIds.length) {
+    if (!normalizedFieldIds.length) {
       return new Response(JSON.stringify({ error: 'fieldIds array required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
@@ -48,7 +48,7 @@ export async function onRequestPost(context) {
 
         const body = {
           from: QB_TABLE_ID,
-          select: fieldIds,
+          select: normalizedFieldIds,
           where,
           options: { skip: 0, top: 100 }
         };
@@ -79,7 +79,7 @@ export async function onRequestPost(context) {
       if (!caseVal) return;
 
       map[caseVal] = {};
-      fieldIds.forEach(fid => {
+      normalizedFieldIds.forEach(fid => {
         const fieldData = rec[fid.toString()];
         let val = fieldData?.value;
 

@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (refreshAllLinkedColumns hard rewrite to true bulk path):**
+  - **Edit — `public/js/services-qb-lookup.js`:** Replaced `refreshAllLinkedColumns()` implementation with async single-pass bulk pipeline: collect unique case numbers, auto-detect linked field IDs, call `POST /api/quickbase/bulk-lookup` once, stage changed rows only, run one `services_rows` upsert, and repaint linked inputs once.
+  - **Edit — `functions/api/quickbase/bulk-lookup.js`:** Request parse now starts with `const { cases = [], fieldIds = [3,25,13] } = await request.json();` and query select uses normalized dynamic field IDs to support caller-provided linked-column sets.
+  - **Behavior contract update:** Removed per-row persistence behavior from `refreshAllLinkedColumns()` path (no queued row persistence within refresh), keeping update latency bounded for large sheets.
+
 - **2026-04-21 (Services QB Update bulk-write optimization):**
   - **Edit — `public/js/services-qb-lookup.js`:** `refreshAllLinkedColumns()` now calls `POST /api/studio/qb_bulk` once, maps returned `{ caseNumber: { fieldId: value } }` payload into linked columns, and performs one Supabase bulk upsert (`services_rows` onConflict `id`) instead of per-row writes.
   - **Edit — `server/routes/studio/qb_bulk.js`:** Added POST support with request shape `{ sheetId, caseFieldId, fields }`, retained auth via `getUserFromJwt`, still uses Studio settings via `readStudioQbSettings(user.id)` (no env token), calls Quickbase reports endpoint with `top=1000`, and returns case map optimized for Services bulk update.
