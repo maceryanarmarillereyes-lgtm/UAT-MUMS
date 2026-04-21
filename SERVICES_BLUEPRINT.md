@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (Regression fix — sheet data visibility after Update):**
+  - **Edit — `public/js/services-grid.js`:** Hardened `autoFitColumns()` so it only processes valid visible columns and persists widths only for explicit/manual calls.
+  - **Edit — `public/js/services-grid.js`:** Replaced global startup `setTimeout(autoFitColumns, 800)` with a sheet-scoped timer inside `load(sheet)` that runs `autoFitColumns({ persist:false })`, preventing unintended early metadata writes.
+  - **Behavior contract update:** Initial auto-fit is now non-destructive (local render-only). DB `column_defs` writes happen only when user explicitly triggers autofit action.
+
 - **2026-04-21 (Premium UI + backup utilities pass):**
   - **Edit — `public/css/services.css`:** Stabilized grid row backgrounds and row-level conditional highlights via `tr[data-cf-row]` attributes, upgraded row-number rail styling to premium sticky design, and appended new premium toast visuals (`.svc-toast-container`, `.svc-toast*`).
   - **Edit — `public/js/services-grid.js`:** Added status-based `tr.dataset.cfRow` mapping at render time, date-input placeholder/empty styling (`---`), column auto-fit utility with Supabase persistence, backup creation flow + toolbar button, right-click column menu for hide/auto-fit actions, and enhanced success save toast copy with timestamp.

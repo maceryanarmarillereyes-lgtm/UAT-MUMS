@@ -62,6 +62,8 @@
     window.servicesDashboard && window.servicesDashboard.reset();
   }
 
+  var _autoFitTimer = null;
+
   async function load(sheet) {
     if (subscription) { try { subscription.unsubscribe(); } catch (_) {} subscription = null; }
     // Invalidate resize cache on new sheet load so columns get measured fresh
@@ -79,6 +81,10 @@
     redoStack = [];
     current.rows = await window.servicesDB.listRows(sheet.id);
     render();
+    if (_autoFitTimer) clearTimeout(_autoFitTimer);
+    _autoFitTimer = setTimeout(function () {
+      autoFitColumns({ persist: false, reason: 'initial-load' });
+    }, 800);
     if (window.svcQbLookup && window.svcQbLookup.startSmartSync) {
       window.svcQbLookup.startSmartSync({ current: current, gridEl: grid, sheetId: sheet.id });
     }
@@ -328,15 +334,20 @@
     })();
   }
 
-  function autoFitColumns() {
+  function autoFitColumns(opts) {
+    opts = opts || {};
     if (!current || !current.sheet || !Array.isArray(current.sheet.column_defs)) return;
+    var colsForFit = current.sheet.column_defs.filter(function (col) {
+      return col && col.key && col.key !== 'row_num' && !col.hidden;
+    });
+    if (!colsForFit.length) return;
+
     var canvas = document.createElement('canvas');
     var ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.font = '13px Inter, system-ui, -apple-system';
 
-    current.sheet.column_defs.forEach(function (col) {
-      if (!col || col.key === 'row_num') return;
+    colsForFit.forEach(function (col) {
       var maxWidth = ctx.measureText(col.name || col.label || '').width + 40;
 
       // Sample first 30 rows for performance
@@ -350,10 +361,11 @@
       col.width = Math.min(Math.max(Math.floor(maxWidth), 90), 320);
     });
 
-    // Save widths
-    window.supabase.from('services_sheets').update({
-      column_defs: current.sheet.column_defs
-    }).eq('id', current.sheet.id);
+    // Save widths only for explicit/manual calls; initial auto-fit is local-only
+    if (opts.persist !== false) {
+      window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs)
+        .catch(function (err) { console.error('[services-grid] autoFitColumns persist failed:', err && err.message ? err.message : err); });
+    }
 
     render(); // re-render with new widths
   }
