@@ -254,3 +254,11 @@ If step #3 is missing, task is incomplete.
 
   - **Folder filter contract (updated):** `All Records` node uses `folderId = '__main__'` (was `__all__`). Active check is `_activeFolderId === null || _activeFolderId === '__main__'`.
   - **Per-folder update contract (new):** Folder update ONLY touches rows matching folder condition. Main sheet state is not modified.
+
+
+- **2026-04-21 (Bulk QB Lookup via Cloudflare Function):** MACE-cleared performance fix for Services Workspace Quickbase update path.
+  - **New endpoint — `functions/api/quickbase/bulk-lookup.js`:** Added POST bulk query endpoint that deduplicates case numbers, chunks by 100, runs parallel Quickbase `records/query` calls, and returns field map for Case # (`3`) → status (`25`) + assigned/tracking (`13`).
+  - **New client script — `js/services-lookup.js`:** Added bulk lookup button interceptor, 60-second localStorage cache (`qb_last_lookup`), and table paint function to update status/tracking columns in-place.
+  - **Entry wiring — `index.html`:** Added `<script src="/js/services-lookup.js"></script>` before `</body>`.
+  - **Files changed:** `functions/api/quickbase/bulk-lookup.js`, `js/services-lookup.js`, `index.html`.
+
