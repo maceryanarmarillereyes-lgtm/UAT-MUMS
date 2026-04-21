@@ -110,6 +110,38 @@
     return list[0] || null;
   }
 
+
+  function formatLinkedCellDisplay(col, value) {
+    var isDate = !!(col && (col.type === 'date' || col.format === 'date' || (col.key && col.key.toLowerCase().indexOf('date') !== -1)));
+    if (!isDate) return value || '';
+    if (!value || value === '' || value === 'undefined') return '---';
+    try {
+      var d = new Date(value);
+      if (isNaN(d.getTime())) return '---';
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    } catch (_) {
+      return '---';
+    }
+  }
+
+  function paintLinkedInput(inp, formatted) {
+    if (!inp) return;
+    inp.value = formatted;
+    inp.placeholder = '';
+    inp.classList.remove('cell-qb-pending');
+    if (formatted === '---') {
+      inp.style.color = '#64748b';
+      inp.style.textAlign = 'center';
+      inp.style.fontStyle = 'italic';
+    } else {
+      inp.style.color = '';
+      inp.style.textAlign = '';
+      inp.style.fontStyle = '';
+    }
+    inp.classList.add('cell-qb-linked');
+    inp.readOnly = true;
+  }
+
   // ── Caches ─────────────────────────────────────────────────────────────────────
   var _cache         = {};   // nk → { fields, columnMap, at }
   var _notFound      = {};   // nk → timestamp  (only genuine misses)
@@ -772,11 +804,11 @@
               row.data[col.key] = '';
             }
             if (inp && inp !== document.activeElement) {
-              inp.value       = shouldWrite ? '' : (row.data[col.key] != null ? String(row.data[col.key]) : '');
-              inp.readOnly    = true;
-              inp.title       = '⚠ Field "' + label + '" not available for Case #' + rawCase;
-              // inp.classList.add('cell-qb-linked'); // Disabled - use default styling
-              inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
+              var fallbackVal = shouldWrite ? '' : (row.data[col.key] != null ? String(row.data[col.key]) : '');
+              var formattedFallback = formatLinkedCellDisplay(col, fallbackVal);
+              paintLinkedInput(inp, formattedFallback);
+              inp.title = '⚠ Field "' + label + '" not available for Case #' + rawCase;
+              inp.classList.remove('cell-qb-not-found');
             }
           } else {
             if (shouldWrite) {
@@ -787,11 +819,10 @@
               if (displayVal && typeof displayVal === 'object') {
                 displayVal = displayVal.name || displayVal.email || '';
               }
-              inp.value       = displayVal || '';
-              inp.readOnly    = true;
-              inp.title       = '🔗 QB: ' + label + ' (Case #' + rawCase + ')';
-              // inp.classList.add('cell-qb-linked'); // Disabled - use default styling
-              inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
+              var formattedDisplay = formatLinkedCellDisplay(col, displayVal || '');
+              paintLinkedInput(inp, formattedDisplay);
+              inp.title = '🔗 QB: ' + label + ' (Case #' + rawCase + ')';
+              inp.classList.remove('cell-qb-not-found');
             }
           }
         });
@@ -1029,6 +1060,7 @@
           if (inp && !inp.value) { // Only show ... if empty
             inp.classList.add('cell-qb-pending'); 
             inp.placeholder = '⋯';
+            inp.value = ''; // Clear old value
           }
         });
       });
@@ -1096,28 +1128,8 @@
           linkedCols.forEach(col => {
             const inp = gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`);
             if (inp && inp !== document.activeElement) {
-              const val = row.data[col.key];
-              const isDateCol = col.key && (col.key.toLowerCase().includes('date') || col.format === 'date');
-              
-              // Clear pending state FIRST
-              inp.classList.remove('cell-qb-pending');
-              inp.placeholder = ''; // ← CRITICAL: Clear the "..." placeholder
-              
-              if (isDateCol && (!val || String(val).trim() === '')) {
-                // Date column with no data - show "---"
-                inp.value = '---';
-                inp.style.color = '#64748b';
-                inp.style.textAlign = 'center';
-                inp.style.fontStyle = 'italic';
-              } else {
-                inp.value = val || '';
-                inp.style.color = '';
-                inp.style.textAlign = '';
-                inp.style.fontStyle = '';
-              }
-              
-              inp.classList.add('cell-qb-linked');
-              inp.readOnly = true;
+              var formatted = formatLinkedCellDisplay(col, row.data[col.key]);
+              paintLinkedInput(inp, formatted);
             }
           });
         });
