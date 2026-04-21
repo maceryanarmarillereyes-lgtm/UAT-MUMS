@@ -1244,6 +1244,8 @@
       }
     });
   }
+
+  if (qbUpdateBtn) {
     qbUpdateBtn.addEventListener('click', async function () {
       if (!current || !window.svcQbLookup) return;
       var targetSheetId = current.sheet && current.sheet.id;
