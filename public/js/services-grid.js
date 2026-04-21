@@ -71,13 +71,26 @@
 
   function formatCellValue(col, value) {
     if ((col && (col.type === 'date' || col.format === 'date'))) {
-      if (!value || value === '' || value === 'mm/dd/yyyy' || value === 'undefined') return '---';
-      try {
-        var d = new Date(value);
-        if (isNaN(d.getTime())) return '---';
-        // Return YYYY-MM-DD for consistency
-        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      } catch (_) { return '---'; }
+      var result = '';
+      if (!value || value === '' || value === 'mm/dd/yyyy' || value === 'undefined') {
+        result = '---';
+      } else {
+        try {
+          var d = new Date(value);
+          if (isNaN(d.getTime())) {
+            result = '---';
+          } else {
+            result = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+          }
+        } catch (_) { result = '---'; }
+      }
+      if (col.key && col.key.includes('date')) {
+        console.log('[DEBUG-RENDER] formatCellValue:',
+          'col:', col.key,
+          'input:', JSON.stringify(value),
+          'output:', JSON.stringify(result));
+      }
+      return result;
     }
     return value || '';
   }
@@ -269,6 +282,14 @@
           spellcheck   : false,
           value        : String(formatCellValue(c, rowData.data[c.key]))
         }, td);
+        // STEP 2b DEBUG: Trace render for date cols on rows 499-520
+        if (c.key && c.key.includes('date') && rowIndex >= 499 && rowIndex <= 520) {
+          var _dbgCaseKey = Object.keys(rowData.data || {}).find(k => k.toLowerCase().includes('case')) || 'unknown';
+          console.log('[DEBUG-RENDER] Row', rowIndex,
+            'CASE:', rowData.data[_dbgCaseKey] || '(no case)',
+            'DATE raw:', JSON.stringify(rowData.data[c.key]),
+            'DATE formatted:', JSON.stringify(inp.value));
+        }
         if (validation && validation.length) {
           inp.setAttribute('list', listId);
           inp.dataset.validationList = validation.join('\n');
@@ -291,6 +312,22 @@
         if ((c.type === 'date' || c.format === 'date') && inp.value === '---') {
           inp.style.color = '#64748b';
           inp.style.textAlign = 'center';
+        }
+        // STEP 4 DEBUG: Visual border badge for date cell states
+        if (c.key && c.key.includes('date')) {
+          var _hasCaseKey = Object.keys(rowData.data || {}).find(k => k.toLowerCase().includes('case'));
+          var _caseVal = _hasCaseKey ? String(rowData.data[_hasCaseKey] || '').trim() : '';
+          var _rawDateVal = rowData.data[c.key];
+          if (!_caseVal) {
+            inp.style.borderLeft = '3px solid #666'; // No CASE# - empty expected
+            inp.title = 'No CASE# - empty expected';
+          } else if (!_rawDateVal || _rawDateVal === '') {
+            inp.style.borderLeft = '3px solid orange'; // Has CASE# but no data → should be "---"
+            inp.title = 'Has CASE# [' + _caseVal + '] but QB returned empty - should be "---"';
+          } else {
+            inp.style.borderLeft = '3px solid #0ea5e9'; // Has actual date data
+            inp.title = 'Has CASE# [' + _caseVal + '] + date data: ' + _rawDateVal;
+          }
         }
       });
     }
