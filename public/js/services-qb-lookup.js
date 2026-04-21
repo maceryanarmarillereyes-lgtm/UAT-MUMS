@@ -366,33 +366,32 @@
   //   After:  1 call → 1-2s (matches Google Sheets Apps Script speed)
   //
   // Returns: { ok: bool, caseMap: { nk: { fields, columnMap } }, total: int }
-  function _bulkFetchAll() {
-    return apiHeadersAsync()
-      .then(function (headers) {
-        return _waitForGap().then(function () {
-          return fetch('/api/studio/qb_bulk?bust=1', { headers: headers });
-        });
-      })
+  function _bulkFetchAll(allNks, linkedCols) {
+    var fieldIds = [3]; // Case#
+    linkedCols.forEach(function (col) {
+      var fid = parseInt(col.qbLookup.fieldId);
+      if (fid && fieldIds.indexOf(fid) === -1) fieldIds.push(fid);
+    });
+
+    console.log('[QB Bulk] fieldIds:', fieldIds);
+
+    return fetch('/api/quickbase/bulk-lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cases: allNks, fieldIds: fieldIds })
+    })
       .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (data.warning === 'studio_qb_not_configured') {
-          return { ok: false, reason: 'not_configured' };
-        }
-        if (!data.ok || !data.caseMap) {
-          return { ok: false, reason: data.error || 'unknown' };
-        }
-        // Write entire caseMap into _cache
-        var now = Date.now();
-        Object.keys(data.caseMap).forEach(function (nk) {
-          if (nk) _cache[nk] = Object.assign({ at: now }, data.caseMap[nk]);
+      .then(function (json) {
+        if (!json.ok) return { ok: false, reason: json.error };
+        Object.keys(json.data || {}).forEach(function (caseNum) {
+          _cache[caseNum] = json.data[caseNum];
         });
-        return { ok: true, total: data.total || Object.keys(data.caseMap).length };
-      })
-      .catch(function (err) {
-        console.warn('[svcQbLookup] _bulkFetchAll error:', err && err.message ? err.message : err);
-        return { ok: false, reason: 'network_error' };
+        return { ok: true };
+      }).catch(function (e) {
+        return { ok: false, reason: e.message };
       });
   }
+
 
   // ── _processBatchPipeline ──────────────────────────────────────────────────────
   // Main pipeline: batch-fetch all nks in chunks of _BATCH_SIZE.
@@ -998,94 +997,54 @@
         .catch(function () { return null; });
     },
     refreshAllLinkedColumns: function (current, gridEl) {
-      if (!current ||!gridEl) return Promise.resolve();
+      if (!current || !gridEl) return Promise.resolve();
 
       var cols = current.sheet.column_defs || [];
-      var linkedCols = cols.filter(c => c.qbLookup && String(c.qbLookup.fieldId||'').trim());
+      var linkedCols = cols.filter(function (c) { return c.qbLookup && String(c.qbLookup.fieldId || '').trim(); });
       if (!linkedCols.length) return Promise.resolve();
 
       var caseCol = resolveCaseColumn(cols);
       if (!caseCol) return Promise.resolve();
 
-      var rowsWithCase = current.rows.filter(r => r.data && r.data[caseCol.key]);
+      var rowsWithCase = current.rows.filter(function (r) { return r.data && r.data[caseCol.key]; });
       if (!rowsWithCase.length) return Promise.resolve();
 
-      // Clear caches
       _cache = {}; _notFound = {}; _inFlight = {}; _rowCaseSeen = {};
-      // Force refresh QB schema when new column added
       _qbSchemaCache = null;
       try { localStorage.removeItem('qb_field_cache'); } catch (_) {}
 
-      // Show spinner
-      rowsWithCase.forEach(row => {
-        linkedCols.forEach(col => {
-          var inp = gridEl.querySelector('input.cell[data-row="'+row.row_index+'"][data-key="'+col.key+'"]');
-          if (inp) { inp.classList.add('cell-qb-pending'); inp.placeholder='⋯'; }
-        });
-      });
-
-      // AUTO-FIELD FINDER: collect ALL linked QB fields dynamically
-      var allFieldIds = [3]; // always include Case#
-      var caseNumbers = [];
-      linkedCols.forEach(col => {
-        var fid = parseInt(col.qbLookup.fieldId);
-        if (fid &&!allFieldIds.includes(fid)) allFieldIds.push(fid);
-      });
       rowsWithCase.forEach(function (row) {
-        var c = String(row.data[caseCol.key] || '').trim();
-        if (c) caseNumbers.push(c);
+        linkedCols.forEach(function (col) {
+          var inp = gridEl.querySelector('input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]');
+          if (inp) { inp.classList.add('cell-qb-pending'); inp.placeholder = '⋯'; }
+        });
       });
 
-      console.log('[QB Bulk] Auto-detected fields:', allFieldIds); // debug
+      var allNks = [];
+      rowsWithCase.forEach(function (row) {
+        var nk = normalizeCaseKey(row.data[caseCol.key]);
+        if (nk) allNks.push(nk);
+      });
+      allNks = Array.from(new Set(allNks));
 
-      return fetch('/api/studio/qb_bulk', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          sheetId: current.sheet.id,
-          caseFieldId: 3,
-          caseNumbers: [...new Set(caseNumbers)],
-          fieldIds: allFieldIds, // pass ALL fields, not just 3
-          fields: linkedCols.map(c => ({
-            key: c.key,
-            fieldId: parseInt(c.qbLookup.fieldId),
-            label: c.qbLookup.fieldLabel,
-            type: c.type || 'text'
-          }))
-        })
-      })
-     .then(r => r.json())
-     .then(bulkData => {
-        // bulkData = { '454203': { '25': '0 - Waiting', '13': 'Mace Ryan' },... }
+      var fetchPipeline = _bulkFetchAll(allNks, linkedCols).then(function (result) {
+        if (!result || !result.ok) throw new Error((result && result.reason) || 'bulk_fetch_failed');
 
-        // Update ALL rows in memory
-        var updates = [];
-        rowsWithCase.forEach(row => {
-          var caseNum = String(row.data[caseCol.key]).trim();
-          var qbRec = bulkData[caseNum];
-          if (!qbRec) return;
-
-          linkedCols.forEach(col => {
+        rowsWithCase.forEach(function (row) {
+          var caseNum = normalizeCaseKey(row.data[caseCol.key]);
+          var qbRec = _cache[caseNum] || {};
+          linkedCols.forEach(function (col) {
             var fid = String(col.qbLookup.fieldId);
-            var val = qbRec[fid] || '';
-            row.data[col.key] = val;
+            var value = qbRec[fid] || '';
+            row.data[col.key] = value;
           });
-          updates.push({ row_index: row.row_index, data: row.data });
         });
 
-        // ONE bulk upsert via Services DB adapter
-        if (!updates.length || !window.servicesDB || !window.servicesDB.bulkUpsertRows) return null;
-        return window.servicesDB.bulkUpsertRows(
-          current.sheet.id,
-          updates.map(function (u) { return { row_index: u.row_index, data: u.data }; })
-        );
-      })
-     .then(() => {
-        // Paint all rows
-        rowsWithCase.forEach(row => {
-          linkedCols.forEach(col => {
-            var inp = gridEl.querySelector('input.cell[data-row="'+row.row_index+'"][data-key="'+col.key+'"]');
-            if (inp && inp!== document.activeElement) {
+        // Step 6: Paint ALL rows
+        rowsWithCase.forEach(function (row) {
+          linkedCols.forEach(function (col) {
+            var inp = gridEl.querySelector('input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]');
+            if (inp && inp !== document.activeElement) {
               inp.value = row.data[col.key] || '';
               inp.classList.remove('cell-qb-pending');
               inp.classList.add('cell-qb-linked');
@@ -1093,8 +1052,24 @@
             }
           });
         });
+
+        // BULK SAVE - ONE call instead of 520
+        var updates = rowsWithCase.map(function (row) {
+          return { id: row.id, data: row.data };
+        });
+
+        return window.supabase.from('services_rows')
+          .upsert(updates, { onConflict: 'id' })
+          .then(function () {
+            _urgentMode = false;
+          });
+      });
+
+      return fetchPipeline.catch(function (err) {
+        console.warn('[svcQbLookup] refreshAllLinkedColumns failed:', err && err.message ? err.message : err);
       });
     },
+
     hydrateLinkedColumnsForExport: function (current, gridEl) {
       autofillLinkedColumns(current, gridEl, { force: false, allRows: true });
       return waitForLookupIdle(90000);

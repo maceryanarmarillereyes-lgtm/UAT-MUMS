@@ -2,7 +2,7 @@ export async function onRequestPost(context) {
   const { request, env } = context;
 
   try {
-    const { cases = [] } = await request.json();
+    const { cases = [], fieldIds = [3, 25, 13] } = await request.json();
 
     if (!Array.isArray(cases) || cases.length === 0) {
       return new Response(JSON.stringify({ error: 'cases array required' }), {
@@ -23,6 +23,14 @@ export async function onRequestPost(context) {
     }
 
     const uniqueCases = [...new Set(cases.map(String).filter(Boolean))];
+    const selectedFieldIds = [...new Set((Array.isArray(fieldIds) ? fieldIds : []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))];
+
+    if (!selectedFieldIds.length) {
+      return new Response(JSON.stringify({ error: 'fieldIds array required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
     const CHUNK_SIZE = 100;
     const chunks = [];
@@ -40,7 +48,7 @@ export async function onRequestPost(context) {
 
         const body = {
           from: QB_TABLE_ID,
-          select: [3, 25, 13],
+          select: selectedFieldIds,
           where,
           options: { skip: 0, top: 100 }
         };
@@ -66,14 +74,16 @@ export async function onRequestPost(context) {
     );
 
     const map = {};
-    results.flat().forEach(rec => {
+    results.flat().forEach((rec) => {
       const caseVal = rec['3']?.value?.toString();
-      if (caseVal) {
-        map[caseVal] = {
-          status: rec['25']?.value || '',
-          tracking: rec['13']?.value || ''
-        };
-      }
+      if (!caseVal) return;
+
+      const row = {};
+      selectedFieldIds.forEach((fieldId) => {
+        const fieldKey = String(fieldId);
+        row[fieldKey] = rec[fieldKey]?.value ?? '';
+      });
+      map[caseVal] = row;
     });
 
     const duration = Date.now() - start;
