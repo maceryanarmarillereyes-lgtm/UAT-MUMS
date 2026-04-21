@@ -270,6 +270,17 @@
           spellcheck   : false,
           value        : String(formatCellValue(c, rowData.data[c.key]))
         }, td);
+        // Apply "---" styling immediately for date columns
+        if (c && (c.type === 'date' || c.format === 'date' || (c.key && c.key.toLowerCase().includes('date')))) {
+          var rawVal = rowData.data[c.key];
+          var hasCase = current.rows.find(function (r) { return r.row_index === rowIndex; })?.data?.[current.sheet.column_defs.find(function (col) { return col.label && col.label.toUpperCase().includes('CASE'); })?.key];
+          if (hasCase && (!rawVal || rawVal === '')) {
+            inp.value = '---';
+            inp.style.color = '#64748b';
+            inp.style.textAlign = 'center';
+            inp.style.fontStyle = 'italic';
+          }
+        }
         // SPECIAL HANDLING FOR DATE COLUMNS
         if (c && (c.type === 'date' || c.format === 'date' || (c.key && c.key.toLowerCase().includes('date')))) {
           var caseColDef = (current.sheet.column_defs || []).find(function (col) {
@@ -618,7 +629,7 @@
             render();
             notify('info', 'Column Hidden', col.label + ' hidden. Click ⊞ Columns to unhide.');
             closeAllCtxMenus();
-            supabase.from('services_sheets')
+            window.supabase.from('services_sheets')
               .update({ column_defs: current.sheet.column_defs })
               .eq('id', current.sheet.id)
               .then(() => { console.log('[Grid] Column hide saved:', col.label); })
@@ -1430,7 +1441,7 @@
       timestamp: new Date().toISOString()
     };
 
-    var result = await supabase.from('services_backups').insert({
+    var result = await window.supabase.from('services_backups').insert({
       sheet_id: current.sheet.id,
       name: name || ('Backup ' + new Date().toLocaleString('en-PH')),
       snapshot: snapshot,
@@ -1540,7 +1551,7 @@
           // Render grid immediately
           render();
           // Save to DB in background
-          supabase.from('services_sheets')
+          window.supabase.from('services_sheets')
             .update({ column_defs: current.sheet.column_defs })
             .eq('id', current.sheet.id)
             .then(() => { console.log('[Grid] Column visibility saved:', col.label); })
