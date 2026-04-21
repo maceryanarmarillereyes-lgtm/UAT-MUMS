@@ -63,6 +63,8 @@
 
   async function load(sheet) {
     if (subscription) { try { subscription.unsubscribe(); } catch (_) {} subscription = null; }
+    // Invalidate resize cache on new sheet load so columns get measured fresh
+    _resizeSheetId = null;
     current   = { sheet: JSON.parse(JSON.stringify(sheet)), rows: [] };
     var colNorm = normalizeColumnDefs(current.sheet.column_defs);
     current.sheet.column_defs = colNorm.normalized;
@@ -219,12 +221,24 @@
     attachHeaderContextMenu();
     attachRowContextMenu();
     updateStatusBar();
-    autoResizeColumns();
-    if (window.servicesTreeview && typeof window.servicesTreeview.refreshCounts === 'function') {
-      window.servicesTreeview.refreshCounts(current.sheet.id);
+    // FIX: Skip autoResizeColumns on treeview filter changes — column widths
+    // are already set for this sheet. Recalculating on every folder click forces
+    // full layout reflow on 520×6 = 3120 DOM nodes → main cause of folder lag.
+    if (!_renderIsFilterSwitch) {
+      autoResizeColumns();
+    }
+    // FIX: refreshCounts triggers rerenderAllTrees which re-builds treeview DOM.
+    // Skip during filter switches — treeview manages its own counts via
+    // updateSheetCountBadge already. Only run on full sheet loads.
+    if (!_renderIsFilterSwitch) {
+      if (window.servicesTreeview && typeof window.servicesTreeview.refreshCounts === 'function') {
+        window.servicesTreeview.refreshCounts(current.sheet.id);
+      }
     }
 
     // QB auto-populate: paint linked column values from QB data (read-only)
+    // During a filter switch, cache is warm — autofill paints instantly from cache,
+    // 150ms debounce with no new API calls → still fast.
     if (window.svcQbLookup) {
       window.svcQbLookup.autofillLinkedColumns(current, grid);
     }
@@ -993,35 +1007,77 @@
     document.querySelectorAll('.svc-col-ctx-menu, .svc-row-ctx-menu').forEach(function (m) { m.remove(); });
   }
 
+  // FIX: autoResizeColumns is the main latency source on large grids.
+  // Run it deferred via requestAnimationFrame so it never blocks the render.
+  // Also: cache column widths per sheet — only re-measure if sheet changed.
+  var _resizeCache      = {};   // sheetId → { key: widthPx, ... }
+  var _resizeSheetId    = null;
+  var _resizeRafPending = false;
+
   function autoResizeColumns() {
     if (!current) return;
-    var cols = current.sheet.column_defs || [];
-    var m = mkEl('span');
-    m.style.cssText = 'visibility:hidden;position:absolute;white-space:nowrap;top:-9999px;left:-9999px;';
-    document.body.appendChild(m);
-    cols.forEach(function (c) {
-      var maxW = 80;
-      var th = grid.querySelector('thead th[data-key="' + c.key + '"]');
-      if (th) {
-        m.style.font = '600 11px/1 Inter,system-ui,sans-serif';
-        m.style.letterSpacing = '0.05em';
-        m.textContent = c.label;
-        maxW = Math.max(maxW, m.offsetWidth + 32);
-      }
-      grid.querySelectorAll('input.cell[data-key="' + c.key + '"]').forEach(function (inp) {
-        if (!inp.value) return;
-        m.style.font = '13px/1 Consolas,monospace';
-        m.style.letterSpacing = '';
-        m.textContent = inp.value;
-        maxW = Math.max(maxW, m.offsetWidth + 32);
+    var sheetId = current.sheet && current.sheet.id;
+
+    // Use cached widths if same sheet (filter switches) — no DOM reads at all
+    if (sheetId && _resizeSheetId === sheetId && _resizeCache[sheetId]) {
+      _applyColumnWidths(_resizeCache[sheetId]);
+      return;
+    }
+
+    // New sheet — measure via rAF so render() completes first, browser paints,
+    // then we do the costly measurement in the next frame (non-blocking)
+    if (_resizeRafPending) return;
+    _resizeRafPending = true;
+    requestAnimationFrame(function () {
+      _resizeRafPending = false;
+      if (!current) return;
+      var sid  = current.sheet && current.sheet.id;
+      var cols = current.sheet.column_defs || [];
+      var widths = {};
+      var m = mkEl('span');
+      m.style.cssText = 'visibility:hidden;position:absolute;white-space:nowrap;top:-9999px;left:-9999px;';
+      document.body.appendChild(m);
+      cols.forEach(function (c) {
+        var maxW = 80;
+        var th = grid.querySelector('thead th[data-key="' + c.key + '"]');
+        if (th) {
+          m.style.font = '600 11px/1 Inter,system-ui,sans-serif';
+          m.style.letterSpacing = '0.05em';
+          m.textContent = c.label;
+          maxW = Math.max(maxW, m.offsetWidth + 32);
+        }
+        grid.querySelectorAll('input.cell[data-key="' + c.key + '"]').forEach(function (inp) {
+          if (!inp.value) return;
+          m.style.font = '13px/1 Consolas,monospace';
+          m.style.letterSpacing = '';
+          m.textContent = inp.value;
+          maxW = Math.max(maxW, m.offsetWidth + 32);
+        });
+        widths[c.key] = Math.min(500, maxW) + 'px';
       });
-      var w = Math.min(500, maxW) + 'px';
+      m.remove();
+      // Cache and apply
+      if (sid) {
+        _resizeCache[sid]  = widths;
+        _resizeSheetId     = sid;
+      }
+      _applyColumnWidths(widths);
+    });
+  }
+
+  function _applyColumnWidths(widths) {
+    if (!widths || !current) return;
+    var cols = current.sheet.column_defs || [];
+    cols.forEach(function (c) {
+      var w  = widths[c.key];
+      if (!w) return;
+      var th = grid.querySelector('thead th[data-key="' + c.key + '"]');
       if (th) { th.style.width = w; th.style.minWidth = w; }
       grid.querySelectorAll('td input.cell[data-key="' + c.key + '"]').forEach(function (inp) {
-        inp.parentElement.style.width = w; inp.parentElement.style.minWidth = w;
+        inp.parentElement.style.width = w;
+        inp.parentElement.style.minWidth = w;
       });
     });
-    m.remove();
   }
 
   function onCellInput(e) {
@@ -1280,9 +1336,17 @@
   // setTreeFilter(fn) — fn receives a row object {row_index, data}, returns bool.
   // Pass null to remove filter (show all rows).
   var _treeFilter = null;
+  // FIX: Flag that render() checks to skip autoResizeColumns + refreshCounts
+  // during folder switches. These are the two main sources of folder-switch lag.
+  var _renderIsFilterSwitch = false;
   function setTreeFilter(fn) {
     _treeFilter = fn || null;
-    render();
+    _renderIsFilterSwitch = true;
+    try {
+      render();
+    } finally {
+      _renderIsFilterSwitch = false;
+    }
   }
 
   // Patch render() to honour _treeFilter —————————————————————————————————————
