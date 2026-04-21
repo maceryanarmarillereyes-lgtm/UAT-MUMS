@@ -282,3 +282,6 @@ If step #3 is missing, task is incomplete.
   - **Update — `public/js/services-qb-lookup.js`:** `_bulkFetchAll(allNks, linkedCols)` now computes linked `fieldIds` dynamically and posts them to `/api/quickbase/bulk-lookup`.
   - **Update — `public/js/services-qb-lookup.js`:** `refreshAllLinkedColumns` now calls `_bulkFetchAll(allNks, linkedCols)`, paints all linked cells from the fetched field map, and performs one Supabase `upsert(..., { onConflict: 'id' })` bulk write for all affected rows.
   - **Files changed:** `functions/api/quickbase/bulk-lookup.js`, `public/js/services-qb-lookup.js`, `SERVICES_BLUEPRINT.md`.
+  - **Patch — `functions/api/quickbase/bulk-lookup.js`:** Added QB object-value normalization (`name/email/display`) so User/List-User fields no longer surface as `[object Object]` in linked columns.
+  - **Patch — `public/js/services-qb-lookup.js`:** Removed per-row `queuePersistRow()` calls during lookup paint and enforced one bulk `services_rows` upsert payload with `sheet_id`, `row_index`, `data`, and `updated_at`.
+  - **Patch — `public/js/services-qb-lookup.js`:** UI paint now normalizes object values (`name/email`) before assigning `inp.value`, preventing `[object Object]` in grid cells.

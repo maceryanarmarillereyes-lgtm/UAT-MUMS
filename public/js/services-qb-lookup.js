@@ -770,7 +770,6 @@
           if (value === null) {
             if (shouldWrite) {
               row.data[col.key] = '';
-              queuePersistRow(current.sheet.id, row); // ← persists even if inp is null
             }
             if (inp && inp !== document.activeElement) {
               inp.value       = shouldWrite ? '' : (row.data[col.key] != null ? String(row.data[col.key]) : '');
@@ -782,10 +781,13 @@
           } else {
             if (shouldWrite) {
               row.data[col.key] = value;
-              queuePersistRow(current.sheet.id, row); // ← persists even if inp is null
             }
             if (inp && inp !== document.activeElement) {
-              inp.value       = shouldWrite ? value : (row.data[col.key] != null ? String(row.data[col.key]) : value);
+              var displayVal = shouldWrite ? value : (row.data[col.key] != null ? String(row.data[col.key]) : value);
+              if (displayVal && typeof displayVal === 'object') {
+                displayVal = displayVal.name || displayVal.email || '';
+              }
+              inp.value       = displayVal || '';
               inp.readOnly    = true;
               inp.title       = '🔗 QB: ' + label + ' (Case #' + rawCase + ')';
               inp.classList.add('cell-qb-linked');
@@ -1045,7 +1047,11 @@
           linkedCols.forEach(function (col) {
             var inp = gridEl.querySelector('input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]');
             if (inp && inp !== document.activeElement) {
-              inp.value = row.data[col.key] || '';
+              var displayVal = row.data[col.key] || '';
+              if (displayVal && typeof displayVal === 'object') {
+                displayVal = displayVal.name || displayVal.email || '';
+              }
+              inp.value = displayVal || '';
               inp.classList.remove('cell-qb-pending');
               inp.classList.add('cell-qb-linked');
               inp.readOnly = true;
@@ -1053,14 +1059,23 @@
           });
         });
 
-        // BULK SAVE - ONE call instead of 520
-        var updates = rowsWithCase.map(function (row) {
-          return { id: row.id, data: row.data };
+        // BULK SAVE - single Supabase call
+        var updates = rowsWithCase.map(function(row) {
+          return {
+            id: row.id,
+            sheet_id: current.sheet.id,
+            row_index: row.row_index,
+            data: row.data,
+            updated_at: new Date().toISOString()
+          };
         });
 
-        return window.supabase.from('services_rows')
-          .upsert(updates, { onConflict: 'id' })
-          .then(function () {
+        // Do ONE upsert, not 520
+        return window.supabase
+          .from('services_rows')
+          .upsert(updates, { onConflict: 'id', ignoreDuplicates: false })
+          .then(function() {
+            console.log('[QB] Bulk saved', updates.length, 'rows');
             _urgentMode = false;
           });
       });

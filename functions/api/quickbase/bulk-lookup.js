@@ -2,7 +2,7 @@ export async function onRequestPost(context) {
   const { request, env } = context;
 
   try {
-    const { cases = [], fieldIds = [3, 25, 13] } = await request.json();
+    let { cases = [], fieldIds = [3, 25, 13] } = await request.json();
 
     if (!Array.isArray(cases) || cases.length === 0) {
       return new Response(JSON.stringify({ error: 'cases array required' }), {
@@ -23,9 +23,9 @@ export async function onRequestPost(context) {
     }
 
     const uniqueCases = [...new Set(cases.map(String).filter(Boolean))];
-    const selectedFieldIds = [...new Set((Array.isArray(fieldIds) ? fieldIds : []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))];
+    fieldIds = [...new Set((Array.isArray(fieldIds) ? fieldIds : []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))];
 
-    if (!selectedFieldIds.length) {
+    if (!fieldIds.length) {
       return new Response(JSON.stringify({ error: 'fieldIds array required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
@@ -48,7 +48,7 @@ export async function onRequestPost(context) {
 
         const body = {
           from: QB_TABLE_ID,
-          select: selectedFieldIds,
+          select: fieldIds,
           where,
           options: { skip: 0, top: 100 }
         };
@@ -78,20 +78,27 @@ export async function onRequestPost(context) {
       const caseVal = rec['3']?.value?.toString();
       if (!caseVal) return;
 
-      const row = {};
-      selectedFieldIds.forEach((fieldId) => {
-        const fieldKey = String(fieldId);
-        row[fieldKey] = rec[fieldKey]?.value ?? '';
-      });
-      map[caseVal] = row;
-    });
+      map[caseVal] = {};
+      fieldIds.forEach(fid => {
+        const fieldData = rec[fid.toString()];
+        let val = fieldData?.value;
 
-    const duration = Date.now() - start;
+        // FIX: Extract proper string from QB field types
+        if (val && typeof val === 'object') {
+          // User field: { email, name } or { id, name }
+          val = val.name || val.email || val.display || JSON.stringify(val);
+        }
+        // Date field: keep ISO string
+        // Text: direct
+
+        map[caseVal][fid] = val || '';
+      });
+    });
 
     return new Response(JSON.stringify({
       ok: true,
       count: uniqueCases.length,
-      duration_ms: duration,
+      duration_ms: Date.now() - start,
       data: map
     }), {
       status: 200,
