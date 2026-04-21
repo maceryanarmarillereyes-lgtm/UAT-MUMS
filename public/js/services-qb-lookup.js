@@ -1031,6 +1031,10 @@
     },
     refreshAllLinkedColumns: async function (current, gridEl) {
       if (!current ||!gridEl) return;
+      if (!window.servicesDB) {
+        console.error('[QB] servicesDB not available');
+        throw new Error('Database not ready');
+      }
 
       const cols = current.sheet.column_defs || [];
       const linkedCols = cols.filter(c => c.qbLookup && c.qbLookup.fieldId);
@@ -1112,11 +1116,12 @@
           }
         });
 
-        // 6. ONE Supabase upsert (this is the fix for minutes → seconds)
+        // 6. ONE bulk upsert via servicesDB (this is the fix for minutes → seconds)
         if (updates.length > 0) {
-          const { error } = await window.supabase
-           .from('services_rows')
-           .upsert(updates, { onConflict: 'sheet_id,row_index' });
+          const { error } = await window.servicesDB.bulkUpsertRows(
+            current.sheet.id,
+            updates.map(u => ({ row_index: u.row_index, data: u.data }))
+          );
 
           if (error) {
             throw error;

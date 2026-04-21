@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (Supabase reference hardening for Services QB/Grid):**
+  - **Edit — `public/js/services-qb-lookup.js`:** `refreshAllLinkedColumns()` now hard-fails early when `window.servicesDB` is unavailable (`Database not ready`) to prevent invalid fallback paths, and bulk row persistence now uses `servicesDB.bulkUpsertRows(sheetId, [{ row_index, data }])` instead of direct `window.supabase.from('services_rows').upsert(...)`.
+  - **Edit — `public/js/services-grid.js`:** Column hide/unhide persistence now routes through `window.servicesDB.updateColumns(sheetId, column_defs)` (both context-menu hide and Columns popover toggle flows), removing direct `window.supabase.from('services_sheets').update(...)` writes while preserving optimistic UI + revert-on-error behavior.
+  - **Verification contract:** No direct `supabase.from('services_rows'|'services_sheets')` calls remain in Services frontend modules; persistence path is centralized in `servicesDB`.
+
 - **2026-04-21 (QB `---` blink regression fix):**
   - **Edit — `public/js/services-qb-lookup.js`:** Introduced shared `formatLinkedCellDisplay()` + `paintLinkedInput()` helpers and reused them across both autofill paint paths (`autofillLinkedColumns` and `refreshAllLinkedColumns`) so empty QB date values consistently render as `---` with the same muted style.
   - **Edit — `public/js/services-qb-lookup.js`:** Removed direct empty-string DOM writes in cached/fallback paint path that previously overpainted `---` after a brief flash.
