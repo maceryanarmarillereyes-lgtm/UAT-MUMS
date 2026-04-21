@@ -202,6 +202,10 @@ If step #3 is missing, task is incomplete.
   - **Edit — `public/js/services-qb-lookup.js`:** Sheet-level refresh now writes through `servicesDB.bulkUpsertRows(sheetId, rows)` (single bulk write) using `{ row_index, data }` payload, avoiding direct `window.supabase.from(...).upsert(...)` call.
   - **Edit — `server/routes/studio/qb_bulk.js`:** Split cache key by method (`GET` vs `POST`) to avoid response-shape collisions and keep POST map output deterministic.
 
+- **2026-04-21 (Dynamic QB field detection for linked columns):**
+  - **Edit — `public/js/services-qb-lookup.js`:** `refreshAllLinkedColumns()` now auto-detects all linked Quickbase field IDs (`fieldIds`) and sends them to `/api/studio/qb_bulk` with `caseNumbers` and typed `fields` metadata. Also added schema cache-buster hooks (`_qbSchemaCache = null` and localStorage `qb_field_cache` clear) during refresh.
+  - **Edit — `server/routes/studio/qb_bulk.js`:** POST mode now queries `https://api.quickbase.com/v1/records/query` using dynamic `select` from request `fieldIds`, optional case-number where clause, and returns `{ caseNum: { fieldId: value } }` map for unlimited linked columns.
+
 - **2026-04-20** — Initial blueprint created. Added mandatory update protocol, feature inventory, logic contracts, file-location mapping, API/DB mapping, and dual-platform checklist.
 
 - **2026-04-21** — Services Lookup + Case Detail Modal overhaul (all MACE CLEARED):

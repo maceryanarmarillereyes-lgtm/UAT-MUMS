@@ -116,6 +116,7 @@
   var _inFlight      = {};   // nk → Promise     (dedup concurrent fetches)
   var _reportIdx     = null; // { byNk, at } one-shot fallback index from qb_data report mode
   var _rowCaseSeen   = {};   // row_index -> normalized case key last painted
+  var _qbSchemaCache = null; // schema cache buster hook for dynamic linked columns
   var _CACHE_TTL     = 5 * 60 * 1000;
   var _NOT_FOUND_TTL = 30 * 1000;
   var _REPORT_TTL    = 2 * 60 * 1000;
@@ -1011,6 +1012,9 @@
 
       // Clear caches
       _cache = {}; _notFound = {}; _inFlight = {}; _rowCaseSeen = {};
+      // Force refresh QB schema when new column added
+      _qbSchemaCache = null;
+      try { localStorage.removeItem('qb_field_cache'); } catch (_) {}
 
       // Show spinner
       rowsWithCase.forEach(row => {
@@ -1020,14 +1024,34 @@
         });
       });
 
-      // ONE CALL to the real bulk endpoint
+      // AUTO-FIELD FINDER: collect ALL linked QB fields dynamically
+      var allFieldIds = [3]; // always include Case#
+      var caseNumbers = [];
+      linkedCols.forEach(col => {
+        var fid = parseInt(col.qbLookup.fieldId);
+        if (fid &&!allFieldIds.includes(fid)) allFieldIds.push(fid);
+      });
+      rowsWithCase.forEach(function (row) {
+        var c = String(row.data[caseCol.key] || '').trim();
+        if (c) caseNumbers.push(c);
+      });
+
+      console.log('[QB Bulk] Auto-detected fields:', allFieldIds); // debug
+
       return fetch('/api/studio/qb_bulk', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           sheetId: current.sheet.id,
-          caseFieldId: '3',
-          fields: linkedCols.map(c => ({ key: c.key, fieldId: c.qbLookup.fieldId, label: c.qbLookup.fieldLabel }))
+          caseFieldId: 3,
+          caseNumbers: [...new Set(caseNumbers)],
+          fieldIds: allFieldIds, // pass ALL fields, not just 3
+          fields: linkedCols.map(c => ({
+            key: c.key,
+            fieldId: parseInt(c.qbLookup.fieldId),
+            label: c.qbLookup.fieldLabel,
+            type: c.type || 'text'
+          }))
         })
       })
      .then(r => r.json())

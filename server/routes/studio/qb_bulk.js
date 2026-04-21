@@ -137,7 +137,66 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // ── Fetch QB report — ALL records in ONE call ─────────────────────────────────
+  let rows = [];
+  let fields = [];
+  if (method === 'POST') {
+    // Get fieldIds from request (auto-detected from frontend)
+    const fieldIds = Array.isArray(body.fieldIds) && body.fieldIds.length ? body.fieldIds : [3, 25, 13];
+    const selectFields = [...new Set(fieldIds.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0))]; // dedupe
+    const caseNumbers = Array.isArray(body.caseNumbers)
+      ? body.caseNumbers.map((x) => String(x || '').trim()).filter(Boolean)
+      : [];
+    const caseFieldForQuery = Number(requestedCaseFieldId || 3) || 3;
+    const whereClause = caseNumbers.length
+      ? `{${caseFieldForQuery}.OAF.'${caseNumbers.map((x) => String(x).replace(/'/g, "\\'")).join("','")}'}` 
+      : null;
+
+    // Build QB query - fetch ALL fields in ONE call
+    let qbData = {};
+    try {
+      const qbResponse = await fetch('https://api.quickbase.com/v1/records/query', {
+        method: 'POST',
+        headers: {
+          'QB-Realm-Hostname': realm,
+          'Authorization': `QB-USER-TOKEN ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: tableId,
+          select: selectFields, // DYNAMIC - includes all linked fields
+          where: whereClause || undefined,
+          options: { top: 1000 }
+        })
+      });
+      qbData = await qbResponse.json().catch(() => ({}));
+      if (!qbResponse.ok) {
+        return sendJson(res, 200, { ok: false, error: 'qb_query_failed', message: qbData?.message || `QB API ${qbResponse.status}` });
+      }
+    } catch (err) {
+      return sendJson(res, 200, { ok: false, error: 'network_error', message: String(err?.message || err) });
+    }
+
+    // Transform to map: { caseNum: { fieldId: value } }
+    const resultMap = {};
+    (qbData.data || []).forEach(record => {
+      const caseNum = record['3']?.value?.toString();
+      if (!caseNum) return;
+      resultMap[caseNum] = {};
+      selectFields.forEach(fid => {
+        const val = record[String(fid)]?.value;
+        // Handle different field types
+        if (val!== null && val!== undefined) {
+          // Date fields: QB returns ISO string, keep as-is
+          // Text/number: direct value
+          resultMap[caseNum][fid] = val;
+        }
+      });
+    });
+    BULK_CACHE.set(cacheKey, { at: Date.now(), value: resultMap });
+    return sendJson(res, 200, resultMap);
+  }
+
+  // ── Fetch QB report — ALL records in ONE call (GET mode) ────────────────────
   const url = `https://api.quickbase.com/v1/reports/${encodeURIComponent(qid)}/run?tableId=${encodeURIComponent(tableId)}&skip=0&top=1000`;
   let json;
   try {
@@ -159,8 +218,8 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 200, { ok: false, error: 'network_error', message: String(err?.message || err) });
   }
 
-  const rows   = Array.isArray(json.data)   ? json.data   : [];
-  const fields = Array.isArray(json.fields) ? json.fields : [];
+  rows   = Array.isArray(json.data)   ? json.data   : [];
+  fields = Array.isArray(json.fields) ? json.fields : [];
 
   if (!rows.length) {
     return sendJson(res, 200, { ok: false, error: 'empty_report', message: 'QB report returned 0 records.' });
@@ -186,18 +245,6 @@ module.exports = async function handler(req, res) {
     const caseStr  = String(rawCase == null ? '' : rawCase).trim();
     const nk       = normalizeCaseKey(caseStr);
     if (!nk) return;
-
-    if (method === 'POST') {
-      const fieldValueMap = {};
-      fields.forEach(f => {
-        const fid = String(f.id);
-        const cell = row[fid];
-        const raw = (cell && typeof cell === 'object' && 'value' in cell) ? cell.value : cell;
-        fieldValueMap[fid] = normalizeQbValue(raw);
-      });
-      caseMap[nk] = fieldValueMap;
-      return;
-    }
 
     const fieldMap = {};
     fields.forEach(f => {
