@@ -3246,3 +3246,223 @@ input.cell.cell-qb-not-found {
 }
 
 /* ENDCSS */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SERVICES v5 ADDITIONS
+   1. Refresh button
+   2. Per-folder TreeView Update button
+   3. Case Detail v2 — Premium Hero layout + enlarged Case Notes
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Refresh Button ──────────────────────────────────────────────────────── */
+.svc-refresh-btn {
+  background: rgba(34,211,238,.07);
+  border-color: rgba(34,211,238,.25);
+  color: rgba(34,211,238,.85);
+  font-weight: 600;
+  letter-spacing: .01em;
+  transition: background .15s, border-color .15s, color .15s, opacity .15s;
+}
+.svc-refresh-btn:hover {
+  background: rgba(34,211,238,.14);
+  border-color: rgba(34,211,238,.4);
+  color: #22d3ee;
+}
+.svc-refresh-btn--loading,
+.svc-refresh-btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* ── 2. Per-folder TreeView Update Button ──────────────────────────────────── */
+.svc-tv-folder-update-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid rgba(34,211,238,.18);
+  background: rgba(34,211,238,.06);
+  color: rgba(34,211,238,.55);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  margin-left: 5px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity .15s, background .15s, color .15s, border-color .15s;
+  vertical-align: middle;
+}
+.svc-tv-node:hover .svc-tv-folder-update-btn,
+.svc-tv-node.svc-tv-active .svc-tv-folder-update-btn {
+  opacity: 1;
+}
+.svc-tv-folder-update-btn:hover {
+  background: rgba(34,211,238,.18);
+  border-color: rgba(34,211,238,.45);
+  color: #22d3ee;
+}
+.svc-tv-folder-update-btn--loading,
+.svc-tv-folder-update-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* ── 3. Case Detail v2 ─────────────────────────────────────────────────────── */
+
+/* Remove old accent bar + header styles (replaced by hero) */
+.svc-qbcd-accent-bar  { display: none !important; }
+.svc-qbcd-header      { display: none !important; }
+.svc-qbcd-status-bar  { display: none !important; }
+.svc-qbcd-row-badge   { display: none !important; }
+
+/* Hero header */
+.svc-qbcd-hero {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg,
+    rgba(34,211,238,.12) 0%,
+    rgba(167,139,250,.08) 50%,
+    rgba(15,23,42,0) 100%);
+  border-bottom: 1px solid rgba(34,211,238,.12);
+  padding: 20px 24px 16px;
+  flex-shrink: 0;
+}
+.svc-qbcd-hero-glow {
+  position: absolute;
+  top: -40px; left: -40px;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(34,211,238,.13) 0%, transparent 70%);
+  pointer-events: none;
+}
+.svc-qbcd-hero-inner {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.svc-qbcd-hero-left {
+  flex: 1;
+  min-width: 0;
+}
+.svc-qbcd-hero-eyebrow {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: rgba(34,211,238,.5);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.svc-qbcd-hero-caseid {
+  font-size: 22px;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  color: #fff;
+  line-height: 1.1;
+  letter-spacing: -.01em;
+  margin-bottom: 5px;
+}
+.svc-qbcd-hero-caseid span {
+  color: #22d3ee;
+}
+.svc-qbcd-hero-desc {
+  font-size: 13px;
+  color: rgba(148,163,184,.7);
+  font-weight: 400;
+  line-height: 1.4;
+  margin-bottom: 10px;
+  max-width: 480px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.svc-qbcd-hero-status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.svc-qbcd-hero-meta {
+  font-size: 11px;
+  color: rgba(148,163,184,.4);
+  font-style: italic;
+}
+
+/* Case Notes — PRIMARY full-width section */
+.svc-qbcd-notes-primary {
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: linear-gradient(135deg,
+    rgba(167,139,250,.07) 0%,
+    rgba(139,92,246,.04) 100%);
+  border: 1px solid rgba(167,139,250,.2);
+  box-shadow: 0 0 0 1px rgba(167,139,250,.04) inset;
+}
+.svc-qbcd-notes-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.svc-qbcd-notes-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a78bfa;
+  box-shadow: 0 0 10px #a78bfa, 0 0 20px rgba(167,139,250,.3);
+  flex-shrink: 0;
+}
+.svc-qbcd-notes-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: rgba(167,139,250,.85);
+  font-weight: 700;
+}
+.svc-qbcd-notes-badge {
+  margin-left: auto;
+  font-size: 10px;
+  background: rgba(167,139,250,.12);
+  border: 1px solid rgba(167,139,250,.2);
+  color: rgba(167,139,250,.7);
+  padding: 1px 7px;
+  border-radius: 20px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.svc-qbcd-notes-body {
+  font-size: 13.5px;
+  color: rgba(226,232,240,.85);
+  line-height: 1.75;
+  white-space: pre-wrap;
+  min-height: 80px;
+  max-height: 320px;
+  overflow-y: auto;
+  font-family: 'Inter', sans-serif;
+  word-break: break-word;
+}
+.svc-qbcd-notes-body::-webkit-scrollbar { width: 5px; }
+.svc-qbcd-notes-body::-webkit-scrollbar-thumb {
+  background: rgba(167,139,250,.25);
+  border-radius: 3px;
+}
+
+/* Latest Update — enhanced primary style */
+.svc-qbcd-update-primary {
+  border-color: rgba(34,211,238,.14);
+  background: rgba(34,211,238,.03);
+}
+.svc-qbcd-update-primary .svc-qbcd-update-text {
+  font-size: 13px;
+  max-height: 140px;
+  color: rgba(186,230,253,.75);
+}
+
+/* Panel layout — ensure flex column */
+.svc-qbcd-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+

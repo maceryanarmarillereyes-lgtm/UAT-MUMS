@@ -60,6 +60,7 @@
         <div class="svc-sheet-tabs" id="svcSheetTabs"></div>
         <div class="svc-toolbar-actions">
           <button class="svc-btn" id="svcQbUpdateBtn" title="Manually refresh all QB lookup values">🔄 Update</button>
+          <button class="svc-btn svc-refresh-btn" id="svcRefreshBtn" title="Refresh page — reloads sheet list and active sheet data (Ctrl+R)">⟳ Refresh</button>
           <button class="svc-btn" id="svcAddRow">+ Row</button>
           <button class="svc-btn" id="svcAddCol">+ Column</button>
           <button class="svc-btn ghost" id="svcUndo" title="Undo">↶ Undo</button>
@@ -260,32 +261,69 @@
        Opened by clicking a row number in the Services grid.
        Uses same qbcd-* CSS design language (scoped via #svcCaseDetailModal).
   ──────────────────────────────────────────────────────────────────────────── -->
+  <!-- ── SERVICES CASE DETAIL MODAL v2 — Premium Enterprise Layout ─────────
+       CHANGES vs v1:
+         • Removed redundant svc-qbcd-row-badge (case# shown in hero only)
+         • New hero header: gradient band, large case#, status inline
+         • Case Notes promoted to full-width PRIMARY section (top of body)
+         • Latest Update below Case Notes (also full-width, clear separation)
+         • KPI row remains (4 tiles)
+         • Assignment + Classification side-by-side detail blocks
+         • Additional Fields collapsible at bottom
+  ──────────────────────────────────────────────────────────────────────────── -->
   <div id="svcCaseDetailModal" aria-label="Case Detail" role="dialog" aria-modal="true">
     <div class="svc-qbcd-panel">
-      <div class="svc-qbcd-accent-bar"></div>
-      <div class="svc-qbcd-header">
-        <div class="svc-qbcd-row-badge" id="svcQbcdRowBadge">—</div>
-        <div class="svc-qbcd-title-block">
-          <div class="svc-qbcd-case-label">CASE DETAIL VIEW</div>
-          <div class="svc-qbcd-case-id">CASE# <span id="svcQbcdCaseId">—</span></div>
-          <div class="svc-qbcd-desc" id="svcQbcdDesc">—</div>
+
+      <!-- HERO HEADER ─────────────────────────────────────────────────────── -->
+      <div class="svc-qbcd-hero">
+        <div class="svc-qbcd-hero-glow"></div>
+        <div class="svc-qbcd-hero-inner">
+          <div class="svc-qbcd-hero-left">
+            <div class="svc-qbcd-hero-eyebrow">CASE DETAIL VIEW</div>
+            <div class="svc-qbcd-hero-caseid">CASE# <span id="svcQbcdCaseId">—</span></div>
+            <div class="svc-qbcd-hero-desc" id="svcQbcdDesc">—</div>
+            <div class="svc-qbcd-hero-status-row">
+              <span class="svc-qbcd-status-label">STATUS</span>
+              <span id="svcQbcdStatusBadge"></span>
+              <span class="svc-qbcd-hero-meta" id="svcQbcdMeta"></span>
+            </div>
+          </div>
+          <button class="svc-qbcd-close-btn" type="button" id="svcQbcdCloseBtn" aria-label="Close">✕</button>
         </div>
-        <button class="svc-qbcd-close-btn" type="button" id="svcQbcdCloseBtn" aria-label="Close">✕</button>
       </div>
-      <div class="svc-qbcd-status-bar">
-        <span class="svc-qbcd-status-label">STATUS:</span>
-        <span id="svcQbcdStatusBadge"></span>
-        <span style="flex:1"></span>
-        <span class="svc-qbcd-meta" id="svcQbcdMeta"></span>
-      </div>
+
+      <!-- BODY ────────────────────────────────────────────────────────────── -->
       <div class="svc-qbcd-body">
-        <!-- Loading / error state -->
+
+        <!-- Loading state -->
         <div id="svcQbcdLoading" class="svc-qbcd-loading-state">
           <div class="svc-qbcd-spinner"></div>
           <span>Fetching QB data…</span>
         </div>
-        <!-- Data state (hidden until loaded) -->
+
+        <!-- Data state -->
         <div id="svcQbcdContent" style="display:none">
+
+          <!-- ① CASE NOTES — PRIMARY, full-width, prominent ───────────────── -->
+          <div class="svc-qbcd-notes-primary" id="svcQbcdNotesBlock" style="display:none">
+            <div class="svc-qbcd-notes-header">
+              <span class="svc-qbcd-notes-dot"></span>
+              <span class="svc-qbcd-notes-title">Case Notes</span>
+              <span class="svc-qbcd-notes-badge" id="svcQbcdNotesBadge"></span>
+            </div>
+            <div class="svc-qbcd-notes-body" id="svcQbcdNotes">—</div>
+          </div>
+
+          <!-- ② LATEST UPDATE — full-width ───────────────────────────────── -->
+          <div class="svc-qbcd-update-block svc-qbcd-update-primary">
+            <div class="svc-qbcd-update-label">
+              <span class="svc-qbcd-update-dot"></span>
+              Latest Update on the Case
+            </div>
+            <div class="svc-qbcd-update-text" id="svcQbcdLatest">—</div>
+          </div>
+
+          <!-- ③ KPI TILES ─────────────────────────────────────────────────── -->
           <div class="svc-qbcd-kpi-row">
             <div class="svc-qbcd-kpi svc-qbcd-kpi-cyan">
               <div class="svc-qbcd-kpi-label">Case Age</div>
@@ -308,49 +346,64 @@
               <div class="svc-qbcd-kpi-sub">Client account</div>
             </div>
           </div>
+
+          <!-- ④ ASSIGNMENT + CLASSIFICATION ──────────────────────────────── -->
           <div class="svc-qbcd-detail-cols">
             <div class="svc-qbcd-detail-block svc-qbcd-block-cyan">
               <div class="svc-qbcd-block-title">Case Assignment</div>
               <div class="svc-qbcd-kv-list">
-                <div class="svc-qbcd-kv"><span class="svc-qbcd-kv-lbl">Assigned To</span><span class="svc-qbcd-kv-val svc-qbcd-kv-hi" id="svcQbcdAssigned">—</span></div>
-                <div class="svc-qbcd-kv"><span class="svc-qbcd-kv-lbl">Contact — Full Name</span><span class="svc-qbcd-kv-val" id="svcQbcdContact">—</span></div>
-                <div class="svc-qbcd-kv"><span class="svc-qbcd-kv-lbl">End User / Client</span><span class="svc-qbcd-kv-val" id="svcQbcdEndUser">—</span></div>
+                <div class="svc-qbcd-kv">
+                  <span class="svc-qbcd-kv-lbl">Assigned To</span>
+                  <span class="svc-qbcd-kv-val svc-qbcd-kv-hi" id="svcQbcdAssigned">—</span>
+                </div>
+                <div class="svc-qbcd-kv">
+                  <span class="svc-qbcd-kv-lbl">Contact — Full Name</span>
+                  <span class="svc-qbcd-kv-val" id="svcQbcdContact">—</span>
+                </div>
+                <div class="svc-qbcd-kv">
+                  <span class="svc-qbcd-kv-lbl">End User / Client</span>
+                  <span class="svc-qbcd-kv-val" id="svcQbcdEndUser">—</span>
+                </div>
               </div>
             </div>
             <div class="svc-qbcd-detail-block svc-qbcd-block-violet">
               <div class="svc-qbcd-block-title">Case Classification</div>
               <div class="svc-qbcd-kv-list">
-                <div class="svc-qbcd-kv"><span class="svc-qbcd-kv-lbl">Case #</span><span class="svc-qbcd-kv-val svc-qbcd-kv-hi" id="svcQbcdCaseId2">—</span></div>
-                <div class="svc-qbcd-kv"><span class="svc-qbcd-kv-lbl">Case Type</span><span class="svc-qbcd-kv-val" id="svcQbcdType2">—</span></div>
-                <div class="svc-qbcd-kv"><span class="svc-qbcd-kv-lbl">Case Status</span><span id="svcQbcdStatus2"></span></div>
+                <div class="svc-qbcd-kv">
+                  <span class="svc-qbcd-kv-lbl">Case #</span>
+                  <span class="svc-qbcd-kv-val svc-qbcd-kv-hi" id="svcQbcdCaseId2">—</span>
+                </div>
+                <div class="svc-qbcd-kv">
+                  <span class="svc-qbcd-kv-lbl">Case Type</span>
+                  <span class="svc-qbcd-kv-val" id="svcQbcdType2">—</span>
+                </div>
+                <div class="svc-qbcd-kv">
+                  <span class="svc-qbcd-kv-lbl">Case Status</span>
+                  <span id="svcQbcdStatus2"></span>
+                </div>
               </div>
             </div>
           </div>
-          <div class="svc-qbcd-update-block svc-qbcd-notes-block" id="svcQbcdNotesBlock" style="display:none">
-            <div class="svc-qbcd-update-label">
-              <span class="svc-qbcd-update-dot" style="background:#a78bfa;box-shadow:0 0 7px #a78bfa;"></span>
-              Case Notes
-            </div>
-            <div class="svc-qbcd-update-text" id="svcQbcdNotes">—</div>
-          </div>
-          <div class="svc-qbcd-update-block">
-            <div class="svc-qbcd-update-label"><span class="svc-qbcd-update-dot"></span>Latest Update on the Case</div>
-            <div class="svc-qbcd-update-text" id="svcQbcdLatest">—</div>
-          </div>
+
+          <!-- ⑤ ADDITIONAL FIELDS ─────────────────────────────────────────── -->
           <div class="svc-qbcd-detail-block svc-qbcd-extra-block" id="svcQbcdExtraBlock" style="display:none">
             <div class="svc-qbcd-block-title" style="color:rgba(148,163,184,.7);">Additional Fields</div>
             <div class="svc-qbcd-kv-list" id="svcQbcdExtraFields"></div>
           </div>
-        </div>
-      </div>
+
+        </div><!-- /svcQbcdContent -->
+      </div><!-- /svc-qbcd-body -->
+
+      <!-- FOOTER ──────────────────────────────────────────────────────────── -->
       <div class="svc-qbcd-footer">
         <span style="flex:1"></span>
         <button class="svc-qbcd-copy-btn" type="button" id="svcQbcdCopyBtn">Copy Case #</button>
         <button class="svc-qbcd-close-btn2" type="button" id="svcQbcdCloseBtn2">Close</button>
       </div>
+
     </div>
   </div>
-  <!-- ── END SERVICES CASE DETAIL MODAL ─────────────────────────────────── -->
+  <!-- ── END SERVICES CASE DETAIL MODAL v2 ───────────────────────────────── -->
 
 </body>
 </html>

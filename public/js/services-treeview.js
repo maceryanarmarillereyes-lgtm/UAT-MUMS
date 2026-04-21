@@ -143,10 +143,14 @@
     containerEl.innerHTML = '';
     if (!folders.length) return;
 
-    // "All Records" virtual node
+    // ── "All Records" virtual node ─────────────────────────────────────────
+    // BUG FIX: onSheetOpened sets _activeFolderId = '__main__', but old code
+    // only checked for null. Now we unify: null OR '__main__' = All Records active.
+    var allIsActive = _activeSheetId === sheetId &&
+      (_activeFolderId === null || _activeFolderId === '__main__');
     var allNode = document.createElement('div');
-    allNode.className = 'svc-tv-node' + (_activeSheetId === sheetId && _activeFolderId === null ? ' svc-tv-active' : '');
-    allNode.dataset.folderId = '__all__';
+    allNode.className = 'svc-tv-node' + (allIsActive ? ' svc-tv-active' : '');
+    allNode.dataset.folderId = '__main__'; // unified key (was '__all__', caused mismatch with onSheetOpened)
     allNode.dataset.sheetId  = sheetId;
     allNode.innerHTML =
       '<span class="svc-tv-connector">└</span>' +
@@ -157,27 +161,49 @@
     allNode.addEventListener('contextmenu', function (e) { e.preventDefault(); openFolderCtxMenu(e, null, sheetId); });
     containerEl.appendChild(allNode);
 
-    // Folder nodes
+    // ── Folder nodes ───────────────────────────────────────────────────────
     folders.forEach(function (f, idx) {
-      var isActive = _activeSheetId === sheetId && _activeFolderId === f.id;
-      var node = document.createElement('div');
+      var isActive  = _activeSheetId === sheetId && _activeFolderId === f.id;
+      var node      = document.createElement('div');
       node.className = 'svc-tv-node' + (isActive ? ' svc-tv-active' : '');
       node.dataset.folderId = f.id;
       node.dataset.sheetId  = sheetId;
 
-      var isLast = idx === folders.length - 1;
-      var count  = countForFolder(f, sheetId);
+      var isLast    = idx === folders.length - 1;
+      var count     = countForFolder(f, sheetId);
       var countBadge = count !== null
         ? '<span class="svc-tv-count">' + count + '</span>'
         : '';
+
+      // Per-folder isolated QB Update button
+      var updateHtml =
+        '<button class="svc-tv-folder-update-btn" ' +
+          'data-folder-id="' + f.id + '" ' +
+          'data-sheet-id="' + sheetId + '" ' +
+          'title="QB Update: refresh lookup for \'' + eh(f.name) + '\' rows only" ' +
+          'tabindex="-1">⟳</button>';
 
       node.innerHTML =
         '<span class="svc-tv-connector">' + (isLast ? '└' : '├') + '</span>' +
         '<span class="svc-tv-icon">' + (f.icon || '📁') + '</span>' +
         '<span class="svc-tv-label">' + eh(f.name) + '</span>' +
-        countBadge;
+        countBadge +
+        updateHtml;
 
-      node.addEventListener('click', function () { selectFolder(f.id, sheetId); });
+      // Wire up per-folder update button — does NOT affect main sheet
+      var ubtn = node.querySelector('.svc-tv-folder-update-btn');
+      if (ubtn) {
+        ubtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          runFolderUpdate(f, sheetId, ubtn);
+        });
+      }
+
+      node.addEventListener('click', function (e) {
+        // Ignore clicks on the Update button itself
+        if (e.target && e.target.classList.contains('svc-tv-folder-update-btn')) return;
+        selectFolder(f.id, sheetId);
+      });
       node.addEventListener('contextmenu', function (e) { e.preventDefault(); openFolderCtxMenu(e, f, sheetId); });
       containerEl.appendChild(node);
     });
@@ -198,6 +224,83 @@
     document.querySelectorAll('.svc-tv-container').forEach(function (c) {
       renderTree(c.dataset.sheetId, c);
     });
+  }
+
+  // ── Per-folder isolated QB Update ────────────────────────────────────────────
+  // Refreshes QB lookup ONLY for rows matching this folder's condition.
+  // Does NOT call refreshAllLinkedColumns (which touches all rows).
+  // Does NOT save rows outside this folder — main sheet rows are untouched.
+  function runFolderUpdate(folder, sheetId, btnEl) {
+    if (!window.servicesGrid || !window.svcQbLookup) {
+      window.svcToast && window.svcToast.show('error', 'Folder Update', 'Grid or QB Lookup not ready.');
+      return;
+    }
+    var state = window.servicesGrid.getState();
+    if (!state || !state.sheet || state.sheet.id !== sheetId) {
+      window.svcToast && window.svcToast.show('error', 'Folder Update', 'Open this sheet first before updating.');
+      return;
+    }
+
+    var cols        = state.sheet.column_defs || [];
+    var matcher     = buildFolderMatcher(folder, cols);
+    var folderRows  = matcher
+      ? (state.rows || []).filter(matcher)
+      : (state.rows || []);
+
+    if (!folderRows.length) {
+      window.svcToast && window.svcToast.show('info', folder.name, 'No matching rows to update.');
+      return;
+    }
+
+    // Disable button + spinner
+    var origText = btnEl.textContent;
+    btnEl.disabled    = true;
+    btnEl.textContent = '⏳';
+    btnEl.classList.add('svc-tv-folder-update-btn--loading');
+
+    // Build a virtual state slice with ONLY this folder's rows
+    var virtualState = Object.assign({}, state, { rows: folderRows });
+    var grid = document.getElementById('svcGrid');
+
+    // Use hydrateLinkedColumnsForExport which accepts a virtual state
+    // (no sheet-change check = safe for folder isolation)
+    window.svcQbLookup.autofillLinkedColumns
+      ? (function () {
+          // Temporarily swap grid state pointer, run autofill, then restore
+          var savedRows = state.rows;
+          state.rows = folderRows;
+          try {
+            window.svcQbLookup.autofillLinkedColumns(state, grid, { force: true, allRows: true, refreshCache: true });
+          } finally {
+            state.rows = savedRows;
+          }
+          // Wait for idle then save only folder rows
+          var idleP = window.svcQbLookup.waitIdle
+            ? window.svcQbLookup.waitIdle(20000)
+            : Promise.resolve();
+          idleP.then(function () {
+            // Save only folder rows to Supabase
+            return window.servicesDB.saveRows
+              ? window.servicesDB.saveRows(sheetId, folderRows)
+              : Promise.resolve();
+          }).then(function () {
+            btnEl.disabled    = false;
+            btnEl.textContent = origText;
+            btnEl.classList.remove('svc-tv-folder-update-btn--loading');
+            rerenderAllTrees(sheetId);
+            window.svcToast && window.svcToast.show('success', folder.name, folderRows.length + ' rows updated.');
+          }).catch(function (err) {
+            btnEl.disabled    = false;
+            btnEl.textContent = origText;
+            btnEl.classList.remove('svc-tv-folder-update-btn--loading');
+            window.svcToast && window.svcToast.show('error', 'Folder Update Failed', err && err.message ? err.message : 'Try again.');
+          });
+        })()
+      : (function () {
+          btnEl.disabled    = false;
+          btnEl.textContent = origText;
+          window.svcToast && window.svcToast.show('error', 'Folder Update', 'QB Lookup module not ready.');
+        })();
   }
 
   // ── Right-click context menu on a folder node ─────────────────────────────────
@@ -736,6 +839,13 @@
       if (!liveContainer || !liveContainer.isConnected) return;
       renderTree(sheetId, liveContainer);
       updateSheetCountBadge(sheetId);
+      // BUG FIX 2: Re-apply active filter AFTER folders load.
+      // onSheetOpened() runs applyGridFilter('__main__') BEFORE this
+      // async loadAndRender() completes — so matchers are always empty
+      // and folder conditions never auto-activate on initial sheet open.
+      if (_activeSheetId === sid) {
+        applyGridFilter(_activeFolderId || '__main__', sheetId);
+      }
     },
 
     /**
@@ -781,6 +891,7 @@
       _activeSheetId  = sheetId;
       _activeFolderId = '__main__';
       applyGridFilter('__main__', sheetId);
+      // BUG FIX: folderId on allNode is now '__main__' (was '__all__') — toggle works
       document.querySelectorAll('.svc-tv-node').forEach(function (n) {
         n.classList.toggle('svc-tv-active',
           n.dataset.sheetId === sheetId && n.dataset.folderId === '__main__');

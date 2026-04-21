@@ -206,3 +206,51 @@ If step #3 is missing, task is incomplete.
   - **Edit — `public/services.html`:** Added `services-conditional-format.js` to boot chain (loads after treeview, before services.js).
   - **Edit — `public/css/services.css`:** Appended `CONDITIONAL FORMATTING — Enterprise UI v1.0` block (~350 lines). Scoped to `#svcCfModal`, `.svc-cf-*`, `.cf-rule-*`. Zero override of existing rules.
 
+
+- **2026-04-21 (P3 — Treeview + Refresh + Case Detail v2):** All MACE CLEARED.
+
+  ### Bug Fixes
+
+  **BUG FIX 1 — TreeView Active State Never Highlighted (Triple Mismatch)**
+  - ROOT CAUSE: `onSheetOpened()` sets `_activeFolderId = '__main__'`. But `renderTree` checked for `_activeFolderId === null` and `allNode.dataset.folderId = '__all__'`. Triple key mismatch → "All Records" node never highlighted after sheet switch.
+  - FIX (`services-treeview.js`):
+    - `allNode.dataset.folderId` changed from `'__all__'` → `'__main__'` (unified key).
+    - renderTree active check: now `_activeFolderId === null || _activeFolderId === '__main__'`.
+    - `onSheetOpened` querySelector: now targets `'__main__'` (matches unified folderId).
+
+  **BUG FIX 2 — Folder Conditions Not Auto-Applying on Sheet Open**
+  - ROOT CAUSE: `applyGridFilter('__main__')` runs before `loadFolders()` completes. Grid renders with no matchers → main filter = show all rows → folder sorting never applied.
+  - FIX (`services-treeview.js`): `loadAndRender()` now calls `applyGridFilter('__main__', sheetId)` AFTER `loadFolders()` resolves, so matchers are built with real folder conditions.
+
+  ### New Features
+
+  **FEATURE 1 — Refresh Button**
+  - Added `⟳ Refresh` button (`#svcRefreshBtn`) in toolbar, right of Update.
+  - Keyboard shortcut: `Ctrl+Shift+R`.
+  - Behavior: reloads sheet list (`servicesSheetManager.refresh()`) + reloads active sheet rows (`servicesApp.openSheet()`) + refreshes treeview counts.
+  - CSS: `.svc-refresh-btn` — cyan tinted, matches toolbar aesthetic.
+  - Files: `services.html` (button), `services-grid.js` (handler), `services.css` (styles).
+
+  **FEATURE 2 — Per-Folder Isolated QB Update Button**
+  - Each folder node now shows a `⟳` icon button (`.svc-tv-folder-update-btn`), visible on hover/active.
+  - Clicking it calls `runFolderUpdate(folder, sheetId, btn)` — updates QB lookup ONLY for rows matching that folder's condition.
+  - Saves only folder rows to Supabase. Main sheet rows are NEVER touched.
+  - Prevents accidental mass-save across the full 520-row sheet when only a subset needs update.
+  - Files: `services-treeview.js` (button + `runFolderUpdate()`), `services.css` (styles).
+
+  **FEATURE 3 — Case Detail Modal v2 (Premium Enterprise Layout)**
+  - Removed: `svc-qbcd-row-badge` (redundant Case# circle badge top-left). Case# now only in Hero.
+  - Removed: `svc-qbcd-header`, `svc-qbcd-status-bar`, `svc-qbcd-accent-bar` (replaced by Hero).
+  - Added: `svc-qbcd-hero` — full-width gradient hero with eyebrow, large Case# (JetBrains Mono), description, inline status badge.
+  - Case Notes promoted to #1 in body flow: full-width `svc-qbcd-notes-primary` with purple glow dot, large readable text (13.5px, 1.75 line-height), 320px max scroll.
+  - Latest Update: full-width below Case Notes, cyan tinted (`svc-qbcd-update-primary`).
+  - KPI tiles: order unchanged (Case Age, Last Updated, Type, End User).
+  - Assignment + Classification: 2-column blocks unchanged.
+  - Additional Fields: unchanged at bottom.
+  - All DOM IDs preserved (`svcQbcdCaseId`, `svcQbcdNotes`, `svcQbcdLatest`, etc.) — zero JS changes needed.
+  - Files: `services.html` (modal HTML), `services.css` (hero + notes styles appended).
+
+  ### Logic Contracts Updated
+
+  - **Folder filter contract (updated):** `All Records` node uses `folderId = '__main__'` (was `__all__`). Active check is `_activeFolderId === null || _activeFolderId === '__main__'`.
+  - **Per-folder update contract (new):** Folder update ONLY touches rows matching folder condition. Main sheet state is not modified.

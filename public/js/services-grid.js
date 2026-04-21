@@ -9,6 +9,7 @@
   var redoBtn     = document.getElementById('svcRedo');
   var saveBtn     = document.getElementById('svcSaveBtn');
   var qbUpdateBtn = document.getElementById('svcQbUpdateBtn');
+  var refreshBtn  = document.getElementById('svcRefreshBtn');
   var statusCells = document.getElementById('svcStatusCells');
   var statusSaved = document.getElementById('svcStatusSaved');
   var SAVE_DEBOUNCE_MS = 800;
@@ -1203,7 +1204,46 @@
 
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
 
-  if (qbUpdateBtn) {
+  // ── Refresh button — reloads sheet list + active sheet data ───────────────
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async function () {
+      refreshBtn.disabled   = true;
+      var origText          = refreshBtn.textContent;
+      refreshBtn.textContent = '⏳';
+      refreshBtn.classList.add('svc-refresh-btn--loading');
+      setStatus('saving', 'Refreshing…');
+      try {
+        // 1. Reload sheet list in sidebar
+        if (window.servicesSheetManager && window.servicesSheetManager.refresh) {
+          await window.servicesSheetManager.refresh();
+        }
+        // 2. Reload active sheet rows from DB
+        if (current && current.sheet && window.servicesApp && window.servicesApp.openSheet) {
+          await window.servicesApp.openSheet(current.sheet);
+        }
+        // 3. Re-render treeview counts
+        if (current && current.sheet && window.servicesTreeview) {
+          window.servicesTreeview.refreshCounts(current.sheet.id);
+        }
+        setStatus('saved', '✓ Refreshed');
+        window.svcToast && window.svcToast.show('success', 'Refresh', 'Sheet data reloaded.');
+      } catch (err) {
+        setStatus('error', '✕ Refresh failed');
+        window.svcToast && window.svcToast.show('error', 'Refresh Failed', err && err.message ? err.message : 'Try again.');
+      } finally {
+        refreshBtn.disabled    = false;
+        refreshBtn.textContent  = origText;
+        refreshBtn.classList.remove('svc-refresh-btn--loading');
+      }
+    });
+    // Keyboard shortcut: Ctrl+Shift+R (avoid conflict with hard-reload Ctrl+R)
+    document.addEventListener('keydown', function (e) {
+      if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+        e.preventDefault();
+        refreshBtn.click();
+      }
+    });
+  }
     qbUpdateBtn.addEventListener('click', async function () {
       if (!current || !window.svcQbLookup) return;
       var targetSheetId = current.sheet && current.sheet.id;
