@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (QB `---` blink regression fix):**
+  - **Edit — `public/js/services-qb-lookup.js`:** Introduced shared `formatLinkedCellDisplay()` + `paintLinkedInput()` helpers and reused them across both autofill paint paths (`autofillLinkedColumns` and `refreshAllLinkedColumns`) so empty QB date values consistently render as `---` with the same muted style.
+  - **Edit — `public/js/services-qb-lookup.js`:** Removed direct empty-string DOM writes in cached/fallback paint path that previously overpainted `---` after a brief flash.
+  - **Edit — `public/js/services-grid.js`:** Removed duplicated date pre-paint guard block that could conflict with the existing CASE/date handler and contribute to flicker.
+
 - **2026-04-21 (QB `---` preservation + explicit `window.supabase` fix):**
   - **Edit — `public/js/services-qb-lookup.js`:** QB pending start now clears stale input values before showing `⋯`, and completion paint uses an inline date-safe formatter that preserves `---` for empty/invalid date values instead of collapsing to empty string.
   - **Edit — `public/js/services-grid.js`:** Initial grid render now immediately reapplies muted `---` styling for date columns when CASE exists but date is empty, preventing QB completion/refresh from visually erasing placeholders.
