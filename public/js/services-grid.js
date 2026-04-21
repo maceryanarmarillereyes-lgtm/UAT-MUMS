@@ -124,6 +124,7 @@
   }
 
   function render() {
+    try {
     if (!current) { clear(); return; }
     empty.style.display = 'none';
     grid.hidden = false;
@@ -185,18 +186,31 @@
       var rowIndex = Number.isFinite(rowData.row_index) ? rowData.row_index : i;
       var tr = mkEl('tr', null, tbody);
       // Stable conditional formatting based on data, not position
-      var statusCol = cols.find(function (c) {
-        return c && c.name && String(c.name).toUpperCase().includes('STATUS');
-      }) || cols.find(function (c) {
-        return c && c.label && String(c.label).toUpperCase().includes('STATUS');
-      });
-      var statusVal = rowData.data && rowData.data[(statusCol && statusCol.key) || ''];
+      var statusVal = '';
+      var statusCol = null;
+      for (var si = 0; si < cols.length; si++) {
+        if (cols[si].name && cols[si].name.toUpperCase().indexOf('STATUS') !== -1) {
+          statusCol = cols[si];
+          break;
+        }
+      }
+      if (!statusCol) {
+        for (var sj = 0; sj < cols.length; sj++) {
+          if (cols[sj].label && cols[sj].label.toUpperCase().indexOf('STATUS') !== -1) {
+            statusCol = cols[sj];
+            break;
+          }
+        }
+      }
+      if (statusCol && rowData.data) {
+        statusVal = rowData.data[statusCol.key] || '';
+      }
       if (statusVal) {
         var statusLower = String(statusVal).toLowerCase();
-        if (statusLower.includes('resolved') || statusLower.startsWith('c -')) {
-          tr.dataset.cfRow = 'resolved';
-        } else if (statusLower.includes('investigati') || statusLower.startsWith('0 -')) {
-          tr.dataset.cfRow = 'investigating';
+        if (statusLower.indexOf('resolved') !== -1 || statusLower.indexOf('c -') === 0) {
+          tr.setAttribute('data-cf-row', 'resolved');
+        } else if (statusLower.indexOf('investigati') !== -1 || statusLower.indexOf('0 -') === 0) {
+          tr.setAttribute('data-cf-row', 'investigating');
         }
       }
       var rowNumTd = mkEl('td', { className: 'row-num', textContent: String(rowIndex + 1) }, tr);
@@ -332,6 +346,15 @@
       };
       wrap.addEventListener('scroll', wrap._qbScrollHandler, { passive: true });
     })();
+    } catch (renderErr) {
+      console.error('Render error:', renderErr);
+      var gridEl = document.getElementById('svcGrid');
+      if (gridEl) {
+        gridEl.innerHTML = '<tbody><tr><td style="padding:40px;color:#ef4444">Render error: ' + renderErr.message + '. Check console.</td></tr></tbody>';
+        gridEl.hidden = false;
+      }
+    }
+
   }
 
   function autoFitColumns(opts) {
@@ -1422,7 +1445,9 @@
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
 
   // Call after initial load
-  setTimeout(autoFitColumns, 800);
+  setTimeout(function () {
+    try { if (typeof autoFitColumns === 'function') autoFitColumns(); } catch (e) { console.warn('Auto-fit skipped:', e.message); }
+  }, 1200);
 
   // ── Refresh button — reloads sheet list + active sheet data ───────────────
   if (refreshBtn) {
@@ -1541,7 +1566,7 @@
       btn.id = 'backupBtn';
       btn.className = 'btn-ghost';
       btn.innerHTML = '💾 Backup';
-      btn.onclick = createBackup;
+      // btn.onclick = createBackup;
       btn.style.marginLeft = '8px';
       toolbar.appendChild(btn);
     }
