@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (Instant case detail + smart sync + 5-min edge cache):**
+  - **Edit — `functions/api/quickbase/bulk-lookup.js`:** Replaced handler with dual-method endpoint: `GET ?case=` now serves single-case detail payload with 5-minute edge cache (`caches.default`) and optional `fresh=1` bypass; `POST` bulk path keeps 5-minute hashable cache and supports `checkOnly` probes for low-cost sync checks.
+  - **Edit — `public/js/services-qb-lookup.js`:** Added `_detailCache` memory store and `getCaseDetailInstant(caseNum)` flow (memory-first, then edge cache GET fallback). `refreshAllLinkedColumns()` now hydrates `_detailCache` so detail modal opens instantly after bulk refresh. Added `startSmartSync()` / `stopSmartSync()` 15-minute hash probe loop using `checkOnly` to refresh only on data change.
+  - **Edit — `public/js/services-grid.js`:** Case detail modal flow now paints cached detail immediately and performs background refresh (`fresh=1`) when cache is stale (>60s). Sheet load/update lifecycle now starts smart sync and clear flow stops it.
+  - **Behavior contract update:** Case-detail UX is now cache-first/non-blocking while preserving existing modal structure and linked-column update behavior.
+
 - **2026-04-21 (refreshAllLinkedColumns hard rewrite to true bulk path):**
   - **Edit — `public/js/services-qb-lookup.js`:** Replaced `refreshAllLinkedColumns()` implementation with async single-pass bulk pipeline: collect unique case numbers, auto-detect linked field IDs, call `POST /api/quickbase/bulk-lookup` once, stage changed rows only, run one `services_rows` upsert, and repaint linked inputs once.
   - **Edit — `functions/api/quickbase/bulk-lookup.js`:** Request parse now starts with `const { cases = [], fieldIds = [3,25,13] } = await request.json();` and query select uses normalized dynamic field IDs to support caller-provided linked-column sets.
