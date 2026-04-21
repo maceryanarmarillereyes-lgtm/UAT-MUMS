@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (Audit fixes: layout/autofit/backup/date/hide-column/notify):**
+  - **Edit — `public/css/services.css`:** Consolidated row-number sticky column rules into one canonical `.svc-grid ... .row-num` block (56px fixed), aligned zebra backgrounds to `td:not(.row-num)`, and updated `.cell-qb-linked` + notification style contracts to the premium toast spec.
+  - **Edit — `public/js/services-grid.js`:** Updated `formatCellValue()` date output to `YYYY-MM-DD` with em-dash fallback, upgraded `autoFitColumns()` floor/ceiling to `140..400`, changed row-number render cell/title contract, added `createBackup(name)` (snapshot payload insert to `services_backups`), made toolbar backup action call backup create flow, and added notify feedback for hide-column action.
+  - **New migration — `supabase/migrations/20260421_add_backups.sql`:** Added/normalized `services_backups.snapshot` schema, ensured backup policy `users_manage_own_backups`, and index `idx_backups_sheet`.
+
 - **2026-04-21 (Services grid UX + backup history + notify uplift):**
   - **Edit — `public/js/services-grid.js`:** Added date display formatter fallback (`---`), row-header class/data attributes, QB update row pulse, right-click column actions (hide + autofit + freeze placeholder), auto-fit width pipeline (`autoFitColumns` + `applyColumnWidths`), backup modal open/save/restore handlers, and migrated user feedback calls to `Notify.show(...)`.
   - **Edit — `public/services.html`:** Added toolbar `Backup` button + backup modal shell (`#svcBackupModal`) and included new script boot chain (`services-notify.js`, `services-backup.js`) before grid init.
