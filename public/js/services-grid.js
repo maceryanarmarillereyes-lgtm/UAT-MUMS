@@ -580,19 +580,12 @@
           } else if (action === 'hide-column') {
             var col = current.sheet.column_defs[colIdx];
             col.hidden = true;
-            // BUG3 FIX: Render immediately (optimistic), save to DB in background
+            await supabase.from('services_sheets')
+              .update({ column_defs: current.sheet.column_defs })
+              .eq('id', current.sheet.id);
             render();
             notify('info', 'Column Hidden', col.label + ' hidden. Click ⊞ Columns to unhide.');
             closeAllCtxMenus();
-            supabase.from('services_sheets')
-              .update({ column_defs: current.sheet.column_defs })
-              .eq('id', current.sheet.id)
-              .then(() => { console.log('[Grid] Column hide saved:', col.label); })
-              .catch(err => {
-                console.error('[Grid] Failed to save column hide:', err);
-                col.hidden = false; // revert on error
-                render();
-              });
           } else if (action === 'autofit-column') {
             cols[colIdx].width = 'auto';
             autoFitColumns();
@@ -1495,26 +1488,11 @@
         var div = document.createElement('div');
         div.style.cssText = 'padding:6px;cursor:pointer;display:flex;align-items:center;gap:8px';
         div.innerHTML = '<input type="checkbox" ' + (!col.hidden ? 'checked' : '') + '><span>' + (col.label || 'Unnamed') + '</span>';
-        div.onclick = function () {
+        div.onclick = async function () {
           col.hidden = !col.hidden;
-          // BUG3 FIX: Update checkbox visual immediately
-          var cb = div.querySelector('input[type="checkbox"]');
-          var lbl = div.querySelector('span');
-          if (cb) cb.checked = !col.hidden;
-          if (lbl) lbl.style.color = col.hidden ? '#64748b' : '#e2e8f0';
-          // Render grid immediately
+          await supabase.from('services_sheets').update({ column_defs: current.sheet.column_defs }).eq('id', current.sheet.id);
           render();
-          // Save to DB in background
-          supabase.from('services_sheets')
-            .update({ column_defs: current.sheet.column_defs })
-            .eq('id', current.sheet.id)
-            .then(() => { console.log('[Grid] Column visibility saved:', col.label); })
-            .catch(err => {
-              console.error('[Grid] Failed to save column visibility:', err);
-              col.hidden = !col.hidden; // revert
-              render();
-            });
-          setTimeout(function () { pop.remove(); }, 100);
+          pop.remove();
         };
         pop.appendChild(div);
       });
