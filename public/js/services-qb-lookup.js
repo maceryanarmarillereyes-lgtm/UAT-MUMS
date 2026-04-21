@@ -1012,9 +1012,6 @@
       // Clear caches
       _cache = {}; _notFound = {}; _inFlight = {}; _rowCaseSeen = {};
 
-      // Collect all case numbers
-      var allCases = [...new Set(rowsWithCase.map(r => String(r.data[caseCol.key]).trim()).filter(Boolean))];
-
       // Show spinner
       rowsWithCase.forEach(row => {
         linkedCols.forEach(col => {
@@ -1049,12 +1046,15 @@
             var val = qbRec[fid] || '';
             row.data[col.key] = val;
           });
-          updates.push({ id: row.id, data: row.data });
+          updates.push({ row_index: row.row_index, data: row.data });
         });
 
-        // ONE bulk upsert to Supabase (instead of 520)
-        if (!updates.length || !window.supabase || !window.supabase.from) return null;
-        return window.supabase.from('services_rows').upsert(updates, { onConflict: 'id' });
+        // ONE bulk upsert via Services DB adapter
+        if (!updates.length || !window.servicesDB || !window.servicesDB.bulkUpsertRows) return null;
+        return window.servicesDB.bulkUpsertRows(
+          current.sheet.id,
+          updates.map(function (u) { return { row_index: u.row_index, data: u.data }; })
+        );
       })
      .then(() => {
         // Paint all rows

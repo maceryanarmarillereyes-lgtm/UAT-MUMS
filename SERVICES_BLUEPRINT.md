@@ -197,6 +197,11 @@ If step #3 is missing, task is incomplete.
   - **Edit — `functions/api/[[path]].js`:** Added Cloudflare `/api/*` router mapping for `studio/qb_bulk` to keep Vercel and Cloudflare route tables in sync.
   - **Behavior contract update:** Services Update button path is now single-QB-fetch + single-DB-upsert pipeline for large sheets (~520 rows), with existing UI/UX intact.
 
+- **2026-04-21 (Treeview Folder Update performance parity):**
+  - **Edit — `public/js/services-treeview.js`:** Reworked folder update action to call `svcQbLookup.refreshAllLinkedColumns()` on a folder-only state slice, removing old `autofillLinkedColumns + waitIdle + servicesDB.saveRows` sequence. This preserves folder isolation and inherits the same fast bulk pipeline used by sheet-level Update.
+  - **Edit — `public/js/services-qb-lookup.js`:** Sheet-level refresh now writes through `servicesDB.bulkUpsertRows(sheetId, rows)` (single bulk write) using `{ row_index, data }` payload, avoiding direct `window.supabase.from(...).upsert(...)` call.
+  - **Edit — `server/routes/studio/qb_bulk.js`:** Split cache key by method (`GET` vs `POST`) to avoid response-shape collisions and keep POST map output deterministic.
+
 - **2026-04-20** — Initial blueprint created. Added mandatory update protocol, feature inventory, logic contracts, file-location mapping, API/DB mapping, and dual-platform checklist.
 
 - **2026-04-21** — Services Lookup + Case Detail Modal overhaul (all MACE CLEARED):

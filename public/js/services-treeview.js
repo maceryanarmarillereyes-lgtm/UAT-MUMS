@@ -258,49 +258,33 @@
     btnEl.textContent = '⏳';
     btnEl.classList.add('svc-tv-folder-update-btn--loading');
 
-    // Build a virtual state slice with ONLY this folder's rows
-    var virtualState = Object.assign({}, state, { rows: folderRows });
     var grid = document.getElementById('svcGrid');
 
-    // Use hydrateLinkedColumnsForExport which accepts a virtual state
-    // (no sheet-change check = safe for folder isolation)
-    window.svcQbLookup.autofillLinkedColumns
-      ? (function () {
-          // Temporarily swap grid state pointer, run autofill, then restore
-          var savedRows = state.rows;
-          state.rows = folderRows;
-          try {
-            window.svcQbLookup.autofillLinkedColumns(state, grid, { force: true, allRows: true, refreshCache: true });
-          } finally {
-            state.rows = savedRows;
-          }
-          // Wait for idle then save only folder rows
-          var idleP = window.svcQbLookup.waitIdle
-            ? window.svcQbLookup.waitIdle(20000)
-            : Promise.resolve();
-          idleP.then(function () {
-            // Save only folder rows to Supabase
-            return window.servicesDB.saveRows
-              ? window.servicesDB.saveRows(sheetId, folderRows)
-              : Promise.resolve();
-          }).then(function () {
-            btnEl.disabled    = false;
-            btnEl.textContent = origText;
-            btnEl.classList.remove('svc-tv-folder-update-btn--loading');
-            rerenderAllTrees(sheetId);
-            window.svcToast && window.svcToast.show('success', folder.name, folderRows.length + ' rows updated.');
-          }).catch(function (err) {
-            btnEl.disabled    = false;
-            btnEl.textContent = origText;
-            btnEl.classList.remove('svc-tv-folder-update-btn--loading');
-            window.svcToast && window.svcToast.show('error', 'Folder Update Failed', err && err.message ? err.message : 'Try again.');
-          });
-        })()
-      : (function () {
-          btnEl.disabled    = false;
-          btnEl.textContent = origText;
-          window.svcToast && window.svcToast.show('error', 'Folder Update', 'QB Lookup module not ready.');
-        })();
+    // Folder-scoped fast update: one QB bulk call + one DB bulk upsert via shared updater
+    // without touching rows outside this folder.
+    var stateSlice = Object.assign({}, state, { rows: folderRows });
+    if (!window.svcQbLookup.refreshAllLinkedColumns) {
+      btnEl.disabled    = false;
+      btnEl.textContent = origText;
+      btnEl.classList.remove('svc-tv-folder-update-btn--loading');
+      window.svcToast && window.svcToast.show('error', 'Folder Update', 'QB Lookup module not ready.');
+      return;
+    }
+
+    window.svcQbLookup.refreshAllLinkedColumns(stateSlice, grid)
+      .then(function () {
+        btnEl.disabled    = false;
+        btnEl.textContent = origText;
+        btnEl.classList.remove('svc-tv-folder-update-btn--loading');
+        rerenderAllTrees(sheetId);
+        window.svcToast && window.svcToast.show('success', folder.name, folderRows.length + ' rows updated.');
+      })
+      .catch(function (err) {
+        btnEl.disabled    = false;
+        btnEl.textContent = origText;
+        btnEl.classList.remove('svc-tv-folder-update-btn--loading');
+        window.svcToast && window.svcToast.show('error', 'Folder Update Failed', err && err.message ? err.message : 'Try again.');
+      });
   }
 
   // ── Right-click context menu on a folder node ─────────────────────────────────

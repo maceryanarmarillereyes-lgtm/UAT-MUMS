@@ -128,7 +128,7 @@ module.exports = async function handler(req, res) {
 
   // ── Cache check (skip if bust=1) ─────────────────────────────────────────────
   const bust     = String((req.query && req.query.bust) || '').trim() === '1';
-  const cacheKey = `${realm}:${tableId}:${qid}`;
+  const cacheKey = `${realm}:${tableId}:${qid}:${method === 'POST' ? 'post' : 'get'}`;
   if (!bust) {
     const hit = BULK_CACHE.get(cacheKey);
     if (hit && (Date.now() - hit.at) < BULK_CACHE_MS) {
@@ -173,11 +173,9 @@ module.exports = async function handler(req, res) {
   // ── Detect case# field ───────────────────────────────────────────────────────
   const caseFieldId = requestedCaseFieldId || detectCaseFieldId(fields);
 
-  const requestedFieldIds = new Set(
-    requestedFields
-      .map((f) => String(f && f.fieldId != null ? f.fieldId : '').trim())
-      .filter(Boolean)
-  );
+  // Request contract accepted for client compatibility; current POST response
+  // returns all field IDs so cache remains deterministic across calls.
+  void requestedFields;
 
   // ── Build caseMap: { normalizedCaseNum → { fieldId: value } } for POST
   //                OR { normalizedCaseNum → { fields, columnMap } } for GET
@@ -193,7 +191,6 @@ module.exports = async function handler(req, res) {
       const fieldValueMap = {};
       fields.forEach(f => {
         const fid = String(f.id);
-        if (requestedFieldIds.size && !requestedFieldIds.has(fid)) return;
         const cell = row[fid];
         const raw = (cell && typeof cell === 'object' && 'value' in cell) ? cell.value : cell;
         fieldValueMap[fid] = normalizeQbValue(raw);
