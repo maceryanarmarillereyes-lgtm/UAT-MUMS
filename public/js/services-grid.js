@@ -178,6 +178,21 @@
         : (current.rows.find(function (r) { return r.row_index === i; }) || { row_index: i, data: {} });
       var rowIndex = Number.isFinite(rowData.row_index) ? rowData.row_index : i;
       var tr = mkEl('tr', null, tbody);
+      // Stable conditional formatting based on data, not position
+      var statusCol = cols.find(function (c) {
+        return c && c.name && String(c.name).toUpperCase().includes('STATUS');
+      }) || cols.find(function (c) {
+        return c && c.label && String(c.label).toUpperCase().includes('STATUS');
+      });
+      var statusVal = rowData.data && rowData.data[(statusCol && statusCol.key) || ''];
+      if (statusVal) {
+        var statusLower = String(statusVal).toLowerCase();
+        if (statusLower.includes('resolved') || statusLower.startsWith('c -')) {
+          tr.dataset.cfRow = 'resolved';
+        } else if (statusLower.includes('investigati') || statusLower.startsWith('0 -')) {
+          tr.dataset.cfRow = 'investigating';
+        }
+      }
       var rowNumTd = mkEl('td', { className: 'row-num', textContent: String(rowIndex + 1) }, tr);
       rowNumTd.dataset.rowIndex = rowIndex;
       rowNumTd.title = 'Click to view case details · Right-click to delete row';
@@ -190,13 +205,31 @@
         var listId = validation && validation.length
           ? ('svc-dv-' + String(c.key || i) + '-' + String(rowIndex))
           : '';
-        var inp = mkEl('input', {
-          className    : 'cell',
-          type         : inputType,
-          autocomplete : 'off',
-          spellcheck   : false,
-          value        : (rowData.data[c.key] != null ? rowData.data[c.key] : '').toString()
-        }, td);
+        var inpAttrs = {
+          className: 'input cell',
+          type: inputType,
+          autocomplete: 'off',
+          spellcheck: false,
+          value: (function () {
+            var v = rowData.data[c.key];
+            return (v === null || v === undefined) ? '' : String(v);
+          })(),
+          placeholder: (inputType === 'date') ? '---' : '',
+          list: listId || undefined
+        };
+        var inp = mkEl('input', inpAttrs, td);
+
+        // Style empty dates
+        if (inputType === 'date' && !inp.value) {
+          inp.style.color = '#475569';
+          inp.style.fontStyle = 'italic';
+        }
+        inp.addEventListener('input', function () {
+          if (inputType === 'date') {
+            this.style.color = this.value ? '' : '#475569';
+            this.style.fontStyle = this.value ? '' : 'italic';
+          }
+        });
         if (validation && validation.length) {
           inp.setAttribute('list', listId);
           inp.dataset.validationList = validation.join('\n');
@@ -293,6 +326,36 @@
       };
       wrap.addEventListener('scroll', wrap._qbScrollHandler, { passive: true });
     })();
+  }
+
+  function autoFitColumns() {
+    if (!current || !current.sheet || !Array.isArray(current.sheet.column_defs)) return;
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.font = '13px Inter, system-ui, -apple-system';
+
+    current.sheet.column_defs.forEach(function (col) {
+      if (!col || col.key === 'row_num') return;
+      var maxWidth = ctx.measureText(col.name || col.label || '').width + 40;
+
+      // Sample first 30 rows for performance
+      var sampleRows = (current.rows || []).slice(0, 30);
+      sampleRows.forEach(function (row) {
+        var val = String((row && row.data && row.data[col.key]) || '');
+        var w = ctx.measureText(val).width + 28;
+        if (w > maxWidth) maxWidth = w;
+      });
+
+      col.width = Math.min(Math.max(Math.floor(maxWidth), 90), 320);
+    });
+
+    // Save widths
+    window.supabase.from('services_sheets').update({
+      column_defs: current.sheet.column_defs
+    }).eq('id', current.sheet.id);
+
+    render(); // re-render with new widths
   }
 
   function attachCellHandlers() {
@@ -1289,13 +1352,34 @@
         nonEmpty.map(function (r) { return { row_index: r.row_index, data: r.data }; }));
       if (result && result.error) throw new Error(result.error.message || 'Write failed');
       setStatus('saved', '✓ All saved');
-      window.svcToast && window.svcToast.show('success', 'Saved', nonEmpty.length + ' rows saved.');
+      window.svcToast && window.svcToast.show('success', '✓ Saved', nonEmpty.length + ' rows • ' + new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }));
       window.servicesDashboard && window.servicesDashboard.update(current);
     } catch (err) {
       setStatus('error', '✕ Save failed');
       window.svcToast && window.svcToast.show('error', 'Save Failed', err.message);
     } finally {
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 SAVE'; }
+    }
+  }
+
+  async function createBackup() {
+    if (!current || !current.sheet) return;
+    var name = 'Backup ' + new Date().toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    var snapshot = {
+      rows: (current.rows || []).map(function (r) { return { row_index: r.row_index, data: r.data }; }),
+      column_defs: current.sheet.column_defs,
+      timestamp: Date.now()
+    };
+
+    var result = await window.supabase.from('services_backups').insert({
+      sheet_id: current.sheet.id,
+      name: name,
+      snapshot: snapshot,
+      row_count: (current.rows || []).length
+    });
+
+    if (!result.error) {
+      window.svcToast.show('success', 'Backup Created', name);
     }
   }
 
@@ -1324,6 +1408,9 @@
   }
 
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
+
+  // Call after initial load
+  setTimeout(autoFitColumns, 800);
 
   // ── Refresh button — reloads sheet list + active sheet data ───────────────
   if (refreshBtn) {
@@ -1435,6 +1522,63 @@
     _origRender();
   };
 
+  document.addEventListener('DOMContentLoaded', function () {
+    var toolbar = document.querySelector('.svc-toolbar,.toolbar,.svc-toolbar-actions');
+    if (toolbar && !document.getElementById('backupBtn')) {
+      var btn = document.createElement('button');
+      btn.id = 'backupBtn';
+      btn.className = 'btn-ghost';
+      btn.innerHTML = '💾 Backup';
+      btn.onclick = createBackup;
+      btn.style.marginLeft = '8px';
+      toolbar.appendChild(btn);
+    }
+  });
+
+  // Right-click hide column
+  document.addEventListener('contextmenu', function (e) {
+    var th = e.target.closest('.svc-grid thead th');
+    if (!th || th.classList.contains('row-num')) return;
+    if (!current || !current.sheet || !Array.isArray(current.sheet.column_defs)) return;
+
+    e.preventDefault();
+    var colIndex = Array.from(th.parentNode.children).indexOf(th) - 1; // -1 for row-num
+    var col = current.sheet.column_defs[colIndex];
+    if (!col) return;
+
+    // Remove existing menu
+    document.querySelectorAll('.svc-context-menu').forEach(function (m) { m.remove(); });
+
+    var menu = document.createElement('div');
+    menu.className = 'svc-context-menu';
+    menu.innerHTML = '<div class="menu-item" data-action="hide">👁️ Hide "' + (col.name || col.label || 'Column') + '"</div><div class="menu-item" data-action="autofit">↔️ Auto-fit All</div>';
+    menu.style.cssText = 'position:fixed;left:' + e.clientX + 'px;top:' + e.clientY + 'px;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:6px;z-index:10000;box-shadow:0 12px 32px rgba(0,0,0,0.6);min-width:180px;font-size:13px';
+    menu.querySelectorAll('.menu-item').forEach(function (item) {
+      item.style.cssText = 'padding:8px 12px;cursor:pointer;border-radius:6px;color:#e2e8f0';
+      item.onmouseenter = function () { this.style.background = '#1e293b'; };
+      item.onmouseleave = function () { this.style.background = ''; };
+    });
+
+    document.body.appendChild(menu);
+
+    menu.onclick = async function (ev) {
+      var action = ev.target.dataset.action;
+      if (action === 'hide') {
+        col.hidden = true;
+        await window.supabase.from('services_sheets').update({ column_defs: current.sheet.column_defs }).eq('id', current.sheet.id);
+        render();
+        window.svcToast.show('info', 'Column Hidden', (col.name || col.label || 'Column') + ' is now hidden');
+      } else if (action === 'autofit') {
+        autoFitColumns();
+      }
+      menu.remove();
+    };
+
+    setTimeout(function () {
+      document.addEventListener('click', function () { menu.remove(); }, { once: true });
+    }, 50);
+  });
+
   function getState() { return current; }
-  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter };
+  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter, autoFitColumns: autoFitColumns, createBackup: createBackup };
 })();
