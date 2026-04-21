@@ -62,7 +62,6 @@
     window.servicesDashboard && window.servicesDashboard.reset();
   }
 
-  var _autoFitTimer = null;
 
   async function load(sheet) {
     if (subscription) { try { subscription.unsubscribe(); } catch (_) {} subscription = null; }
@@ -81,10 +80,6 @@
     redoStack = [];
     current.rows = await window.servicesDB.listRows(sheet.id);
     render();
-    if (_autoFitTimer) clearTimeout(_autoFitTimer);
-    _autoFitTimer = setTimeout(function () {
-      autoFitColumns({ persist: false, reason: 'initial-load' });
-    }, 800);
     if (window.svcQbLookup && window.svcQbLookup.startSmartSync) {
       window.svcQbLookup.startSmartSync({ current: current, gridEl: grid, sheetId: sheet.id });
     }
@@ -185,34 +180,6 @@
         : (current.rows.find(function (r) { return r.row_index === i; }) || { row_index: i, data: {} });
       var rowIndex = Number.isFinite(rowData.row_index) ? rowData.row_index : i;
       var tr = mkEl('tr', null, tbody);
-      // Stable conditional formatting based on data, not position
-      var statusVal = '';
-      var statusCol = null;
-      for (var si = 0; si < cols.length; si++) {
-        if (cols[si].name && cols[si].name.toUpperCase().indexOf('STATUS') !== -1) {
-          statusCol = cols[si];
-          break;
-        }
-      }
-      if (!statusCol) {
-        for (var sj = 0; sj < cols.length; sj++) {
-          if (cols[sj].label && cols[sj].label.toUpperCase().indexOf('STATUS') !== -1) {
-            statusCol = cols[sj];
-            break;
-          }
-        }
-      }
-      if (statusCol && rowData.data) {
-        statusVal = rowData.data[statusCol.key] || '';
-      }
-      if (statusVal) {
-        var statusLower = String(statusVal).toLowerCase();
-        if (statusLower.indexOf('resolved') !== -1 || statusLower.indexOf('c -') === 0) {
-          tr.setAttribute('data-cf-row', 'resolved');
-        } else if (statusLower.indexOf('investigati') !== -1 || statusLower.indexOf('0 -') === 0) {
-          tr.setAttribute('data-cf-row', 'investigating');
-        }
-      }
       var rowNumTd = mkEl('td', { className: 'row-num', textContent: String(rowIndex + 1) }, tr);
       rowNumTd.dataset.rowIndex = rowIndex;
       rowNumTd.title = 'Click to view case details · Right-click to delete row';
@@ -225,31 +192,32 @@
         var listId = validation && validation.length
           ? ('svc-dv-' + String(c.key || i) + '-' + String(rowIndex))
           : '';
-        var inpAttrs = {
+        var inp = mkEl('input', {
           className: 'input cell',
           type: inputType,
-          autocomplete: 'off',
-          spellcheck: false,
           value: (function () {
             var v = rowData.data[c.key];
             return (v === null || v === undefined) ? '' : String(v);
-          })(),
-          placeholder: (inputType === 'date') ? '---' : '',
-          list: listId || undefined
-        };
-        var inp = mkEl('input', inpAttrs, td);
+          })()
+        }, td);
 
-        // Style empty dates
-        if (inputType === 'date' && !inp.value) {
-          inp.style.color = '#475569';
-          inp.style.fontStyle = 'italic';
-        }
-        inp.addEventListener('input', function () {
-          if (inputType === 'date') {
+        // Fix for date placeholder only
+        if (inputType === 'date') {
+          inp.placeholder = '---';
+          if (!inp.value) {
+            inp.style.color = '#475569';
+            inp.style.fontStyle = 'italic';
+          }
+          inp.addEventListener('input', function () {
             this.style.color = this.value ? '' : '#475569';
             this.style.fontStyle = this.value ? '' : 'italic';
-          }
-        });
+          });
+        }
+
+        // Handle datalist separately (if needed)
+        if (listId) {
+          inp.setAttribute('list', listId);
+        }
         if (validation && validation.length) {
           inp.setAttribute('list', listId);
           inp.dataset.validationList = validation.join('\n');
@@ -355,42 +323,6 @@
       }
     }
 
-  }
-
-  function autoFitColumns(opts) {
-    opts = opts || {};
-    if (!current || !current.sheet || !Array.isArray(current.sheet.column_defs)) return;
-    var colsForFit = current.sheet.column_defs.filter(function (col) {
-      return col && col.key && col.key !== 'row_num' && !col.hidden;
-    });
-    if (!colsForFit.length) return;
-
-    var canvas = document.createElement('canvas');
-    var ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.font = '13px Inter, system-ui, -apple-system';
-
-    colsForFit.forEach(function (col) {
-      var maxWidth = ctx.measureText(col.name || col.label || '').width + 40;
-
-      // Sample first 30 rows for performance
-      var sampleRows = (current.rows || []).slice(0, 30);
-      sampleRows.forEach(function (row) {
-        var val = String((row && row.data && row.data[col.key]) || '');
-        var w = ctx.measureText(val).width + 28;
-        if (w > maxWidth) maxWidth = w;
-      });
-
-      col.width = Math.min(Math.max(Math.floor(maxWidth), 90), 320);
-    });
-
-    // Save widths only for explicit/manual calls; initial auto-fit is local-only
-    if (opts.persist !== false) {
-      window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs)
-        .catch(function (err) { console.error('[services-grid] autoFitColumns persist failed:', err && err.message ? err.message : err); });
-    }
-
-    render(); // re-render with new widths
   }
 
   function attachCellHandlers() {
@@ -1444,10 +1376,6 @@
 
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
 
-  // Call after initial load
-  setTimeout(function () {
-    try { if (typeof autoFitColumns === 'function') autoFitColumns(); } catch (e) { console.warn('Auto-fit skipped:', e.message); }
-  }, 1200);
 
   // ── Refresh button — reloads sheet list + active sheet data ───────────────
   if (refreshBtn) {
@@ -1559,63 +1487,8 @@
     _origRender();
   };
 
-  document.addEventListener('DOMContentLoaded', function () {
-    var toolbar = document.querySelector('.svc-toolbar,.toolbar,.svc-toolbar-actions');
-    if (toolbar && !document.getElementById('backupBtn')) {
-      var btn = document.createElement('button');
-      btn.id = 'backupBtn';
-      btn.className = 'btn-ghost';
-      btn.innerHTML = '💾 Backup';
-      // btn.onclick = createBackup;
-      btn.style.marginLeft = '8px';
-      toolbar.appendChild(btn);
-    }
-  });
 
-  // Right-click hide column
-  document.addEventListener('contextmenu', function (e) {
-    var th = e.target.closest('.svc-grid thead th');
-    if (!th || th.classList.contains('row-num')) return;
-    if (!current || !current.sheet || !Array.isArray(current.sheet.column_defs)) return;
-
-    e.preventDefault();
-    var colIndex = Array.from(th.parentNode.children).indexOf(th) - 1; // -1 for row-num
-    var col = current.sheet.column_defs[colIndex];
-    if (!col) return;
-
-    // Remove existing menu
-    document.querySelectorAll('.svc-context-menu').forEach(function (m) { m.remove(); });
-
-    var menu = document.createElement('div');
-    menu.className = 'svc-context-menu';
-    menu.innerHTML = '<div class="menu-item" data-action="hide">👁️ Hide "' + (col.name || col.label || 'Column') + '"</div><div class="menu-item" data-action="autofit">↔️ Auto-fit All</div>';
-    menu.style.cssText = 'position:fixed;left:' + e.clientX + 'px;top:' + e.clientY + 'px;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:6px;z-index:10000;box-shadow:0 12px 32px rgba(0,0,0,0.6);min-width:180px;font-size:13px';
-    menu.querySelectorAll('.menu-item').forEach(function (item) {
-      item.style.cssText = 'padding:8px 12px;cursor:pointer;border-radius:6px;color:#e2e8f0';
-      item.onmouseenter = function () { this.style.background = '#1e293b'; };
-      item.onmouseleave = function () { this.style.background = ''; };
-    });
-
-    document.body.appendChild(menu);
-
-    menu.onclick = async function (ev) {
-      var action = ev.target.dataset.action;
-      if (action === 'hide') {
-        col.hidden = true;
-        await window.supabase.from('services_sheets').update({ column_defs: current.sheet.column_defs }).eq('id', current.sheet.id);
-        render();
-        window.svcToast.show('info', 'Column Hidden', (col.name || col.label || 'Column') + ' is now hidden');
-      } else if (action === 'autofit') {
-        autoFitColumns();
-      }
-      menu.remove();
-    };
-
-    setTimeout(function () {
-      document.addEventListener('click', function () { menu.remove(); }, { once: true });
-    }, 50);
-  });
 
   function getState() { return current; }
-  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter, autoFitColumns: autoFitColumns, createBackup: createBackup };
+  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter, createBackup: createBackup };
 })();
