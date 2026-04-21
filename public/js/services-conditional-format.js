@@ -1380,6 +1380,15 @@
     syncToColumnDefs(); // clear from live column_defs too
     renderRulesList();
     renderEditor(null);
+    // Force remove all CF attributes and re-render
+    document.querySelectorAll('#svcGrid tr[data-cf-applied]').forEach(function(tr) {
+      tr.removeAttribute('data-cf-applied');
+      tr.removeAttribute('data-cf-rule');
+      tr.style.removeProperty('--cf-bg');
+    });
+    if (window.servicesGrid && window.servicesGrid.render) {
+      window.servicesGrid.render();
+    }
     paintGrid();
   }
 

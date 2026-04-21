@@ -775,7 +775,7 @@
               inp.value       = shouldWrite ? '' : (row.data[col.key] != null ? String(row.data[col.key]) : '');
               inp.readOnly    = true;
               inp.title       = '⚠ Field "' + label + '" not available for Case #' + rawCase;
-              inp.classList.add('cell-qb-linked');
+              // inp.classList.add('cell-qb-linked'); // Disabled - use default styling
               inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
             }
           } else {
@@ -790,7 +790,7 @@
               inp.value       = displayVal || '';
               inp.readOnly    = true;
               inp.title       = '🔗 QB: ' + label + ' (Case #' + rawCase + ')';
-              inp.classList.add('cell-qb-linked');
+              // inp.classList.add('cell-qb-linked'); // Disabled - use default styling
               inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
             }
           }
@@ -1014,7 +1014,6 @@
 
       // 1. Collect all unique cases
       const allCases = [...new Set(rowsWithCase.map(r => String(r.data[caseCol.key]).trim()).filter(Boolean))];
-      console.log('[DEBUG-QB] Cases to lookup:', allCases.length, allCases.slice(0,5));
 
       // 2. Auto-detect ALL field IDs (including new DUE DATE)
       const fieldIds = [3]; // Case#
@@ -1043,11 +1042,6 @@
         if (!qbJson.ok) throw new Error(qbJson.error || 'QB fetch failed');
 
         const qbData = qbJson.data || {};
-        console.log('[DEBUG-QB] QB returned:', Object.keys(qbData).length, 'records');
-        // Log first 3 cases with DUE DATE field
-        Object.entries(qbData).slice(0,3).forEach(([caseNum, data]) => {
-          console.log(`[DEBUG-QB] Case ${caseNum}:`, data);
-        });
 
         // 5. Update ALL rows in memory
         const updates = [];
@@ -1060,12 +1054,6 @@
           linkedCols.forEach(col => {
             const fid = col.qbLookup.fieldId.toString();
             let val = qbRec[fid];
-            if (col.key.includes('date') || col.key.includes('qa')) {
-              console.log(`[DEBUG-QB] Processing ${caseNum} -> ${col.key}:`,
-                'QB raw:', qbRec[fid],
-                'Type:', typeof qbRec[fid],
-                'Final val:', val);
-            }
 
             // Fix [object Object] for user fields
             if (val && typeof val === 'object') {
@@ -1075,10 +1063,6 @@
             if (row.data[col.key] !== val) {
               row.data[col.key] = val || '';
               changed = true;
-              if (col.key.includes('date')) {
-                console.log(`[DEBUG-QB] SAVING to row ${row.row_index}:`,
-                  col.key, '=', JSON.stringify(val || ''));
-              }
             }
           });
 
@@ -1095,19 +1079,12 @@
 
         // 6. ONE Supabase upsert (this is the fix for minutes → seconds)
         if (updates.length > 0) {
-          console.log('[DEBUG-SAVE] About to upsert', updates.length, 'rows');
-          updates.slice(0,3).forEach(u => {
-            console.log('[DEBUG-SAVE] Row', u.row_index, 'data:', JSON.stringify(u.data));
-          });
           const { error } = await window.supabase
            .from('services_rows')
            .upsert(updates, { onConflict: 'sheet_id,row_index' });
 
           if (error) {
-            console.error('[DEBUG-SAVE] UPSERT FAILED:', error);
             throw error;
-          } else {
-            console.log('[DEBUG-SAVE] UPSERT SUCCESS');
           }
         }
 
