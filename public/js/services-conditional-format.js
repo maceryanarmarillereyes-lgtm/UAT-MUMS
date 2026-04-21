@@ -522,11 +522,6 @@
 
         var inp = td.querySelector('input.cell');
         if (inp) {
-          // FIX-CF: Strip cell-qb-linked !important class so row-highlight colors apply
-          if (inp.classList.contains('cell-qb-linked')) {
-            inp.classList.remove('cell-qb-linked');
-            inp.dataset.cfQbStripped = '1';
-          }
           if (hl.textColor) {
             inp.style.setProperty('color', hl.textColor, 'important');
           } else if (hl.bgColor) {
@@ -570,12 +565,6 @@
 
     var inp = td.querySelector('input.cell');
     if (inp) {
-      // Strip cell-qb-linked !important class so CF color takes effect visually.
-      // Mark it so the clear step can restore it later.
-      if (inp.classList.contains('cell-qb-linked')) {
-        inp.classList.remove('cell-qb-linked');
-        inp.dataset.cfQbStripped = '1';
-      }
       var finalColor = textColor || (bgColor ? contrastColor(bgColor) : '');
       if (finalColor) inp.style.setProperty('color', finalColor, 'important');
       inp.style.setProperty('font-weight', bold   ? '700'     : 'normal', 'important');
