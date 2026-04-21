@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (Services QB Update bulk-write optimization):**
+  - **Edit — `public/js/services-qb-lookup.js`:** `refreshAllLinkedColumns()` now calls `POST /api/studio/qb_bulk` once, maps returned `{ caseNumber: { fieldId: value } }` payload into linked columns, and performs one Supabase bulk upsert (`services_rows` onConflict `id`) instead of per-row writes.
+  - **Edit — `server/routes/studio/qb_bulk.js`:** Added POST support with request shape `{ sheetId, caseFieldId, fields }`, retained auth via `getUserFromJwt`, still uses Studio settings via `readStudioQbSettings(user.id)` (no env token), calls Quickbase reports endpoint with `top=1000`, and returns case map optimized for Services bulk update.
+  - **Edit — `functions/api/[[path]].js`:** Added Cloudflare `/api/*` router mapping for `studio/qb_bulk` to keep Vercel and Cloudflare route tables in sync.
+  - **Behavior contract update:** Services Update button path is now single-QB-fetch + single-DB-upsert pipeline for large sheets (~520 rows), with existing UI/UX intact.
+
 - **2026-04-20** — Initial blueprint created. Added mandatory update protocol, feature inventory, logic contracts, file-location mapping, API/DB mapping, and dual-platform checklist.
 
 - **2026-04-21** — Services Lookup + Case Detail Modal overhaul (all MACE CLEARED):
@@ -261,4 +267,3 @@ If step #3 is missing, task is incomplete.
   - **New client script — `js/services-lookup.js`:** Added bulk lookup button interceptor, 60-second localStorage cache (`qb_last_lookup`), and table paint function to update status/tracking columns in-place.
   - **Entry wiring — `index.html`:** Added `<script src="/js/services-lookup.js"></script>` before `</body>`.
   - **Files changed:** `functions/api/quickbase/bulk-lookup.js`, `js/services-lookup.js`, `index.html`.
-

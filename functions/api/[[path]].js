@@ -124,6 +124,7 @@ async function getRoutes(env) {
 // Studio QB — isolated from MUMS Global QB settings
     'studio/qb_settings':        unwrapCjs(await import('../../server/routes/studio/qb_settings.js')),
     'studio/qb_data':            unwrapCjs(await import('../../server/routes/studio/qb_data.js')),
+    'studio/qb_bulk':            unwrapCjs(await import('../../server/routes/studio/qb_bulk.js')),
     // BUG FIX 2026-04-19: studio/qb_fields was missing from Cloudflare router
     // (present in api/handler.js Vercel but absent here — caused "Failed to load QB fields"
     //  on the Services Page → Select Quickbase Field modal).
