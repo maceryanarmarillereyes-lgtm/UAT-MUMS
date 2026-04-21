@@ -1396,11 +1396,6 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   font-style: normal !important;
   background: transparent !important;
 }
-input.cell.cell-qb-linked {
-  color: inherit !important;
-  background: transparent !important;
-  font-style: normal !important;
-}
 input.cell.cell-qb-pending {
   color: transparent !important;
   background: linear-gradient(

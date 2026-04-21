@@ -191,6 +191,13 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (Permanent fixes: date-case placeholder, QB visual reset, CF clear-all cleanup):**
+  - **Edit — `public/js/services-grid.js`:** Replaced `formatCellValue()` with strict date fallback (`---`), removed temporary `[DEBUG-RENDER]` instrumentation, and added date render guard that shows empty when no CASE value exists but shows `---` only when CASE exists with missing date.
+  - **Edit — `public/js/services-qb-lookup.js`:** Removed `[DEBUG-QB]` / `[DEBUG-SAVE]` console traces from bulk lookup/upsert path and disabled `.cell-qb-linked` class application so linked cells stay on default neutral styling.
+  - **Edit — `public/css/services.css`:** Simplified `.cell-qb-linked` contract to inherit/default styles only (no cyan override restoration path).
+  - **Edit — `public/js/services-conditional-format.js`:** `Clear All` now strips row-level CF data attributes/CSS vars before forcing a grid re-render, guaranteeing zebra baseline is restored instantly.
+  - **Verification contract:** Column hide remains optimistic (`col.hidden = true` + immediate `render()` + background Supabase update with revert on error).
+
 - **2026-04-21 (Audit fixes: date placeholder/QB class/upsert conflict/column unhide/row header freeze):**
   - **Edit — `public/js/services-grid.js`:** Date formatter fallback now returns `---`, removed date placeholder injection on em-dash sentinel, added `Columns` toolbar toggle popover (`#svcColumnsBtn`) to hide/unhide columns with persisted `services_sheets.column_defs`, and updated hide-column notification copy to direct users to the new Columns control.
   - **Edit — `public/js/services-conditional-format.js`:** Removed CF logic that stripped `.cell-qb-linked`, preserving QB-linked class compatibility while CF still applies inline styles.
