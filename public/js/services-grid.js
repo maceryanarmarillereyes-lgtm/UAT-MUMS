@@ -1421,6 +1421,9 @@
 
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
 
+  // Call after initial load
+  setTimeout(autoFitColumns, 800);
+
   // ── Refresh button — reloads sheet list + active sheet data ───────────────
   if (refreshBtn) {
     refreshBtn.addEventListener('click', async function () {
