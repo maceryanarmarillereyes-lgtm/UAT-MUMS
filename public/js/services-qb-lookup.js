@@ -1029,6 +1029,7 @@
           if (inp && !inp.value) { // Only show ... if empty
             inp.classList.add('cell-qb-pending'); 
             inp.placeholder = '⋯';
+            inp.value = ''; // Clear old value
           }
         });
       });
@@ -1096,21 +1097,30 @@
           linkedCols.forEach(col => {
             const inp = gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`);
             if (inp && inp !== document.activeElement) {
-              const val = row.data[col.key];
-              const isDateCol = col.key && (col.key.toLowerCase().includes('date') || col.format === 'date');
+              // CRITICAL: Use formatCellValue, don't assign directly
+              const formatted = (function() {
+                const val = row.data[col.key];
+                const isDate = col.type === 'date' || col.format === 'date' || (col.key && col.key.toLowerCase().includes('date'));
+                if (isDate) {
+                  if (!val || val === '' || val === 'undefined') return '---';
+                  try {
+                    const d = new Date(val);
+                    return isNaN(d.getTime()) ? '---' : d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+                  } catch(e) { return '---'; }
+                }
+                return val || '';
+              })();
               
-              // Clear pending state FIRST
+              inp.value = formatted;
+              inp.placeholder = '';
               inp.classList.remove('cell-qb-pending');
-              inp.placeholder = ''; // ← CRITICAL: Clear the "..." placeholder
               
-              if (isDateCol && (!val || String(val).trim() === '')) {
-                // Date column with no data - show "---"
-                inp.value = '---';
+              // Style "---" differently
+              if (formatted === '---') {
                 inp.style.color = '#64748b';
                 inp.style.textAlign = 'center';
                 inp.style.fontStyle = 'italic';
               } else {
-                inp.value = val || '';
                 inp.style.color = '';
                 inp.style.textAlign = '';
                 inp.style.fontStyle = '';

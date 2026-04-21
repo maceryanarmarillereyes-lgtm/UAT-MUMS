@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (QB `---` preservation + explicit `window.supabase` fix):**
+  - **Edit — `public/js/services-qb-lookup.js`:** QB pending start now clears stale input values before showing `⋯`, and completion paint uses an inline date-safe formatter that preserves `---` for empty/invalid date values instead of collapsing to empty string.
+  - **Edit — `public/js/services-grid.js`:** Initial grid render now immediately reapplies muted `---` styling for date columns when CASE exists but date is empty, preventing QB completion/refresh from visually erasing placeholders.
+  - **Edit — `public/js/services-grid.js`:** Replaced direct `supabase.*` references with `window.supabase.*` for hide/unhide + backup paths to align with global client usage and avoid runtime reference errors.
+
 - **2026-04-21 (QB placeholder stuck fix + empty-date paint contract):**
   - **Edit — `public/js/services-qb-lookup.js`:** Pending indicator now applies only to empty linked cells (`!inp.value`), and post-lookup paint now always clears `.cell-qb-pending` plus `inp.placeholder` before assigning linked styles.
   - **Edit — `public/js/services-qb-lookup.js`:** Linked date columns now render `---` for empty QB values with centered italic muted style, while non-empty or non-date values restore default inline styles.
