@@ -1026,7 +1026,10 @@
       rowsWithCase.forEach(row => {
         linkedCols.forEach(col => {
           const inp = gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`);
-          if (inp) { inp.classList.add('cell-qb-pending'); inp.placeholder = '⋯'; }
+          if (inp && !inp.value) { // Only show ... if empty
+            inp.classList.add('cell-qb-pending'); 
+            inp.placeholder = '⋯';
+          }
         });
       });
 
@@ -1093,23 +1096,28 @@
           linkedCols.forEach(col => {
             const inp = gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`);
             if (inp && inp !== document.activeElement) {
-              // BUG2 FIX: date cols with no value = '---', others = '' 
               const val = row.data[col.key];
-              const isDateCol = col.key.includes('date') || col.format === 'date';
-              const hasVal = val && String(val).trim() !== '';
-              if (isDateCol) {
-                inp.value = hasVal ? val : '---';
-                if (!hasVal) {
-                  inp.style.color = '#64748b';
-                  inp.style.textAlign = 'center';
-                } else {
-                  inp.style.removeProperty('color');
-                  inp.style.removeProperty('text-align');
-                }
+              const isDateCol = col.key && (col.key.toLowerCase().includes('date') || col.format === 'date');
+              
+              // Clear pending state FIRST
+              inp.classList.remove('cell-qb-pending');
+              inp.placeholder = ''; // ← CRITICAL: Clear the "..." placeholder
+              
+              if (isDateCol && (!val || String(val).trim() === '')) {
+                // Date column with no data - show "---"
+                inp.value = '---';
+                inp.style.color = '#64748b';
+                inp.style.textAlign = 'center';
+                inp.style.fontStyle = 'italic';
               } else {
                 inp.value = val || '';
+                inp.style.color = '';
+                inp.style.textAlign = '';
+                inp.style.fontStyle = '';
               }
-              inp.classList.remove('cell-qb-pending', 'cell-qb-linked'); // BUG1 FIX: no QB styling
+              
+              inp.classList.add('cell-qb-linked');
+              inp.readOnly = true;
             }
           });
         });

@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (QB placeholder stuck fix + empty-date paint contract):**
+  - **Edit — `public/js/services-qb-lookup.js`:** Pending indicator now applies only to empty linked cells (`!inp.value`), and post-lookup paint now always clears `.cell-qb-pending` plus `inp.placeholder` before assigning linked styles.
+  - **Edit — `public/js/services-qb-lookup.js`:** Linked date columns now render `---` for empty QB values with centered italic muted style, while non-empty or non-date values restore default inline styles.
+  - **Verification — `public/js/services-grid.js`:** `formatCellValue()` date fallbacks remain strict `---` for empty/invalid dates (no em-dash fallback reintroduced).
+
 - **2026-04-21 (Permanent fixes: date-case placeholder, QB visual reset, CF clear-all cleanup):**
   - **Edit — `public/js/services-grid.js`:** Replaced `formatCellValue()` with strict date fallback (`---`), removed temporary `[DEBUG-RENDER]` instrumentation, and added date render guard that shows empty when no CASE value exists but shows `---` only when CASE exists with missing date.
   - **Edit — `public/js/services-qb-lookup.js`:** Removed `[DEBUG-QB]` / `[DEBUG-SAVE]` console traces from bulk lookup/upsert path and disabled `.cell-qb-linked` class application so linked cells stay on default neutral styling.
