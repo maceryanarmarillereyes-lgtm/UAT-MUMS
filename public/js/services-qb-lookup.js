@@ -998,60 +998,99 @@
         })
         .catch(function () { return null; });
     },
-    refreshAllLinkedColumns: function (current, gridEl) {
-      if (!current || !gridEl) return Promise.resolve();
+    refreshAllLinkedColumns: async function (current, gridEl) {
+      if (!current ||!gridEl) return;
 
-      var cols = current.sheet.column_defs || [];
-      var linkedCols = cols.filter(function (c) { return c.qbLookup && String(c.qbLookup.fieldId || '').trim(); });
-      if (!linkedCols.length) return Promise.resolve();
+      const cols = current.sheet.column_defs || [];
+      const linkedCols = cols.filter(c => c.qbLookup && c.qbLookup.fieldId);
+      if (!linkedCols.length) return;
 
-      var caseCol = resolveCaseColumn(cols);
-      if (!caseCol) return Promise.resolve();
+      const caseCol = cols.find(c => c.key && c.name && c.name.toUpperCase().includes('CASE'));
+      if (!caseCol) return;
 
-      var rowsWithCase = current.rows.filter(function (r) { return r.data && r.data[caseCol.key]; });
-      if (!rowsWithCase.length) return Promise.resolve();
+      const rowsWithCase = current.rows.filter(r => r.data && r.data[caseCol.key]);
+      if (!rowsWithCase.length) return;
 
-      _cache = {}; _notFound = {}; _inFlight = {}; _rowCaseSeen = {};
-      _qbSchemaCache = null;
-      try { localStorage.removeItem('qb_field_cache'); } catch (_) {}
+      // 1. Collect all unique cases
+      const allCases = [...new Set(rowsWithCase.map(r => String(r.data[caseCol.key]).trim()).filter(Boolean))];
 
-      rowsWithCase.forEach(function (row) {
-        linkedCols.forEach(function (col) {
-          var inp = gridEl.querySelector('input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]');
+      // 2. Auto-detect ALL field IDs (including new DUE DATE)
+      const fieldIds = [3]; // Case#
+      linkedCols.forEach(col => {
+        const fid = parseInt(col.qbLookup.fieldId);
+        if (fid &&!fieldIds.includes(fid)) fieldIds.push(fid);
+      });
+
+      // 3. Show spinner
+      rowsWithCase.forEach(row => {
+        linkedCols.forEach(col => {
+          const inp = gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`);
           if (inp) { inp.classList.add('cell-qb-pending'); inp.placeholder = '⋯'; }
         });
       });
 
-      var allNks = [];
-      rowsWithCase.forEach(function (row) {
-        var nk = normalizeCaseKey(row.data[caseCol.key]);
-        if (nk) allNks.push(nk);
-      });
-      allNks = Array.from(new Set(allNks));
+      try {
+        // 4. ONE Quickbase call for ALL fields
+        const qbRes = await fetch('/api/quickbase/bulk-lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cases: allCases, fieldIds })
+        });
+        const qbJson = await qbRes.json();
 
-      var fetchPipeline = _bulkFetchAll(allNks, linkedCols).then(function (result) {
-        if (!result || !result.ok) throw new Error((result && result.reason) || 'bulk_fetch_failed');
+        if (!qbJson.ok) throw new Error(qbJson.error || 'QB fetch failed');
 
-        rowsWithCase.forEach(function (row) {
-          var caseNum = normalizeCaseKey(row.data[caseCol.key]);
-          var qbRec = _cache[caseNum] || {};
-          linkedCols.forEach(function (col) {
-            var fid = String(col.qbLookup.fieldId);
-            var value = qbRec[fid] || '';
-            row.data[col.key] = value;
+        const qbData = qbJson.data || {};
+
+        // 5. Update ALL rows in memory
+        const updates = [];
+        rowsWithCase.forEach(row => {
+          const caseNum = String(row.data[caseCol.key]).trim();
+          const qbRec = qbData[caseNum];
+          if (!qbRec) return;
+
+          let changed = false;
+          linkedCols.forEach(col => {
+            const fid = col.qbLookup.fieldId.toString();
+            let val = qbRec[fid];
+
+            // Fix [object Object] for user fields
+            if (val && typeof val === 'object') {
+              val = val.name || val.email || val.display || '';
+            }
+
+            if (row.data[col.key]!== val) {
+              row.data[col.key] = val || '';
+              changed = true;
+            }
           });
+
+          if (changed) {
+            updates.push({
+              id: row.id,
+              sheet_id: current.sheet.id,
+              row_index: row.row_index,
+              data: row.data,
+              updated_at: new Date().toISOString()
+            });
+          }
         });
 
-        // Step 6: Paint ALL rows
-        rowsWithCase.forEach(function (row) {
-          linkedCols.forEach(function (col) {
-            var inp = gridEl.querySelector('input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]');
-            if (inp && inp !== document.activeElement) {
-              var displayVal = row.data[col.key] || '';
-              if (displayVal && typeof displayVal === 'object') {
-                displayVal = displayVal.name || displayVal.email || '';
-              }
-              inp.value = displayVal || '';
+        // 6. ONE Supabase upsert (this is the fix for minutes → seconds)
+        if (updates.length > 0) {
+          const { error } = await window.supabase
+           .from('services_rows')
+           .upsert(updates, { onConflict: 'id' });
+
+          if (error) throw error;
+        }
+
+        // 7. Paint UI once
+        rowsWithCase.forEach(row => {
+          linkedCols.forEach(col => {
+            const inp = gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`);
+            if (inp && inp!== document.activeElement) {
+              inp.value = row.data[col.key] || '';
               inp.classList.remove('cell-qb-pending');
               inp.classList.add('cell-qb-linked');
               inp.readOnly = true;
@@ -1059,30 +1098,12 @@
           });
         });
 
-        // BULK SAVE - single Supabase call
-        var updates = rowsWithCase.map(function(row) {
-          return {
-            id: row.id,
-            sheet_id: current.sheet.id,
-            row_index: row.row_index,
-            data: row.data,
-            updated_at: new Date().toISOString()
-          };
-        });
+        console.log(`[QB] Bulk complete: ${allCases.length} cases, ${updates.length} updated in ${qbJson.duration_ms}ms`);
 
-        // Do ONE upsert, not 520
-        return window.supabase
-          .from('services_rows')
-          .upsert(updates, { onConflict: 'id', ignoreDuplicates: false })
-          .then(function() {
-            console.log('[QB] Bulk saved', updates.length, 'rows');
-            _urgentMode = false;
-          });
-      });
-
-      return fetchPipeline.catch(function (err) {
-        console.warn('[svcQbLookup] refreshAllLinkedColumns failed:', err && err.message ? err.message : err);
-      });
+      } catch (err) {
+        console.error('[QB] Bulk failed:', err);
+        throw err;
+      }
     },
 
     hydrateLinkedColumnsForExport: function (current, gridEl) {
