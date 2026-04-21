@@ -19,39 +19,32 @@
          window.svcToast.show(type, title, message, duration?)
          window.svcToast.pulse()   ← called by auto-save (subtle, no text)
   ═══════════════════════════════════════════════════════════════════════════ */
-  var toastContainer = document.getElementById('svcToastContainer');
   var syncChip       = document.getElementById('svcSyncIndicator');
   var _pulseTimer    = null;
 
   window.svcToast = {
+    container: null,
     // type: 'success' | 'error' | 'warning' | 'info'
     show: function (type, title, message, duration) {
-      if (!toastContainer) return;
+      if (!this.container) {
+        this.container = document.createElement('div');
+        this.container.className = 'svc-toast-container';
+        document.body.appendChild(this.container);
+      }
       duration = duration || 4000;
+      var icons = { success: '✓', error: '✕', info: 'ℹ', loading: '⟳', warning: '⚠' };
+      var colors = { success: '#22c55e', error: '#ef4444', info: '#3b82f6', loading: '#8b5cf6', warning: '#f59e0b' };
 
       var toast = document.createElement('div');
-      toast.className = 'svc-toast svc-toast-' + type;
+      toast.className = 'svc-toast';
+      toast.innerHTML = '<div class="svc-toast-icon" style="background:' + (colors[type] || colors.info) + '20;color:' + (colors[type] || colors.info) + '">' + (icons[type] || icons.info) + '</div><div class="svc-toast-content"><div class="svc-toast-title">' + _esc(title) + '</div><div class="svc-toast-message">' + _esc(message) + '</div></div>';
 
-      var icon = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' }[type] || 'ℹ';
-      toast.innerHTML =
-        '<span class="svc-toast-icon">' + icon + '</span>' +
-        '<div class="svc-toast-body">' +
-          '<strong class="svc-toast-title">' + _esc(title) + '</strong>' +
-          '<span class="svc-toast-msg">' + _esc(message) + '</span>' +
-        '</div>' +
-        '<button class="svc-toast-close" title="Dismiss">✕</button>';
-
-      toast.querySelector('.svc-toast-close').addEventListener('click', function () {
-        _dismissToast(toast);
-      });
-
-      toastContainer.appendChild(toast);
-      // Force reflow then add visible class for CSS transition
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () { toast.classList.add('svc-toast-visible'); });
-      });
-
-      setTimeout(function () { _dismissToast(toast); }, duration);
+      this.container.appendChild(toast);
+      setTimeout(function () { toast.classList.add('show'); }, 10);
+      setTimeout(function () {
+        toast.classList.remove('show');
+        setTimeout(function () { toast.remove(); }, 400);
+      }, duration);
     },
 
     // Subtle sync-chip pulse for auto-saves (no popup toast)
@@ -64,12 +57,6 @@
       }, 1200);
     }
   };
-
-  function _dismissToast(toast) {
-    toast.classList.remove('svc-toast-visible');
-    toast.classList.add('svc-toast-exit');
-    setTimeout(function () { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 320);
-  }
 
   function _esc(s) {
     return String(s || '')

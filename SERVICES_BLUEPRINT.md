@@ -191,6 +191,18 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (Regression fix — sheet data visibility after Update):**
+  - **Edit — `public/js/services-grid.js`:** Hardened `autoFitColumns()` so it only processes valid visible columns and persists widths only for explicit/manual calls.
+  - **Edit — `public/js/services-grid.js`:** Replaced global startup `setTimeout(autoFitColumns, 800)` with a sheet-scoped timer inside `load(sheet)` that runs `autoFitColumns({ persist:false })`, preventing unintended early metadata writes.
+  - **Behavior contract update:** Initial auto-fit is now non-destructive (local render-only). DB `column_defs` writes happen only when user explicitly triggers autofit action.
+
+- **2026-04-21 (Premium UI + backup utilities pass):**
+  - **Edit — `public/css/services.css`:** Stabilized grid row backgrounds and row-level conditional highlights via `tr[data-cf-row]` attributes, upgraded row-number rail styling to premium sticky design, and appended new premium toast visuals (`.svc-toast-container`, `.svc-toast*`).
+  - **Edit — `public/js/services-grid.js`:** Added status-based `tr.dataset.cfRow` mapping at render time, date-input placeholder/empty styling (`---`), column auto-fit utility with Supabase persistence, backup creation flow + toolbar button, right-click column menu for hide/auto-fit actions, and enhanced success save toast copy with timestamp.
+  - **Edit — `public/js/services-import.js`:** Replaced toast renderer implementation with reusable premium toast runtime (dynamic container, icon/color map, animated slide-in/out behavior) while keeping `pulse()` sync chip helper intact.
+  - **New — `supabase/migrations/20260421_backup_history.sql`:** Added `services_backups` table, index, RLS enablement, and owner policy for backup snapshot history.
+  - **Behavior contract update:** Services grid now applies status highlighting deterministically per-row data, supports one-click backup snapshots, and exposes context-menu column hiding/autofit without altering auth/realtime contracts.
+
 - **2026-04-21 (Instant case detail + smart sync + 5-min edge cache):**
   - **Edit — `functions/api/quickbase/bulk-lookup.js`:** Replaced handler with dual-method endpoint: `GET ?case=` now serves single-case detail payload with 5-minute edge cache (`caches.default`) and optional `fresh=1` bypass; `POST` bulk path keeps 5-minute hashable cache and supports `checkOnly` probes for low-cost sync checks.
   - **Edit — `public/js/services-qb-lookup.js`:** Added `_detailCache` memory store and `getCaseDetailInstant(caseNum)` flow (memory-first, then edge cache GET fallback). `refreshAllLinkedColumns()` now hydrates `_detailCache` so detail modal opens instantly after bulk refresh. Added `startSmartSync()` / `stopSmartSync()` 15-minute hash probe loop using `checkOnly` to refresh only on data change.
