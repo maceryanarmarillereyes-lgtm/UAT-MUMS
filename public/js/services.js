@@ -16,6 +16,8 @@
       setSyncState('synced');
     }
   };
+  window.Notify = window.Notify || null;
+  window.BackupManager = window.BackupManager || null;
 
   // ── Sync chip ─────────────────────────────────────────────────────────────────
   const syncChip = document.getElementById('svcSyncIndicator');

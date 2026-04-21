@@ -191,6 +191,15 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (Services grid UX + backup history + notify uplift):**
+  - **Edit — `public/js/services-grid.js`:** Added date display formatter fallback (`---`), row-header class/data attributes, QB update row pulse, right-click column actions (hide + autofit + freeze placeholder), auto-fit width pipeline (`autoFitColumns` + `applyColumnWidths`), backup modal open/save/restore handlers, and migrated user feedback calls to `Notify.show(...)`.
+  - **Edit — `public/services.html`:** Added toolbar `Backup` button + backup modal shell (`#svcBackupModal`) and included new script boot chain (`services-notify.js`, `services-backup.js`) before grid init.
+  - **Edit — `public/css/services.css`:** Updated `.cell-qb-linked` visual contract to transparent bg, added zebra row backgrounds + `qbPulse` animation, premium `.row-header` style, and appended premium notification CSS blocks.
+  - **New file — `public/js/services-notify.js`:** Global `window.Notify` toast utility (`show/hide/update`) with container auto-create.
+  - **New file — `public/js/services-backup.js`:** Global `window.BackupManager` for Supabase backup save/list/restore on `services_backups`.
+  - **New migration — `supabase/migrations/20260421_02_services_backups.sql`:** Added `services_backups` table + RLS + user-owned manage policy.
+  - **Behavior contract update:** Services save/refresh/CF/treeview/import now route toast notifications through `Notify` while preserving existing sync pulse behavior.
+
 - **2026-04-21 (refreshAllLinkedColumns hard rewrite to true bulk path):**
   - **Edit — `public/js/services-qb-lookup.js`:** Replaced `refreshAllLinkedColumns()` implementation with async single-pass bulk pipeline: collect unique case numbers, auto-detect linked field IDs, call `POST /api/quickbase/bulk-lookup` once, stage changed rows only, run one `services_rows` upsert, and repaint linked inputs once.
   - **Edit — `functions/api/quickbase/bulk-lookup.js`:** Request parse now starts with `const { cases = [], fieldIds = [3,25,13] } = await request.json();` and query select uses normalized dynamic field IDs to support caller-provided linked-column sets.

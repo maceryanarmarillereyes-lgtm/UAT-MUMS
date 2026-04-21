@@ -232,12 +232,12 @@
   // Does NOT save rows outside this folder — main sheet rows are untouched.
   function runFolderUpdate(folder, sheetId, btnEl) {
     if (!window.servicesGrid || !window.svcQbLookup) {
-      window.svcToast && window.svcToast.show('error', 'Folder Update', 'Grid or QB Lookup not ready.');
+      window.Notify && window.Notify.show('error', 'Folder Update', 'Grid or QB Lookup not ready.');
       return;
     }
     var state = window.servicesGrid.getState();
     if (!state || !state.sheet || state.sheet.id !== sheetId) {
-      window.svcToast && window.svcToast.show('error', 'Folder Update', 'Open this sheet first before updating.');
+      window.Notify && window.Notify.show('error', 'Folder Update', 'Open this sheet first before updating.');
       return;
     }
 
@@ -248,7 +248,7 @@
       : (state.rows || []);
 
     if (!folderRows.length) {
-      window.svcToast && window.svcToast.show('info', folder.name, 'No matching rows to update.');
+      window.Notify && window.Notify.show('info', folder.name, 'No matching rows to update.');
       return;
     }
 
@@ -267,7 +267,7 @@
       btnEl.disabled    = false;
       btnEl.textContent = origText;
       btnEl.classList.remove('svc-tv-folder-update-btn--loading');
-      window.svcToast && window.svcToast.show('error', 'Folder Update', 'QB Lookup module not ready.');
+      window.Notify && window.Notify.show('error', 'Folder Update', 'QB Lookup module not ready.');
       return;
     }
 
@@ -277,13 +277,13 @@
         btnEl.textContent = origText;
         btnEl.classList.remove('svc-tv-folder-update-btn--loading');
         rerenderAllTrees(sheetId);
-        window.svcToast && window.svcToast.show('success', folder.name, folderRows.length + ' rows updated.');
+        window.Notify && window.Notify.show('success', folder.name, folderRows.length + ' rows updated.');
       })
       .catch(function (err) {
         btnEl.disabled    = false;
         btnEl.textContent = origText;
         btnEl.classList.remove('svc-tv-folder-update-btn--loading');
-        window.svcToast && window.svcToast.show('error', 'Folder Update Failed', err && err.message ? err.message : 'Try again.');
+        window.Notify && window.Notify.show('error', 'Folder Update Failed', err && err.message ? err.message : 'Try again.');
       });
   }
 
@@ -609,13 +609,13 @@
         }
         rerenderAllTrees(sheetId);
         closeModal();
-        window.svcToast && window.svcToast.show('success', 'TreeView', isEdit ? 'Folder updated.' : 'Folder "' + name + '" created.');
+        window.Notify && window.Notify.show('success', 'TreeView', isEdit ? 'Folder updated.' : 'Folder "' + name + '" created.');
         // async reconcile cache from DB, but do not block modal close UX
         loadFolders(sheetId).then(function () { rerenderAllTrees(sheetId); }).catch(function () {});
       } catch (err) {
         saveBtn.disabled = false;
         saveBtn.textContent = isEdit ? '✓ Save Changes' : '✓ Create Folder';
-        window.svcToast && window.svcToast.show('error', 'Error', err && err.message ? err.message : 'Could not save folder.');
+        window.Notify && window.Notify.show('error', 'Error', err && err.message ? err.message : 'Could not save folder.');
       }
     });
 
@@ -666,7 +666,7 @@
           closeModal();
         } catch (err) {
           ok.disabled = false; ok.textContent = '✓ Rename';
-          window.svcToast && window.svcToast.show('error', 'Rename Failed', err && err.message ? err.message : 'Could not rename folder.');
+          window.Notify && window.Notify.show('error', 'Rename Failed', err && err.message ? err.message : 'Could not rename folder.');
         }
       });
       footer.appendChild(cancel);
@@ -711,10 +711,10 @@
           await loadFolders(sheetId);
           rerenderAllTrees(sheetId);
           closeModal();
-          window.svcToast && window.svcToast.show('info', 'Folder Deleted', '"' + folder.name + '" removed.');
+          window.Notify && window.Notify.show('info', 'Folder Deleted', '"' + folder.name + '" removed.');
         } catch (err) {
           del.disabled = false; del.textContent = '🗑 Delete';
-          window.svcToast && window.svcToast.show('error', 'Delete Failed', err && err.message ? err.message : 'Could not delete folder.');
+          window.Notify && window.Notify.show('error', 'Delete Failed', err && err.message ? err.message : 'Could not delete folder.');
         }
       });
       footer.appendChild(cancel);

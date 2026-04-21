@@ -8,10 +8,16 @@
   var undoBtn     = document.getElementById('svcUndo');
   var redoBtn     = document.getElementById('svcRedo');
   var saveBtn     = document.getElementById('svcSaveBtn');
+  var backupBtn   = document.getElementById('svcBackupBtn');
   var qbUpdateBtn = document.getElementById('svcQbUpdateBtn');
   var refreshBtn  = document.getElementById('svcRefreshBtn');
   var statusCells = document.getElementById('svcStatusCells');
   var statusSaved = document.getElementById('svcStatusSaved');
+  var backupModal = document.getElementById('svcBackupModal');
+  var backupClose = document.getElementById('svcBackupClose');
+  var backupSaveBtn = document.getElementById('svcBackupSaveBtn');
+  var backupNameEl = document.getElementById('svcBackupName');
+  var backupListEl = document.getElementById('svcBackupList');
   var SAVE_DEBOUNCE_MS = 800;
   var current      = null;
   var subscription = null;
@@ -53,6 +59,26 @@
     statusSaved.className   = 'svc-status-' + state;
   }
 
+  function notify(type, title, message, duration) {
+    if (window.Notify && typeof window.Notify.show === 'function') {
+      return window.Notify.show(type, title, message, duration);
+    }
+    if (window.svcToast && typeof window.svcToast.show === 'function') {
+      return window.svcToast.show(type, title, message, duration);
+    }
+  }
+
+  function formatCellValue(col, value) {
+    if ((col && (col.type === 'date' || col.format === 'date'))) {
+      if (!value || value === '' || value === 'mm/dd/yyyy') return '---';
+      try {
+        var d = new Date(value);
+        return isNaN(d) ? '---' : d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+      } catch (_) { return '---'; }
+    }
+    return value || '';
+  }
+
   function clear() {
     current = null;
     if (subscription) { try { subscription.unsubscribe(); } catch (_) {} subscription = null; }
@@ -77,6 +103,7 @@
     undoStack = [];
     redoStack = [];
     current.rows = await window.servicesDB.listRows(sheet.id);
+    autoFitColumns(current);
     render();
     window.servicesDashboard && window.servicesDashboard.update(current);
     subscription = window.servicesDB.subscribeToSheet(sheet.id, function (payload) {
@@ -102,8 +129,13 @@
     (current.sheet.column_defs || []).forEach(function (c) {
       var inp = grid.querySelector('input.cell[data-row="' + row.row_index + '"][data-key="' + c.key + '"]');
       if (inp && document.activeElement !== inp)
-        inp.value = (row.data[c.key] != null ? row.data[c.key] : '').toString();
+        inp.value = String(formatCellValue(c, row.data[c.key]));
     });
+    var tr = grid.querySelector('tbody tr[data-row="' + row.row_index + '"]');
+    if (tr) {
+      tr.classList.add('qb-updated');
+      setTimeout(function () { tr.classList.remove('qb-updated'); }, 650);
+    }
   }
 
   function mkEl(tag, props, parent) {
@@ -117,7 +149,7 @@
     if (!current) { clear(); return; }
     empty.style.display = 'none';
     grid.hidden = false;
-    var cols      = current.sheet.column_defs || [];
+    var cols      = (current.sheet.column_defs || []).filter(function (c) { return !c.hidden; });
     var isFilteredView = Array.isArray(current.__treeFilteredRows);
     var viewRows = isFilteredView
       ? current.__treeFilteredRows.slice().sort(function (a, b) { return a.row_index - b.row_index; })
@@ -143,7 +175,7 @@
 
     var thead   = mkEl('thead');
     var headTr  = mkEl('tr', null, thead);
-    var thCorner = mkEl('th', { className: 'row-num', textContent: '#' }, headTr);
+    var thCorner = mkEl('th', { className: 'row-num row-header', textContent: '#' }, headTr);
     cols.forEach(function (c) {
       var th = mkEl('th', { textContent: sanitizeHeaderLabel(c.label, 0) }, headTr);
       th.dataset.key = c.key;
@@ -173,13 +205,15 @@
         ? (viewRows[i] || { row_index: i, data: {} })
         : (current.rows.find(function (r) { return r.row_index === i; }) || { row_index: i, data: {} });
       var rowIndex = Number.isFinite(rowData.row_index) ? rowData.row_index : i;
-      var tr = mkEl('tr', null, tbody);
-      var rowNumTd = mkEl('td', { className: 'row-num', textContent: String(rowIndex + 1) }, tr);
+      var tr = mkEl('tr', { className: 'grid-row' }, tbody);
+      tr.dataset.row = String(rowIndex);
+      var rowNumTd = mkEl('td', { className: 'row-num row-header', textContent: String(rowIndex + 1) }, tr);
       rowNumTd.dataset.rowIndex = rowIndex;
+      rowNumTd.dataset.row = String(rowIndex);
       rowNumTd.title = 'Click to view case details · Right-click to delete row';
       cols.forEach(function (c) {
         var td  = mkEl('td', null, tr);
-        var inputType = (c.format === 'date') ? 'date' : 'text';
+        var inputType = 'text';
         var validation = c && c.validation && c.validation.type === 'list' && Array.isArray(c.validation.options)
           ? c.validation.options.filter(function (v) { return String(v || '').trim() !== ''; })
           : null;
@@ -191,7 +225,7 @@
           type         : inputType,
           autocomplete : 'off',
           spellcheck   : false,
-          value        : (rowData.data[c.key] != null ? rowData.data[c.key] : '').toString()
+          value        : String(formatCellValue(c, rowData.data[c.key]))
         }, td);
         if (validation && validation.length) {
           inp.setAttribute('list', listId);
@@ -209,6 +243,8 @@
         inp.dataset.row = rowIndex;
         inp.dataset.key = c.key;
         inp.dataset.format = (c && c.format) ? c.format : 'auto';
+        inp.dataset.raw = (rowData.data[c.key] != null ? rowData.data[c.key] : '').toString();
+        if (String(formatCellValue(c, rowData.data[c.key])) === '---') inp.placeholder = 'mm/dd/yyyy';
         if (c.format === 'number') inp.inputMode = 'numeric';
       });
     }
@@ -436,6 +472,14 @@
 
         addSep();
 
+        /* ── COLUMN VISIBILITY ── */
+        addSectionHeader('COLUMN VIEW');
+        buildItem(menu, { icon: '👁️', label: 'Hide Column', action: 'hide-column' });
+        buildItem(menu, { icon: '↔️', label: 'Auto-fit', action: 'autofit-column' });
+        buildItem(menu, { icon: '📌', label: 'Freeze', action: 'freeze-column' });
+
+        addSep();
+
         /* ── MOVE COLUMN ── */
         addSectionHeader('MOVE COLUMN');
         buildItem(menu, {
@@ -509,6 +553,20 @@
           } else if (action === 'sort-clear') {
             _sortState = { key: null, dir: 'asc' };
             render(); closeAllCtxMenus();
+          } else if (action === 'hide-column') {
+            cols[colIdx].hidden = true;
+            await window.servicesDB.updateColumns(current.sheet.id, cols);
+            render();
+            closeAllCtxMenus();
+          } else if (action === 'autofit-column') {
+            cols[colIdx].width = 'auto';
+            autoFitColumns(current);
+            await window.servicesDB.updateColumns(current.sheet.id, cols);
+            render();
+            closeAllCtxMenus();
+          } else if (action === 'freeze-column') {
+            notify('info', 'Freeze', 'Freeze column is queued for next iteration.');
+            closeAllCtxMenus();
           } else if (action === 'move-left' && colIdx > 0) {
             var tmp = cols[colIdx]; cols[colIdx] = cols[colIdx-1]; cols[colIdx-1] = tmp;
             await window.servicesDB.updateColumns(current.sheet.id, cols);
@@ -563,7 +621,7 @@
                 cfCol.conditionalRules || []
               );
             } else {
-              window.svcToast && window.svcToast.show('error', 'Conditional Formatting', 'Module not loaded. Please refresh.');
+              notify('error', 'Conditional Formatting', 'Module not loaded. Please refresh.');
             }
           } else if (action === 'data-validation') {
             closeAllCtxMenus();
@@ -587,7 +645,7 @@
             }
             await window.servicesDB.updateColumns(current.sheet.id, cols);
             render();
-            window.svcToast && window.svcToast.show('success', 'Data Validation', opts.length ? ('Dropdown set (' + opts.length + ' options).') : 'Dropdown removed.');
+            notify('success', 'Data Validation', opts.length ? ('Dropdown set (' + opts.length + ' options).') : 'Dropdown removed.');
           } else if (action === 'delete-column') {
             var colName = cols[colIdx] ? (cols[colIdx].label || 'this column') : 'this column';
             if (!confirm('Delete column "' + colName + '"?\n\nAll data in this column will be permanently removed from every row. This cannot be undone.')) {
@@ -612,10 +670,10 @@
                   nonEmpty.map(function (r) { return { row_index: r.row_index, data: r.data }; }));
               }
             } catch (err) {
-              window.svcToast && window.svcToast.show('error', 'Delete Failed', err.message);
+              notify('error', 'Delete Failed', err.message);
             }
             render();
-            window.svcToast && window.svcToast.show('success', 'Column Deleted', '"' + colName + '" removed.');
+            notify('success', 'Column Deleted', '"' + colName + '" removed.');
           } else if (action.indexOf('cell-format-') === 0) {
             var fmt = action.replace('cell-format-', '');
             cols[colIdx].format = fmt === 'auto' ? undefined : fmt;
@@ -982,7 +1040,7 @@
               }
             } catch (err) {
               console.error('[services-grid] deleteRow error:', err);
-              window.svcToast && window.svcToast.show('error', 'Delete Failed', err.message || 'Could not delete row.');
+              notify('error', 'Delete Failed', err.message || 'Could not delete row.');
               // Keep local update to avoid UX freeze; realtime/db sync will reconcile.
             }
           } else {
@@ -991,7 +1049,7 @@
 
           render();
           window.servicesDashboard && window.servicesDashboard.update(current);
-          window.svcToast && window.svcToast.show('success', 'Row Deleted', 'Row ' + displayNum + ' removed.');
+          notify('success', 'Row Deleted', 'Row ' + displayNum + ' removed.');
         });
         menu.appendChild(delItem);
 
@@ -1034,9 +1092,46 @@
   var _resizeSheetId    = null;
   var _resizeRafPending = false;
 
+  function applyColumnWidths() {
+    if (!current || !current.sheet) return;
+    var widths = {};
+    (current.sheet.column_defs || []).forEach(function (col) {
+      if (col && col.key && col.width) widths[col.key] = String(col.width);
+    });
+    _applyColumnWidths(widths);
+  }
+
+  function autoFitColumns(sheetState) {
+    if (!sheetState || !sheetState.sheet) return;
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.font = '13px Inter, system-ui';
+
+    (sheetState.sheet.column_defs || []).forEach(function (col) {
+      if (!col) return;
+      if (col.width && col.width !== 'auto') return;
+
+      var maxWidth = ctx.measureText(String(col.label || col.name || '')).width + 40;
+      (sheetState.rows || []).slice(0, 50).forEach(function (row) {
+        var val = String((row && row.data && row.data[col.key]) || '');
+        var w = ctx.measureText(val).width + 32;
+        if (w > maxWidth) maxWidth = w;
+      });
+      col.width = Math.min(Math.max(maxWidth, 80), 300) + 'px';
+    });
+
+    applyColumnWidths();
+  }
+
   function autoResizeColumns() {
     if (!current) return;
     var sheetId = current.sheet && current.sheet.id;
+    var visibleCols = (current.sheet.column_defs || []).filter(function (c) { return !c.hidden; });
+    if (visibleCols.length && visibleCols.every(function (c) { return c.width && c.width !== 'auto'; })) {
+      applyColumnWidths();
+      return;
+    }
 
     // Use cached widths if same sheet (filter switches) — no DOM reads at all
     if (sheetId && _resizeSheetId === sheetId && _resizeCache[sheetId]) {
@@ -1112,7 +1207,7 @@
         .map(function (v) { return String(v || '').trim(); })
         .filter(function (v) { return !!v; });
       if (value && allowed.length && allowed.indexOf(value) === -1) {
-        window.svcToast && window.svcToast.show('warning', 'Invalid Value', 'Please select from the dropdown list.');
+        notify('warning', 'Invalid Value', 'Please select from the dropdown list.');
         var rowExisting = current.rows.find(function (r) { return r.row_index === rowIdx; });
         e.target.value = rowExisting && rowExisting.data && rowExisting.data[key] != null ? String(rowExisting.data[key]) : '';
         return;
@@ -1144,7 +1239,7 @@
   function onCellKey(e) {
     var row  = +e.target.dataset.row;
     var key  = e.target.dataset.key;
-    var cols = current.sheet.column_defs.map(function (c) { return c.key; });
+    var cols = current.sheet.column_defs.filter(function (c) { return !c.hidden; }).map(function (c) { return c.key; });
     var idx  = cols.indexOf(key);
     var nextRow = row, nextKey = key;
     if      (e.key === 'Enter' || e.key === 'ArrowDown') nextRow = row + 1;
@@ -1185,7 +1280,8 @@
     var label = prompt('Column name:', 'New Column');
     if (!label || !label.trim()) return;
     var key = 'col_' + Math.random().toString(36).slice(2, 8);
-    current.sheet.column_defs.push({ key: key, label: sanitizeHeaderLabel(label, current.sheet.column_defs.length), type: 'text', width: 160 });
+    current.sheet.column_defs.push({ key: key, label: sanitizeHeaderLabel(label, current.sheet.column_defs.length), type: 'text', width: 'auto' });
+    autoFitColumns(current);
     await window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs);
     render();
   });
@@ -1211,7 +1307,7 @@
       var a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: current.sheet.title + '.csv' });
       document.body.appendChild(a); a.click(); a.remove();
     } catch (err) {
-      window.svcToast && window.svcToast.show('error', 'Export Failed', err && err.message ? err.message : 'Try again.');
+      notify('error', 'Export Failed', err && err.message ? err.message : 'Try again.');
     } finally {
       exportBtn.disabled = false;
       exportBtn.textContent = originalText;
@@ -1232,11 +1328,11 @@
   }
 
   async function saveAllRows() {
-    if (!current) { window.svcToast && window.svcToast.show('warning', 'No Sheet Open', 'Open a sheet first.'); return; }
+    if (!current) { notify('warning', 'No Sheet Open', 'Open a sheet first.'); return; }
     var nonEmpty = current.rows.filter(function (r) {
       return r.data && Object.values(r.data).some(function (v) { return v !== '' && v != null; });
     });
-    if (nonEmpty.length === 0) { window.svcToast && window.svcToast.show('info', 'Nothing to Save', 'No data yet.'); return; }
+    if (nonEmpty.length === 0) { notify('info', 'Nothing to Save', 'No data yet.'); return; }
     if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Saving…'; }
     setStatus('saving', 'Saving all…');
     try {
@@ -1244,14 +1340,59 @@
         nonEmpty.map(function (r) { return { row_index: r.row_index, data: r.data }; }));
       if (result && result.error) throw new Error(result.error.message || 'Write failed');
       setStatus('saved', '✓ All saved');
-      window.svcToast && window.svcToast.show('success', 'Saved', nonEmpty.length + ' rows saved.');
+      notify('success', 'Saved', nonEmpty.length + ' rows saved.');
       window.servicesDashboard && window.servicesDashboard.update(current);
     } catch (err) {
       setStatus('error', '✕ Save failed');
-      window.svcToast && window.svcToast.show('error', 'Save Failed', err.message);
+      notify('error', 'Save Failed', err.message);
     } finally {
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 SAVE'; }
     }
+  }
+
+  function renderBackupList(items) {
+    if (!backupListEl) return;
+    if (!items || !items.length) {
+      backupListEl.innerHTML = '<div style="padding:14px;color:#94a3b8;">No backups yet.</div>';
+      return;
+    }
+    backupListEl.innerHTML = items.map(function (b) {
+      var dt = b.created_at ? new Date(b.created_at).toLocaleString() : 'Unknown';
+      return '<div style=\"padding:10px 0;border-bottom:1px solid rgba(30,41,59,.6);display:flex;justify-content:space-between;gap:12px;align-items:center;\">' +
+        '<div><div style=\"color:#e2e8f0;font-size:13px;font-weight:600;\">' + (b.name || 'Backup') + '</div>' +
+        '<div style=\"color:#94a3b8;font-size:12px;\">' + dt + ' · ' + (b.row_count || 0) + ' rows</div></div>' +
+        '<button class=\"svc-btn ghost\" data-restore-id=\"' + b.id + '\">Restore</button></div>';
+    }).join('');
+    backupListEl.querySelectorAll('button[data-restore-id]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        try {
+          var payload = await window.BackupManager.restore(btn.dataset.restoreId);
+          if (!payload || !Array.isArray(payload.rows) || !Array.isArray(payload.columns)) throw new Error('Invalid backup payload');
+          current.sheet.column_defs = payload.columns;
+          current.rows = payload.rows;
+          await window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs);
+          await window.servicesDB.bulkUpsertRows(current.sheet.id, current.rows.map(function (r) {
+            return { row_index: r.row_index, data: r.data || {} };
+          }));
+          render();
+          notify('success', 'Backup Restored', 'Sheet restored from backup.');
+          backupModal.hidden = true;
+        } catch (err) {
+          notify('error', 'Restore Failed', err.message || 'Try again.');
+        }
+      });
+    });
+  }
+
+  async function openBackupModal() {
+    if (!current || !window.BackupManager) {
+      notify('warning', 'Backup', 'Open a sheet first.');
+      return;
+    }
+    backupModal.hidden = false;
+    var out = await window.BackupManager.list(current.sheet.id);
+    if (out && out.error) throw out.error;
+    renderBackupList((out && out.data) || []);
   }
 
   function countUnresolvedLinkedCells(state) {
@@ -1280,6 +1421,37 @@
 
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
 
+  if (backupBtn) {
+    backupBtn.addEventListener('click', function () {
+      openBackupModal().catch(function (err) {
+        notify('error', 'Backup Failed', err && err.message ? err.message : 'Try again.');
+      });
+    });
+  }
+  if (backupClose) backupClose.addEventListener('click', function () { backupModal.hidden = true; });
+  if (backupModal) {
+    backupModal.addEventListener('click', function (e) { if (e.target === backupModal) backupModal.hidden = true; });
+  }
+  if (backupSaveBtn) {
+    backupSaveBtn.addEventListener('click', async function () {
+      if (!current || !window.BackupManager) return;
+      try {
+        var payload = {
+          id: current.sheet.id,
+          rows: current.rows || [],
+          column_defs: current.sheet.column_defs || []
+        };
+        var out = await window.BackupManager.save(payload, (backupNameEl && backupNameEl.value) || '');
+        if (out && out.error) throw out.error;
+        notify('success', 'Backup Saved', ((current.rows && current.rows.length) || 0) + ' rows captured.');
+        if (backupNameEl) backupNameEl.value = '';
+        await openBackupModal();
+      } catch (err) {
+        notify('error', 'Backup Save Failed', err && err.message ? err.message : 'Try again.');
+      }
+    });
+  }
+
   // ── Refresh button — reloads sheet list + active sheet data ───────────────
   if (refreshBtn) {
     refreshBtn.addEventListener('click', async function () {
@@ -1302,10 +1474,10 @@
           window.servicesTreeview.refreshCounts(current.sheet.id);
         }
         setStatus('saved', '✓ Refreshed');
-        window.svcToast && window.svcToast.show('success', 'Refresh', 'Sheet data reloaded.');
+        notify('success', 'Refresh', 'Sheet data reloaded.');
       } catch (err) {
         setStatus('error', '✕ Refresh failed');
-        window.svcToast && window.svcToast.show('error', 'Refresh Failed', err && err.message ? err.message : 'Try again.');
+        notify('error', 'Refresh Failed', err && err.message ? err.message : 'Try again.');
       } finally {
         refreshBtn.disabled    = false;
         refreshBtn.textContent  = origText;
@@ -1343,10 +1515,10 @@
         }
         await saveAllRows();
         setStatus('saved', '✓ Lookup updated');
-        window.svcToast && window.svcToast.show('success', 'Lookup Updated', 'All linked QB values refreshed.');
+        notify('success', 'Lookup Updated', 'All linked QB values refreshed.');
       } catch (err) {
         setStatus('error', '✕ Lookup update failed');
-        window.svcToast && window.svcToast.show('error', 'Lookup Update Failed', err && err.message ? err.message : 'Try again.');
+        notify('error', 'Lookup Update Failed', err && err.message ? err.message : 'Try again.');
       } finally {
         qbUpdateBtn.disabled = false;
         qbUpdateBtn.textContent = originalText;

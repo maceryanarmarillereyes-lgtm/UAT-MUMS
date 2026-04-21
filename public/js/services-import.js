@@ -16,7 +16,7 @@
 
   /* ═══════════════════════════════════════════════════════════════════════════
      A.  TOAST NOTIFICATION SYSTEM
-         window.svcToast.show(type, title, message, duration?)
+         window.Notify && window.Notify.show(type, title, message, duration?)
          window.svcToast.pulse()   ← called by auto-save (subtle, no text)
   ═══════════════════════════════════════════════════════════════════════════ */
   var toastContainer = document.getElementById('svcToastContainer');
@@ -105,7 +105,7 @@
   function openModal() {
     var state = window.servicesGrid && window.servicesGrid.getState();
     if (!state) {
-      window.svcToast.show('warning', 'No Sheet Open', 'Select a sheet first, then import.');
+      window.Notify && window.Notify.show('warning', 'No Sheet Open', 'Select a sheet first, then import.');
       return;
     }
     _resetModal();
@@ -175,7 +175,7 @@
     } else if (ext === 'csv') {
       parseCSV(file);
     } else {
-      window.svcToast.show('error', 'Unsupported File', 'Please upload a .xlsx, .xls, or .csv file.');
+      window.Notify && window.Notify.show('error', 'Unsupported File', 'Please upload a .xlsx, .xls, or .csv file.');
     }
   }
 
@@ -187,15 +187,15 @@
         var wb  = window.XLSX.read(e.target.result, { type: 'binary', cellDates: true });
         var ws  = wb.Sheets[wb.SheetNames[0]];
         var raw = window.XLSX.utils.sheet_to_json(ws, { defval: '' });
-        if (!raw.length) { window.svcToast.show('warning', 'Empty File', 'The file has no data rows.'); return; }
+        if (!raw.length) { window.Notify && window.Notify.show('warning', 'Empty File', 'The file has no data rows.'); return; }
         _fileHeaders = Object.keys(raw[0]);
         _parsedRows  = raw;
         showPreview(file.name, file.size);
       } catch (err) {
-        window.svcToast.show('error', 'Parse Error', 'Could not read XLSX: ' + err.message);
+        window.Notify && window.Notify.show('error', 'Parse Error', 'Could not read XLSX: ' + err.message);
       }
     };
-    reader.onerror = function () { window.svcToast.show('error', 'Read Error', 'Failed to read the file.'); };
+    reader.onerror = function () { window.Notify && window.Notify.show('error', 'Read Error', 'Failed to read the file.'); };
     reader.readAsBinaryString(file);
   }
 
@@ -205,7 +205,7 @@
     reader.onload = function (e) {
       try {
         var lines = e.target.result.split(/\r?\n/).filter(function (l) { return l.trim(); });
-        if (lines.length < 2) { window.svcToast.show('warning', 'Empty File', 'CSV needs at least a header and one data row.'); return; }
+        if (lines.length < 2) { window.Notify && window.Notify.show('warning', 'Empty File', 'CSV needs at least a header and one data row.'); return; }
         var headers = splitCSVLine(lines[0]);
         var rows = [];
         for (var i = 1; i < lines.length; i++) {
@@ -214,15 +214,15 @@
           headers.forEach(function (h, hi) { obj[h] = (vals[hi] != null ? vals[hi] : '').trim(); });
           if (Object.values(obj).some(function (v) { return v !== ''; })) rows.push(obj);
         }
-        if (!rows.length) { window.svcToast.show('warning', 'Empty File', 'CSV has headers but no data rows.'); return; }
+        if (!rows.length) { window.Notify && window.Notify.show('warning', 'Empty File', 'CSV has headers but no data rows.'); return; }
         _fileHeaders = headers;
         _parsedRows  = rows;
         showPreview(file.name, file.size);
       } catch (err) {
-        window.svcToast.show('error', 'Parse Error', 'Could not read CSV: ' + err.message);
+        window.Notify && window.Notify.show('error', 'Parse Error', 'Could not read CSV: ' + err.message);
       }
     };
-    reader.onerror = function () { window.svcToast.show('error', 'Read Error', 'Failed to read the file.'); };
+    reader.onerror = function () { window.Notify && window.Notify.show('error', 'Read Error', 'Failed to read the file.'); };
     reader.readAsText(file);
   }
 
@@ -259,7 +259,7 @@
   // ── Preview ──────────────────────────────────────────────────────────────────
   function showPreview(filename, filesize) {
     var state = window.servicesGrid.getState();
-    if (!state) { window.svcToast.show('warning', 'No Sheet', 'Open a sheet first.'); return; }
+    if (!state) { window.Notify && window.Notify.show('warning', 'No Sheet', 'Open a sheet first.'); return; }
 
     var colDefs = state.sheet.column_defs || [];
     _colMapping = autoMap(_fileHeaders, colDefs);
@@ -318,11 +318,11 @@
   if (confirmBtn) {
     confirmBtn.addEventListener('click', async function () {
       var state = window.servicesGrid && window.servicesGrid.getState();
-      if (!state) { window.svcToast.show('warning', 'No Sheet', 'Open a sheet first.'); return; }
+      if (!state) { window.Notify && window.Notify.show('warning', 'No Sheet', 'Open a sheet first.'); return; }
 
       var mapped = Object.values(_colMapping).filter(Boolean);
       if (!mapped.length) {
-        window.svcToast.show('error', 'Nothing Mapped', 'No file columns matched sheet columns. Cannot import.');
+        window.Notify && window.Notify.show('error', 'Nothing Mapped', 'No file columns matched sheet columns. Cannot import.');
         return;
       }
 
@@ -355,7 +355,7 @@
       });
 
       if (!payload.length) {
-        window.svcToast.show('warning', 'No Data', 'All rows were empty after mapping.');
+        window.Notify && window.Notify.show('warning', 'No Data', 'All rows were empty after mapping.');
         return;
       }
 
@@ -385,7 +385,7 @@
 
         setTimeout(function () {
           closeModal();
-          window.svcToast.show(
+          window.Notify && window.Notify.show(
             'success',
             '✓ Import Complete',
             payload.length + ' row' + (payload.length !== 1 ? 's' : '') + ' imported & saved to Supabase.',
@@ -395,7 +395,7 @@
 
       } catch (err) {
         if (progressWrap) progressWrap.hidden = true;
-        window.svcToast.show('error', 'Import Failed', err.message || 'Check your connection.');
+        window.Notify && window.Notify.show('error', 'Import Failed', err.message || 'Check your connection.');
         console.error('[services-import] bulkUpsertRows failed:', err);
       } finally {
         confirmBtn.disabled = false;
