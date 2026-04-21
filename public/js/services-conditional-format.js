@@ -312,11 +312,8 @@
         inp.style.removeProperty('text-decoration');
         inp.style.removeProperty('font-family');
         inp.dataset.cfIcon = '';
-        // Restore cell-qb-linked if it was stripped by a previous CF pass
-        if (inp.dataset.cfQbStripped === '1') {
-          inp.classList.add('cell-qb-linked');
-          inp.dataset.cfQbStripped = '';
-        }
+        // BUG1 FIX: Do NOT restore cell-qb-linked — class is neutralized, no cyan restore needed
+        inp.dataset.cfQbStripped = '';
       }
       var badge = td.querySelector('.cf-icon-badge');
       if (badge) badge.remove();
@@ -336,11 +333,8 @@
           inp.style.removeProperty('font-weight');
           inp.style.removeProperty('font-style');
           inp.style.removeProperty('text-decoration');
-          // Restore cell-qb-linked if stripped
-          if (inp.dataset.cfQbStripped === '1') {
-            inp.classList.add('cell-qb-linked');
-            inp.dataset.cfQbStripped = '';
-          }
+          // BUG1 FIX: Do NOT restore cell-qb-linked — neutralized, no restore needed
+          inp.dataset.cfQbStripped = '';
         }
       });
     });
@@ -522,11 +516,6 @@
 
         var inp = td.querySelector('input.cell');
         if (inp) {
-          // FIX-CF: Strip cell-qb-linked !important class so row-highlight colors apply
-          if (inp.classList.contains('cell-qb-linked')) {
-            inp.classList.remove('cell-qb-linked');
-            inp.dataset.cfQbStripped = '1';
-          }
           if (hl.textColor) {
             inp.style.setProperty('color', hl.textColor, 'important');
           } else if (hl.bgColor) {
@@ -570,12 +559,6 @@
 
     var inp = td.querySelector('input.cell');
     if (inp) {
-      // Strip cell-qb-linked !important class so CF color takes effect visually.
-      // Mark it so the clear step can restore it later.
-      if (inp.classList.contains('cell-qb-linked')) {
-        inp.classList.remove('cell-qb-linked');
-        inp.dataset.cfQbStripped = '1';
-      }
       var finalColor = textColor || (bgColor ? contrastColor(bgColor) : '');
       if (finalColor) inp.style.setProperty('color', finalColor, 'important');
       inp.style.setProperty('font-weight', bold   ? '700'     : 'normal', 'important');
@@ -1338,17 +1321,17 @@
   async function saveRules() {
     // ── Guard: need grid + DB ──────────────────────────────────────────────
     if (!window.servicesGrid) {
-      window.svcToast && window.svcToast.show('error', 'Save Failed', 'Grid not ready. Please refresh.');
+      window.Notify && window.Notify.show('error', 'Save Failed', 'Grid not ready. Please refresh.');
       return;
     }
     if (!window.servicesDB) {
-      window.svcToast && window.svcToast.show('error', 'Save Failed', 'DB not ready. Please refresh.');
+      window.Notify && window.Notify.show('error', 'Save Failed', 'DB not ready. Please refresh.');
       return;
     }
 
     var state = window.servicesGrid.getState();
     if (!state || !state.sheet) {
-      window.svcToast && window.svcToast.show('error', 'Save Failed', 'No sheet loaded.');
+      window.Notify && window.Notify.show('error', 'Save Failed', 'No sheet loaded.');
       closeModal();
       return;
     }
@@ -1356,7 +1339,7 @@
     var cols = state.sheet.column_defs || [];
     var col  = cols[_state.colIdx];
     if (!col) {
-      window.svcToast && window.svcToast.show('error', 'Save Failed', 'Column not found.');
+      window.Notify && window.Notify.show('error', 'Save Failed', 'Column not found.');
       closeModal();
       return;
     }
@@ -1380,9 +1363,9 @@
     // ── Persist to Supabase ────────────────────────────────────────────────
     try {
       await window.servicesDB.updateColumns(state.sheet.id, cols);
-      window.svcToast && window.svcToast.show('success', 'Conditional Formatting', 'Rules saved — ' + rulesForSave.length + ' rule(s) active.');
+      window.Notify && window.Notify.show('success', 'Conditional Formatting', 'Rules saved — ' + rulesForSave.length + ' rule(s) active.');
     } catch (err) {
-      window.svcToast && window.svcToast.show('error', 'CF Save Failed', err && err.message ? err.message : 'Try again.');
+      window.Notify && window.Notify.show('error', 'CF Save Failed', err && err.message ? err.message : 'Try again.');
     }
 
     paintGrid();

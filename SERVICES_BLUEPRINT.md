@@ -191,6 +191,33 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (Audit fixes: date placeholder/QB class/upsert conflict/column unhide/row header freeze):**
+  - **Edit — `public/js/services-grid.js`:** Date formatter fallback now returns `---`, removed date placeholder injection on em-dash sentinel, added `Columns` toolbar toggle popover (`#svcColumnsBtn`) to hide/unhide columns with persisted `services_sheets.column_defs`, and updated hide-column notification copy to direct users to the new Columns control.
+  - **Edit — `public/js/services-conditional-format.js`:** Removed CF logic that stripped `.cell-qb-linked`, preserving QB-linked class compatibility while CF still applies inline styles.
+  - **Edit — `public/js/services-qb-lookup.js`:** Bulk refresh upsert conflict key switched to `sheet_id,row_index` to match Services row uniqueness contract.
+  - **Edit — `public/services.html`:** Added toolbar button `⊞ Columns` (`#svcColumnsBtn`) adjacent to backup controls.
+  - **Edit — `public/css/services.css`:** Added sticky row-number header rule (`.svc-grid thead th.row-num`) and explicit QB-linked input style contract (`color: #5eead4`, italic).
+  - **Behavior contract update:** Hidden columns are now recoverable from the in-grid Columns popover, and QB-linked cell class remains intact under conditional formatting paint paths.
+
+- **2026-04-21 (Services zebra vs CF priority fix):**
+  - **Edit — `public/css/services.css`:** Replaced legacy zebra striping with explicit priority stack: base zebra (`grid-row` + even rows), row-level conditional-format overrides via `tr[data-cf-applied]`/`data-cf-rule`, and enforced hover as highest priority; retained `.cell-qb-linked` as text-only styling with transparent background.
+  - **Edit — `public/js/services-grid.js`:** Added `evaluateConditionalFormat(row, columns)` fallback evaluator and row render hook that writes `data-cf-applied`, `data-cf-rule`, and `--cf-bg` CSS variable on each `<tr>` when CF matches, while preserving zebra defaults when no rule matches.
+  - **Behavior contract update:** Default row visuals now remain zebra unless a row-level CF match is present; hover always wins over zebra and CF.
+
+- **2026-04-21 (Audit fixes: layout/autofit/backup/date/hide-column/notify):**
+  - **Edit — `public/css/services.css`:** Consolidated row-number sticky column rules into one canonical `.svc-grid ... .row-num` block (56px fixed), aligned zebra backgrounds to `td:not(.row-num)`, and updated `.cell-qb-linked` + notification style contracts to the premium toast spec.
+  - **Edit — `public/js/services-grid.js`:** Updated `formatCellValue()` date output to `YYYY-MM-DD` with em-dash fallback, upgraded `autoFitColumns()` floor/ceiling to `140..400`, changed row-number render cell/title contract, added `createBackup(name)` (snapshot payload insert to `services_backups`), made toolbar backup action call backup create flow, and added notify feedback for hide-column action.
+  - **New migration — `supabase/migrations/20260421_add_backups.sql`:** Added/normalized `services_backups.snapshot` schema, ensured backup policy `users_manage_own_backups`, and index `idx_backups_sheet`.
+
+- **2026-04-21 (Services grid UX + backup history + notify uplift):**
+  - **Edit — `public/js/services-grid.js`:** Added date display formatter fallback (`---`), row-header class/data attributes, QB update row pulse, right-click column actions (hide + autofit + freeze placeholder), auto-fit width pipeline (`autoFitColumns` + `applyColumnWidths`), backup modal open/save/restore handlers, and migrated user feedback calls to `Notify.show(...)`.
+  - **Edit — `public/services.html`:** Added toolbar `Backup` button + backup modal shell (`#svcBackupModal`) and included new script boot chain (`services-notify.js`, `services-backup.js`) before grid init.
+  - **Edit — `public/css/services.css`:** Updated `.cell-qb-linked` visual contract to transparent bg, added zebra row backgrounds + `qbPulse` animation, premium `.row-header` style, and appended premium notification CSS blocks.
+  - **New file — `public/js/services-notify.js`:** Global `window.Notify` toast utility (`show/hide/update`) with container auto-create.
+  - **New file — `public/js/services-backup.js`:** Global `window.BackupManager` for Supabase backup save/list/restore on `services_backups`.
+  - **New migration — `supabase/migrations/20260421_02_services_backups.sql`:** Added `services_backups` table + RLS + user-owned manage policy.
+  - **Behavior contract update:** Services save/refresh/CF/treeview/import now route toast notifications through `Notify` while preserving existing sync pulse behavior.
+
 - **2026-04-21 (refreshAllLinkedColumns hard rewrite to true bulk path):**
   - **Edit — `public/js/services-qb-lookup.js`:** Replaced `refreshAllLinkedColumns()` implementation with async single-pass bulk pipeline: collect unique case numbers, auto-detect linked field IDs, call `POST /api/quickbase/bulk-lookup` once, stage changed rows only, run one `services_rows` upsert, and repaint linked inputs once.
   - **Edit — `functions/api/quickbase/bulk-lookup.js`:** Request parse now starts with `const { cases = [], fieldIds = [3,25,13] } = await request.json();` and query select uses normalized dynamic field IDs to support caller-provided linked-column sets.

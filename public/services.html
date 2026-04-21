@@ -68,6 +68,8 @@
           <button class="svc-btn svc-import-btn" id="svcUploadBtn" title="Import XLSX or CSV">⬆ Import</button>
           <button class="svc-btn accent" id="svcExportCsv">⬇ CSV</button>
           <button class="svc-btn svc-save-btn" id="svcSaveBtn" title="Force-save all rows to Supabase">💾 SAVE</button>
+          <button class="svc-btn" id="svcBackupBtn" title="Save or restore sheet backups">🛡 Backup</button>
+          <button class="svc-btn" id="svcColumnsBtn" title="Show/hide columns">⊞ Columns</button>
         </div>
       </div>
 
@@ -120,6 +122,20 @@
 
   <!-- ── TOAST CONTAINER ─────────────────────────────────────────────────── -->
   <div id="svcToastContainer" class="svc-toast-container" aria-live="polite" aria-atomic="false"></div>
+
+  <div id="svcBackupModal" class="svc-modal-overlay" hidden>
+    <div class="svc-modal">
+      <div class="svc-modal-header">
+        <span class="svc-modal-title">🛡 Backup History</span>
+        <button class="svc-modal-close" id="svcBackupClose" title="Close">✕</button>
+      </div>
+      <div style="padding:14px 20px;display:flex;gap:10px;align-items:center;border-bottom:1px solid rgba(30,41,59,.7);">
+        <input id="svcBackupName" class="svc-sheet-search" style="margin:0;" placeholder="Backup name (optional)" autocomplete="off" />
+        <button class="svc-btn accent" id="svcBackupSaveBtn">Save Backup</button>
+      </div>
+      <div id="svcBackupList" style="max-height:360px;overflow:auto;padding:10px 20px 20px 20px;"></div>
+    </div>
+  </div>
 
   <!-- ── IMPORT MODAL ─────────────────────────────────────────────────────── -->
   <div id="svcImportModal" class="svc-modal-overlay" hidden>
@@ -208,7 +224,9 @@
       // Load in strict dependency order, chained via onload
       loadScript('/js/services-supabase.js', function () {
         loadScript('/js/services-dashboard.js', function () {
-          loadScript('/js/services-grid.js', function () {
+          loadScript('/js/services-notify.js', function () {
+            loadScript('/js/services-backup.js', function () {
+              loadScript('/js/services-grid.js', function () {
             loadScript('/js/services-qb-lookup.js', function () {
               loadScript('/js/services-import.js', function () {
                 loadScript('/js/services-sheet-manager.js', function () {
@@ -218,6 +236,8 @@
                     });
                   });
                 });
+              });
+            });
               });
             });
           });

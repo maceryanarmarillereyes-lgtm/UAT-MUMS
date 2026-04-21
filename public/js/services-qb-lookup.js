@@ -1008,7 +1008,7 @@
       const caseCol = cols.find(c => c.key && c.name && c.name.toUpperCase().includes('CASE'));
       if (!caseCol) return;
 
-      const rowsWithCase = current.rows.filter(r => r.data && r.data[caseCol.key]);
+      const rowsWithCase = current.rows.filter(r => r.data && r.data[caseCol.key] && String(r.data[caseCol.key]).trim() !== '');
       if (!rowsWithCase.length) return;
 
       // 1. Collect all unique cases
@@ -1080,7 +1080,7 @@
         if (updates.length > 0) {
           const { error } = await window.supabase
            .from('services_rows')
-           .upsert(updates, { onConflict: 'id' });
+           .upsert(updates, { onConflict: 'sheet_id,row_index' });
 
           if (error) throw error;
         }
@@ -1089,11 +1089,24 @@
         rowsWithCase.forEach(row => {
           linkedCols.forEach(col => {
             const inp = gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`);
-            if (inp && inp!== document.activeElement) {
-              inp.value = row.data[col.key] || '';
-              inp.classList.remove('cell-qb-pending');
-              inp.classList.add('cell-qb-linked');
-              inp.readOnly = true;
+            if (inp && inp !== document.activeElement) {
+              // BUG2 FIX: date cols with no value = '---', others = '' 
+              const val = row.data[col.key];
+              const isDateCol = col.key.includes('date') || col.format === 'date';
+              const hasVal = val && String(val).trim() !== '';
+              if (isDateCol) {
+                inp.value = hasVal ? val : '---';
+                if (!hasVal) {
+                  inp.style.color = '#64748b';
+                  inp.style.textAlign = 'center';
+                } else {
+                  inp.style.removeProperty('color');
+                  inp.style.removeProperty('text-align');
+                }
+              } else {
+                inp.value = val || '';
+              }
+              inp.classList.remove('cell-qb-pending', 'cell-qb-linked'); // BUG1 FIX: no QB styling
             }
           });
         });
