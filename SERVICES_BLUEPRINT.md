@@ -191,6 +191,20 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (Emergency rollback — restore working Services grid path):**
+  - **Edit — `public/js/services-grid.js`:** Removed render-level `try/catch` wrapper fallback and restored direct render flow.
+  - **Edit — `public/js/services-grid.js`:** Removed status-based row `data-cf-row` assignment block in `render()` and reverted input creation to avoid assigning readonly `input.list` via `Object.assign`; datalist binding now uses `setAttribute('list', listId)` only.
+  - **Edit — `public/js/services-grid.js`:** Removed experimental `autoFitColumns()` function and startup timeout call; removed temporary backup button injection block and ad-hoc right-click column menu block.
+  - **Edit — `public/css/services.css`:** Rolled back experimental Services styling for `tr[data-cf-row]`, premium row-number overrides, and duplicated premium toast block to restore prior stable stylesheet behavior.
+  - **Behavior contract update:** Grid render path is back to the prior stable baseline with only non-breaking date placeholder handling retained for date inputs.
+
+- **2026-04-21 (Hotfix — ES5-safe render recovery for blank Services grid):**
+  - **Edit — `public/js/services-grid.js`:** Replaced optional-chaining/modern string-method status-row formatter with ES5-safe loops + `indexOf` checks and explicit `setAttribute('data-cf-row', ...)` writes to prevent parser/runtime failures in older execution contexts.
+  - **Edit — `public/js/services-grid.js`:** Wrapped `render()` body in top-level `try/catch` so render exceptions fail into an inline visible error row (`#svcGrid`) instead of blank-grid silent failure.
+  - **Edit — `public/js/services-grid.js`:** Hardened deferred auto-fit bootstrap call with guarded `setTimeout(function(){...},1200)` + `typeof autoFitColumns` check and warning-only catch path.
+  - **Edit — `public/js/services-grid.js`:** Temporarily disabled toolbar backup button click binding (`btn.onclick = createBackup`) for isolation while triaging grid stability.
+  - **Behavior contract update:** Services grid now fails safe under render/autofit errors and remains compatible with ES5-only runtimes without changing auth/realtime/data contracts.
+
 - **2026-04-21 (Regression fix — sheet data visibility after Update):**
   - **Edit — `public/js/services-grid.js`:** Hardened `autoFitColumns()` so it only processes valid visible columns and persists widths only for explicit/manual calls.
   - **Edit — `public/js/services-grid.js`:** Replaced global startup `setTimeout(autoFitColumns, 800)` with a sheet-scoped timer inside `load(sheet)` that runs `autoFitColumns({ persist:false })`, preventing unintended early metadata writes.
