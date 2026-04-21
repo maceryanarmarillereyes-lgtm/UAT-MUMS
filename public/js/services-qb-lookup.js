@@ -1080,7 +1080,7 @@
         if (updates.length > 0) {
           const { error } = await window.supabase
            .from('services_rows')
-           .upsert(updates, { onConflict: 'id' });
+           .upsert(updates, { onConflict: 'sheet_id,row_index' });
 
           if (error) throw error;
         }

@@ -11,6 +11,7 @@
   var backupBtn   = document.getElementById('svcBackupBtn');
   var qbUpdateBtn = document.getElementById('svcQbUpdateBtn');
   var refreshBtn  = document.getElementById('svcRefreshBtn');
+  var columnsBtn  = document.getElementById('svcColumnsBtn');
   var statusCells = document.getElementById('svcStatusCells');
   var statusSaved = document.getElementById('svcStatusSaved');
   var backupModal = document.getElementById('svcBackupModal');
@@ -70,13 +71,13 @@
 
   function formatCellValue(col, value) {
     if ((col && (col.type === 'date' || col.format === 'date'))) {
-      if (!value || value === '' || value === 'mm/dd/yyyy' || value === 'undefined') return '—';
+      if (!value || value === '' || value === 'mm/dd/yyyy' || value === 'undefined') return '---';
       try {
         var d = new Date(value);
-        if (isNaN(d.getTime())) return '—';
+        if (isNaN(d.getTime())) return '---';
         // Return YYYY-MM-DD for consistency
         return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      } catch (_) { return '—'; }
+      } catch (_) { return '---'; }
     }
     return value || '';
   }
@@ -275,7 +276,6 @@
         inp.dataset.key = c.key;
         inp.dataset.format = (c && c.format) ? c.format : 'auto';
         inp.dataset.raw = (rowData.data[c.key] != null ? rowData.data[c.key] : '').toString();
-        if (String(formatCellValue(c, rowData.data[c.key])) === '—') inp.placeholder = 'mm/dd/yyyy';
         if (c.format === 'number') inp.inputMode = 'numeric';
       });
     }
@@ -579,7 +579,7 @@
               .update({ column_defs: current.sheet.column_defs })
               .eq('id', current.sheet.id);
             render();
-            notify('info', 'Column Hidden', col.name + ' hidden. Use View menu to unhide.');
+            notify('info', 'Column Hidden', col.label + ' hidden. Click ⊞ Columns to unhide.');
             closeAllCtxMenus();
           } else if (action === 'autofit-column') {
             cols[colIdx].width = 'auto';
@@ -1466,6 +1466,42 @@
   }
 
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
+
+  if (columnsBtn) {
+    columnsBtn.onclick = function (e) {
+      e && e.stopPropagation && e.stopPropagation();
+      if (!current || !current.sheet || !Array.isArray(current.sheet.column_defs)) {
+        notify('warning', 'Columns', 'Open a sheet first.');
+        return;
+      }
+      var pop = document.querySelector('.col-pop');
+      if (pop) { pop.remove(); return; }
+      pop = document.createElement('div');
+      pop.className = 'col-pop';
+      pop.style.cssText = 'position:fixed;top:60px;right:20px;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:8px;z-index:9999;min-width:200px;max-height:300px;overflow:auto';
+      current.sheet.column_defs.forEach(function (col) {
+        var div = document.createElement('div');
+        div.style.cssText = 'padding:6px;cursor:pointer;display:flex;align-items:center;gap:8px';
+        div.innerHTML = '<input type="checkbox" ' + (!col.hidden ? 'checked' : '') + '><span>' + (col.label || 'Unnamed') + '</span>';
+        div.onclick = async function () {
+          col.hidden = !col.hidden;
+          await supabase.from('services_sheets').update({ column_defs: current.sheet.column_defs }).eq('id', current.sheet.id);
+          render();
+          pop.remove();
+        };
+        pop.appendChild(div);
+      });
+      document.body.appendChild(pop);
+      setTimeout(function () {
+        document.addEventListener('click', function c(ev) {
+          if (!pop.contains(ev.target) && ev.target !== columnsBtn) {
+            pop.remove();
+            document.removeEventListener('click', c);
+          }
+        });
+      }, 100);
+    };
+  }
 
   if (backupBtn) {
     backupBtn.addEventListener('click', async function () {

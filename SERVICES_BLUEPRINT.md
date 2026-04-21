@@ -191,6 +191,14 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (Audit fixes: date placeholder/QB class/upsert conflict/column unhide/row header freeze):**
+  - **Edit — `public/js/services-grid.js`:** Date formatter fallback now returns `---`, removed date placeholder injection on em-dash sentinel, added `Columns` toolbar toggle popover (`#svcColumnsBtn`) to hide/unhide columns with persisted `services_sheets.column_defs`, and updated hide-column notification copy to direct users to the new Columns control.
+  - **Edit — `public/js/services-conditional-format.js`:** Removed CF logic that stripped `.cell-qb-linked`, preserving QB-linked class compatibility while CF still applies inline styles.
+  - **Edit — `public/js/services-qb-lookup.js`:** Bulk refresh upsert conflict key switched to `sheet_id,row_index` to match Services row uniqueness contract.
+  - **Edit — `public/services.html`:** Added toolbar button `⊞ Columns` (`#svcColumnsBtn`) adjacent to backup controls.
+  - **Edit — `public/css/services.css`:** Added sticky row-number header rule (`.svc-grid thead th.row-num`) and explicit QB-linked input style contract (`color: #5eead4`, italic).
+  - **Behavior contract update:** Hidden columns are now recoverable from the in-grid Columns popover, and QB-linked cell class remains intact under conditional formatting paint paths.
+
 - **2026-04-21 (Services zebra vs CF priority fix):**
   - **Edit — `public/css/services.css`:** Replaced legacy zebra striping with explicit priority stack: base zebra (`grid-row` + even rows), row-level conditional-format overrides via `tr[data-cf-applied]`/`data-cf-rule`, and enforced hover as highest priority; retained `.cell-qb-linked` as text-only styling with transparent background.
   - **Edit — `public/js/services-grid.js`:** Added `evaluateConditionalFormat(row, columns)` fallback evaluator and row render hook that writes `data-cf-applied`, `data-cf-rule`, and `--cf-bg` CSS variable on each `<tr>` when CF matches, while preserving zebra defaults when no rule matches.

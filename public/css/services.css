@@ -373,6 +373,13 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
 .svc-grid tbody tr.grid-row:nth-child(even) td:not(.row-num) {
   background-color: #111c2f; /* zebra even */
 }
+.svc-grid thead th.row-num {
+  position: sticky !important;
+  left: 0 !important;
+  top: 0 !important;
+  z-index: 30 !important;
+  background: #020617 !important;
+}
 .grid-row.qb-updated { animation: qbPulse 0.6s ease; }
 @keyframes qbPulse { 0% { background:#1e293b; } 100% { background:transparent; } }
 .svc-grid tbody td input.cell {
@@ -3278,6 +3285,11 @@ input.cell.cell-qb-not-found {
 
 .svc-grid td[data-cf-applied] > input.cell {
   background: transparent !important;
+}
+
+.svc-grid input.cell-qb-linked {
+  color: #5eead4 !important;
+  font-style: italic !important;
 }
 
 /* ── Premium row highlight: left accent pulse animation ──── */
