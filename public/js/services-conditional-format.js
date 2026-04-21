@@ -16,6 +16,12 @@
 (function () {
   'use strict';
 
+  // FIX-CF-SUSPEND: While QB bulk update is running, suspend paintGrid() calls
+  // triggered by the svc:qb-paint-done event — they would paint against incomplete
+  // row.data (cells are in the ⋯ pending state). One final paintGrid() fires when
+  // the update resolves via svc:qb-update-complete event.
+  var _paintSuspended = false;
+
   /* ─────────────────────────────────────────────────────────────────────────
      CONSTANTS & PALETTES
   ───────────────────────────────────────────────────────────────────────── */
@@ -288,22 +294,29 @@
     });
 
     // Clear ALL previous CF styles (cells + row-level)
+    // FIX-CF: Also remove data-cf-qb-override flag so cell-qb-linked class
+    // is restored for inputs that had their QB class stripped by a previous CF paint.
     grid.querySelectorAll('td[data-cf-applied]').forEach(function (td) {
       td.removeAttribute('data-cf-applied');
-      td.style.background = '';
-      td.style.borderLeft = '';
-      td.style.outline = '';
-      td.style.position = '';
-      td.style.paddingLeft = '';
-      td.style.boxShadow = '';
+      td.style.removeProperty('background');
+      td.style.removeProperty('border-left');
+      td.style.removeProperty('outline');
+      td.style.removeProperty('position');
+      td.style.removeProperty('padding-left');
+      td.style.removeProperty('box-shadow');
       var inp = td.querySelector('input.cell');
       if (inp) {
-        inp.style.color = '';
-        inp.style.fontWeight = '';
-        inp.style.fontStyle = '';
-        inp.style.textDecoration = '';
-        inp.style.fontFamily = '';
+        inp.style.removeProperty('color');
+        inp.style.removeProperty('font-weight');
+        inp.style.removeProperty('font-style');
+        inp.style.removeProperty('text-decoration');
+        inp.style.removeProperty('font-family');
         inp.dataset.cfIcon = '';
+        // Restore cell-qb-linked if it was stripped by a previous CF pass
+        if (inp.dataset.cfQbStripped === '1') {
+          inp.classList.add('cell-qb-linked');
+          inp.dataset.cfQbStripped = '';
+        }
       }
       var badge = td.querySelector('.cf-icon-badge');
       if (badge) badge.remove();
@@ -312,17 +325,22 @@
     grid.querySelectorAll('tr[data-cf-row]').forEach(function (tr) {
       tr.removeAttribute('data-cf-row');
       tr.querySelectorAll('td').forEach(function (td) {
-        td.style.background = '';
-        td.style.borderTop = '';
-        td.style.borderBottom = '';
-        td.style.borderLeft = '';
-        td.style.boxShadow = '';
+        td.style.removeProperty('background');
+        td.style.removeProperty('border-top');
+        td.style.removeProperty('border-bottom');
+        td.style.removeProperty('border-left');
+        td.style.removeProperty('box-shadow');
         var inp = td.querySelector('input.cell');
         if (inp) {
-          inp.style.color = '';
-          inp.style.fontWeight = '';
-          inp.style.fontStyle = '';
-          inp.style.textDecoration = '';
+          inp.style.removeProperty('color');
+          inp.style.removeProperty('font-weight');
+          inp.style.removeProperty('font-style');
+          inp.style.removeProperty('text-decoration');
+          // Restore cell-qb-linked if stripped
+          if (inp.dataset.cfQbStripped === '1') {
+            inp.classList.add('cell-qb-linked');
+            inp.dataset.cfQbStripped = '';
+          }
         }
       });
     });
@@ -504,24 +522,28 @@
 
         var inp = td.querySelector('input.cell');
         if (inp) {
+          // FIX-CF: Strip cell-qb-linked !important class so row-highlight colors apply
+          if (inp.classList.contains('cell-qb-linked')) {
+            inp.classList.remove('cell-qb-linked');
+            inp.dataset.cfQbStripped = '1';
+          }
           if (hl.textColor) {
-            inp.style.color = hl.textColor;
+            inp.style.setProperty('color', hl.textColor, 'important');
           } else if (hl.bgColor) {
-            // Auto-contrast text, but softer (not full contrast — premium feel)
             var luminance = (function (hex) {
               var c = hex.replace('#','');
               if (c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
               var r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);
               return (0.299*r+0.587*g+0.114*b)/255;
             })(hl.bgColor);
-            inp.style.color = luminance > 0.55 ? '#1e293b' : '#f1f5f9';
+            inp.style.setProperty('color', luminance > 0.55 ? '#1e293b' : '#f1f5f9', 'important');
           }
-          inp.style.fontWeight     = hl.bold        ? '700' : '';
-          inp.style.fontStyle      = hl.italic      ? 'italic' : '';
+          inp.style.setProperty('font-weight', hl.bold   ? '700'    : 'normal',  'important');
+          inp.style.setProperty('font-style',  hl.italic ? 'italic' : 'normal',  'important');
           var dec2 = [];
           if (hl.strikethrough) dec2.push('line-through');
           if (hl.underline)     dec2.push('underline');
-          inp.style.textDecoration = dec2.join(' ') || '';
+          inp.style.setProperty('text-decoration', dec2.join(' ') || 'none', 'important');
         }
       });
     });
@@ -535,26 +557,33 @@
     var strike    = !!rule.strikethrough;
     var underline = !!rule.underline;
 
+    // FIX-CF: Use setProperty with 'important' so CF wins over
+    // cell-qb-linked { color: #67e8f9 !important } CSS class.
     if (bgColor) {
-      td.style.background = bgColor;
-      // Reinforce cell borders so they remain visible over solid CF background
-      td.style.boxShadow = [
+      td.style.setProperty('background', bgColor, 'important');
+      td.style.setProperty('box-shadow', [
         'inset -1px 0 0 rgba(148,163,184,0.22)',
         'inset 0 -1px 0 rgba(148,163,184,0.22)'
-      ].join(', ');
+      ].join(', '), 'important');
     }
     td.setAttribute('data-cf-applied', '1');
 
     var inp = td.querySelector('input.cell');
     if (inp) {
-      if (textColor) inp.style.color = textColor;
-      else if (bgColor) inp.style.color = contrastColor(bgColor);
-      inp.style.fontWeight     = bold    ? '700' : '';
-      inp.style.fontStyle      = italic  ? 'italic' : ''  ;
+      // Strip cell-qb-linked !important class so CF color takes effect visually.
+      // Mark it so the clear step can restore it later.
+      if (inp.classList.contains('cell-qb-linked')) {
+        inp.classList.remove('cell-qb-linked');
+        inp.dataset.cfQbStripped = '1';
+      }
+      var finalColor = textColor || (bgColor ? contrastColor(bgColor) : '');
+      if (finalColor) inp.style.setProperty('color', finalColor, 'important');
+      inp.style.setProperty('font-weight', bold   ? '700'     : 'normal', 'important');
+      inp.style.setProperty('font-style',  italic ? 'italic'  : 'normal', 'important');
       var dec = [];
       if (strike)    dec.push('line-through');
       if (underline) dec.push('underline');
-      inp.style.textDecoration = dec.join(' ') || '';
+      inp.style.setProperty('text-decoration', dec.join(' ') || 'none', 'important');
     }
   }
 
@@ -1435,9 +1464,21 @@
   // Hook in after grid is ready
   hookGridRender();
 
-  // Also repaint on QB lookup autofill completion (data may have changed)
+  // Repaint on QB autofill completion — but NOT during bulk Update (suspend)
   document.addEventListener('svc:qb-paint-done', function () {
+    if (_paintSuspended) return;
     setTimeout(paintGrid, 60);
+  });
+
+  // Suspend CF paint while bulk Update runs (prevents flicker + wrong colors)
+  document.addEventListener('svc:qb-update-start', function () {
+    _paintSuspended = true;
+  });
+
+  // Resume and do one final repaint when Update completes
+  document.addEventListener('svc:qb-update-complete', function () {
+    _paintSuspended = false;
+    setTimeout(paintGrid, 120); // allow row.data to settle
   });
 
 })();

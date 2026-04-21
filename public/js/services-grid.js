@@ -221,31 +221,51 @@
     attachHeaderContextMenu();
     attachRowContextMenu();
     updateStatusBar();
-    // FIX: Skip autoResizeColumns on treeview filter changes — column widths
-    // are already set for this sheet. Recalculating on every folder click forces
-    // full layout reflow on 520×6 = 3120 DOM nodes → main cause of folder lag.
-    if (!_renderIsFilterSwitch) {
+
+    // ── Column resize ──────────────────────────────────────────────────────────
+    // FIX-ALIGN: On filter switch the grid DOM is fully rebuilt (innerHTML replaced)
+    // so we MUST re-apply column widths. If cache exists → apply synchronously via
+    // rAF (deferred one frame so the browser has measured the new nodes).
+    // If no cache → run full measurement as normal.
+    if (_renderIsFilterSwitch) {
+      var _fsSheetId = current && current.sheet && current.sheet.id;
+      if (_fsSheetId && _resizeSheetId === _fsSheetId && _resizeCache[_fsSheetId]) {
+        // Cache hit: apply in next frame to avoid forced-layout on incomplete DOM
+        var _fsCachedWidths = _resizeCache[_fsSheetId];
+        requestAnimationFrame(function () { _applyColumnWidths(_fsCachedWidths); });
+      } else {
+        // No cache yet (first load came through a filter switch path): measure now
+        autoResizeColumns();
+      }
+    } else {
       autoResizeColumns();
     }
-    // FIX: refreshCounts triggers rerenderAllTrees which re-builds treeview DOM.
-    // Skip during filter switches — treeview manages its own counts via
-    // updateSheetCountBadge already. Only run on full sheet loads.
+
+    // refreshCounts builds treeview DOM — skip on filter switches (treeview
+    // manages its own badge counts via updateSheetCountBadge already).
     if (!_renderIsFilterSwitch) {
       if (window.servicesTreeview && typeof window.servicesTreeview.refreshCounts === 'function') {
         window.servicesTreeview.refreshCounts(current.sheet.id);
       }
     }
 
-    // QB auto-populate: paint linked column values from QB data (read-only)
-    // During a filter switch, cache is warm — autofill paints instantly from cache,
-    // 150ms debounce with no new API calls → still fast.
-    if (window.svcQbLookup) {
+    // ── QB auto-populate ────────────────────────────────────────────────────────
+    // FIX-LATENCY: During a filter switch, row.data already contains QB values from
+    // the previous autofill run (persisted in Supabase). inp.value is set directly
+    // from row.data during render(). Skip autofillLinkedColumns entirely on filter
+    // switches — it schedules debounced API calls that are unnecessary and cause lag.
+    // Only run on full sheet loads (non-filter-switch renders).
+    if (!_renderIsFilterSwitch && window.svcQbLookup) {
       window.svcQbLookup.autofillLinkedColumns(current, grid);
     }
 
     // ── Scroll-triggered re-autofill ─────────────────────────────────────────
-    // When user scrolls down, newly visible rows get their QB data painted.
+    // FIX-LATENCY: Skip re-attaching scroll handler on filter switches.
+    // The handler is already attached from the full load render and scrolled-to
+    // rows already have their QB data in row.data. Re-attaching on every folder
+    // click creates unnecessary work and minor memory pressure.
     (function attachScrollRepaint() {
+      if (_renderIsFilterSwitch) return; // already attached from full load
       var wrap = document.getElementById('svcGridWrap');
       if (!wrap) return;
       if (wrap._qbScrollHandler) {
@@ -1309,6 +1329,8 @@
       var originalText = qbUpdateBtn.textContent;
       qbUpdateBtn.textContent = '⏳ Updating…';
       setStatus('saving', 'Updating lookup…');
+      // Suspend CF paint during bulk update — fires one final paint when done
+      document.dispatchEvent(new CustomEvent('svc:qb-update-start'));
       try {
         await window.svcQbLookup.refreshAllLinkedColumns(current, grid);
         var unresolved = countUnresolvedLinkedCells(current);
@@ -1328,6 +1350,8 @@
       } finally {
         qbUpdateBtn.disabled = false;
         qbUpdateBtn.textContent = originalText;
+        // Always resume CF paint and trigger final repaint
+        document.dispatchEvent(new CustomEvent('svc:qb-update-complete'));
       }
     });
   }

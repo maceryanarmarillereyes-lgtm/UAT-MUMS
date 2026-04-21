@@ -105,6 +105,8 @@ const ROUTES = {
   'studio/qb_monitoring':      require('../server/routes/studio/qb_monitoring'),
   'studio/qb_search':          require('../server/routes/studio/qb_search'),
   'studio/qb_export':          require('../server/routes/studio/qb_export'),
+  // FAST BULK UPDATE: fetches entire QB report in 1 call (Issue 4 fix)
+  'studio/qb_bulk':            require('../server/routes/studio/qb_bulk'),
   'studio/cache_manifest':     require('../server/routes/studio/cache_manifest'),
   'studio/cache_bundle':       require('../server/routes/studio/cache_bundle'),
   'studio/csv_settings':       require('../server/routes/studio/csv_settings'),
