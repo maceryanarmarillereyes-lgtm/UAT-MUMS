@@ -365,11 +365,13 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   color: white;
   box-shadow: inset 3px 0 0 #38bdf8;
 }
-.svc-grid tbody tr.grid-row:nth-child(even) td:not(.row-num) {
-  background: #0f172a;
+/* 1. BASE ZEBRA - lowest priority */
+.svc-grid tbody tr.grid-row td:not(.row-num) {
+  background-color: #0f172a; /* default dark */
 }
-.svc-grid tbody tr.grid-row:nth-child(odd) td:not(.row-num) {
-  background: #111827;
+
+.svc-grid tbody tr.grid-row:nth-child(even) td:not(.row-num) {
+  background-color: #111c2f; /* zebra even */
 }
 .grid-row.qb-updated { animation: qbPulse 0.6s ease; }
 @keyframes qbPulse { 0% { background:#1e293b; } 100% { background:transparent; } }
@@ -407,7 +409,10 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   box-shadow: inset 0 0 0 2px var(--svc-accent);
   z-index: 1;
 }
-.svc-grid tbody tr:hover td:not(.row-num) { background: rgba(255,255,255,0.018); }
+/* 3. HOVER - highest priority */
+.svc-grid tbody tr.grid-row:hover td:not(.row-num) {
+  background-color: #1e293b !important;
+}
 .svc-grid tbody tr.selected td { background: rgba(34,211,238,0.06); }
 
 .svc-statusbar {
@@ -1378,7 +1383,7 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   box-shadow: 0 0 6px rgba(34,211,238,0.15);
 }
 
-/* ── QB-linked cell styling ──────────────────────────────────────────────── */
+/* 4. QB LINKED - text only, never background */
 .cell-qb-linked {
   color: #5eead4 !important;
   font-style: italic;
@@ -3256,11 +3261,21 @@ input.cell.cell-qb-not-found {
   transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 
-/* CF-applied single-cell highlight — reinforced grid lines */
-.svc-grid td[data-cf-applied]:not(.row-num) {
-  /* box-shadow grid reinforcement is applied inline by JS.
-     This ensures the input inside is always transparent over the td bg. */
+/* 2. CONDITIONAL FORMATTING - medium priority (overrides zebra) */
+.svc-grid tbody tr[data-cf-applied="true"] td:not(.row-num) {
+  /* CF will set inline style or data-cf-color */
+  background-color: var(--cf-bg, inherit) !important;
 }
+
+/* Specific CF colors from configured rules */
+.svc-grid tbody tr[data-cf-rule="waiting"] td:not(.row-num) {
+  background-color: #2d1b0e !important; /* brown for Waiting */
+}
+
+.svc-grid tbody tr[data-cf-rule="mace-assigned"] td:not(.row-num) {
+  background-color: #2d1b0e !important; /* brown for Mace */
+}
+
 .svc-grid td[data-cf-applied] > input.cell {
   background: transparent !important;
 }

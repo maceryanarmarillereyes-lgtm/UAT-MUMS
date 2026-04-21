@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-21 (Services zebra vs CF priority fix):**
+  - **Edit — `public/css/services.css`:** Replaced legacy zebra striping with explicit priority stack: base zebra (`grid-row` + even rows), row-level conditional-format overrides via `tr[data-cf-applied]`/`data-cf-rule`, and enforced hover as highest priority; retained `.cell-qb-linked` as text-only styling with transparent background.
+  - **Edit — `public/js/services-grid.js`:** Added `evaluateConditionalFormat(row, columns)` fallback evaluator and row render hook that writes `data-cf-applied`, `data-cf-rule`, and `--cf-bg` CSS variable on each `<tr>` when CF matches, while preserving zebra defaults when no rule matches.
+  - **Behavior contract update:** Default row visuals now remain zebra unless a row-level CF match is present; hover always wins over zebra and CF.
+
 - **2026-04-21 (Audit fixes: layout/autofit/backup/date/hide-column/notify):**
   - **Edit — `public/css/services.css`:** Consolidated row-number sticky column rules into one canonical `.svc-grid ... .row-num` block (56px fixed), aligned zebra backgrounds to `td:not(.row-num)`, and updated `.cell-qb-linked` + notification style contracts to the premium toast spec.
   - **Edit — `public/js/services-grid.js`:** Updated `formatCellValue()` date output to `YYYY-MM-DD` with em-dash fallback, upgraded `autoFitColumns()` floor/ceiling to `140..400`, changed row-number render cell/title contract, added `createBackup(name)` (snapshot payload insert to `services_backups`), made toolbar backup action call backup create flow, and added notify feedback for hide-column action.

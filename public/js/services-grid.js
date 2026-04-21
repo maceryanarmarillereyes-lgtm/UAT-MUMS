@@ -81,6 +81,18 @@
     return value || '';
   }
 
+  function evaluateConditionalFormat(row, columns) {
+    var safeRow = row || {};
+    var data = safeRow.data || {};
+    var status = String(data.status || '');
+    var tracking = String(data.tracking_case_progress || '');
+
+    if (status.includes('Waiting') || tracking === 'Mace Ryan Reyes') {
+      return { match: true, ruleId: 'waiting', color: '#2d1b0e' };
+    }
+    return { match: false };
+  }
+
   function clear() {
     current = null;
     if (subscription) { try { subscription.unsubscribe(); } catch (_) {} subscription = null; }
@@ -206,9 +218,23 @@
       var rowData = (isFilteredView || isSorted)
         ? (viewRows[i] || { row_index: i, data: {} })
         : (current.rows.find(function (r) { return r.row_index === i; }) || { row_index: i, data: {} });
+      if (typeof rowData._cfMatch === 'undefined') {
+        var cf = evaluateConditionalFormat(rowData, current.sheet.column_defs || []);
+        rowData._cfMatch = !!cf.match;
+        rowData._cfRuleId = cf.ruleId || '';
+        rowData._cfColor = cf.color || '';
+      }
       var rowIndex = Number.isFinite(rowData.row_index) ? rowData.row_index : i;
       var tr = mkEl('tr', { className: 'grid-row' }, tbody);
       tr.dataset.row = String(rowIndex);
+      if (rowData._cfMatch) {
+        tr.setAttribute('data-cf-applied', 'true');
+        tr.setAttribute('data-cf-rule', rowData._cfRuleId);
+        tr.style.setProperty('--cf-bg', rowData._cfColor);
+      } else {
+        tr.removeAttribute('data-cf-applied');
+        tr.removeAttribute('data-cf-rule');
+      }
       var rowNumTd = mkEl('td', {
         className: 'row-num',
         textContent: String(rowIndex + 1),
