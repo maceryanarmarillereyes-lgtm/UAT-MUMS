@@ -1,128 +1,131 @@
-export async function onRequestPost(context) {
+export async function onRequest(context) {
   const { request, env } = context;
+  const url = new URL(request.url);
 
-  try {
-    const { cases = [], fieldIds = [3,25,13] } = await request.json();
+  // Support GET for single case (for detail view)
+  if (request.method === 'GET') {
+    const caseNum = (url.searchParams.get('case') || '').trim();
+    if (!caseNum) return new Response('Missing case', { status: 400 });
 
-    if (!Array.isArray(cases) || cases.length === 0) {
-      return new Response(JSON.stringify({ error: 'cases array required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    const cache = caches.default;
+    const useFresh = url.searchParams.get('fresh') === '1';
+    const cacheKey = new Request(`https://cache.qb/single/${encodeURIComponent(caseNum)}`);
+
+    if (!useFresh) {
+      const cached = await cache.match(cacheKey);
+      if (cached) return cached;
     }
 
-    const QB_REALM = env.QB_REALM_HOSTNAME;
-    const QB_TOKEN = env.QB_USER_TOKEN;
-    const QB_TABLE_ID = env.QB_SERVICES_TABLE_ID;
-
-    if (!QB_REALM ||!QB_TOKEN ||!QB_TABLE_ID) {
-      return new Response(JSON.stringify({ error: 'Missing Quickbase env vars' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    const uniqueCases = [...new Set(cases.map(String).filter(Boolean))];
-    const normalizedFieldIds = [...new Set((Array.isArray(fieldIds) ? fieldIds : []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))];
-
-    if (!normalizedFieldIds.length) {
-      return new Response(JSON.stringify({ error: 'fieldIds array required' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    const CHUNK_SIZE = 100;
-    const chunks = [];
-    for (let i = 0; i < uniqueCases.length; i += CHUNK_SIZE) {
-      chunks.push(uniqueCases.slice(i, i + CHUNK_SIZE));
-    }
-
-    const start = Date.now();
-
-    const results = await Promise.all(
-      chunks.map(async (chunk) => {
-        const where = chunk
-         .map(c => `{3.EX.'${c.replace(/'/g, "''")}'}`)
-         .join('OR');
-
-        const body = {
-          from: QB_TABLE_ID,
-          select: normalizedFieldIds,
-          where,
-          options: { skip: 0, top: 100 }
-        };
-
-        const resp = await fetch('https://api.quickbase.com/v1/records/query', {
-          method: 'POST',
-          headers: {
-            'QB-Realm-Hostname': QB_REALM,
-            'Authorization': `QB-USER-TOKEN ${QB_TOKEN}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(body)
-        });
-
-        if (!resp.ok) {
-          const err = await resp.text();
-          throw new Error(`QB ${resp.status}: ${err}`);
-        }
-
-        const data = await resp.json();
-        return data.data || [];
+    const qbRes = await fetch('https://api.quickbase.com/v1/records/query', {
+      method: 'POST',
+      headers: {
+        'QB-Realm-Hostname': env.QB_REALM_HOSTNAME,
+        'Authorization': `QB-USER-TOKEN ${env.QB_USER_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: env.QB_SERVICES_TABLE_ID,
+        select: [3, 6, 7, 8, 13, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40],
+        where: `{3.EX.'${caseNum.replace(/'/g, "''")}'}`,
+        options: { top: 1 }
       })
-    );
-
-    const map = {};
-    results.flat().forEach((rec) => {
-      const caseVal = rec['3']?.value?.toString();
-      if (!caseVal) return;
-
-      map[caseVal] = {};
-      normalizedFieldIds.forEach(fid => {
-        const fieldData = rec[fid.toString()];
-        let val = fieldData?.value;
-
-        // FIX: Extract proper string from QB field types
-        if (val && typeof val === 'object') {
-          // User field: { email, name } or { id, name }
-          val = val.name || val.email || val.display || JSON.stringify(val);
-        }
-        // Date field: keep ISO string
-        // Text: direct
-
-        map[caseVal][fid] = val || '';
-      });
     });
 
-    return new Response(JSON.stringify({
-      ok: true,
-      count: uniqueCases.length,
-      duration_ms: Date.now() - start,
-      data: map
-    }), {
-      status: 200,
+    const data = await qbRes.json();
+    const response = new Response(JSON.stringify(data), {
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 's-maxage=30, stale-while-revalidate=60',
-        'Access-Control-Allow-Origin': '*'
+        'Cache-Control': 'public, max-age=300'
       }
     });
 
-  } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
+    if (!useFresh) {
+      await cache.put(cacheKey, response.clone());
+    }
+
+    return response;
+  }
+
+  // POST - bulk
+  if (request.method === 'POST') {
+    const body = await request.json();
+    const { cases = [], fieldIds = [3, 25, 13], checkOnly = false } = body;
+
+    if (!Array.isArray(cases) || !cases.length) {
+      return new Response(JSON.stringify({ ok: false, error: 'cases array required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const normalizedCases = [...new Set(cases.map((v) => String(v || '').trim()).filter(Boolean))];
+    const normalizedFieldIds = [...new Set((Array.isArray(fieldIds) ? fieldIds : []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))];
+    if (!normalizedFieldIds.length) normalizedFieldIds.push(3, 25, 13);
+
+    const cache = caches.default;
+    const sortedFields = [...normalizedFieldIds].sort((a, b) => a - b).join('-');
+    const caseHash = btoa(normalizedCases.join('|')).slice(0, 16);
+    const cacheKey = new Request(`https://cache.qb/bulk/${env.QB_SERVICES_TABLE_ID}/${sortedFields}/${caseHash}`);
+
+    const cachedRes = await cache.match(cacheKey);
+    if (cachedRes) {
+      const cached = await cachedRes.json();
+      if (Date.now() - (cached.cachedAt || 0) < 300000) {
+        if (checkOnly) {
+          return new Response(JSON.stringify({ ok: true, hash: cached.hash, fromCache: true }), {
+            headers: { 'Content-Type': 'application/json', 'X-Cache': 'HIT' }
+          });
+        }
+        return new Response(JSON.stringify({ ...cached, fromCache: true }), {
+          headers: { 'Content-Type': 'application/json', 'X-Cache': 'HIT' }
+        });
+      }
+    }
+
+    const qbResponse = await fetch('https://api.quickbase.com/v1/records/query', {
+      method: 'POST',
+      headers: {
+        'QB-Realm-Hostname': env.QB_REALM_HOSTNAME,
+        'Authorization': `QB-USER-TOKEN ${env.QB_USER_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: env.QB_SERVICES_TABLE_ID,
+        select: normalizedFieldIds,
+        where: `{3.OAF.'${normalizedCases.map((c) => c.replace(/'/g, "''")).join("','")}'}`,
+        options: { top: 1000 }
+      })
+    });
+
+    const qbData = await qbResponse.json();
+    const map = {};
+    (qbData.data || []).forEach((rec) => {
+      const cn = rec['3']?.value?.toString();
+      if (!cn) return;
+      map[cn] = {};
+      normalizedFieldIds.forEach((fid) => {
+        let v = rec[fid.toString()]?.value;
+        if (v && typeof v === 'object') v = v.name || v.email || v.display || '';
+        map[cn][fid] = v || '';
+      });
+    });
+
+    const hash = btoa(JSON.stringify(map)).slice(0, 16);
+    const result = { ok: true, count: normalizedCases.length, data: map, hash, cachedAt: Date.now() };
+    await cache.put(cacheKey, new Response(JSON.stringify(result), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=300'
+      }
+    }));
+
+    return new Response(JSON.stringify({ ...result, fromCache: false }), {
+      headers: { 'Content-Type': 'application/json', 'X-Cache': 'MISS' }
     });
   }
-}
 
-export async function onRequestOptions() {
-  return new Response(null, {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
-    }
+  return new Response(JSON.stringify({ ok: false, error: 'Method not allowed' }), {
+    status: 405,
+    headers: { 'Content-Type': 'application/json' }
   });
 }

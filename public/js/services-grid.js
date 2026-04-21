@@ -58,6 +58,7 @@
     if (subscription) { try { subscription.unsubscribe(); } catch (_) {} subscription = null; }
     grid.hidden = true;
     empty.style.display = '';
+    if (window.svcQbLookup && window.svcQbLookup.stopSmartSync) window.svcQbLookup.stopSmartSync();
     window.servicesDashboard && window.servicesDashboard.reset();
   }
 
@@ -78,6 +79,9 @@
     redoStack = [];
     current.rows = await window.servicesDB.listRows(sheet.id);
     render();
+    if (window.svcQbLookup && window.svcQbLookup.startSmartSync) {
+      window.svcQbLookup.startSmartSync({ current: current, gridEl: grid, sheetId: sheet.id });
+    }
     window.servicesDashboard && window.servicesDashboard.update(current);
     subscription = window.servicesDB.subscribeToSheet(sheet.id, function (payload) {
       if (!current) return;
@@ -832,14 +836,55 @@
       if (!caseNum) { _showError('No Case # found in this row.'); return; }
       if (!window.svcQbLookup) { _showError('QB Lookup module not loaded.'); return; }
 
-      // Use fetchCaseRecord (MODE A direct) — independent of the batch pipeline.
-      // lookupCase() can block if a 520-row Update batch is in-flight.
-      // fetchCaseRecord() goes straight to /api/studio/qb_data?recordId=X — always fast.
-      window.svcQbLookup.fetchCaseRecord(caseNum).then(function (rec) {
+      function _normalizeDetailPayload(payload) {
+        if (!payload) return null;
+        if (payload.fields) return payload;
+
+        var knownLabels = {
+          '3': 'Case #', '6': 'Short Description', '7': 'Assigned To', '8': 'Contact',
+          '13': 'Case Status', '25': 'Type', '26': 'Age', '27': 'Last Update Days',
+          '28': 'Latest Update on the Case', '29': 'Case Notes Detail', '30': 'End User',
+          '31': 'Classification', '32': 'Priority', '33': 'Queue', '34': 'Sub Type',
+          '35': 'Workgroup', '36': 'Region', '37': 'Site', '38': 'Email', '39': 'Phone', '40': 'Owner'
+        };
+
+        var rec = { fields: {}, columnMap: {} };
+        Object.keys(payload).forEach(function (fid) {
+          if (fid === '_cachedAt') return;
+          var raw = payload[fid];
+          var val = (raw && typeof raw === 'object' && Object.prototype.hasOwnProperty.call(raw, 'value')) ? raw.value : raw;
+          rec.fields[fid] = { value: val };
+          rec.columnMap[fid] = knownLabels[fid] || ('Field #' + fid);
+        });
+        return rec;
+      }
+
+      var loadingEl = document.getElementById('svcQbcdLoading');
+      var renderCaseDetail = function (data) {
+        var normalized = _normalizeDetailPayload(data);
+        if (!normalized) return;
+        _populate(caseNum, normalized);
+      };
+
+      (async function openCaseDetail() {
+        var cached = await window.svcQbLookup.getCaseDetailInstant(caseNum);
         if (!modal.classList.contains('svc-cdm-open')) return;
-        if (!rec) { _showError('Case #' + caseNum + ' not found in QuickBase.'); return; }
-        _populate(caseNum, rec);
-      }).catch(function (err) {
+
+        if (cached.ok) {
+          renderCaseDetail(cached.data);
+          if (loadingEl) loadingEl.style.display = 'none';
+        }
+
+        if (!cached.ok || Date.now() - ((cached.data && cached.data._cachedAt) || 0) > 60000) {
+          fetch('/api/quickbase/bulk-lookup?case=' + encodeURIComponent(caseNum) + '&fresh=1')
+            .then(function (r) { return r.json(); })
+            .then(function (json) {
+              if (!modal.classList.contains('svc-cdm-open')) return;
+              if (json && json.data && json.data[0]) renderCaseDetail(json.data[0]);
+            })
+            .catch(function () {});
+        }
+      })().catch(function (err) {
         if (!modal.classList.contains('svc-cdm-open')) return;
         _showError('Failed: ' + (err && err.message ? err.message : String(err)));
       });
@@ -1342,6 +1387,9 @@
           throw new Error('Sheet changed while updating. Please click Update again on the selected sheet.');
         }
         await saveAllRows();
+        if (window.svcQbLookup && window.svcQbLookup.startSmartSync) {
+          window.svcQbLookup.startSmartSync({ current: current, gridEl: grid, sheetId: targetSheetId });
+        }
         setStatus('saved', '✓ Lookup updated');
         window.svcToast && window.svcToast.show('success', 'Lookup Updated', 'All linked QB values refreshed.');
       } catch (err) {
