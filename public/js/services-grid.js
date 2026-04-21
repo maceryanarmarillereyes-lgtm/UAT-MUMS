@@ -119,6 +119,7 @@
   }
 
   function render() {
+    try {
     if (!current) { clear(); return; }
     empty.style.display = 'none';
     grid.hidden = false;
@@ -313,6 +314,15 @@
       };
       wrap.addEventListener('scroll', wrap._qbScrollHandler, { passive: true });
     })();
+    } catch (renderErr) {
+      console.error('Render error:', renderErr);
+      var gridEl = document.getElementById('svcGrid');
+      if (gridEl) {
+        gridEl.innerHTML = '<tbody><tr><td style="padding:40px;color:#ef4444">Render error: ' + renderErr.message + '. Check console.</td></tr></tbody>';
+        gridEl.hidden = false;
+      }
+    }
+
   }
 
   function attachCellHandlers() {
