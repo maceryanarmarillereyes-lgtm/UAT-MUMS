@@ -191,38 +191,6 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
-- **2026-04-21 (Emergency rollback — restore working Services grid path):**
-  - **Edit — `public/js/services-grid.js`:** Removed render-level `try/catch` wrapper fallback and restored direct render flow.
-  - **Edit — `public/js/services-grid.js`:** Removed status-based row `data-cf-row` assignment block in `render()` and reverted input creation to avoid assigning readonly `input.list` via `Object.assign`; datalist binding now uses `setAttribute('list', listId)` only.
-  - **Edit — `public/js/services-grid.js`:** Removed experimental `autoFitColumns()` function and startup timeout call; removed temporary backup button injection block and ad-hoc right-click column menu block.
-  - **Edit — `public/css/services.css`:** Rolled back experimental Services styling for `tr[data-cf-row]`, premium row-number overrides, and duplicated premium toast block to restore prior stable stylesheet behavior.
-  - **Behavior contract update:** Grid render path is back to the prior stable baseline with only non-breaking date placeholder handling retained for date inputs.
-
-- **2026-04-21 (Hotfix — ES5-safe render recovery for blank Services grid):**
-  - **Edit — `public/js/services-grid.js`:** Replaced optional-chaining/modern string-method status-row formatter with ES5-safe loops + `indexOf` checks and explicit `setAttribute('data-cf-row', ...)` writes to prevent parser/runtime failures in older execution contexts.
-  - **Edit — `public/js/services-grid.js`:** Wrapped `render()` body in top-level `try/catch` so render exceptions fail into an inline visible error row (`#svcGrid`) instead of blank-grid silent failure.
-  - **Edit — `public/js/services-grid.js`:** Hardened deferred auto-fit bootstrap call with guarded `setTimeout(function(){...},1200)` + `typeof autoFitColumns` check and warning-only catch path.
-  - **Edit — `public/js/services-grid.js`:** Temporarily disabled toolbar backup button click binding (`btn.onclick = createBackup`) for isolation while triaging grid stability.
-  - **Behavior contract update:** Services grid now fails safe under render/autofit errors and remains compatible with ES5-only runtimes without changing auth/realtime/data contracts.
-
-- **2026-04-21 (Regression fix — sheet data visibility after Update):**
-  - **Edit — `public/js/services-grid.js`:** Hardened `autoFitColumns()` so it only processes valid visible columns and persists widths only for explicit/manual calls.
-  - **Edit — `public/js/services-grid.js`:** Replaced global startup `setTimeout(autoFitColumns, 800)` with a sheet-scoped timer inside `load(sheet)` that runs `autoFitColumns({ persist:false })`, preventing unintended early metadata writes.
-  - **Behavior contract update:** Initial auto-fit is now non-destructive (local render-only). DB `column_defs` writes happen only when user explicitly triggers autofit action.
-
-- **2026-04-21 (Premium UI + backup utilities pass):**
-  - **Edit — `public/css/services.css`:** Stabilized grid row backgrounds and row-level conditional highlights via `tr[data-cf-row]` attributes, upgraded row-number rail styling to premium sticky design, and appended new premium toast visuals (`.svc-toast-container`, `.svc-toast*`).
-  - **Edit — `public/js/services-grid.js`:** Added status-based `tr.dataset.cfRow` mapping at render time, date-input placeholder/empty styling (`---`), column auto-fit utility with Supabase persistence, backup creation flow + toolbar button, right-click column menu for hide/auto-fit actions, and enhanced success save toast copy with timestamp.
-  - **Edit — `public/js/services-import.js`:** Replaced toast renderer implementation with reusable premium toast runtime (dynamic container, icon/color map, animated slide-in/out behavior) while keeping `pulse()` sync chip helper intact.
-  - **New — `supabase/migrations/20260421_backup_history.sql`:** Added `services_backups` table, index, RLS enablement, and owner policy for backup snapshot history.
-  - **Behavior contract update:** Services grid now applies status highlighting deterministically per-row data, supports one-click backup snapshots, and exposes context-menu column hiding/autofit without altering auth/realtime contracts.
-
-- **2026-04-21 (Instant case detail + smart sync + 5-min edge cache):**
-  - **Edit — `functions/api/quickbase/bulk-lookup.js`:** Replaced handler with dual-method endpoint: `GET ?case=` now serves single-case detail payload with 5-minute edge cache (`caches.default`) and optional `fresh=1` bypass; `POST` bulk path keeps 5-minute hashable cache and supports `checkOnly` probes for low-cost sync checks.
-  - **Edit — `public/js/services-qb-lookup.js`:** Added `_detailCache` memory store and `getCaseDetailInstant(caseNum)` flow (memory-first, then edge cache GET fallback). `refreshAllLinkedColumns()` now hydrates `_detailCache` so detail modal opens instantly after bulk refresh. Added `startSmartSync()` / `stopSmartSync()` 15-minute hash probe loop using `checkOnly` to refresh only on data change.
-  - **Edit — `public/js/services-grid.js`:** Case detail modal flow now paints cached detail immediately and performs background refresh (`fresh=1`) when cache is stale (>60s). Sheet load/update lifecycle now starts smart sync and clear flow stops it.
-  - **Behavior contract update:** Case-detail UX is now cache-first/non-blocking while preserving existing modal structure and linked-column update behavior.
-
 - **2026-04-21 (refreshAllLinkedColumns hard rewrite to true bulk path):**
   - **Edit — `public/js/services-qb-lookup.js`:** Replaced `refreshAllLinkedColumns()` implementation with async single-pass bulk pipeline: collect unique case numbers, auto-detect linked field IDs, call `POST /api/quickbase/bulk-lookup` once, stage changed rows only, run one `services_rows` upsert, and repaint linked inputs once.
   - **Edit — `functions/api/quickbase/bulk-lookup.js`:** Request parse now starts with `const { cases = [], fieldIds = [3,25,13] } = await request.json();` and query select uses normalized dynamic field IDs to support caller-provided linked-column sets.

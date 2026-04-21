@@ -339,15 +339,17 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
 .svc-grid tbody td {
   padding: 0;
   background: var(--svc-panel);
-  transition: background-color 0.15s ease;
   border-right: 1px solid var(--svc-border);
   border-bottom: 1px solid var(--svc-border);
 }
-.svc-grid tbody tr {
-  background: var(--svc-panel);
-}
-.svc-grid tbody tr:nth-child(even) td:not(.row-num) {
-  background: rgba(255,255,255,0.015);
+.svc-grid tbody td.row-num {
+  background: var(--svc-bg);
+  color: var(--svc-text-dim);
+  text-align: center;
+  font-size: 11px;
+  padding: 6px;
+  width: 40px;
+  user-select: none;
 }
 .svc-grid tbody td input.cell {
   width: 100%;
@@ -1385,6 +1387,16 @@ input.cell.cell-qb-not-found {
   color: rgba(248,113,113,0.55) !important;
   font-style: italic;
   cursor: default;
+}
+
+/* ── Row number hover — signal right-clickable ───────────────────────────── */
+.svc-grid tbody td.row-num {
+  cursor: context-menu;
+  user-select: none;
+}
+.svc-grid tbody td.row-num:hover {
+  background: rgba(248,113,113,0.07);
+  color: #f87171;
 }
 
 /* ── Danger zone ctx-item (Delete Column / Delete Row) ───────────────────── */
@@ -3132,6 +3144,12 @@ input.cell.cell-qb-not-found {
   word-break: break-all;
 }
 
+/* ── ROW HIGHLIGHT ACTIVE STATE ──────────────────────────── */
+#svcGrid tr[data-cf-row] td.row-num {
+  border-left-width: 3px !important;
+  border-left-style: solid !important;
+}
+
 /* ═══════════════════════════════════════════════════════════
    SORT FEATURE — Column Header Sort Indicators
    ═══════════════════════════════════════════════════════════ */
@@ -3184,6 +3202,50 @@ input.cell.cell-qb-not-found {
   color: #f87171;
   font-size: 11px;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   CONDITIONAL FORMATTING — Premium Row Highlight Redesign
+   Enterprise-grade semi-transparent row highlighting
+   ═══════════════════════════════════════════════════════════ */
+
+/* Row highlight: the row-num column gets a solid left accent bar via box-shadow
+   (set inline by paintGrid). This CSS ensures the row-num td is position:relative
+   so the accent renders correctly and provides the "active row" visual cue. */
+#svcGrid tbody tr[data-cf-row] td.row-num {
+  position: relative;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+/* Data cells in highlighted rows: remove the default hover bg so CF bg wins */
+#svcGrid tbody tr[data-cf-row]:hover td:not(.row-num) {
+  /* box-shadow set by JS takes precedence over hover bg
+     — no override needed here, but reset hover background */
+  background: inherit;
+}
+
+/* When row is highlighted, make the row-num separator line tinted */
+#svcGrid tbody tr[data-cf-row] td {
+  /* transition for smooth paint/unpaint */
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* CF-applied single-cell highlight — reinforced grid lines */
+.svc-grid td[data-cf-applied]:not(.row-num) {
+  /* box-shadow grid reinforcement is applied inline by JS.
+     This ensures the input inside is always transparent over the td bg. */
+}
+.svc-grid td[data-cf-applied] > input.cell {
+  background: transparent !important;
+}
+
+/* ── Premium row highlight: left accent pulse animation ──── */
+@keyframes cf-row-accent-in {
+  from { box-shadow: inset 0 0 0 transparent; }
+  to   { box-shadow: inset 4px 0 0 currentColor; }
+}
+
+/* ENDCSS */
 
 /* ════════════════════════════════════════════════════════════════════════════
    SERVICES v5 ADDITIONS

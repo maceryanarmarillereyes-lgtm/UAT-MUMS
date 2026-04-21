@@ -112,9 +112,6 @@
 
   // ── Caches ─────────────────────────────────────────────────────────────────────
   var _cache         = {};   // nk → { fields, columnMap, at }
-  var _detailCache   = {};   // caseNum -> flat QB map for case detail modal
-  var _smartSyncTimer = null;
-  var _smartSyncState = null;
   var _notFound      = {};   // nk → timestamp  (only genuine misses)
   var _inFlight      = {};   // nk → Promise     (dedup concurrent fetches)
   var _reportIdx     = null; // { byNk, at } one-shot fallback index from qb_data report mode
@@ -1002,25 +999,29 @@
         .catch(function () { return null; });
     },
     refreshAllLinkedColumns: async function (current, gridEl) {
-      if (!current || !gridEl) return;
+      if (!current ||!gridEl) return;
 
       const cols = current.sheet.column_defs || [];
       const linkedCols = cols.filter(c => c.qbLookup && c.qbLookup.fieldId);
       if (!linkedCols.length) return;
 
-      const caseCol = resolveCaseColumn(cols);
+      const caseCol = cols.find(c => c.key && c.name && c.name.toUpperCase().includes('CASE'));
       if (!caseCol) return;
 
       const rowsWithCase = current.rows.filter(r => r.data && r.data[caseCol.key]);
       if (!rowsWithCase.length) return;
 
+      // 1. Collect all unique cases
       const allCases = [...new Set(rowsWithCase.map(r => String(r.data[caseCol.key]).trim()).filter(Boolean))];
-      const fieldIds = [3];
+
+      // 2. Auto-detect ALL field IDs (including new DUE DATE)
+      const fieldIds = [3]; // Case#
       linkedCols.forEach(col => {
-        const fid = parseInt(col.qbLookup.fieldId, 10);
-        if (fid && !fieldIds.includes(fid)) fieldIds.push(fid);
+        const fid = parseInt(col.qbLookup.fieldId);
+        if (fid &&!fieldIds.includes(fid)) fieldIds.push(fid);
       });
 
+      // 3. Show spinner
       rowsWithCase.forEach(row => {
         linkedCols.forEach(col => {
           const inp = gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`);
@@ -1029,21 +1030,19 @@
       });
 
       try {
+        // 4. ONE Quickbase call for ALL fields
         const qbRes = await fetch('/api/quickbase/bulk-lookup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cases: allCases, fieldIds })
         });
         const qbJson = await qbRes.json();
+
         if (!qbJson.ok) throw new Error(qbJson.error || 'QB fetch failed');
 
         const qbData = qbJson.data || {};
 
-        // Store in detail cache for instant view
-        Object.keys(qbData).forEach(caseNum => {
-          _detailCache[caseNum] = { ...qbData[caseNum], _cachedAt: Date.now() };
-        });
-
+        // 5. Update ALL rows in memory
         const updates = [];
         rowsWithCase.forEach(row => {
           const caseNum = String(row.data[caseCol.key]).trim();
@@ -1052,28 +1051,45 @@
 
           let changed = false;
           linkedCols.forEach(col => {
-            const fid = String(col.qbLookup.fieldId);
+            const fid = col.qbLookup.fieldId.toString();
             let val = qbRec[fid];
-            if (val && typeof val === 'object') val = val.name || val.email || val.display || '';
-            if (row.data[col.key] !== (val || '')) {
+
+            // Fix [object Object] for user fields
+            if (val && typeof val === 'object') {
+              val = val.name || val.email || val.display || '';
+            }
+
+            if (row.data[col.key]!== val) {
               row.data[col.key] = val || '';
               changed = true;
             }
           });
 
           if (changed) {
-            updates.push({ row_index: row.row_index, data: row.data });
+            updates.push({
+              id: row.id,
+              sheet_id: current.sheet.id,
+              row_index: row.row_index,
+              data: row.data,
+              updated_at: new Date().toISOString()
+            });
           }
         });
 
-        if (updates.length > 0 && window.servicesDB && window.servicesDB.bulkUpsertRows) {
-          await window.servicesDB.bulkUpsertRows(current.sheet.id, updates);
+        // 6. ONE Supabase upsert (this is the fix for minutes → seconds)
+        if (updates.length > 0) {
+          const { error } = await window.supabase
+           .from('services_rows')
+           .upsert(updates, { onConflict: 'id' });
+
+          if (error) throw error;
         }
 
+        // 7. Paint UI once
         rowsWithCase.forEach(row => {
           linkedCols.forEach(col => {
             const inp = gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`);
-            if (inp && inp !== document.activeElement) {
+            if (inp && inp!== document.activeElement) {
               inp.value = row.data[col.key] || '';
               inp.classList.remove('cell-qb-pending');
               inp.classList.add('cell-qb-linked');
@@ -1082,64 +1098,12 @@
           });
         });
 
-        console.log(`[QB] Bulk complete: ${allCases.length} cases, ${updates.length} updated`);
+        console.log(`[QB] Bulk complete: ${allCases.length} cases, ${updates.length} updated in ${qbJson.duration_ms}ms`);
+
       } catch (err) {
         console.error('[QB] Bulk failed:', err);
         throw err;
       }
-    },
-
-    getCaseDetailInstant: async function (caseNum) {
-      if (_detailCache[caseNum] && Date.now() - _detailCache[caseNum]._cachedAt < 300000) {
-        return { ok: true, data: _detailCache[caseNum], fromCache: 'memory' };
-      }
-      try {
-        const res = await fetch(`/api/quickbase/bulk-lookup?case=${encodeURIComponent(caseNum)}`);
-        const json = await res.json();
-        if (json.data && json.data[0]) {
-          _detailCache[caseNum] = { ...json.data[0], _cachedAt: Date.now() };
-          return { ok: true, data: _detailCache[caseNum], fromCache: 'cloudflare' };
-        }
-      } catch (e) {}
-      return { ok: false };
-    },
-
-    startSmartSync: function (ctx) {
-      this.stopSmartSync();
-      _smartSyncState = ctx || null;
-      _smartSyncTimer = setInterval(async () => {
-        try {
-          if (!_smartSyncState || !_smartSyncState.current || !_smartSyncState.gridEl) return;
-          const cols = _smartSyncState.current.sheet.column_defs || [];
-          const caseCol = resolveCaseColumn(cols);
-          if (!caseCol) return;
-          const cases = [...new Set((_smartSyncState.current.rows || [])
-            .map(r => String((r.data || {})[caseCol.key] || '').trim())
-            .filter(Boolean))];
-          if (!cases.length) return;
-          const fieldIds = [3];
-          cols.filter(c => c.qbLookup && c.qbLookup.fieldId).forEach(col => {
-            const fid = parseInt(col.qbLookup.fieldId, 10);
-            if (fid && !fieldIds.includes(fid)) fieldIds.push(fid);
-          });
-          const probe = await fetch('/api/quickbase/bulk-lookup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cases, fieldIds, checkOnly: true })
-          }).then(r => r.json()).catch(() => null);
-          if (!probe || !probe.ok) return;
-          if (_smartSyncState.lastHash && probe.hash && probe.hash !== _smartSyncState.lastHash) {
-            await this.refreshAllLinkedColumns(_smartSyncState.current, _smartSyncState.gridEl);
-          }
-          if (probe.hash) _smartSyncState.lastHash = probe.hash;
-        } catch (_) {}
-      }, 15 * 60 * 1000);
-    },
-
-    stopSmartSync: function () {
-      if (_smartSyncTimer) clearInterval(_smartSyncTimer);
-      _smartSyncTimer = null;
-      _smartSyncState = null;
     },
 
     hydrateLinkedColumnsForExport: function (current, gridEl) {
@@ -1147,16 +1111,12 @@
       return waitForLookupIdle(90000);
     },
     clearCache: function () {
-      _cache        = {};
-      _detailCache  = {};
-      _notFound     = {};
-      _inFlight     = {};
-      _fieldsCache  = null;
-      _reportIdx    = null;
-      _rowCaseSeen  = {};
-      if (_smartSyncTimer) clearInterval(_smartSyncTimer);
-      _smartSyncTimer = null;
-      _smartSyncState = null;
+      _cache       = {};
+      _notFound    = {};
+      _inFlight    = {};
+      _fieldsCache = null;
+      _reportIdx   = null;
+      _rowCaseSeen = {};
     }
   };
 

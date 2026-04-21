@@ -58,10 +58,8 @@
     if (subscription) { try { subscription.unsubscribe(); } catch (_) {} subscription = null; }
     grid.hidden = true;
     empty.style.display = '';
-    if (window.svcQbLookup && window.svcQbLookup.stopSmartSync) window.svcQbLookup.stopSmartSync();
     window.servicesDashboard && window.servicesDashboard.reset();
   }
-
 
   async function load(sheet) {
     if (subscription) { try { subscription.unsubscribe(); } catch (_) {} subscription = null; }
@@ -80,9 +78,6 @@
     redoStack = [];
     current.rows = await window.servicesDB.listRows(sheet.id);
     render();
-    if (window.svcQbLookup && window.svcQbLookup.startSmartSync) {
-      window.svcQbLookup.startSmartSync({ current: current, gridEl: grid, sheetId: sheet.id });
-    }
     window.servicesDashboard && window.servicesDashboard.update(current);
     subscription = window.servicesDB.subscribeToSheet(sheet.id, function (payload) {
       if (!current) return;
@@ -119,7 +114,6 @@
   }
 
   function render() {
-    try {
     if (!current) { clear(); return; }
     empty.style.display = 'none';
     grid.hidden = false;
@@ -193,31 +187,12 @@
           ? ('svc-dv-' + String(c.key || i) + '-' + String(rowIndex))
           : '';
         var inp = mkEl('input', {
-          className: 'input cell',
-          type: inputType,
-          value: (function () {
-            var v = rowData.data[c.key];
-            return (v === null || v === undefined) ? '' : String(v);
-          })()
+          className    : 'cell',
+          type         : inputType,
+          autocomplete : 'off',
+          spellcheck   : false,
+          value        : (rowData.data[c.key] != null ? rowData.data[c.key] : '').toString()
         }, td);
-
-        // Fix for date placeholder only
-        if (inputType === 'date') {
-          inp.placeholder = '---';
-          if (!inp.value) {
-            inp.style.color = '#475569';
-            inp.style.fontStyle = 'italic';
-          }
-          inp.addEventListener('input', function () {
-            this.style.color = this.value ? '' : '#475569';
-            this.style.fontStyle = this.value ? '' : 'italic';
-          });
-        }
-
-        // Handle datalist separately (if needed)
-        if (listId) {
-          inp.setAttribute('list', listId);
-        }
         if (validation && validation.length) {
           inp.setAttribute('list', listId);
           inp.dataset.validationList = validation.join('\n');
@@ -314,15 +289,6 @@
       };
       wrap.addEventListener('scroll', wrap._qbScrollHandler, { passive: true });
     })();
-    } catch (renderErr) {
-      console.error('Render error:', renderErr);
-      var gridEl = document.getElementById('svcGrid');
-      if (gridEl) {
-        gridEl.innerHTML = '<tbody><tr><td style="padding:40px;color:#ef4444">Render error: ' + renderErr.message + '. Check console.</td></tr></tbody>';
-        gridEl.hidden = false;
-      }
-    }
-
   }
 
   function attachCellHandlers() {
@@ -866,55 +832,14 @@
       if (!caseNum) { _showError('No Case # found in this row.'); return; }
       if (!window.svcQbLookup) { _showError('QB Lookup module not loaded.'); return; }
 
-      function _normalizeDetailPayload(payload) {
-        if (!payload) return null;
-        if (payload.fields) return payload;
-
-        var knownLabels = {
-          '3': 'Case #', '6': 'Short Description', '7': 'Assigned To', '8': 'Contact',
-          '13': 'Case Status', '25': 'Type', '26': 'Age', '27': 'Last Update Days',
-          '28': 'Latest Update on the Case', '29': 'Case Notes Detail', '30': 'End User',
-          '31': 'Classification', '32': 'Priority', '33': 'Queue', '34': 'Sub Type',
-          '35': 'Workgroup', '36': 'Region', '37': 'Site', '38': 'Email', '39': 'Phone', '40': 'Owner'
-        };
-
-        var rec = { fields: {}, columnMap: {} };
-        Object.keys(payload).forEach(function (fid) {
-          if (fid === '_cachedAt') return;
-          var raw = payload[fid];
-          var val = (raw && typeof raw === 'object' && Object.prototype.hasOwnProperty.call(raw, 'value')) ? raw.value : raw;
-          rec.fields[fid] = { value: val };
-          rec.columnMap[fid] = knownLabels[fid] || ('Field #' + fid);
-        });
-        return rec;
-      }
-
-      var loadingEl = document.getElementById('svcQbcdLoading');
-      var renderCaseDetail = function (data) {
-        var normalized = _normalizeDetailPayload(data);
-        if (!normalized) return;
-        _populate(caseNum, normalized);
-      };
-
-      (async function openCaseDetail() {
-        var cached = await window.svcQbLookup.getCaseDetailInstant(caseNum);
+      // Use fetchCaseRecord (MODE A direct) — independent of the batch pipeline.
+      // lookupCase() can block if a 520-row Update batch is in-flight.
+      // fetchCaseRecord() goes straight to /api/studio/qb_data?recordId=X — always fast.
+      window.svcQbLookup.fetchCaseRecord(caseNum).then(function (rec) {
         if (!modal.classList.contains('svc-cdm-open')) return;
-
-        if (cached.ok) {
-          renderCaseDetail(cached.data);
-          if (loadingEl) loadingEl.style.display = 'none';
-        }
-
-        if (!cached.ok || Date.now() - ((cached.data && cached.data._cachedAt) || 0) > 60000) {
-          fetch('/api/quickbase/bulk-lookup?case=' + encodeURIComponent(caseNum) + '&fresh=1')
-            .then(function (r) { return r.json(); })
-            .then(function (json) {
-              if (!modal.classList.contains('svc-cdm-open')) return;
-              if (json && json.data && json.data[0]) renderCaseDetail(json.data[0]);
-            })
-            .catch(function () {});
-        }
-      })().catch(function (err) {
+        if (!rec) { _showError('Case #' + caseNum + ' not found in QuickBase.'); return; }
+        _populate(caseNum, rec);
+      }).catch(function (err) {
         if (!modal.classList.contains('svc-cdm-open')) return;
         _showError('Failed: ' + (err && err.message ? err.message : String(err)));
       });
@@ -1319,34 +1244,13 @@
         nonEmpty.map(function (r) { return { row_index: r.row_index, data: r.data }; }));
       if (result && result.error) throw new Error(result.error.message || 'Write failed');
       setStatus('saved', '✓ All saved');
-      window.svcToast && window.svcToast.show('success', '✓ Saved', nonEmpty.length + ' rows • ' + new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }));
+      window.svcToast && window.svcToast.show('success', 'Saved', nonEmpty.length + ' rows saved.');
       window.servicesDashboard && window.servicesDashboard.update(current);
     } catch (err) {
       setStatus('error', '✕ Save failed');
       window.svcToast && window.svcToast.show('error', 'Save Failed', err.message);
     } finally {
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 SAVE'; }
-    }
-  }
-
-  async function createBackup() {
-    if (!current || !current.sheet) return;
-    var name = 'Backup ' + new Date().toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    var snapshot = {
-      rows: (current.rows || []).map(function (r) { return { row_index: r.row_index, data: r.data }; }),
-      column_defs: current.sheet.column_defs,
-      timestamp: Date.now()
-    };
-
-    var result = await window.supabase.from('services_backups').insert({
-      sheet_id: current.sheet.id,
-      name: name,
-      snapshot: snapshot,
-      row_count: (current.rows || []).length
-    });
-
-    if (!result.error) {
-      window.svcToast.show('success', 'Backup Created', name);
     }
   }
 
@@ -1375,7 +1279,6 @@
   }
 
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
-
 
   // ── Refresh button — reloads sheet list + active sheet data ───────────────
   if (refreshBtn) {
@@ -1439,9 +1342,6 @@
           throw new Error('Sheet changed while updating. Please click Update again on the selected sheet.');
         }
         await saveAllRows();
-        if (window.svcQbLookup && window.svcQbLookup.startSmartSync) {
-          window.svcQbLookup.startSmartSync({ current: current, gridEl: grid, sheetId: targetSheetId });
-        }
         setStatus('saved', '✓ Lookup updated');
         window.svcToast && window.svcToast.show('success', 'Lookup Updated', 'All linked QB values refreshed.');
       } catch (err) {
@@ -1487,8 +1387,6 @@
     _origRender();
   };
 
-
-
   function getState() { return current; }
-  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter, createBackup: createBackup };
+  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter };
 })();
