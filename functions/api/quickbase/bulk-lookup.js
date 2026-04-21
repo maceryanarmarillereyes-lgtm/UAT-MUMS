@@ -74,7 +74,7 @@ export async function onRequestPost(context) {
     );
 
     const map = {};
-    results.flat().forEach(rec => {
+    results.flat().forEach((rec) => {
       const caseVal = rec['3']?.value?.toString();
       if (!caseVal) return;
 
