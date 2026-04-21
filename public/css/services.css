@@ -1390,17 +1390,16 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   box-shadow: 0 0 6px rgba(34,211,238,0.15);
 }
 
-/* 4. QB LINKED - text only, never background */
+/* 4. QB LINKED - neutral, no cyan styling (BUG1 FIX) */
 .cell-qb-linked {
-  color: #5eead4 !important;
-  font-style: italic;
+  color: inherit !important;
+  font-style: normal !important;
   background: transparent !important;
 }
 input.cell.cell-qb-linked {
-  color: #5eead4 !important;
+  color: inherit !important;
   background: transparent !important;
-  cursor: default;
-  font-style: italic;
+  font-style: normal !important;
 }
 input.cell.cell-qb-pending {
   color: transparent !important;
@@ -3288,8 +3287,8 @@ input.cell.cell-qb-not-found {
 }
 
 .svc-grid input.cell-qb-linked {
-  color: #5eead4 !important;
-  font-style: italic !important;
+  color: inherit !important;
+  font-style: normal !important;
 }
 
 /* ── Premium row highlight: left accent pulse animation ──── */
