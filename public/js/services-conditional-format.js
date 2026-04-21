@@ -1338,17 +1338,17 @@
   async function saveRules() {
     // ── Guard: need grid + DB ──────────────────────────────────────────────
     if (!window.servicesGrid) {
-      window.svcToast && window.svcToast.show('error', 'Save Failed', 'Grid not ready. Please refresh.');
+      window.Notify && window.Notify.show('error', 'Save Failed', 'Grid not ready. Please refresh.');
       return;
     }
     if (!window.servicesDB) {
-      window.svcToast && window.svcToast.show('error', 'Save Failed', 'DB not ready. Please refresh.');
+      window.Notify && window.Notify.show('error', 'Save Failed', 'DB not ready. Please refresh.');
       return;
     }
 
     var state = window.servicesGrid.getState();
     if (!state || !state.sheet) {
-      window.svcToast && window.svcToast.show('error', 'Save Failed', 'No sheet loaded.');
+      window.Notify && window.Notify.show('error', 'Save Failed', 'No sheet loaded.');
       closeModal();
       return;
     }
@@ -1356,7 +1356,7 @@
     var cols = state.sheet.column_defs || [];
     var col  = cols[_state.colIdx];
     if (!col) {
-      window.svcToast && window.svcToast.show('error', 'Save Failed', 'Column not found.');
+      window.Notify && window.Notify.show('error', 'Save Failed', 'Column not found.');
       closeModal();
       return;
     }
@@ -1380,9 +1380,9 @@
     // ── Persist to Supabase ────────────────────────────────────────────────
     try {
       await window.servicesDB.updateColumns(state.sheet.id, cols);
-      window.svcToast && window.svcToast.show('success', 'Conditional Formatting', 'Rules saved — ' + rulesForSave.length + ' rule(s) active.');
+      window.Notify && window.Notify.show('success', 'Conditional Formatting', 'Rules saved — ' + rulesForSave.length + ' rule(s) active.');
     } catch (err) {
-      window.svcToast && window.svcToast.show('error', 'CF Save Failed', err && err.message ? err.message : 'Try again.');
+      window.Notify && window.Notify.show('error', 'CF Save Failed', err && err.message ? err.message : 'Try again.');
     }
 
     paintGrid();
