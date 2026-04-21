@@ -116,6 +116,7 @@
   var _inFlight      = {};   // nk → Promise     (dedup concurrent fetches)
   var _reportIdx     = null; // { byNk, at } one-shot fallback index from qb_data report mode
   var _rowCaseSeen   = {};   // row_index -> normalized case key last painted
+  var _qbSchemaCache = null; // schema cache buster hook for dynamic linked columns
   var _CACHE_TTL     = 5 * 60 * 1000;
   var _NOT_FOUND_TTL = 30 * 1000;
   var _REPORT_TTL    = 2 * 60 * 1000;
@@ -997,148 +998,101 @@
         .catch(function () { return null; });
     },
     refreshAllLinkedColumns: function (current, gridEl) {
-      // ── PERMANENT FIX: Token-immune Update pipeline ─────────────────────
-      // ROOT CAUSE BUG: The old path called autofillLinkedColumns() which uses
-      // _autofillToken debounce. ANY concurrent call (Supabase realtime event,
-      // treeview applyGridFilter, scroll handler) resets _autofillToken, which
-      // causes the Update pipeline's .then() checks to bail early with
-      // "if (_autofillToken !== token) return" — paintRow() never fires →
-      // DOM stays stale, row.data never updated, Supabase gets old values.
-      //
-      // FIX: Run a dedicated direct pipeline that:
-      //   • Owns its own _updateRunId — immune to _autofillToken resets
-      //   • Clears all caches upfront
-      //   • Fetches ALL rows in parallel batches (urgent mode = no rate gate)
-      //   • Paints ALL rows after pipeline resolves — no token check
-      //   • Saves to Supabase via queuePersistRow regardless of filter state
-      // ─────────────────────────────────────────────────────────────────────
-      if (!current || !gridEl) return Promise.resolve();
+      if (!current ||!gridEl) return Promise.resolve();
 
       var cols = current.sheet.column_defs || [];
-      var linkedCols = cols.filter(function (c) {
-        return c.qbLookup && String(c.qbLookup.fieldId || '').trim();
-      });
+      var linkedCols = cols.filter(c => c.qbLookup && String(c.qbLookup.fieldId||'').trim());
       if (!linkedCols.length) return Promise.resolve();
 
       var caseCol = resolveCaseColumn(cols);
       if (!caseCol) return Promise.resolve();
 
-      var rowsWithCase = current.rows.filter(function (r) {
-        return r.data && r.data[caseCol.key] && String(r.data[caseCol.key]).trim();
-      });
+      var rowsWithCase = current.rows.filter(r => r.data && r.data[caseCol.key]);
       if (!rowsWithCase.length) return Promise.resolve();
 
-      // Step 1: Wipe ALL caches so fresh QB data is guaranteed
-      _cache        = {};
-      _notFound     = {};
-      _inFlight     = {};
-      _reportIdx    = null;
-      _rowCaseSeen  = {};
-      _urgentMode   = true;  // drops rate gate from 200ms → 50ms
+      // Clear caches
+      _cache = {}; _notFound = {}; _inFlight = {}; _rowCaseSeen = {};
+      // Force refresh QB schema when new column added
+      _qbSchemaCache = null;
+      try { localStorage.removeItem('qb_field_cache'); } catch (_) {}
 
-      // Step 2: Cancel any pending debounced autofill so it doesn't interfere
-      clearTimeout(_autofillTimer);
-      _autofillTimer = null;
-      // Give the autofill system a fresh token so scrolled-autofill after
-      // Update completes doesn't inherit the stale cancelled state
-      _autofillToken = {};
-
-      // Step 3: Collect ALL unique case keys from ALL rows (not just visible)
-      var seenNks = new Set();
-      var allNks  = [];
-      rowsWithCase.forEach(function (row) {
-        var nk = normalizeCaseKey(row.data[caseCol.key]);
-        if (nk && !seenNks.has(nk)) { seenNks.add(nk); allNks.push(nk); }
-      });
-
-      // Step 4: Spinner on all linked cells (visible rows only — off-DOM rows are fine)
-      rowsWithCase.forEach(function (row) {
-        linkedCols.forEach(function (col) {
-          var inp = gridEl.querySelector(
-            'input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]'
-          );
-          if (inp) {
-            inp.classList.add('cell-qb-pending');
-            inp.readOnly    = true;
-            inp.placeholder = '⋯';
-          }
+      // Show spinner
+      rowsWithCase.forEach(row => {
+        linkedCols.forEach(col => {
+          var inp = gridEl.querySelector('input.cell[data-row="'+row.row_index+'"][data-key="'+col.key+'"]');
+          if (inp) { inp.classList.add('cell-qb-pending'); inp.placeholder='⋯'; }
         });
       });
 
-      // Step 5: Bulk fetch ALL records in ONE call (Issue 4 fix).
-      // Falls back to batch pipeline if bulk endpoint returns not_configured or errors.
-      // Bulk: 1 HTTP call → 1-2s for 520 rows.
-      // Batch: 11 calls × 50ms = 2-4s for 520 rows.
-      var fetchPipeline = _bulkFetchAll().then(function (bulkResult) {
-        if (!bulkResult.ok) {
-          // Bulk not available (QB not configured for user, or network error)
-          // Fall back to proven batch pipeline
-          console.info('[svcQbLookup] bulk fallback → batch pipeline. reason:', bulkResult.reason);
-          return _processBatchPipeline(allNks);
-        }
-        // Bulk succeeded — _cache is already populated by _bulkFetchAll()
-        return Promise.resolve();
+      // AUTO-FIELD FINDER: collect ALL linked QB fields dynamically
+      var allFieldIds = [3]; // always include Case#
+      var caseNumbers = [];
+      linkedCols.forEach(col => {
+        var fid = parseInt(col.qbLookup.fieldId);
+        if (fid &&!allFieldIds.includes(fid)) allFieldIds.push(fid);
       });
-      return fetchPipeline.then(function () {
-        // Step 6: Paint ALL rows — no _autofillToken check, immune to cancellation
-        var now = Date.now();
-        rowsWithCase.forEach(function (row) {
-          var rawCase = String(row.data[caseCol.key] || '').trim();
-          if (!rawCase) return;
-          var nk  = normalizeCaseKey(rawCase);
-          var rec = _cache[nk];
+      rowsWithCase.forEach(function (row) {
+        var c = String(row.data[caseCol.key] || '').trim();
+        if (c) caseNumbers.push(c);
+      });
 
-          linkedCols.forEach(function (col) {
-            var inp = gridEl.querySelector(
-              'input.cell[data-row="' + row.row_index + '"][data-key="' + col.key + '"]'
-            );
+      console.log('[QB Bulk] Auto-detected fields:', allFieldIds); // debug
 
-            var fid   = String(col.qbLookup.fieldId   || '').trim();
-            var label = String(col.qbLookup.fieldLabel || '').trim();
+      return fetch('/api/studio/qb_bulk', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          sheetId: current.sheet.id,
+          caseFieldId: 3,
+          caseNumbers: [...new Set(caseNumbers)],
+          fieldIds: allFieldIds, // pass ALL fields, not just 3
+          fields: linkedCols.map(c => ({
+            key: c.key,
+            fieldId: parseInt(c.qbLookup.fieldId),
+            label: c.qbLookup.fieldLabel,
+            type: c.type || 'text'
+          }))
+        })
+      })
+     .then(r => r.json())
+     .then(bulkData => {
+        // bulkData = { '454203': { '25': '0 - Waiting', '13': 'Mace Ryan' },... }
 
-            if (!rec) {
-              // QB returned nothing (genuine miss or transient) — leave existing value
-              if (inp && inp !== document.activeElement) {
-                inp.classList.remove('cell-qb-pending');
-                inp.readOnly    = !!(_notFound[nk] && (Date.now() - _notFound[nk]) < _NOT_FOUND_TTL);
-              }
-              return;
-            }
+        // Update ALL rows in memory
+        var updates = [];
+        rowsWithCase.forEach(row => {
+          var caseNum = String(row.data[caseCol.key]).trim();
+          var qbRec = bulkData[caseNum];
+          if (!qbRec) return;
 
-            var value = getFieldValue(rec, fid, label);
+          linkedCols.forEach(col => {
+            var fid = String(col.qbLookup.fieldId);
+            var val = qbRec[fid] || '';
+            row.data[col.key] = val;
+          });
+          updates.push({ row_index: row.row_index, data: row.data });
+        });
 
-            // ALWAYS write to row.data and persist — even if inp is null (off-DOM row)
-            if (value !== null) {
-              row.data[col.key] = value;
-              queuePersistRow(current.sheet.id, row);
-            } else if (value === null) {
-              row.data[col.key] = '';
-              queuePersistRow(current.sheet.id, row);
-            }
-
-            _rowCaseSeen[row.row_index] = nk;
-
-            if (inp && inp !== document.activeElement) {
-              if (value === null) {
-                inp.value    = '';
-                inp.readOnly = true;
-                inp.title    = '⚠ Field "' + label + '" not available for Case #' + rawCase;
-                inp.classList.add('cell-qb-linked');
-                inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
-              } else {
-                inp.value    = value;
-                inp.readOnly = true;
-                inp.title    = '🔗 QB: ' + label + ' (Case #' + rawCase + ')';
-                inp.classList.add('cell-qb-linked');
-                inp.classList.remove('cell-qb-pending', 'cell-qb-not-found');
-              }
+        // ONE bulk upsert via Services DB adapter
+        if (!updates.length || !window.servicesDB || !window.servicesDB.bulkUpsertRows) return null;
+        return window.servicesDB.bulkUpsertRows(
+          current.sheet.id,
+          updates.map(function (u) { return { row_index: u.row_index, data: u.data }; })
+        );
+      })
+     .then(() => {
+        // Paint all rows
+        rowsWithCase.forEach(row => {
+          linkedCols.forEach(col => {
+            var inp = gridEl.querySelector('input.cell[data-row="'+row.row_index+'"][data-key="'+col.key+'"]');
+            if (inp && inp!== document.activeElement) {
+              inp.value = row.data[col.key] || '';
+              inp.classList.remove('cell-qb-pending');
+              inp.classList.add('cell-qb-linked');
+              inp.readOnly = true;
             }
           });
         });
-
-        _urgentMode = false;
-      }).catch(function () {
-        _urgentMode = false;
       });
     },
     hydrateLinkedColumnsForExport: function (current, gridEl) {

@@ -32,6 +32,25 @@ function sendJson(res, statusCode, body) {
   res.end(JSON.stringify(body));
 }
 
+async function readBody(req) {
+  try {
+    if (req && typeof req.body === 'string') return JSON.parse(req.body || '{}');
+    if (req && req.body && typeof req.body === 'object') return req.body;
+  } catch (_) {}
+  return await new Promise((resolve) => {
+    try {
+      let raw = '';
+      req.on('data', (c) => { raw += String(c || ''); });
+      req.on('end', () => {
+        try { resolve(raw ? JSON.parse(raw) : {}); } catch (_) { resolve({}); }
+      });
+      req.on('error', () => resolve({}));
+    } catch (_) {
+      resolve({});
+    }
+  });
+}
+
 const BULK_CACHE    = new Map();
 const BULK_CACHE_MS = 30 * 1000; // 30-second TTL — same as report mode
 
@@ -81,7 +100,8 @@ function detectCaseFieldId(fields) {
 }
 
 module.exports = async function handler(req, res) {
-  if (req.method !== 'GET') return sendJson(res, 405, { ok: false, error: 'method_not_allowed' });
+  const method = String(req.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'POST') return sendJson(res, 405, { ok: false, error: 'method_not_allowed' });
 
   // ── Auth ─────────────────────────────────────────────────────────────────────
   let user;
@@ -102,17 +122,81 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 200, { ok: false, error: 'studio_qb_not_configured', warning: 'studio_qb_not_configured' });
   }
 
+  const body = method === 'POST' ? await readBody(req) : {};
+  const requestedCaseFieldId = String((body && body.caseFieldId) || '').trim();
+  const requestedFields = Array.isArray(body && body.fields) ? body.fields : [];
+
   // ── Cache check (skip if bust=1) ─────────────────────────────────────────────
-  const bust     = String(req.query && req.query.bust || '').trim() === '1';
-  const cacheKey = `${realm}:${tableId}:${qid}`;
+  const bust     = String((req.query && req.query.bust) || '').trim() === '1';
+  const cacheKey = `${realm}:${tableId}:${qid}:${method === 'POST' ? 'post' : 'get'}`;
   if (!bust) {
     const hit = BULK_CACHE.get(cacheKey);
     if (hit && (Date.now() - hit.at) < BULK_CACHE_MS) {
+      if (method === 'POST') return sendJson(res, 200, hit.value || {});
       return sendJson(res, 200, { ok: true, caseMap: hit.value, cached: true });
     }
   }
 
-  // ── Fetch QB report — ALL records in ONE call ─────────────────────────────────
+  let rows = [];
+  let fields = [];
+  if (method === 'POST') {
+    // Get fieldIds from request (auto-detected from frontend)
+    const fieldIds = Array.isArray(body.fieldIds) && body.fieldIds.length ? body.fieldIds : [3, 25, 13];
+    const selectFields = [...new Set(fieldIds.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0))]; // dedupe
+    const caseNumbers = Array.isArray(body.caseNumbers)
+      ? body.caseNumbers.map((x) => String(x || '').trim()).filter(Boolean)
+      : [];
+    const caseFieldForQuery = Number(requestedCaseFieldId || 3) || 3;
+    const whereClause = caseNumbers.length
+      ? `{${caseFieldForQuery}.OAF.'${caseNumbers.map((x) => String(x).replace(/'/g, "\\'")).join("','")}'}` 
+      : null;
+
+    // Build QB query - fetch ALL fields in ONE call
+    let qbData = {};
+    try {
+      const qbResponse = await fetch('https://api.quickbase.com/v1/records/query', {
+        method: 'POST',
+        headers: {
+          'QB-Realm-Hostname': realm,
+          'Authorization': `QB-USER-TOKEN ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: tableId,
+          select: selectFields, // DYNAMIC - includes all linked fields
+          where: whereClause || undefined,
+          options: { top: 1000 }
+        })
+      });
+      qbData = await qbResponse.json().catch(() => ({}));
+      if (!qbResponse.ok) {
+        return sendJson(res, 200, { ok: false, error: 'qb_query_failed', message: qbData?.message || `QB API ${qbResponse.status}` });
+      }
+    } catch (err) {
+      return sendJson(res, 200, { ok: false, error: 'network_error', message: String(err?.message || err) });
+    }
+
+    // Transform to map: { caseNum: { fieldId: value } }
+    const resultMap = {};
+    (qbData.data || []).forEach(record => {
+      const caseNum = record['3']?.value?.toString();
+      if (!caseNum) return;
+      resultMap[caseNum] = {};
+      selectFields.forEach(fid => {
+        const val = record[String(fid)]?.value;
+        // Handle different field types
+        if (val!== null && val!== undefined) {
+          // Date fields: QB returns ISO string, keep as-is
+          // Text/number: direct value
+          resultMap[caseNum][fid] = val;
+        }
+      });
+    });
+    BULK_CACHE.set(cacheKey, { at: Date.now(), value: resultMap });
+    return sendJson(res, 200, resultMap);
+  }
+
+  // ── Fetch QB report — ALL records in ONE call (GET mode) ────────────────────
   const url = `https://api.quickbase.com/v1/reports/${encodeURIComponent(qid)}/run?tableId=${encodeURIComponent(tableId)}&skip=0&top=1000`;
   let json;
   try {
@@ -134,8 +218,8 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 200, { ok: false, error: 'network_error', message: String(err?.message || err) });
   }
 
-  const rows   = Array.isArray(json.data)   ? json.data   : [];
-  const fields = Array.isArray(json.fields) ? json.fields : [];
+  rows   = Array.isArray(json.data)   ? json.data   : [];
+  fields = Array.isArray(json.fields) ? json.fields : [];
 
   if (!rows.length) {
     return sendJson(res, 200, { ok: false, error: 'empty_report', message: 'QB report returned 0 records.' });
@@ -146,9 +230,14 @@ module.exports = async function handler(req, res) {
   fields.forEach(f => { columnMap[String(f.id)] = String(f.label || ''); });
 
   // ── Detect case# field ───────────────────────────────────────────────────────
-  const caseFieldId = detectCaseFieldId(fields);
+  const caseFieldId = requestedCaseFieldId || detectCaseFieldId(fields);
 
-  // ── Build caseMap: { normalizedCaseNum → { fields, columnMap } } ─────────────
+  // Request contract accepted for client compatibility; current POST response
+  // returns all field IDs so cache remains deterministic across calls.
+  void requestedFields;
+
+  // ── Build caseMap: { normalizedCaseNum → { fieldId: value } } for POST
+  //                OR { normalizedCaseNum → { fields, columnMap } } for GET
   const caseMap = {};
   rows.forEach(row => {
     const caseCell = row[caseFieldId];
@@ -157,7 +246,6 @@ module.exports = async function handler(req, res) {
     const nk       = normalizeCaseKey(caseStr);
     if (!nk) return;
 
-    // Normalize all field values into the same shape as Mode B
     const fieldMap = {};
     fields.forEach(f => {
       const fid  = String(f.id);
@@ -165,11 +253,11 @@ module.exports = async function handler(req, res) {
       const raw  = (cell && typeof cell === 'object' && 'value' in cell) ? cell.value : cell;
       fieldMap[fid] = { value: normalizeQbValue(raw), label: f.label || fid };
     });
-
     caseMap[nk] = { fields: fieldMap, columnMap };
   });
 
   // ── Cache and return ─────────────────────────────────────────────────────────
   BULK_CACHE.set(cacheKey, { at: Date.now(), value: caseMap });
+  if (method === 'POST') return sendJson(res, 200, caseMap);
   return sendJson(res, 200, { ok: true, caseMap, total: rows.length });
 };
