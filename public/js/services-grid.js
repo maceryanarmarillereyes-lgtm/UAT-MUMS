@@ -70,11 +70,13 @@
 
   function formatCellValue(col, value) {
     if ((col && (col.type === 'date' || col.format === 'date'))) {
-      if (!value || value === '' || value === 'mm/dd/yyyy') return '---';
+      if (!value || value === '' || value === 'mm/dd/yyyy' || value === 'undefined') return '—';
       try {
         var d = new Date(value);
-        return isNaN(d) ? '---' : d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
-      } catch (_) { return '---'; }
+        if (isNaN(d.getTime())) return '—';
+        // Return YYYY-MM-DD for consistency
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      } catch (_) { return '—'; }
     }
     return value || '';
   }
@@ -103,7 +105,7 @@
     undoStack = [];
     redoStack = [];
     current.rows = await window.servicesDB.listRows(sheet.id);
-    autoFitColumns(current);
+    autoFitColumns();
     render();
     window.servicesDashboard && window.servicesDashboard.update(current);
     subscription = window.servicesDB.subscribeToSheet(sheet.id, function (payload) {
@@ -207,10 +209,13 @@
       var rowIndex = Number.isFinite(rowData.row_index) ? rowData.row_index : i;
       var tr = mkEl('tr', { className: 'grid-row' }, tbody);
       tr.dataset.row = String(rowIndex);
-      var rowNumTd = mkEl('td', { className: 'row-num row-header', textContent: String(rowIndex + 1) }, tr);
+      var rowNumTd = mkEl('td', {
+        className: 'row-num',
+        textContent: String(rowIndex + 1),
+        title: 'Row ' + (rowIndex + 1) + ' - Click to select'
+      }, tr);
       rowNumTd.dataset.rowIndex = rowIndex;
       rowNumTd.dataset.row = String(rowIndex);
-      rowNumTd.title = 'Click to view case details · Right-click to delete row';
       cols.forEach(function (c) {
         var td  = mkEl('td', null, tr);
         var inputType = 'text';
@@ -244,7 +249,7 @@
         inp.dataset.key = c.key;
         inp.dataset.format = (c && c.format) ? c.format : 'auto';
         inp.dataset.raw = (rowData.data[c.key] != null ? rowData.data[c.key] : '').toString();
-        if (String(formatCellValue(c, rowData.data[c.key])) === '---') inp.placeholder = 'mm/dd/yyyy';
+        if (String(formatCellValue(c, rowData.data[c.key])) === '—') inp.placeholder = 'mm/dd/yyyy';
         if (c.format === 'number') inp.inputMode = 'numeric';
       });
     }
@@ -263,19 +268,7 @@
     // so we MUST re-apply column widths. If cache exists → apply synchronously via
     // rAF (deferred one frame so the browser has measured the new nodes).
     // If no cache → run full measurement as normal.
-    if (_renderIsFilterSwitch) {
-      var _fsSheetId = current && current.sheet && current.sheet.id;
-      if (_fsSheetId && _resizeSheetId === _fsSheetId && _resizeCache[_fsSheetId]) {
-        // Cache hit: apply in next frame to avoid forced-layout on incomplete DOM
-        var _fsCachedWidths = _resizeCache[_fsSheetId];
-        requestAnimationFrame(function () { _applyColumnWidths(_fsCachedWidths); });
-      } else {
-        // No cache yet (first load came through a filter switch path): measure now
-        autoResizeColumns();
-      }
-    } else {
-      autoResizeColumns();
-    }
+    autoFitColumns();
 
     // refreshCounts builds treeview DOM — skip on filter switches (treeview
     // manages its own badge counts via updateSheetCountBadge already).
@@ -554,13 +547,17 @@
             _sortState = { key: null, dir: 'asc' };
             render(); closeAllCtxMenus();
           } else if (action === 'hide-column') {
-            cols[colIdx].hidden = true;
-            await window.servicesDB.updateColumns(current.sheet.id, cols);
+            var col = current.sheet.column_defs[colIdx];
+            col.hidden = true;
+            await supabase.from('services_sheets')
+              .update({ column_defs: current.sheet.column_defs })
+              .eq('id', current.sheet.id);
             render();
+            notify('info', 'Column Hidden', col.name + ' hidden. Use View menu to unhide.');
             closeAllCtxMenus();
           } else if (action === 'autofit-column') {
             cols[colIdx].width = 'auto';
-            autoFitColumns(current);
+            autoFitColumns();
             await window.servicesDB.updateColumns(current.sheet.id, cols);
             render();
             closeAllCtxMenus();
@@ -1093,35 +1090,35 @@
   var _resizeRafPending = false;
 
   function applyColumnWidths() {
-    if (!current || !current.sheet) return;
-    var widths = {};
-    (current.sheet.column_defs || []).forEach(function (col) {
-      if (col && col.key && col.width) widths[col.key] = String(col.width);
-    });
-    _applyColumnWidths(widths);
+    _applyColumnWidths();
   }
 
-  function autoFitColumns(sheetState) {
-    if (!sheetState || !sheetState.sheet) return;
+  function autoFitColumns() {
+    if (!current || !current.sheet) return;
     var canvas = document.createElement('canvas');
     var ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.font = '13px Inter, system-ui';
+    ctx.font = '13px Inter, system-ui, -apple-system';
 
-    (sheetState.sheet.column_defs || []).forEach(function (col) {
-      if (!col) return;
-      if (col.width && col.width !== 'auto') return;
+    current.sheet.column_defs.forEach(function (col) {
+      if (col.hidden) return;
 
-      var maxWidth = ctx.measureText(String(col.label || col.name || '')).width + 40;
-      (sheetState.rows || []).slice(0, 50).forEach(function (row) {
-        var val = String((row && row.data && row.data[col.key]) || '');
-        var w = ctx.measureText(val).width + 32;
+      // Measure header
+      var maxWidth = ctx.measureText(col.name || col.key).width + 48;
+
+      // Measure first 30 rows of data
+      var sampleRows = current.rows.slice(0, 30);
+      sampleRows.forEach(function (row) {
+        var val = formatCellValue(col, row.data[col.key]);
+        var w = ctx.measureText(String(val)).width + 32;
         if (w > maxWidth) maxWidth = w;
       });
-      col.width = Math.min(Math.max(maxWidth, 80), 300) + 'px';
+
+      // NEW: Increase floor from 80 to 140, ceiling from 300 to 400
+      col.width = Math.min(Math.max(maxWidth, 140), 400) + 'px';
     });
 
-    applyColumnWidths();
+    _applyColumnWidths();
   }
 
   function autoResizeColumns() {
@@ -1180,18 +1177,22 @@
     });
   }
 
-  function _applyColumnWidths(widths) {
-    if (!widths || !current) return;
-    var cols = current.sheet.column_defs || [];
-    cols.forEach(function (c) {
-      var w  = widths[c.key];
-      if (!w) return;
-      var th = grid.querySelector('thead th[data-key="' + c.key + '"]');
-      if (th) { th.style.width = w; th.style.minWidth = w; }
-      grid.querySelectorAll('td input.cell[data-key="' + c.key + '"]').forEach(function (inp) {
-        inp.parentElement.style.width = w;
-        inp.parentElement.style.minWidth = w;
-      });
+  function _applyColumnWidths() {
+    if (!grid || !current || !current.sheet) return;
+    var headers = grid.querySelectorAll('thead th');
+    headers.forEach(function (th, idx) {
+      var col = current.sheet.column_defs[idx - 1]; // -1 for row-num column
+      if (col && col.width) {
+        th.style.width = col.width;
+        th.style.minWidth = col.width;
+        th.style.maxWidth = col.width;
+        var colCells = grid.querySelectorAll('tbody tr td:nth-child(' + (idx + 1) + ')');
+        colCells.forEach(function (td) {
+          td.style.width = col.width;
+          td.style.minWidth = col.width;
+          td.style.maxWidth = col.width;
+        });
+      }
     });
   }
 
@@ -1281,7 +1282,7 @@
     if (!label || !label.trim()) return;
     var key = 'col_' + Math.random().toString(36).slice(2, 8);
     current.sheet.column_defs.push({ key: key, label: sanitizeHeaderLabel(label, current.sheet.column_defs.length), type: 'text', width: 'auto' });
-    autoFitColumns(current);
+    autoFitColumns();
     await window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs);
     render();
   });
@@ -1348,6 +1349,25 @@
     } finally {
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 SAVE'; }
     }
+  }
+
+  async function createBackup(name) {
+    var snapshot = {
+      columns: JSON.parse(JSON.stringify(current.sheet.column_defs)),
+      rows: current.rows.map(function (r) { return { row_index: r.row_index, data: r.data }; }),
+      timestamp: new Date().toISOString()
+    };
+
+    var result = await supabase.from('services_backups').insert({
+      sheet_id: current.sheet.id,
+      name: name || ('Backup ' + new Date().toLocaleString('en-PH')),
+      snapshot: snapshot,
+      row_count: current.rows.length
+    });
+    var error = result && result.error;
+
+    if (!error) notify('success', 'Backup Created', name);
+    return !error;
   }
 
   function renderBackupList(items) {
@@ -1422,10 +1442,12 @@
   if (saveBtn) saveBtn.addEventListener('click', saveAllRows);
 
   if (backupBtn) {
-    backupBtn.addEventListener('click', function () {
-      openBackupModal().catch(function (err) {
-        notify('error', 'Backup Failed', err && err.message ? err.message : 'Try again.');
-      });
+    backupBtn.addEventListener('click', async function () {
+      if (!current) { notify('warning', 'Backup', 'Open a sheet first.'); return; }
+      var backupName = prompt('Backup name:', 'Backup ' + new Date().toLocaleString('en-PH'));
+      if (backupName === null) return;
+      var ok = await createBackup(backupName);
+      if (!ok) notify('error', 'Backup Failed', 'Could not create backup.');
     });
   }
   if (backupClose) backupClose.addEventListener('click', function () { backupModal.hidden = true; });
