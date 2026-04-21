@@ -1005,7 +1005,8 @@
       const linkedCols = cols.filter(c => c.qbLookup && c.qbLookup.fieldId);
       if (!linkedCols.length) return;
 
-      const caseCol = cols.find(c => c.key && c.name && c.name.toUpperCase().includes('CASE'));
+      // BUG2 ROOT FIX: Use resolveCaseColumn (label-based, same as autofill) instead of c.name
+      const caseCol = resolveCaseColumn(cols);
       if (!caseCol) return;
 
       const rowsWithCase = current.rows.filter(r => r.data && r.data[caseCol.key] && String(r.data[caseCol.key]).trim() !== '');

@@ -143,8 +143,18 @@
     if (!current || !row) return;
     (current.sheet.column_defs || []).forEach(function (c) {
       var inp = grid.querySelector('input.cell[data-row="' + row.row_index + '"][data-key="' + c.key + '"]');
-      if (inp && document.activeElement !== inp)
-        inp.value = String(formatCellValue(c, row.data[c.key]));
+      if (inp && document.activeElement !== inp) {
+        var displayVal = String(formatCellValue(c, row.data[c.key]));
+        inp.value = displayVal;
+        // BUG2 FIX: Apply gray '---' styling for empty date cells
+        if ((c.type === 'date' || c.format === 'date') && displayVal === '---') {
+          inp.style.color = '#64748b';
+          inp.style.textAlign = 'center';
+        } else if (c.type === 'date' || c.format === 'date') {
+          inp.style.removeProperty('color');
+          inp.style.removeProperty('text-align');
+        }
+      }
     });
     var tr = grid.querySelector('tbody tr[data-row="' + row.row_index + '"]');
     if (tr) {
@@ -1471,7 +1481,8 @@
       if (!caseVal) return;
       linkedCols.forEach(function (c) {
         var v = row.data[c.key];
-        if (v == null || String(v).trim() === '' || String(v).trim() === '—') unresolved++;
+        // '---' is display-only placeholder — not stored in row.data, but guard just in case
+        if (v == null || String(v).trim() === '' || String(v).trim() === '—' || String(v).trim() === '---') unresolved++;
       });
     });
     return unresolved;
@@ -1625,6 +1636,9 @@
           throw new Error('Sheet changed while updating. Please click Update again on the selected sheet.');
         }
         await saveAllRows();
+        // BUG1 FIX: Re-render grid immediately so all QB values + '---' placeholders
+        // are visible without requiring a browser refresh
+        render();
         setStatus('saved', '✓ Lookup updated');
         notify('success', 'Lookup Updated', 'All linked QB values refreshed.');
       } catch (err) {
