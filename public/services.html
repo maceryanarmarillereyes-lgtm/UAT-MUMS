@@ -53,7 +53,18 @@
     </div>
     <div class="svc-top-actions">
       <button id="svcSearchBtn" class="svc-icon-btn" title="Search sheets (Ctrl+K)">🔍</button>
-      <button id="svcSyncIndicator" class="svc-sync-chip">◌ Connecting…</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div id="updateTimer" class="update-timer" title="Time since last update">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span id="timerValue">00:00:00</span>
+        </div>
+        <div class="sync-badge" id="syncBadge">
+          <span class="sync-dot"></span>
+          <span>Synced</span>
+        </div>
+      </div>
       <div class="svc-user-chip" id="svcUserChip">—</div>
     </div>
   </header>

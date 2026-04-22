@@ -486,6 +486,10 @@
   }
 
   function render() {
+    if (document.getElementById('svcLoadingScreen') && !document.getElementById('svcLoadingScreen').classList.contains('hidden')) {
+      console.log('[GRID] Render blocked - loader active');
+      return;
+    }
     if (isResizing) {
       console.log('[RENDER] Skipped - resizing in progress');
       return;
@@ -1872,6 +1876,8 @@
 
   async function saveAllRows() {
     if (!current) { notify('warning', 'No Sheet Open', 'Open a sheet first.'); return; }
+    if (window.updateTimer) window.updateTimer.reset();
+    localStorage.setItem('svc_lastFullUpdate', Date.now().toString());
     await saveColumnState();
     var nonEmpty = current.rows.filter(function (r) {
       return r.data && Object.values(r.data).some(function (v) { return v !== '' && v != null; });
@@ -2109,6 +2115,7 @@
       // Suspend CF paint during bulk update — fires one final paint when done
       document.dispatchEvent(new CustomEvent('svc:qb-update-start'));
       try {
+        if (window.updateTimer) window.updateTimer.reset();
         await window.svcQbLookup.refreshAllLinkedColumns(current, grid);
         var unresolved = countUnresolvedLinkedCells(current);
         if (unresolved > 0) {
