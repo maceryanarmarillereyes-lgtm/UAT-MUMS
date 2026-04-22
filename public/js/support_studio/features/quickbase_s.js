@@ -221,11 +221,6 @@
     }
 
     var caseId = snap.recordId || '—';
-    var ridRaw = snap.recordId || '';
-    var rid = ridRaw && ridRaw !== '—' ? String(ridRaw) : '';
-    var qbBase = 'https://copeland-coldchainservices.quickbase.com/nav/app/bpvmztzkw/table/bpvmztzr5';
-    var editUrl = rid ? (qbBase + '/action/er?rid=' + encodeURIComponent(rid) + '&rl=bmg5') : '#';
-    var viewUrl = rid ? (qbBase + '/action/dr?rid=' + encodeURIComponent(rid) + '&rl=bmg5') : '#';
     var desc   = fieldVal(['short description','description','concern','subject']) || '—';
     var assign = fieldVal(['assigned to','assigned','agent']);
     var contact= fieldVal(['contact','full name','customer name']);
@@ -255,19 +250,6 @@
     set('qbcdRowBadge', snap.rowNum || '—');
     set('qbcdCaseId',   caseId);
     set('qbcdDesc',     desc);
-    set('qbcdRidBadge', 'RID: ' + (rid || 'N/A'));
-    var viewBtn = document.getElementById('qbcdViewBtn');
-    var editBtn = document.getElementById('qbcdEditBtn');
-    if (viewBtn) {
-      viewBtn.href = viewUrl;
-      viewBtn.setAttribute('aria-disabled', rid ? 'false' : 'true');
-      viewBtn.classList.toggle('is-disabled', !rid);
-    }
-    if (editBtn) {
-      editBtn.href = editUrl;
-      editBtn.setAttribute('aria-disabled', rid ? 'false' : 'true');
-      editBtn.classList.toggle('is-disabled', !rid);
-    }
     html('qbcdStatusBadge', statusBadge(status));
     set('qbcdMeta',     'Row ' + (snap.rowNum || '?') + (endUser ? ' · ' + endUser : ''));
     set('qbcdKpiAge',   age     ? (Number(age) < 86400000 ? '< 1 day' : Math.round(Number(age)/(86400000)) + ' days') : '—');

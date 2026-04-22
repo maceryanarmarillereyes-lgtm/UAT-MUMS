@@ -44,7 +44,6 @@ Tab switching is handled client-side by `public/js/support_studio/core_ui.js` (`
 ## C) QuickBase_S & Search
 - QuickBase monitoring, table rendering and deep search hooks.
 - QB interceptors normalize/guard responses.
-- Case Detail modal includes QuickBase View/Edit deep links (RID-based), copy-case action, and RID badge indicator with graceful disabled state when RID is unavailable.
 - Export and deep-search route integration (`qb_search`, `qb_export`).
 
 ## D) Knowledge Base + Support Records
@@ -220,6 +219,5 @@ If step 3 is missing, task is incomplete.
 
 ## 9) Blueprint Change Log
 
-- **2026-04-22** — Added Support Studio Case Detail modal QuickBase View/Edit actions, RID badge display, and premium footer action styling. Updated files: `public/support_studio.html`, `public/js/support_studio/features/quickbase_s.js`, `public/css/support_studio/main_studio.css`.
 - **2026-04-20** — Initial Support Studio blueprint created with full feature inventory, module mapping, endpoint map, contracts, and mandatory update protocol.
 
