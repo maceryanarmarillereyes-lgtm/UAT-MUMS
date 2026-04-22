@@ -2072,6 +2072,7 @@
       refreshBtn.classList.add('svc-refresh-btn--loading');
       setStatus('saving', 'Refreshing…');
       try {
+        if (window.updateTimer) window.updateTimer.reset();
         // 1. Reload sheet list in sidebar
         if (window.servicesSheetManager && window.servicesSheetManager.refresh) {
           await window.servicesSheetManager.refresh();
