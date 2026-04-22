@@ -96,6 +96,7 @@
   }
 
   function clear() {
+    DupCheck.clear();
     current = null;
     if (subscription) { try { subscription.unsubscribe(); } catch (_) {} subscription = null; }
     grid.hidden = true;
@@ -104,6 +105,7 @@
   }
 
   async function load(sheet) {
+    DupCheck.clear();
     if (subscription) { try { subscription.unsubscribe(); } catch (_) {} subscription = null; }
     // Invalidate resize cache on new sheet load so columns get measured fresh
     _resizeSheetId = null;
@@ -120,6 +122,13 @@
     redoStack = [];
     current.rows = await window.servicesDB.listRows(sheet.id);
     console.log('[LOAD] Loaded', current.rows.length, 'rows');
+
+    var caseCol = (current.sheet.column_defs || []).find(function (c) {
+      return c && c.label && String(c.label).toUpperCase().includes('CASE');
+    });
+    if (caseCol && current.rows.length > 0) {
+      DupCheck.init(current.rows, caseCol.key);
+    }
 
     // Auto-refresh QB data in background after 2 seconds
     setTimeout(function () {
@@ -178,6 +187,127 @@
     if (props) Object.assign(el, props);
     if (parent) parent.appendChild(el);
     return el;
+  }
+
+  // FREE TIER OPTIMIZED DUPLICATE DETECTOR
+  // Memory: ~10KB for 500 rows | CPU: O(1) | Network: 0
+  var DupCheck = {
+    index: null,
+    caseKey: null,
+    lastBuild: 0,
+
+    init: function (rows, key) {
+      var now = Date.now();
+      if (this.index && this.caseKey === key && (now - this.lastBuild < 5000)) return;
+
+      this.caseKey = key;
+      this.index = new Map();
+      this.lastBuild = now;
+
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i] || {};
+        var data = row.data || {};
+        var val = data[key];
+        if (!val) continue;
+        var str = String(val).trim();
+        if (str.length < 3) continue;
+        var rowIndex = Number.isFinite(row.row_index) ? row.row_index : i;
+        if (!this.index.has(str)) this.index.set(str, rowIndex);
+      }
+      console.log('[DUP] Index:', this.index.size, 'cases,', Math.round(JSON.stringify(Array.from(this.index)).length / 1024), 'KB');
+    },
+
+    find: function (val, currentIdx) {
+      if (!this.index || !val) return null;
+      var str = String(val).trim();
+      var foundIdx = this.index.get(str);
+      return (foundIdx !== undefined && foundIdx !== currentIdx) ? foundIdx : null;
+    },
+
+    update: function (val, idx) {
+      if (!this.index || !val) return;
+      var str = String(val).trim();
+      if (!this.index.has(str)) this.index.set(str, idx);
+    },
+
+    clear: function () {
+      if (this.index) {
+        this.index.clear();
+        this.index = null;
+      }
+      this.caseKey = null;
+      this.lastBuild = 0;
+    }
+  };
+
+  var dupCheckTimer = null;
+
+  function checkDuplicateDebounced(input, caseVal, rowIdx) {
+    clearTimeout(dupCheckTimer);
+    dupCheckTimer = setTimeout(function () {
+      var dupIdx = DupCheck.find(caseVal, rowIdx);
+      if (dupIdx !== null) showDupNotice(input, caseVal, dupIdx);
+    }, 300);
+  }
+
+  function showDupNotice(inputEl, caseNum, dupRowIdx) {
+    document.querySelectorAll('.dup-notice').forEach(function (n) { n.remove(); });
+
+    var rect = inputEl.getBoundingClientRect();
+    var notice = document.createElement('div');
+    notice.className = 'dup-notice';
+    notice.innerHTML = '' +
+      '<div class="dup-wrap">' +
+      '<span class="dup-ico">⚠</span>' +
+      '<span>Duplicate: <b>' + String(caseNum) + '</b> exists in row <b>' + String(dupRowIdx + 1) + '</b></span>' +
+      '<button data-goto="' + String(dupRowIdx) + '">Go</button>' +
+      '<button class="dup-x">×</button>' +
+      '</div>';
+
+    notice.style.cssText = '' +
+      'position:fixed;' +
+      'left:' + Math.min(rect.left, window.innerWidth - 300) + 'px;' +
+      'top:' + (rect.bottom + 4) + 'px;' +
+      'z-index:9999;' +
+      'background:#1e293b;' +
+      'border:1px solid #ef4444;' +
+      'border-radius:6px;' +
+      'padding:8px 10px;' +
+      'font-size:12px;' +
+      'color:#e2e8f0;' +
+      'box-shadow:0 4px 12px rgba(0,0,0,0.4);' +
+      'max-width:280px;';
+
+    document.body.appendChild(notice);
+
+    var removeTimer = setTimeout(function () { notice.remove(); }, 5000);
+
+    var gotoBtn = notice.querySelector('[data-goto]');
+    if (gotoBtn) {
+      gotoBtn.onclick = function () {
+        clearTimeout(removeTimer);
+        notice.remove();
+        var targetRow = document.querySelector('tr[data-row="' + dupRowIdx + '"]');
+        if (targetRow) {
+          targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          targetRow.style.outline = '2px solid #ef4444';
+          setTimeout(function () { targetRow.style.outline = ''; }, 2000);
+          var inp = targetRow.querySelector('input[data-key*="case" i]');
+          if (inp) inp.focus();
+        }
+      };
+    }
+
+    var closeBtn = notice.querySelector('.dup-x');
+    if (closeBtn) {
+      closeBtn.onclick = function () {
+        clearTimeout(removeTimer);
+        notice.remove();
+      };
+    }
+
+    inputEl.style.boxShadow = 'inset 3px 0 0 #ef4444';
+    setTimeout(function () { inputEl.style.boxShadow = ''; }, 3000);
   }
 
   function render() {
@@ -329,6 +459,22 @@
         inp.dataset.format = (c && c.format) ? c.format : 'auto';
         inp.dataset.raw = (rowData.data[c.key] != null ? rowData.data[c.key] : '').toString();
         if (c.format === 'number') inp.inputMode = 'numeric';
+
+        var isCase = c && c.key && c.label && String(c.label).toUpperCase().includes('CASE');
+        if (isCase) {
+          var prevVal = '';
+          var handleCheck = function () {
+            var val = String(inp.value || '').trim();
+            if (!val || val === prevVal || val.length < 3) return;
+            prevVal = val;
+            checkDuplicateDebounced(inp, val, rowIndex);
+          };
+          inp.addEventListener('blur', handleCheck);
+          inp.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter') setTimeout(handleCheck, 100);
+          });
+        }
+
         // BUG2 FIX: Style '---' placeholder for date columns with no value
         if ((c.type === 'date' || c.format === 'date') && inp.value === '---') {
           inp.style.color = '#64748b';
@@ -1313,6 +1459,7 @@
     undoStack.push({ rowIdx: rowIdx, key: key, prev: rowObj.data[key] != null ? rowObj.data[key] : '', next: value });
     redoStack = [];
     rowObj.data[key] = value;
+    if (DupCheck.caseKey === key) DupCheck.update(value, rowIdx);
     setStatus('unsaved', 'Unsaved');
     updateStatusBar();
     var tKey = rowIdx + ':' + key;
