@@ -191,6 +191,14 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-22 (QB-blocking loader + enterprise update timer + render gate):**
+  - **Edit — `public/js/services.js`:** Loader per-sheet refresh now runs blocking QB linked-column sync (`refreshAllLinkedColumns`) before marking each sheet done; sheet-level last-update timestamps are persisted, and full refresh now also stores `svc_lastFullUpdate` for timer baseline.
+  - **Edit — `public/js/services.js`:** Added `UpdateTimer` runtime (HH:MM:SS counter + fresh/stale/old state classes) initialized post-boot and exposed as `window.updateTimer` for cross-module refresh/save reset hooks.
+  - **Edit — `public/services.html`:** Replaced top-bar sync indicator region with composite timer + sync badge container (`#updateTimer`, `#timerValue`, `#syncBadge`).
+  - **Edit — `public/css/services.css`:** Added enterprise timer and sync badge styles (`.update-timer*`, `.sync-badge`, `.sync-dot`) with pulse keyframes for stale/old visibility.
+  - **Edit — `public/js/services-grid.js`:** Added loader-visible render guard to avoid double render during boot, and timer reset hooks on refresh, QB update, and save paths.
+  - **Behavior contract update:** Initial Services bootstrap now waits for QB sync work per sheet before completion, while a persistent top-bar elapsed-update timer reflects data freshness and resets on save/refresh/update actions.
+
 - **2026-04-22 (Blocking loader + pre-open sheet refresh gate):**
   - **Edit — `public/services.html`:** Added blocking loader shell (`#svcLoadingScreen`) and set workspace root (`#app`) to hidden by default until boot completes.
   - **Edit — `public/css/services.css`:** Added scoped blocking-loader visuals, per-sheet progress states, and loader transition styles.
