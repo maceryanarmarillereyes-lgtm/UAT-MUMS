@@ -10,6 +10,7 @@
   // ─────────────────────────────────────────────────────────────────────────────
 
   const LS_SESSION = 'mums_supabase_session';
+  const CACHE_TTL = 30 * 1000; // 30 seconds only
 
   // ── Read MUMS session from same-origin storage (never blocked) ───────────────
   function readMumsSession() {
@@ -164,13 +165,34 @@
       if (error) console.error('[services] deleteSheet:', error.message);
     },
 
-    async listRows(sheetId) {
+    async listRows(sheetId, force = false) {
       const c = await db(); if (!c) return [];
+
+      const KEY = `mums_rows_${sheetId}_v4`; // Bump version to invalidate old cache
+      const cached = localStorage.getItem(KEY);
+      if (!force && cached) {
+        try {
+          const { ts, rows } = JSON.parse(cached);
+          if (Date.now() - ts < CACHE_TTL) return rows || [];
+        } catch (_) {}
+      }
+
       const { data, error } = await c
-        .from('services_rows').select('*')
+        .from('services_rows')
+        .select('*')
         .eq('sheet_id', sheetId)
-        .order('row_index', { ascending: true });
-      if (error) console.error('[services] listRows:', error.message);
+        .order('id', { ascending: true })
+        .limit(1000);
+
+      if (error) {
+        console.error('[DB] Fetch failed:', error);
+        throw error;
+      }
+
+      try {
+        localStorage.setItem(KEY, JSON.stringify({ ts: Date.now(), rows: data || [] }));
+      } catch (_) {}
+
       return data || [];
     },
 

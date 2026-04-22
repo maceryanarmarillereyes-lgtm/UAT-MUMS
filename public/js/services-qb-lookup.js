@@ -1073,134 +1073,116 @@
       }
     },
     refreshAllLinkedColumns: async function (current, gridEl) {
-      if (!current) return;
+      const sheet = current && current.sheet ? current.sheet : null;
+      const rows = current && Array.isArray(current.rows) ? current.rows : [];
+      if (!sheet || !rows.length) return 0;
 
-      console.log('[QB] Starting REAL sync for', current && current.sheet ? current.sheet.title : 'sheet');
-      await this.fetchFreshQBData(current.sheet && current.sheet.id);
-
-      if (!gridEl) {
-        gridEl = document.getElementById('svcGrid');
-      }
-      if (!window.servicesDB) {
-        console.error('[QB] servicesDB not available');
-        throw new Error('Database not ready');
-      }
-      if (typeof window.servicesDB.bulkUpsertRows !== 'function' && typeof window.servicesDB.upsertRow !== 'function') {
-        console.error('[QB] servicesDB write methods not available');
-        throw new Error('Database write API not ready');
-      }
-
-      const cols = current.sheet.column_defs || [];
-      const linkedCols = cols.filter(c => c.qbLookup && c.qbLookup.fieldId);
-      if (!linkedCols.length) return;
-
-      // BUG2 ROOT FIX: Use resolveCaseColumn (label-based, same as autofill) instead of c.name
-      const caseCol = resolveCaseColumn(cols);
-      if (!caseCol) return;
-
-      const rowsWithCase = current.rows.filter(r => r.data && r.data[caseCol.key] && String(r.data[caseCol.key]).trim() !== '');
-      if (!rowsWithCase.length) return;
-
-      // 1. Collect all unique cases
-      const allCases = [...new Set(rowsWithCase.map(r => String(r.data[caseCol.key]).trim()).filter(Boolean))];
-
-      // 2. Auto-detect ALL field IDs (including new DUE DATE)
-      const fieldIds = [3]; // Case#
-      linkedCols.forEach(col => {
-        const fid = parseInt(col.qbLookup.fieldId);
-        if (fid &&!fieldIds.includes(fid)) fieldIds.push(fid);
-      });
-
-      // 3. Show spinner
-      rowsWithCase.forEach(row => {
-        linkedCols.forEach(col => {
-          const inp = gridEl ? gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`) : null;
-          if (inp && !inp.value) { // Only show ... if empty
-            inp.classList.add('cell-qb-pending'); 
-            inp.placeholder = '⋯';
-            inp.value = ''; // Clear old value
-          }
-        });
-      });
+      console.log('[QB] Syncing', rows.length, 'rows for', sheet.title || 'sheet');
 
       try {
-        // 4. ONE Quickbase call for ALL fields
-        const qbRes = await fetch('/api/quickbase/bulk-lookup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cases: allCases, fieldIds })
+        if (!gridEl) gridEl = document.getElementById('svcGrid');
+
+        const cols = sheet.column_defs || [];
+        const linkedCols = cols.filter(c => c.qbLookup && c.qbLookup.fieldId);
+        if (!linkedCols.length) return 0;
+
+        const caseCol = resolveCaseColumn(cols);
+        if (!caseCol) return 0;
+
+        const rowsWithCase = rows.filter(r => r.data && String(r.data[caseCol.key] || '').trim());
+        const caseNumbers = [...new Set(
+          rowsWithCase.map(r => String(r.data[caseCol.key] || '').trim()).filter(Boolean)
+        )];
+        if (!caseNumbers.length) return 0;
+
+        const fieldIds = [3];
+        linkedCols.forEach(col => {
+          const fid = Number.parseInt(col.qbLookup.fieldId, 10);
+          if (Number.isFinite(fid) && !fieldIds.includes(fid)) fieldIds.push(fid);
         });
-        const qbJson = await qbRes.json();
 
-        if (!qbJson.ok) throw new Error(qbJson.error || 'QB fetch failed');
+        const batchSize = 100;
+        const allQbData = {};
+        for (let i = 0; i < caseNumbers.length; i += batchSize) {
+          const batch = caseNumbers.slice(i, i + batchSize);
+          try {
+            const res = await fetch('/api/quickbase/bulk-lookup', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cases: batch, fieldIds })
+            });
+            if (res.ok) {
+              const payload = await res.json();
+              if (payload && payload.ok && payload.data) {
+                Object.assign(allQbData, payload.data);
+              }
+            }
+          } catch (e) {
+            console.warn('[QB] Batch failed:', e && e.message ? e.message : e);
+          }
+          if (i + batchSize < caseNumbers.length) {
+            await new Promise(r => setTimeout(r, 200));
+          }
+        }
 
-        const qbData = qbJson.data || {};
-
-        // 5. Update ALL rows in memory
         const updates = [];
-        rowsWithCase.forEach(row => {
-          const caseNum = String(row.data[caseCol.key]).trim();
-          const qbRec = qbData[caseNum];
-          if (!qbRec) return;
+        for (const row of rowsWithCase) {
+          const caseNum = String(row.data[caseCol.key] || '').trim();
+          const qb = allQbData[caseNum];
+          if (!qb) continue;
 
           linkedCols.forEach(col => {
-            const fid = col.qbLookup.fieldId.toString();
-            let val = qbRec[fid];
-
-            // Fix [object Object] for user fields
-            if (val && typeof val === 'object') {
-              val = val.name || val.email || val.display || '';
-            }
-
-            // ALWAYS update to ensure persistence, even if same
-            const newVal = val || '';
-            row.data[col.key] = newVal; // Force assign
+            const fid = String(col.qbLookup.fieldId || '').trim();
+            let val = qb[fid];
+            if (val && typeof val === 'object') val = val.name || val.email || val.display || '';
+            row.data[col.key] = val || '';
           });
 
-          // Always push to ensure QB data is persisted
           updates.push({
             id: row.id,
-            sheet_id: current.sheet.id,
+            sheet_id: sheet.id,
             row_index: row.row_index,
             data: row.data,
             updated_at: new Date().toISOString()
           });
-        });
+        }
 
-        // 6. ONE bulk upsert via servicesDB (this is the fix for minutes → seconds)
         if (updates.length > 0) {
-          let error = null;
-          const upsertPayload = updates.map(u => ({ row_index: u.row_index, data: u.data }));
-          if (typeof window.servicesDB.bulkUpsertRows === 'function') {
-            const out = await window.servicesDB.bulkUpsertRows(current.sheet.id, upsertPayload);
-            error = out && out.error ? out.error : null;
-          } else {
-            for (const rowPatch of upsertPayload) {
-              await window.servicesDB.upsertRow(current.sheet.id, rowPatch.row_index, rowPatch.data);
-            }
-          }
+          const { error } = await window.servicesDB.client
+            .from('services_rows')
+            .upsert(updates, { onConflict: 'id' });
 
           if (error) {
-            throw error;
+            console.error('[QB] DB upsert failed:', error);
+          } else {
+            console.log('[QB] Persisted', updates.length, 'rows to DB');
+            const cacheKey = `mums_rows_${sheet.id}_v4`;
+            const cached = localStorage.getItem(cacheKey);
+            if (cached) {
+              localStorage.setItem(cacheKey, JSON.stringify({
+                ts: Date.now(),
+                rows: rows
+              }));
+            }
           }
         }
 
-        // 7. Paint UI once
-        rowsWithCase.forEach(row => {
-          linkedCols.forEach(col => {
-            const inp = gridEl ? gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`) : null;
-            if (inp && inp !== document.activeElement) {
-              var formatted = formatLinkedCellDisplay(col, row.data[col.key]);
-              paintLinkedInput(inp, formatted);
-            }
+        if (gridEl) {
+          rowsWithCase.forEach(row => {
+            linkedCols.forEach(col => {
+              const inp = gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`);
+              if (inp && inp !== document.activeElement) {
+                var formatted = formatLinkedCellDisplay(col, row.data[col.key]);
+                paintLinkedInput(inp, formatted);
+              }
+            });
           });
-        });
+        }
 
-        console.log(`[QB] Bulk complete: ${allCases.length} cases, ${updates.length} updated in ${qbJson.duration_ms}ms`);
-
+        return updates.length;
       } catch (err) {
-        console.error('[QB] Bulk failed:', err);
-        throw err;
+        console.error('[QB] Sync failed:', err);
+        return 0;
       }
     },
 
