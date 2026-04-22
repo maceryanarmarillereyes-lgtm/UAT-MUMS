@@ -3637,3 +3637,13 @@ input.cell.cell-qb-not-found {
 .sheet-count{color:#64748b;font-variant-numeric:tabular-nums;flex-shrink:0}
 .loader-tip{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:rgba(255,255,255,.02);border-radius:8px;font-size:12px;color:#64748b}
 
+
+.update-timer{display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:8px;font-size:12px;color:#94a3b8;font-variant-numeric:tabular-nums;font-family:ui-monospace, SFMono-Regular, monospace;transition:all .3s}
+.update-timer.fresh{color:#10b981;border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.1)}
+.update-timer.stale{color:#f59e0b;border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.1);animation:pulse-amber 2s infinite}
+.update-timer.old{color:#ef4444;border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.1);animation:pulse-red 2s infinite}
+@keyframes pulse-amber{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.4)}50%{box-shadow:0 0 0 4px rgba(245,158,11,0)}}
+@keyframes pulse-red{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}50%{box-shadow:0 0 0 4px rgba(239,68,68,0)}}
+.sync-badge{display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:8px;font-size:12px;color:#10b981}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:#10b981;animation:pulse-dot 2s infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.5}}

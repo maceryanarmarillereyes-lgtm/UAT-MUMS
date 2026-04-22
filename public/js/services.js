@@ -21,17 +21,21 @@
 
   // ── Sync chip ─────────────────────────────────────────────────────────────────
   const syncChip = document.getElementById('svcSyncIndicator');
+  const syncBadge = document.getElementById('syncBadge');
   function setSyncState(state) {
-    if (!syncChip) return;
+    const chipLabel = syncChip || (syncBadge ? syncBadge.querySelector('span:last-child') : null);
+    const chipEl = syncChip || syncBadge;
+    if (!chipEl || !chipLabel) return;
+
     if (state === 'loading') {
-      syncChip.textContent = '◌ Connecting…';
-      syncChip.style.cssText = 'color:#94A3B8;background:rgba(148,163,184,0.1);border-color:rgba(148,163,184,0.3)';
+      chipLabel.textContent = 'Connecting…';
+      chipEl.style.cssText = 'color:#94A3B8;background:rgba(148,163,184,0.1);border-color:rgba(148,163,184,0.3)';
     } else if (state === 'synced') {
-      syncChip.textContent = '● Synced';
-      syncChip.style.cssText = 'color:#4ADE80;background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.3)';
+      chipLabel.textContent = 'Synced';
+      chipEl.style.cssText = 'color:#4ADE80;background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.3)';
     } else {
-      syncChip.textContent = '✕ Auth Error';
-      syncChip.style.cssText = 'color:#F87171;background:rgba(248,113,113,0.1);border-color:rgba(248,113,113,0.3)';
+      chipLabel.textContent = 'Auth Error';
+      chipEl.style.cssText = 'color:#F87171;background:rgba(248,113,113,0.1);border-color:rgba(248,113,113,0.3)';
     }
   }
 
@@ -166,13 +170,23 @@
             localStorage.setItem(`svc_rows_${sheet.id}`, String(rows.length));
             const countEl = item ? item.querySelector('.sheet-count') : null;
             if (countEl) countEl.textContent = `${rows.length} rows`;
-            setTimeout(() => window.svcQbLookup?.quickSync?.(sheet.id).catch(() => {}), 100);
+
+            updateStatus(`Syncing QB for ${sheet.title || 'sheet'}...`);
+            try {
+              const qbClient = window.servicesQB || window.svcQbLookup;
+              await qbClient?.refreshAllLinkedColumns?.({ sheet, rows }, null);
+              console.log('[LOADER] QB sync complete for', sheet.title);
+            } catch (qbErr) {
+              console.warn('[LOADER] QB sync failed (non-blocking):', qbErr && qbErr.message ? qbErr.message : qbErr);
+            }
+
+            localStorage.setItem(`svc_lastUpdate_${sheet.id}`, Date.now().toString());
           } else {
             const cached = localStorage.getItem(`svc_rows_${sheet.id}`);
             const countEl = item ? item.querySelector('.sheet-count') : null;
             if (cached && countEl) countEl.textContent = `${cached} rows`;
           }
-          await new Promise((r) => setTimeout(r, 180));
+          await new Promise((r) => setTimeout(r, 150));
         } catch (err) {
           console.warn('Refresh failed', sheet.title, err);
         }
@@ -185,7 +199,10 @@
         updateProgress(completed, sheets.length);
       }
 
-      if (shouldRefreshAll) localStorage.setItem('svc_lastFullRefresh', Date.now().toString());
+      if (shouldRefreshAll) {
+        localStorage.setItem('svc_lastFullRefresh', Date.now().toString());
+        localStorage.setItem('svc_lastFullUpdate', Date.now().toString());
+      }
 
       updateStatus('Finalizing...');
       await new Promise((r) => setTimeout(r, 250));
@@ -217,4 +234,60 @@
       setTimeout(() => location.reload(), 2000);
     }
   })();
+
+  // ENTERPRISE UPDATE TIMER
+  class UpdateTimer {
+    constructor() {
+      this.startTime = Number.parseInt(localStorage.getItem('svc_lastFullUpdate') || Date.now().toString(), 10);
+      this.timerEl = document.getElementById('timerValue');
+      this.containerEl = document.getElementById('updateTimer');
+      this.interval = null;
+      this.start();
+    }
+
+    start() {
+      this.update();
+      this.interval = setInterval(() => this.update(), 1000);
+    }
+
+    update() {
+      const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+      const h = Math.floor(elapsed / 3600).toString().padStart(2, '0');
+      const m = Math.floor((elapsed % 3600) / 60).toString().padStart(2, '0');
+      const s = (elapsed % 60).toString().padStart(2, '0');
+
+      if (this.timerEl) this.timerEl.textContent = `${h}:${m}:${s}`;
+
+      if (this.containerEl) {
+        this.containerEl.classList.remove('fresh', 'stale', 'old');
+        if (elapsed < 300) {
+          this.containerEl.classList.add('fresh');
+          this.containerEl.title = 'Data is fresh (< 5 min)';
+        } else if (elapsed < 1800) {
+          this.containerEl.classList.add('stale');
+          this.containerEl.title = 'Data is stale (5-30 min)';
+        } else {
+          this.containerEl.classList.add('old');
+          this.containerEl.title = 'Data is old (> 30 min) - Refresh recommended';
+        }
+      }
+    }
+
+    reset() {
+      this.startTime = Date.now();
+      localStorage.setItem('svc_lastFullUpdate', this.startTime.toString());
+      this.update();
+      console.log('[TIMER] Reset to 00:00:00');
+    }
+
+    stop() {
+      if (this.interval) clearInterval(this.interval);
+    }
+  }
+
+  window.updateTimer = null;
+  setTimeout(() => {
+    window.updateTimer = new UpdateTimer();
+  }, 1000);
+
 })();
