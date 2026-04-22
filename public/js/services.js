@@ -113,5 +113,16 @@
     await window.servicesSheetManager.refresh();
 
     setSyncState('synced');
+
+    // AUTO-OPEN: Last sheet or first available
+    const lastSheetId = localStorage.getItem('svc_lastSheetId');
+    const sheets = window.servicesSheetManager.getSheets();
+    if (sheets.length > 0) {
+      const targetSheet = sheets.find(s => s.id === lastSheetId) || sheets[0];
+      if (targetSheet) {
+        console.log('[AUTO-OPEN] Opening sheet:', targetSheet.title);
+        window.servicesSheetManager.openSheet(targetSheet);
+      }
+    }
   })();
 })();

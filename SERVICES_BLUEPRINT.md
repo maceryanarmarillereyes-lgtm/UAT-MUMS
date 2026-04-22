@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-22 (Auto-open sheet + forced QB persistence + empty-date display hardening):**
+  - **Edit — `public/js/services.js`:** Boot flow now auto-opens the persisted last sheet (`svc_lastSheetId`) after successful sheet refresh, with fallback to the first available sheet.
+  - **Edit — `public/js/services-sheet-manager.js`:** `openSheet()` now persists the active sheet id to localStorage (`svc_lastSheetId`) to support restore-on-login behavior.
+  - **Edit — `public/js/services-qb-lookup.js`:** `refreshAllLinkedColumns()` now force-assigns linked QB values and always enqueues rows with CASE data for persistence, preventing no-diff skips from dropping writes.
+  - **Edit — `public/js/services-grid.js`:** Grid load now logs row count and triggers delayed background QB refresh; render path enforces muted `---` for empty QB-linked date cells when a CASE-like id is present.
+
 - **2026-04-22 (QB refresh write-path resilience fix):**
   - **Edit — `public/js/services-qb-lookup.js`:** `refreshAllLinkedColumns()` now validates write-capable `servicesDB` methods (`bulkUpsertRows` or `upsertRow`) before processing and uses guarded persistence: bulk path when available, deterministic row-by-row fallback via `upsertRow` when bulk helper is absent.
   - **Edit — `public/js/services-supabase.js`:** `bulkUpsertRows()` now awaits `servicesDB.ready` and verifies client shape (`client.from` function) before attempting writes, preventing invalid SDK-namespace usage from surfacing as `window.supabase.from is not a function`.

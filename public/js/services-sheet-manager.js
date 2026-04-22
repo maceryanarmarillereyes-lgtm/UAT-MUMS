@@ -90,6 +90,8 @@
   function openSheet(s) {
     window.servicesApp.openSheet(s);
     window.servicesTreeview && window.servicesTreeview.onSheetOpened(s.id);
+    // Persist last opened
+    localStorage.setItem('svc_lastSheetId', s.id);
   }
 
   function showSheetMenu(e, sheet) {
@@ -294,6 +296,8 @@
       await refresh();
       startRealtimeSync();
     },
-    setActive(id) { activeId = id; render(); }
+    setActive(id) { activeId = id; render(); },
+    openSheet,
+    getSheets() { return sheets.slice(); }
   };
 })();

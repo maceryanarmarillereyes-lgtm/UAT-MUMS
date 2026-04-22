@@ -1093,7 +1093,6 @@
           const qbRec = qbData[caseNum];
           if (!qbRec) return;
 
-          let changed = false;
           linkedCols.forEach(col => {
             const fid = col.qbLookup.fieldId.toString();
             let val = qbRec[fid];
@@ -1103,21 +1102,19 @@
               val = val.name || val.email || val.display || '';
             }
 
-            if (row.data[col.key] !== val) {
-              row.data[col.key] = val || '';
-              changed = true;
-            }
+            // ALWAYS update to ensure persistence, even if same
+            const newVal = val || '';
+            row.data[col.key] = newVal; // Force assign
           });
 
-          if (changed) {
-            updates.push({
-              id: row.id,
-              sheet_id: current.sheet.id,
-              row_index: row.row_index,
-              data: row.data,
-              updated_at: new Date().toISOString()
-            });
-          }
+          // Always push to ensure QB data is persisted
+          updates.push({
+            id: row.id,
+            sheet_id: current.sheet.id,
+            row_index: row.row_index,
+            data: row.data,
+            updated_at: new Date().toISOString()
+          });
         });
 
         // 6. ONE bulk upsert via servicesDB (this is the fix for minutes → seconds)
