@@ -221,6 +221,10 @@
     }
 
     var caseId = snap.recordId || '—';
+    var rid = snap.recordId || (String(caseId).trim() === '—' ? '' : caseId) || '';
+    var qbBase = 'https://copeland-coldchainservices.quickbase.com/nav/app/bpvmztzkw/table/bpvmztzr5';
+    var editUrl = qbBase + '/action/er?rid=' + encodeURIComponent(rid) + '&rl=bmg5';
+    var viewUrl = qbBase + '/action/dr?rid=' + encodeURIComponent(rid) + '&rl=bmg5';
     var desc   = fieldVal(['short description','description','concern','subject']) || '—';
     var assign = fieldVal(['assigned to','assigned','agent']);
     var contact= fieldVal(['contact','full name','customer name']);
@@ -263,6 +267,16 @@
     set('qbcdType2',    type);
     html('qbcdStatus2', statusBadge(status));
     set('qbcdLatest',   latest || '—');
+    ['qbcdEditIconBtn', 'qbcdEditBtn'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.setAttribute('href', editUrl);
+    });
+    ['qbcdViewIconBtn', 'qbcdViewBtn'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.setAttribute('href', viewUrl);
+    });
 
     var notesBlock = document.getElementById('qbcdNotesBlock');
     if (notes) {
@@ -313,8 +327,10 @@
       if (cpy)   cpy.addEventListener('click', function() {
         var id = (document.getElementById('qbcdCaseId') || {}).textContent || '';
         if (id && navigator.clipboard) navigator.clipboard.writeText(id).then(function() {
-          cpy.textContent = 'Copied!';
-          setTimeout(function() { cpy.textContent = 'Copy Case #'; }, 1800);
+          var cpyLbl = cpy.querySelector('.qbcd-copy-label');
+          if (!cpyLbl) return;
+          cpyLbl.textContent = 'Copied!';
+          setTimeout(function() { cpyLbl.textContent = 'Copy Case #'; }, 1800);
         }).catch(function() {});
       });
       m.addEventListener('mousedown', function(e) { if (e.target === m) closeModal(); });
