@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-22 (QB refresh write-path resilience fix):**
+  - **Edit — `public/js/services-qb-lookup.js`:** `refreshAllLinkedColumns()` now validates write-capable `servicesDB` methods (`bulkUpsertRows` or `upsertRow`) before processing and uses guarded persistence: bulk path when available, deterministic row-by-row fallback via `upsertRow` when bulk helper is absent.
+  - **Edit — `public/js/services-supabase.js`:** `bulkUpsertRows()` now awaits `servicesDB.ready` and verifies client shape (`client.from` function) before attempting writes, preventing invalid SDK-namespace usage from surfacing as `window.supabase.from is not a function`.
+  - **Verification contract:** QB refresh persistence must execute only through ready/validated `servicesDB` client paths.
+
 - **2026-04-21 (Supabase reference hardening for Services QB/Grid):**
   - **Edit — `public/js/services-qb-lookup.js`:** `refreshAllLinkedColumns()` now hard-fails early when `window.servicesDB` is unavailable (`Database not ready`) to prevent invalid fallback paths, and bulk row persistence now uses `servicesDB.bulkUpsertRows(sheetId, [{ row_index, data }])` instead of direct `window.supabase.from('services_rows').upsert(...)`.
   - **Edit — `public/js/services-grid.js`:** Column hide/unhide persistence now routes through `window.servicesDB.updateColumns(sheetId, column_defs)` (both context-menu hide and Columns popover toggle flows), removing direct `window.supabase.from('services_sheets').update(...)` writes while preserving optimistic UI + revert-on-error behavior.

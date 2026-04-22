@@ -1035,6 +1035,10 @@
         console.error('[QB] servicesDB not available');
         throw new Error('Database not ready');
       }
+      if (typeof window.servicesDB.bulkUpsertRows !== 'function' && typeof window.servicesDB.upsertRow !== 'function') {
+        console.error('[QB] servicesDB write methods not available');
+        throw new Error('Database write API not ready');
+      }
 
       const cols = current.sheet.column_defs || [];
       const linkedCols = cols.filter(c => c.qbLookup && c.qbLookup.fieldId);
@@ -1118,10 +1122,16 @@
 
         // 6. ONE bulk upsert via servicesDB (this is the fix for minutes → seconds)
         if (updates.length > 0) {
-          const { error } = await window.servicesDB.bulkUpsertRows(
-            current.sheet.id,
-            updates.map(u => ({ row_index: u.row_index, data: u.data }))
-          );
+          let error = null;
+          const upsertPayload = updates.map(u => ({ row_index: u.row_index, data: u.data }));
+          if (typeof window.servicesDB.bulkUpsertRows === 'function') {
+            const out = await window.servicesDB.bulkUpsertRows(current.sheet.id, upsertPayload);
+            error = out && out.error ? out.error : null;
+          } else {
+            for (const rowPatch of upsertPayload) {
+              await window.servicesDB.upsertRow(current.sheet.id, rowPatch.row_index, rowPatch.data);
+            }
+          }
 
           if (error) {
             throw error;
