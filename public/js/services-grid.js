@@ -341,6 +341,15 @@
       if (!set.size) this.index.delete(str);
     },
 
+    duplicateRowCount: function () {
+      if (!this.index) return 0;
+      var count = 0;
+      this.index.forEach(function (set) {
+        if (set && set.size > 1) count += set.size;
+      });
+      return count;
+    },
+
     clear: function () {
       if (this.index) {
         this.index.clear();
@@ -352,6 +361,7 @@
   };
 
   var dupCheckTimer = null;
+  var dupPaintTimer = null;
 
   function checkDuplicateDebounced(input, caseVal, rowIdx) {
     clearTimeout(dupCheckTimer);
@@ -359,6 +369,56 @@
       var duplicates = DuplicateDetector.check(caseVal, rowIdx);
       if (duplicates) showDuplicateBubble(input, caseVal, duplicates);
     }, 300);
+  }
+
+  function getCaseColumnDef() {
+    if (!current || !current.sheet || !Array.isArray(current.sheet.column_defs)) return null;
+    return current.sheet.column_defs.find(function (c) {
+      return c && c.key && c.label && String(c.label).toUpperCase().includes('CASE');
+    }) || null;
+  }
+
+  function applyDuplicateStyles(inputEl, caseNum, duplicateRows) {
+    inputEl.classList.add('cell-has-duplicate');
+    inputEl.setAttribute('data-dup-case', caseNum);
+    inputEl.setAttribute('data-dup-rows', duplicateRows.join(','));
+    inputEl.style.borderLeft = '3px solid #ef4444';
+    inputEl.style.backgroundColor = 'rgba(239, 68, 68, 0.08)';
+    inputEl.style.boxShadow = 'inset 0 0 0 1px rgba(239, 68, 68, 0.3)';
+  }
+
+  function clearDuplicateStyles(inputEl) {
+    inputEl.classList.remove('cell-has-duplicate');
+    inputEl.style.borderLeft = '';
+    inputEl.style.backgroundColor = '';
+    inputEl.style.boxShadow = '';
+    inputEl.removeAttribute('data-dup-case');
+    inputEl.removeAttribute('data-dup-rows');
+    delete inputEl._dupCaseNum;
+  }
+
+  function refreshDuplicateIndicators() {
+    var caseCol = getCaseColumnDef();
+    if (!caseCol) return;
+    grid.querySelectorAll('input.cell[data-key="' + caseCol.key + '"]').forEach(function (inp) {
+      var rowIdx = Number(inp.dataset.row);
+      var val = String(inp.value || '').trim();
+      var duplicates = DuplicateDetector.check(val, rowIdx);
+      if (duplicates) {
+        applyDuplicateStyles(inp, val, duplicates);
+      } else {
+        if (inp._dupBubble) {
+          inp._dupBubble.remove();
+          inp._dupBubble = null;
+        }
+        clearDuplicateStyles(inp);
+      }
+    });
+  }
+
+  function refreshDuplicateIndicatorsDebounced() {
+    clearTimeout(dupPaintTimer);
+    dupPaintTimer = setTimeout(refreshDuplicateIndicators, 120);
   }
 
   function showDuplicateBubble(inputEl, caseNum, duplicateRows) {
@@ -398,16 +458,7 @@
     // Store reference for manual cleanup
     inputEl._dupBubble = bubble;
     inputEl._dupCaseNum = caseNum;
-
-    // PERMANENT visual indicator on cell
-    inputEl.classList.add('cell-has-duplicate');
-    inputEl.setAttribute('data-dup-case', caseNum);
-    inputEl.setAttribute('data-dup-rows', duplicateRows.join(','));
-
-    // Add persistent left border
-    inputEl.style.borderLeft = '3px solid #ef4444';
-    inputEl.style.backgroundColor = 'rgba(239, 68, 68, 0.08)';
-    inputEl.style.boxShadow = 'inset 0 0 0 1px rgba(239, 68, 68, 0.3)';
+    applyDuplicateStyles(inputEl, caseNum, duplicateRows);
 
     var gotoBtn = bubble.querySelector('[data-goto]');
     if (gotoBtn) {
@@ -428,7 +479,6 @@
       closeBtn.onclick = function () {
         bubble.remove();
         inputEl._dupBubble = null;
-        inputEl.classList.remove('cell-has-duplicate');
         // Keep visual warning but remove bubble
         console.log('[DUP] Manually dismissed (still duplicate)');
       };
@@ -701,13 +751,7 @@
               var oldCase = inp._dupCaseNum;
               inp._dupBubble.remove();
               inp._dupBubble = null;
-              inp.classList.remove('cell-has-duplicate');
-              inp.style.borderLeft = '';
-              inp.style.backgroundColor = '';
-              inp.style.boxShadow = '';
-              inp.removeAttribute('data-dup-case');
-              inp.removeAttribute('data-dup-rows');
-              delete inp._dupCaseNum;
+              clearDuplicateStyles(inp);
               DuplicateDetector.remove(oldCase, rowIndex);
               DuplicateDetector.add(currentVal, rowIndex);
               console.log('[DUP] Fixed:', currentVal);
@@ -751,6 +795,7 @@
     attachHeaderContextMenu();
     attachRowContextMenu();
     updateStatusBar();
+    refreshDuplicateIndicators();
 
     // ── Column resize ──────────────────────────────────────────────────────────
     // FIX-ALIGN: On filter switch the grid DOM is fully rebuilt (innerHTML replaced)
@@ -1719,6 +1764,7 @@
     if (DuplicateDetector.caseKey === key) {
       DuplicateDetector.remove(prevValue, rowIdx);
       DuplicateDetector.add(value, rowIdx);
+      refreshDuplicateIndicatorsDebounced();
     }
     setStatus('unsaved', 'Unsaved');
     updateStatusBar();
@@ -2123,10 +2169,10 @@
 
   // Block leave navigation when unresolved duplicate CASE warnings exist
   window.addEventListener('beforeunload', function (e) {
-    var dups = document.querySelectorAll('.cell-has-duplicate');
-    if (dups.length > 0) {
+    var dupCount = DuplicateDetector.duplicateRowCount();
+    if (dupCount > 0) {
       e.preventDefault();
-      e.returnValue = 'May ' + dups.length + ' duplicate CASE# na hindi pa naayos. Sigurado ka?';
+      e.returnValue = 'May ' + dupCount + ' duplicate CASE# na hindi pa naayos. Sigurado ka?';
     }
   });
 
