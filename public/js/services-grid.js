@@ -69,6 +69,60 @@
     }
   }
 
+
+  async function saveColumnState() {
+    if (!current || !current.sheet || !current.sheet.id) return;
+    var columnDefs = Array.isArray(current.sheet.column_defs) ? current.sheet.column_defs : [];
+    var state = {
+      widths: current.sheet.column_widths || {},
+      hidden: columnDefs.filter(function (c) { return !!(c && c.hidden); }).map(function (c) { return c.key; })
+    };
+
+    try {
+      if (window.servicesDB && typeof window.servicesDB.updateColumns === 'function') {
+        await window.servicesDB.updateColumns(current.sheet.id, columnDefs);
+      }
+      var client = window.servicesDB && window.servicesDB.client;
+      if (!client || typeof client.from !== 'function') return;
+      var out = await client
+        .from('services_sheets')
+        .update({
+          column_state: state,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', current.sheet.id);
+      if (out && out.error) throw out.error;
+      current.sheet.column_state = state;
+      console.log('[COLUMNS] State saved to DB');
+    } catch (err) {
+      console.error('[COLUMNS] Save failed:', err);
+    }
+  }
+
+  function queueColumnStateSave(delayMs) {
+    clearTimeout(window._colSaveTimer);
+    window._colSaveTimer = setTimeout(function () {
+      saveColumnState();
+    }, delayMs || 400);
+  }
+
+  function toggleColumnVisibility(colKey, hide) {
+    if (!current || !current.sheet || !Array.isArray(current.sheet.column_defs)) return;
+    var col = current.sheet.column_defs.find(function (c) { return c && c.key === colKey; });
+    if (!col) return;
+
+    col.hidden = !!hide;
+
+    document.querySelectorAll('[data-key="' + String(colKey) + '"]').forEach(function (el) {
+      if (!el) return;
+      el.style.display = hide ? 'none' : '';
+    });
+
+    render();
+    queueColumnStateSave(300);
+    console.log('[COLUMN]', hide ? 'Hidden' : 'Shown', colKey);
+  }
+
   function formatCellValue(col, value) {
     if ((col && (col.type === 'date' || col.format === 'date'))) {
       if (!value || value === '' || value === 'mm/dd/yyyy' || value === 'undefined') {
@@ -112,6 +166,22 @@
     current   = { sheet: JSON.parse(JSON.stringify(sheet)), rows: [] };
     var colNorm = normalizeColumnDefs(current.sheet.column_defs);
     current.sheet.column_defs = colNorm.normalized;
+    if (!current.sheet.column_widths || typeof current.sheet.column_widths !== 'object') {
+      current.sheet.column_widths = {};
+    }
+
+    if (current.sheet.column_state) {
+      var state = current.sheet.column_state;
+      if (state && state.widths && typeof state.widths === 'object') {
+        current.sheet.column_widths = Object.assign({}, state.widths);
+      }
+      if (state && Array.isArray(state.hidden)) {
+        state.hidden.forEach(function (key) {
+          var col = current.sheet.column_defs.find(function (c) { return c && c.key === key; });
+          if (col) col.hidden = true;
+        });
+      }
+    }
     // One-time self-heal: persist sanitized labels so future loads stay clean
     if (colNorm.changed && !_columnRepairPromise) {
       _columnRepairPromise = window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs)
@@ -376,6 +446,78 @@
       th.dataset.key = c.key;
       th.tabIndex = 0;
       th.title = 'Right-click for column options · Right-click to sort';
+
+      var savedWidth = Number(current.sheet.column_widths && current.sheet.column_widths[c.key]);
+      if (savedWidth) {
+        var px = savedWidth + 'px';
+        th.style.width = px;
+        th.style.minWidth = px;
+        th.style.maxWidth = px;
+      }
+      if (c.hidden) th.style.display = 'none';
+
+      var resizeHandle = document.createElement('div');
+      resizeHandle.className = 'col-resize-handle';
+      resizeHandle.innerHTML = '<div class="resize-grip"></div>';
+      th.style.position = 'relative';
+      th.appendChild(resizeHandle);
+
+      resizeHandle.addEventListener('mousedown', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var startX = ev.clientX;
+        var startWidth = th.offsetWidth;
+        var colKey = c.key;
+
+        var preview = document.createElement('div');
+        preview.id = 'col-resize-preview';
+        Object.assign(preview.style, {
+          position: 'fixed',
+          left: ev.clientX + 'px',
+          top: th.getBoundingClientRect().top + 'px',
+          width: '2px',
+          height: window.innerHeight + 'px',
+          background: '#0ea5e9',
+          zIndex: '99999',
+          pointerEvents: 'none',
+          boxShadow: '0 0 8px rgba(14,165,233,0.5)'
+        });
+        document.body.appendChild(preview);
+
+        function onMouseMove(moveEv) {
+          var delta = moveEv.clientX - startX;
+          var newWidth = Math.max(60, startWidth + delta);
+          var leftPx = (th.getBoundingClientRect().left + newWidth) + 'px';
+          preview.style.left = leftPx;
+          var px = newWidth + 'px';
+          th.style.width = px;
+          th.style.minWidth = px;
+          th.style.maxWidth = px;
+          grid.querySelectorAll('td[data-col="' + colKey + '"]').forEach(function (td) {
+            td.style.width = px;
+            td.style.minWidth = px;
+            td.style.maxWidth = px;
+          });
+        }
+
+        function onMouseUp() {
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+          preview.remove();
+
+          var finalWidth = Math.max(60, th.offsetWidth);
+          if (!current.sheet.column_widths) current.sheet.column_widths = {};
+          current.sheet.column_widths[colKey] = finalWidth;
+          var targetCol = current.sheet.column_defs.find(function (col) { return col && col.key === colKey; });
+          if (targetCol) targetCol.width = finalWidth + 'px';
+          queueColumnStateSave(500);
+          console.log('[RESIZE] Saved:', colKey, finalWidth + 'px');
+        }
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+
       // Sort indicator
       if (_sortState.key === c.key) {
         var sortBadge = document.createElement('span');
@@ -425,6 +567,15 @@
       rowNumTd.dataset.row = String(rowIndex);
       cols.forEach(function (c) {
         var td  = mkEl('td', null, tr);
+        var savedWidth = Number(current.sheet.column_widths && current.sheet.column_widths[c.key]);
+        if (savedWidth) {
+          var tdPx = savedWidth + 'px';
+          td.style.width = tdPx;
+          td.style.minWidth = tdPx;
+          td.style.maxWidth = tdPx;
+        }
+        if (c.hidden) td.style.display = 'none';
+        td.setAttribute('data-col', c.key);
         var inputType = 'text';
         var validation = c && c.validation && c.validation.type === 'list' && Array.isArray(c.validation.options)
           ? c.validation.options.filter(function (v) { return String(v || '').trim() !== ''; })
@@ -841,19 +992,9 @@
             render(); closeAllCtxMenus();
           } else if (action === 'hide-column') {
             var col = current.sheet.column_defs[colIdx];
-            col.hidden = true;
-            // BUG3 FIX: Render immediately (optimistic), save to DB in background
-            render();
+            toggleColumnVisibility(key, true);
             notify('info', 'Column Hidden', col.label + ' hidden. Click ⊞ Columns to unhide.');
             closeAllCtxMenus();
-            // updateColumns is async but we don't need to wait
-            window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs)
-              .then(() => console.log('[Grid] Column hide saved:', col.label))
-              .catch(err => {
-                console.error('[Grid] Failed to save column hide:', err);
-                col.hidden = false;
-                render();
-              });
           } else if (action === 'autofit-column') {
             cols[colIdx].width = 'auto';
             autoFitColumns();
@@ -1402,6 +1543,12 @@
     current.sheet.column_defs.forEach(function (col) {
       if (col.hidden) return;
 
+      var saved = Number(current.sheet.column_widths && current.sheet.column_widths[col.key]);
+      if (saved) {
+        col.width = saved + 'px';
+        return;
+      }
+
       // Measure header
       var maxWidth = ctx.measureText(col.name || col.key).width + 48;
 
@@ -1634,6 +1781,7 @@
 
   async function saveAllRows() {
     if (!current) { notify('warning', 'No Sheet Open', 'Open a sheet first.'); return; }
+    await saveColumnState();
     var nonEmpty = current.rows.filter(function (r) {
       return r.data && Object.values(r.data).some(function (v) { return v !== '' && v != null; });
     });
@@ -1763,22 +1911,12 @@
         div.style.cssText = 'padding:6px;cursor:pointer;display:flex;align-items:center;gap:8px';
         div.innerHTML = '<input type="checkbox" ' + (!col.hidden ? 'checked' : '') + '><span>' + (col.label || 'Unnamed') + '</span>';
         div.onclick = function () {
-          col.hidden = !col.hidden;
-          // BUG3 FIX: Update checkbox visual immediately
+          var nextHidden = !col.hidden;
+          toggleColumnVisibility(col.key, nextHidden);
           var cb = div.querySelector('input[type="checkbox"]');
           var lbl = div.querySelector('span');
-          if (cb) cb.checked = !col.hidden;
-          if (lbl) lbl.style.color = col.hidden ? '#64748b' : '#e2e8f0';
-          // Render grid immediately
-          render();
-          // Save to DB in background
-          window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs)
-            .then(() => { console.log('[Grid] Column visibility saved:', col.label); })
-            .catch(err => {
-              console.error('[Grid] Failed to save column visibility:', err);
-              col.hidden = !col.hidden; // revert
-              render();
-            });
+          if (cb) cb.checked = !nextHidden;
+          if (lbl) lbl.style.color = nextHidden ? '#64748b' : '#e2e8f0';
           setTimeout(function () { pop.remove(); }, 100);
         };
         pop.appendChild(div);
@@ -1948,5 +2086,5 @@
   });
 
   function getState() { return current; }
-  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter };
+  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter, saveColumnState: saveColumnState, toggleColumnVisibility: toggleColumnVisibility };
 })();
