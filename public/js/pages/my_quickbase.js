@@ -3961,10 +3961,10 @@
         var ridFromField = snap.fields && snap.fields['3'] && snap.fields['3'].value != null
           ? String(snap.fields['3'].value)
           : '';
-        var rid = String(snap.recordId || ridFromField || '').trim();
+        var caseNum = String(ridFromField || caseId || '').trim();
         var qbBase = 'https://copeland-coldchainservices.quickbase.com/nav/app/bpvmztzkw/table/bpvmztzr5';
-        var editUrl = rid ? (qbBase + '/action/er?rid=' + encodeURIComponent(rid) + '&rl=bmg5') : '#';
-        var viewUrl = rid ? (qbBase + '/action/dr?rid=' + encodeURIComponent(rid) + '&rl=bmg5') : '#';
+        var editUrl = caseNum ? (qbBase + '/action/er?rid=' + encodeURIComponent(caseNum) + '&rl=bmg5') : '#';
+        var viewUrl = caseNum ? (qbBase + '/action/dr?rid=' + encodeURIComponent(caseNum) + '&rl=bmg5') : '#';
 
         // ── Populate fixed DOM slots ─────────────────────────────────────────
         _set('qbcdRowBadge',  snap.rowNum || '—');
