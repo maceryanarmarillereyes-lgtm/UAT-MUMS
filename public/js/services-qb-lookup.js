@@ -1029,6 +1029,15 @@
         })
         .catch(function () { return null; });
     },
+    quickSync: async function (sheetId) {
+      try {
+        if (!window.servicesDB || !window.servicesDB.client) return false;
+        const { data, error } = await window.servicesDB.client.from('qb_tokens').select('updated_at').limit(1).maybeSingle();
+        return !error && !!data;
+      } catch (_) {
+        return false;
+      }
+    },
     refreshAllLinkedColumns: async function (current, gridEl) {
       if (!current ||!gridEl) return;
       if (!window.servicesDB) {
