@@ -1038,8 +1038,49 @@
         return false;
       }
     },
+    fetchFreshQBData: async function (sheetId) {
+      // Bypass local lookup caches and trigger a lightweight freshness check.
+      _cache = {};
+      _notFound = {};
+      _inFlight = {};
+      _reportIdx = null;
+
+      if (!sheetId || !window.servicesDB || !window.servicesDB.client) {
+        return { ok: false, reason: 'missing_sheet_or_db' };
+      }
+
+      try {
+        const { data, error } = await window.servicesDB.client
+          .from('qb_tokens')
+          .select('updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        const updatedAt = data && data.updated_at ? new Date(data.updated_at).getTime() : 0;
+        const age = updatedAt > 0 ? Date.now() - updatedAt : Number.POSITIVE_INFINITY;
+
+        if (age > 60000) {
+          console.log('[QB] Token timestamp is older than 1 minute; forcing live bulk lookup path for sheet', sheetId);
+        }
+
+        return { ok: true, ageMs: age };
+      } catch (err) {
+        console.error('[QB] Fetch failed:', err);
+        throw err;
+      }
+    },
     refreshAllLinkedColumns: async function (current, gridEl) {
-      if (!current ||!gridEl) return;
+      if (!current) return;
+
+      console.log('[QB] Starting REAL sync for', current && current.sheet ? current.sheet.title : 'sheet');
+      await this.fetchFreshQBData(current.sheet && current.sheet.id);
+
+      if (!gridEl) {
+        gridEl = document.getElementById('svcGrid');
+      }
       if (!window.servicesDB) {
         console.error('[QB] servicesDB not available');
         throw new Error('Database not ready');
@@ -1073,7 +1114,7 @@
       // 3. Show spinner
       rowsWithCase.forEach(row => {
         linkedCols.forEach(col => {
-          const inp = gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`);
+          const inp = gridEl ? gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`) : null;
           if (inp && !inp.value) { // Only show ... if empty
             inp.classList.add('cell-qb-pending'); 
             inp.placeholder = '⋯';
@@ -1147,7 +1188,7 @@
         // 7. Paint UI once
         rowsWithCase.forEach(row => {
           linkedCols.forEach(col => {
-            const inp = gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`);
+            const inp = gridEl ? gridEl.querySelector(`input.cell[data-row="${row.row_index}"][data-key="${col.key}"]`) : null;
             if (inp && inp !== document.activeElement) {
               var formatted = formatLinkedCellDisplay(col, row.data[col.key]);
               paintLinkedInput(inp, formatted);

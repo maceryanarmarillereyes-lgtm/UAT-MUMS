@@ -147,16 +147,8 @@
         `).join('');
       }
 
-      const lastFullRefresh = localStorage.getItem('svc_lastFullRefresh');
-      const lastRefreshTs = Number.parseInt(lastFullRefresh || '', 10);
-      const shouldRefreshAll = !Number.isFinite(lastRefreshTs) || (Date.now() - lastRefreshTs) > 300000;
-
-      if (!shouldRefreshAll) {
-        updateStatus('Using cached data (updated recently)');
-        await new Promise((r) => setTimeout(r, 600));
-      } else {
-        updateStatus('Refreshing all sheets...');
-      }
+      // ALWAYS do real refresh - remove cache logic
+      updateStatus('Starting fresh data sync...');
 
       let completed = 0;
       for (const sheet of sheets) {
@@ -165,30 +157,43 @@
         updateStatus(`Updating ${sheet.title || 'sheet'}...`);
 
         try {
-          if (shouldRefreshAll) {
-            const rows = await window.servicesDB.listRows(sheet.id);
-            localStorage.setItem(`svc_rows_${sheet.id}`, String(rows.length));
-            const countEl = item ? item.querySelector('.sheet-count') : null;
+          // ALWAYS fetch fresh from DB - NO CACHE
+          updateStatus(`Fetching ${sheet.title || 'sheet'} from database...`);
+          const rows = await window.servicesDB.listRows(sheet.id);
+
+          // Verify we got fresh data
+          console.log(`[LOADER] Fetched ${rows.length} rows for ${sheet.title || 'sheet'}`);
+
+          localStorage.setItem(`svc_rows_${sheet.id}`, rows.length.toString());
+          if (item) {
+            const countEl = item.querySelector('.sheet-count');
             if (countEl) countEl.textContent = `${rows.length} rows`;
-
-            updateStatus(`Syncing QB for ${sheet.title || 'sheet'}...`);
-            try {
-              const qbClient = window.servicesQB || window.svcQbLookup;
-              await qbClient?.refreshAllLinkedColumns?.({ sheet, rows }, null);
-              console.log('[LOADER] QB sync complete for', sheet.title);
-            } catch (qbErr) {
-              console.warn('[LOADER] QB sync failed (non-blocking):', qbErr && qbErr.message ? qbErr.message : qbErr);
-            }
-
-            localStorage.setItem(`svc_lastUpdate_${sheet.id}`, Date.now().toString());
-          } else {
-            const cached = localStorage.getItem(`svc_rows_${sheet.id}`);
-            const countEl = item ? item.querySelector('.sheet-count') : null;
-            if (cached && countEl) countEl.textContent = `${cached} rows`;
           }
-          await new Promise((r) => setTimeout(r, 150));
+
+          // FORCE QB SYNC - wait for completion
+          updateStatus(`Syncing QuickBooks for ${sheet.title || 'sheet'}...`);
+          try {
+            // This MUST complete before continuing
+            const qbClient = window.servicesQB || window.svcQbLookup;
+            const qbResult = await qbClient?.refreshAllLinkedColumns?.(
+              { sheet, rows },
+              document.getElementById('svcGrid')
+            );
+            console.log(`[LOADER] QB sync DONE for ${sheet.title || 'sheet'}`, qbResult);
+          } catch (qbErr) {
+            console.error(`[LOADER] QB FAILED for ${sheet.title || 'sheet'}:`, qbErr);
+            // Continue anyway but log it
+          }
+
+          // ONLY set timestamp AFTER successful fetch
+          const updateTime = Date.now();
+          localStorage.setItem(`svc_lastUpdate_${sheet.id}`, updateTime.toString());
+          localStorage.setItem('svc_lastFullUpdate', updateTime.toString());
+
+          await new Promise((r) => setTimeout(r, 100)); // Visual only
         } catch (err) {
-          console.warn('Refresh failed', sheet.title, err);
+          console.error('[LOADER] FAILED to refresh', sheet.title, err);
+          updateStatus(`Error updating ${sheet.title || 'sheet'} - using cached`);
         }
 
         if (item) {
@@ -199,10 +204,12 @@
         updateProgress(completed, sheets.length);
       }
 
-      if (shouldRefreshAll) {
-        localStorage.setItem('svc_lastFullRefresh', Date.now().toString());
-        localStorage.setItem('svc_lastFullUpdate', Date.now().toString());
-      }
+      // Set final timestamp AFTER all sheets done
+      const finalUpdateTime = Date.now();
+      localStorage.setItem('svc_lastFullRefresh', finalUpdateTime.toString());
+      localStorage.setItem('svc_lastFullUpdate', finalUpdateTime.toString());
+
+      console.log('[LOADER] All sheets updated at', new Date(finalUpdateTime).toLocaleTimeString());
 
       updateStatus('Finalizing...');
       await new Promise((r) => setTimeout(r, 250));
@@ -213,6 +220,22 @@
 
       setSyncState('synced');
       updateStatus('Ready!');
+
+      updateStatus('Verifying data freshness...');
+
+      // Verify the update actually happened
+      const verifyTime = localStorage.getItem('svc_lastFullUpdate');
+      const safeVerifyTime = Number.parseInt(verifyTime || '', 10);
+      const age = Number.isFinite(safeVerifyTime) ? (Date.now() - safeVerifyTime) : Number.POSITIVE_INFINITY;
+      console.log('[VERIFY] Data age:', Math.floor(age / 1000), 'seconds');
+
+      if (age > 10000) { // More than 10 seconds old
+        console.error('[VERIFY] WARNING: Data is stale! Age:', age);
+        updateStatus('Warning: Data may be stale');
+      } else {
+        updateStatus(`Ready! Data updated ${Math.floor(age / 1000)}s ago`);
+      }
+
       await new Promise((r) => setTimeout(r, 350));
 
       if (loader) loader.classList.add('hidden');
@@ -238,7 +261,14 @@
   // ENTERPRISE UPDATE TIMER
   class UpdateTimer {
     constructor() {
-      this.startTime = Number.parseInt(localStorage.getItem('svc_lastFullUpdate') || Date.now().toString(), 10);
+      // Read the ACTUAL last update time (set by loader)
+      const lastUpdate = localStorage.getItem('svc_lastFullUpdate');
+      const parsedUpdate = Number.parseInt(lastUpdate || '', 10);
+      this.startTime = Number.isFinite(parsedUpdate) ? parsedUpdate : Date.now();
+
+      console.log('[TIMER] Initialized with start time:', new Date(this.startTime).toLocaleTimeString());
+      console.log('[TIMER] Time since update:', Math.floor((Date.now() - this.startTime) / 1000), 'seconds');
+
       this.timerEl = document.getElementById('timerValue');
       this.containerEl = document.getElementById('updateTimer');
       this.interval = null;

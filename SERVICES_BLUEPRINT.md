@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-22 (Loader always-real refresh + freshness verification hardening):**
+  - **Edit — `public/js/services.js`:** Removed startup cache-gate branch (`shouldRefreshAll`) so loader now always does live `servicesDB.listRows()` per sheet, persists per-sheet and full-refresh timestamps after successful fetches, and logs explicit loader progress for DB/QB phases.
+  - **Edit — `public/js/services.js`:** Added post-ready freshness verification (`svc_lastFullUpdate` age check) and hardened `UpdateTimer` constructor to initialize from validated persisted timestamp with diagnostics.
+  - **Edit — `public/js/services-qb-lookup.js`:** `refreshAllLinkedColumns()` now logs enforced live-sync start, performs a pre-sync freshness/cache-bust hook (`fetchFreshQBData`), and tolerates missing `gridEl` by resolving `#svcGrid` lazily to avoid loader-path no-op.
+  - **Behavior contract update:** Services boot loader now always performs real DB refresh + blocking QB sync attempt for each sheet before final ready state, with explicit freshness telemetry instead of recent-cache short-circuiting.
+
 - **2026-04-22 (Column-state DB schema fallback hardening):**
   - **Edit — `public/js/services-grid.js`:** Added one-way fallback guard for column-state persistence (`_columnStateDbUnavailable`) so when Supabase responds that `services_sheets.column_state` is unavailable (e.g. schema lag), the app automatically switches to localStorage-only persistence and stops repeating failing DB writes.
   - **Behavior contract update:** Column width/visibility state remains fully functional via local cache even when DB column-state schema is not yet present, preventing recurring console errors while preserving grid behavior.
