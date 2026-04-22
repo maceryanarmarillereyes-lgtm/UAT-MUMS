@@ -29,6 +29,7 @@
   // ── Sort State ──────────────────────────────────────────────────────────────
   // key: column key string | null (no sort), dir: 'asc' | 'desc'
   var _sortState   = { key: null, dir: 'asc' };
+  var isResizing  = false;
 
   function sanitizeHeaderLabel(label, fallbackIndex) {
     var s = String(label == null ? '' : label)
@@ -71,7 +72,7 @@
 
 
   async function saveColumnState() {
-    if (!current || !current.sheet || !current.sheet.id) return;
+    if (!current || !current.sheet || !current.sheet.id || isResizing) return;
     var columnDefs = Array.isArray(current.sheet.column_defs) ? current.sheet.column_defs : [];
     var state = {
       widths: current.sheet.column_widths || {},
@@ -79,31 +80,35 @@
     };
 
     try {
-      if (window.servicesDB && typeof window.servicesDB.updateColumns === 'function') {
-        await window.servicesDB.updateColumns(current.sheet.id, columnDefs);
-      }
-      var client = window.servicesDB && window.servicesDB.client;
-      if (!client || typeof client.from !== 'function') return;
-      var out = await client
-        .from('services_sheets')
-        .update({
-          column_state: state,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', current.sheet.id);
-      if (out && out.error) throw out.error;
+      localStorage.setItem('svc_cols_' + String(current.sheet.id), JSON.stringify(state));
       current.sheet.column_state = state;
-      console.log('[COLUMNS] State saved to DB');
-    } catch (err) {
-      console.error('[COLUMNS] Save failed:', err);
-    }
+    } catch (_) {}
+
+    clearTimeout(window._colStateDbTimer);
+    window._colStateDbTimer = setTimeout(async function () {
+      try {
+        var client = window.servicesDB && window.servicesDB.client;
+        if (!client || typeof client.from !== 'function') return;
+        var out = await client
+          .from('services_sheets')
+          .update({
+            column_state: state,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', current.sheet.id);
+        if (out && out.error) throw out.error;
+        console.log('[COLUMNS] Saved to DB');
+      } catch (err) {
+        console.error('[COLUMNS] DB save failed, local state retained:', err);
+      }
+    }, 2000);
   }
 
   function queueColumnStateSave(delayMs) {
-    clearTimeout(window._colSaveTimer);
-    window._colSaveTimer = setTimeout(function () {
+    clearTimeout(window._colStateQueueTimer);
+    window._colStateQueueTimer = setTimeout(function () {
       saveColumnState();
-    }, delayMs || 400);
+    }, delayMs || 300);
   }
 
   function toggleColumnVisibility(colKey, hide) {
@@ -170,13 +175,29 @@
       current.sheet.column_widths = {};
     }
 
-    if (current.sheet.column_state) {
-      var state = current.sheet.column_state;
-      if (state && state.widths && typeof state.widths === 'object') {
-        current.sheet.column_widths = Object.assign({}, state.widths);
-      }
-      if (state && Array.isArray(state.hidden)) {
-        state.hidden.forEach(function (key) {
+    var localStateRaw = null;
+    try {
+      localStateRaw = localStorage.getItem('svc_cols_' + String(sheet.id));
+    } catch (_) {}
+
+    if (localStateRaw) {
+      try {
+        var localState = JSON.parse(localStateRaw);
+        current.sheet.column_state = localState;
+        current.sheet.column_widths = Object.assign({}, localState.widths || {});
+        if (Array.isArray(localState.hidden)) {
+          localState.hidden.forEach(function (key) {
+            var localCol = current.sheet.column_defs.find(function (c) { return c && c.key === key; });
+            if (localCol) localCol.hidden = true;
+          });
+        }
+        console.log('[COLUMNS] Loaded from localStorage');
+      } catch (_) {}
+    } else if (sheet.column_state) {
+      current.sheet.column_state = sheet.column_state;
+      current.sheet.column_widths = Object.assign({}, (sheet.column_state && sheet.column_state.widths) || {});
+      if (Array.isArray(sheet.column_state.hidden)) {
+        sheet.column_state.hidden.forEach(function (key) {
           var col = current.sheet.column_defs.find(function (c) { return c && c.key === key; });
           if (col) col.hidden = true;
         });
@@ -211,6 +232,10 @@
     render();
     window.servicesDashboard && window.servicesDashboard.update(current);
     subscription = window.servicesDB.subscribeToSheet(sheet.id, function (payload) {
+      if (isResizing) {
+        console.log('[REALTIME] Paused during resize');
+        return;
+      }
       if (!current) return;
       var ev  = payload.eventType;
       var row = payload.new;
@@ -461,6 +486,10 @@
   }
 
   function render() {
+    if (isResizing) {
+      console.log('[RENDER] Skipped - resizing in progress');
+      return;
+    }
     if (!current) { clear(); return; }
     empty.style.display = 'none';
     grid.hidden = false;
@@ -487,6 +516,17 @@
     var totalRows = (isFilteredView || isSorted)
       ? Math.max(viewRows.length, 1)
       : Math.max(current.rows.length + 2, 10);
+
+    var colgroup = mkEl('colgroup');
+    (current.sheet.column_defs || []).forEach(function (c) {
+      var col = document.createElement('col');
+      col.setAttribute('data-key', c.key);
+      var savedWidth = Number(current.sheet.column_widths && current.sheet.column_widths[c.key]);
+      if (savedWidth) col.style.width = savedWidth + 'px';
+      else col.style.width = ((parseInt(c.width, 10) || 150) + 'px');
+      if (c.hidden) col.style.display = 'none';
+      colgroup.appendChild(col);
+    });
 
     var thead   = mkEl('thead');
     var headTr  = mkEl('tr', null, thead);
@@ -515,6 +555,8 @@
       resizeHandle.addEventListener('mousedown', function (ev) {
         ev.preventDefault();
         ev.stopPropagation();
+        isResizing = true;
+        document.body.style.userSelect = 'none';
         var startX = ev.clientX;
         var startWidth = th.offsetWidth;
         var colKey = c.key;
@@ -536,18 +578,11 @@
 
         function onMouseMove(moveEv) {
           var delta = moveEv.clientX - startX;
-          var newWidth = Math.max(60, startWidth + delta);
+          var newWidth = Math.max(60, Math.min(800, startWidth + delta));
           var leftPx = (th.getBoundingClientRect().left + newWidth) + 'px';
           preview.style.left = leftPx;
-          var px = newWidth + 'px';
-          th.style.width = px;
-          th.style.minWidth = px;
-          th.style.maxWidth = px;
-          grid.querySelectorAll('td[data-col="' + colKey + '"]').forEach(function (td) {
-            td.style.width = px;
-            td.style.minWidth = px;
-            td.style.maxWidth = px;
-          });
+          var colEl = grid.querySelector('colgroup col[data-key="' + colKey + '"]');
+          if (colEl) colEl.style.width = newWidth + 'px';
         }
 
         function onMouseUp() {
@@ -555,12 +590,18 @@
           document.removeEventListener('mouseup', onMouseUp);
           preview.remove();
 
-          var finalWidth = Math.max(60, th.offsetWidth);
+          var colEl = grid.querySelector('colgroup col[data-key="' + colKey + '"]');
+          var finalWidth = Math.max(60, Math.min(800, (colEl ? parseInt(colEl.style.width, 10) : th.offsetWidth) || th.offsetWidth));
           if (!current.sheet.column_widths) current.sheet.column_widths = {};
           current.sheet.column_widths[colKey] = finalWidth;
+          if (colEl) colEl.style.width = finalWidth + 'px';
           var targetCol = current.sheet.column_defs.find(function (col) { return col && col.key === colKey; });
           if (targetCol) targetCol.width = finalWidth + 'px';
-          queueColumnStateSave(500);
+          grid.style.tableLayout = 'fixed';
+          queueColumnStateSave(400);
+          isResizing = false;
+          document.body.style.userSelect = '';
+          render();
           console.log('[RESIZE] Saved:', colKey, finalWidth + 'px');
         }
 
@@ -743,6 +784,7 @@
     }
 
     grid.innerHTML = '';
+    grid.appendChild(colgroup);
     grid.appendChild(thead);
     grid.appendChild(tbody);
 
