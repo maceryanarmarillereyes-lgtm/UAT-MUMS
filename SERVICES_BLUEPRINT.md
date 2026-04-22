@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-22 (Column resize cross-column bleed fix):**
+  - **Edit — `public/js/services-grid.js`:** Fixed `<colgroup>` mapping to match rendered grid structure exactly (`row-num` + visible columns only), eliminating width-index drift that caused non-target columns to move during resize.
+  - **Edit — `public/css/services.css`:** Changed fixed-layout width lock from forced `100%` to `max-content` with `min-width:100%` so resizing one column no longer redistributes width across other columns.
+  - **Behavior contract update:** Single-column resize now updates only the targeted column width while preserving horizontal scroll behavior and existing layout.
+
 - **2026-04-22 (Resize stability hardening: colgroup + fixed layout lock):**
   - **Edit — `public/js/services-grid.js`:** Added resize safety state (`isResizing`) to pause render/realtime row paint while dragging, and prevent layout churn during active column resize.
   - **Edit — `public/js/services-grid.js`:** Render now builds a `<colgroup>` from `column_defs` + `column_widths`, and resize drag updates `colgroup col[data-key]` widths directly for stable, non-reverting column widths.

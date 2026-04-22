@@ -518,13 +518,16 @@
       : Math.max(current.rows.length + 2, 10);
 
     var colgroup = mkEl('colgroup');
-    (current.sheet.column_defs || []).forEach(function (c) {
+    var rowNumCol = document.createElement('col');
+    rowNumCol.setAttribute('data-key', '__rownum__');
+    rowNumCol.style.width = '56px';
+    colgroup.appendChild(rowNumCol);
+    cols.forEach(function (c) {
       var col = document.createElement('col');
       col.setAttribute('data-key', c.key);
       var savedWidth = Number(current.sheet.column_widths && current.sheet.column_widths[c.key]);
       if (savedWidth) col.style.width = savedWidth + 'px';
       else col.style.width = ((parseInt(c.width, 10) || 150) + 'px');
-      if (c.hidden) col.style.display = 'none';
       colgroup.appendChild(col);
     });
 
