@@ -26,6 +26,7 @@
   var undoStack    = [];
   var redoStack    = [];
   var _columnRepairPromise = null;
+  var _columnStateDbUnavailable = false;
   // ── Sort State ──────────────────────────────────────────────────────────────
   // key: column key string | null (no sort), dir: 'asc' | 'desc'
   var _sortState   = { key: null, dir: 'asc' };
@@ -86,6 +87,7 @@
 
     clearTimeout(window._colStateDbTimer);
     window._colStateDbTimer = setTimeout(async function () {
+      if (_columnStateDbUnavailable) return;
       try {
         var client = window.servicesDB && window.servicesDB.client;
         if (!client || typeof client.from !== 'function') return;
@@ -99,6 +101,14 @@
         if (out && out.error) throw out.error;
         console.log('[COLUMNS] Saved to DB');
       } catch (err) {
+        var msg = String((err && (err.message || err.details || err.hint)) || '').toLowerCase();
+        var missingColumn = (err && String(err.code || '') === '42703')
+          || msg.indexOf('column_state') !== -1 && msg.indexOf('does not exist') !== -1;
+        if (missingColumn) {
+          _columnStateDbUnavailable = true;
+          console.warn('[COLUMNS] column_state DB field unavailable, using local-only persistence.');
+          return;
+        }
         console.error('[COLUMNS] DB save failed, local state retained:', err);
       }
     }, 2000);

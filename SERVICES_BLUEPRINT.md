@@ -191,6 +191,10 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-22 (Column-state DB schema fallback hardening):**
+  - **Edit — `public/js/services-grid.js`:** Added one-way fallback guard for column-state persistence (`_columnStateDbUnavailable`) so when Supabase responds that `services_sheets.column_state` is unavailable (e.g. schema lag), the app automatically switches to localStorage-only persistence and stops repeating failing DB writes.
+  - **Behavior contract update:** Column width/visibility state remains fully functional via local cache even when DB column-state schema is not yet present, preventing recurring console errors while preserving grid behavior.
+
 - **2026-04-22 (QB-blocking loader + enterprise update timer + render gate):**
   - **Edit — `public/js/services.js`:** Loader per-sheet refresh now runs blocking QB linked-column sync (`refreshAllLinkedColumns`) before marking each sheet done; sheet-level last-update timestamps are persisted, and full refresh now also stores `svc_lastFullUpdate` for timer baseline.
   - **Edit — `public/js/services.js`:** Added `UpdateTimer` runtime (HH:MM:SS counter + fresh/stale/old state classes) initialized post-boot and exposed as `window.updateTimer` for cross-module refresh/save reset hooks.
