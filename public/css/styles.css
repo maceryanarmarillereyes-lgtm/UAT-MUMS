@@ -4232,6 +4232,111 @@ body[data-theme="monday_workspace"] .rtabs{
   flex-direction: column;
   gap: 12px;
 }
+
+/* ===== RIGHT SIDEBAR FIX: Leave Monitor scroll + fixed action buttons ===== */
+.right-sidebar,
+#rightSidebar,
+.sidebar-right,
+#rightbar {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+}
+
+#right-sidebar-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+#lm-leave-monitor-widget,
+.leave-monitor-wrapper,
+#leaveMonitorContainer {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.lm-widget-inner {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* THE KEY FIX - Scrollable list */
+.leave-monitor-list,
+#leaveMonitorList,
+.leave-list-container,
+.lm-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  max-height: calc(100vh - 420px) !important;
+  padding: 0 12px 0 16px;
+  margin-right: 4px;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.leave-monitor-list::-webkit-scrollbar,
+.lm-body::-webkit-scrollbar { width: 5px; }
+.leave-monitor-list::-webkit-scrollbar-track,
+.lm-body::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 3px;
+}
+.leave-monitor-list::-webkit-scrollbar-thumb,
+.lm-body::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+.leave-monitor-list::-webkit-scrollbar-thumb:hover,
+.lm-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
+}
+
+.leave-monitor-list,
+.lm-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.4) rgba(15, 23, 42, 0.5);
+}
+
+.sidebar-footer-actions,
+.right-sidebar-footer {
+  flex-shrink: 0 !important;
+  margin-top: auto !important;
+  padding: 12px 0 0;
+  background: linear-gradient(to top, #0b1220 0%, rgba(11, 18, 32, 0.95) 100%);
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+.sidebar-footer-actions .services-btn,
+.sidebar-footer-actions #btn-support-studio {
+  width: 100%;
+}
+
+@media (max-height: 800px) {
+  .leave-monitor-list,
+  .lm-body {
+    max-height: calc(100vh - 380px) !important;
+  }
+}
+
+@media (max-height: 700px) {
+  .leave-monitor-list,
+  .lm-body {
+    max-height: calc(100vh - 350px) !important;
+  }
+}
+
 .status-widget-grid {
 order: -1;
 width: 100%;
