@@ -19,6 +19,7 @@
   const WIDGET_ID  = 'lm-leave-monitor-widget';
   const ROOT_ID    = 'right-sidebar-container';
   const REFRESH_MS = 10 * 60 * 1000; // 10 min auto-refresh
+  const SCROLL_KEY = 'leaveMonitorScroll';
 
   // ─── Leave type colour map (matches Manila Calendar) ────────────────────────
   const LEAVE_COLORS = {
@@ -280,7 +281,7 @@
         </div>
 
         <!-- Body -->
-        <div class="lm-body">
+        <div class="lm-body leave-monitor-list" id="leaveMonitorList">
           ${bodyContent}
         </div>
 
@@ -326,6 +327,7 @@
     el.innerHTML = renderWidget([], [], true, null);
     inject(el);
     bindButtons(el);
+    bindScrollPersistence(el);
 
     try {
       const tok = getBearerToken();
@@ -351,6 +353,7 @@
       el.innerHTML = renderWidget([], [], false, String(err && err.message || err));
       inject(el);
       bindButtons(el);
+      bindScrollPersistence(el);
     }
   }
 
@@ -359,6 +362,25 @@
     el.innerHTML = renderWidget(todayList, tomorrowList, false, null);
     inject(el);
     bindButtons(el);
+    bindScrollPersistence(el);
+  }
+
+
+
+  function bindScrollPersistence(el) {
+    const list = el && el.querySelector('#leaveMonitorList');
+    if (!list || list.__lmScrollBound) return;
+
+    const saved = sessionStorage.getItem(SCROLL_KEY);
+    if (saved !== null) {
+      const top = parseInt(saved, 10);
+      if (!Number.isNaN(top)) list.scrollTop = top;
+    }
+
+    list.__lmScrollBound = true;
+    list.addEventListener('scroll', () => {
+      sessionStorage.setItem(SCROLL_KEY, String(list.scrollTop));
+    }, { passive: true });
   }
 
   function bindButtons(el) {
