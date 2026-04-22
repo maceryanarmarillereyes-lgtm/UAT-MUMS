@@ -197,7 +197,7 @@ If step #3 is missing, task is incomplete.
   - **Edit — `public/services.html`:** Replaced top-bar sync indicator region with composite timer + sync badge container (`#updateTimer`, `#timerValue`, `#syncBadge`).
   - **Edit — `public/css/services.css`:** Added enterprise timer and sync badge styles (`.update-timer*`, `.sync-badge`, `.sync-dot`) with pulse keyframes for stale/old visibility.
   - **Edit — `public/js/services-grid.js`:** Added loader-visible render guard to avoid double render during boot, and timer reset hooks on refresh, QB update, and save paths.
-  - **Behavior contract update:** Initial Services bootstrap now waits for QB sync work per sheet before completion, while a persistent top-bar elapsed-update timer reflects data freshness and resets on save/refresh/update actions.
+  - **Behavior contract update:** Initial Services bootstrap now waits for QB sync work per sheet before completion, while a persistent top-bar elapsed-update timer reflects data freshness and resets on save and QB Update actions only (manual Refresh no longer resets timer).
 
 - **2026-04-22 (Blocking loader + pre-open sheet refresh gate):**
   - **Edit — `public/services.html`:** Added blocking loader shell (`#svcLoadingScreen`) and set workspace root (`#app`) to hidden by default until boot completes.
