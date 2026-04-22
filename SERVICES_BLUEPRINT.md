@@ -191,6 +191,19 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-22 (Persistent duplicate alert state for CASE fields):**
+  - **Edit — `public/js/services-grid.js`:** Replaced transient duplicate popup behavior with persistent duplicate bubbles (`showDuplicateBubble`) that stay visible until resolved/manual dismiss, while preserving client-only detection (no added DB/API calls).
+  - **Edit — `public/js/services-grid.js`:** Added persistent cell warning state (`cell-has-duplicate`, data attributes, red border/background) and recovery logic that auto-clears bubble/styles once CASE duplicates are fixed; focus now re-shows warnings when duplicate state still exists.
+  - **Edit — `public/js/services-grid.js`:** Added `beforeunload` safety prompt when unresolved duplicate CASE indicators are present.
+  - **Edit — `public/css/services.css`:** Added persistent duplicate warning CSS (`.cell-has-duplicate`, pulse animations, `.dup-bubble-inner` emphasis).
+  - **Behavior contract update:** Duplicate alerts now remain visible until data is corrected or user manually dismisses the bubble; duplicate detection remains in-memory and sheet-scoped.
+
+- **2026-04-22 (Free-tier duplicate detection for CASE columns):**
+  - **Edit — `public/js/services-grid.js`:** Added lightweight in-memory `DupCheck` index (single-pass `Map`, O(1) lookup, throttled rebuild window) initialized from already-loaded sheet rows, plus `clear()`/load cleanup to release memory on sheet changes.
+  - **Edit — `public/js/services-grid.js`:** Added debounced duplicate checks (`300ms`) on CASE inputs (`blur` and Enter) with inline duplicate notice (`Go` jump-to-row + auto-dismiss + input/row highlight) and index refresh on edited CASE values; no additional Supabase or API requests introduced.
+  - **Edit — `public/css/services.css`:** Added scoped `.dup-notice` action button and icon styling for duplicate warning UI.
+  - **Behavior contract update:** Duplicate detection is client-only and operates solely on the current in-memory sheet dataset (`current.rows`), preserving existing DB/auth/realtime contracts.
+
 - **2026-04-22 (Auto-open sheet + forced QB persistence + empty-date display hardening):**
   - **Edit — `public/js/services.js`:** Boot flow now auto-opens the persisted last sheet (`svc_lastSheetId`) after successful sheet refresh, with fallback to the first available sheet.
   - **Edit — `public/js/services-sheet-manager.js`:** `openSheet()` now persists the active sheet id to localStorage (`svc_lastSheetId`) to support restore-on-login behavior.
