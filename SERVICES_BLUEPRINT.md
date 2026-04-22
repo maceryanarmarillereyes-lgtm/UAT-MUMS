@@ -191,6 +191,21 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-22 (Resize stability hardening: colgroup + fixed layout lock):**
+  - **Edit — `public/js/services-grid.js`:** Added resize safety state (`isResizing`) to pause render/realtime row paint while dragging, and prevent layout churn during active column resize.
+  - **Edit — `public/js/services-grid.js`:** Render now builds a `<colgroup>` from `column_defs` + `column_widths`, and resize drag updates `colgroup col[data-key]` widths directly for stable, non-reverting column widths.
+  - **Edit — `public/js/services-grid.js`:** `saveColumnState()` now caches state locally first (`localStorage`) and performs delayed DB persistence; `load()` now hydrates local column-state before DB state for faster restore.
+  - **Edit — `public/css/services.css`:** Added fixed-table lock styles for `#svcGrid` and strict cell overflow controls to prevent grid break/wrap during resize.
+  - **Behavior contract update:** Column resizing now prioritizes stable colgroup width control, with deferred persistence and reduced render/realtime interference while dragging.
+
+- **2026-04-22 (Excel-style column resize + hide/unhide persistence):**
+  - **Edit — `public/js/services-grid.js`:** Added Excel-style drag resize handles per header with live preview line, live `<th>/<td>` width updates, in-memory `column_widths`, and debounced persistence via `saveColumnState()`.
+  - **Edit — `public/js/services-grid.js`:** Added `saveColumnState()` / `toggleColumnVisibility()` flow so hide/unhide + resize states are saved to `services_sheets.column_state` while keeping `column_defs` updates in sync.
+  - **Edit — `public/js/services-grid.js`:** Sheet load now hydrates `column_state` (saved widths + hidden keys), and render now applies saved widths/visibility to headers and cells (`data-col` markers for targeted resize updates).
+  - **Edit — `public/css/services.css`:** Added resize-handle styles (`.col-resize-handle`, `.resize-grip`) for hover/active grip affordance.
+  - **Edit — `supabase/migrations/20260422_01_services_sheet_column_state.sql`:** Added `services_sheets.column_state` (`jsonb`) with default `{ widths: {}, hidden: [] }` + column comment.
+  - **Behavior contract update:** Column widths and visibility now persist across sheet reloads and are included in manual SAVE flow.
+
 - **2026-04-22 (Persistent duplicate alert state for CASE fields):**
   - **Edit — `public/js/services-grid.js`:** Replaced transient duplicate popup behavior with persistent duplicate bubbles (`showDuplicateBubble`) that stay visible until resolved/manual dismiss, while preserving client-only detection (no added DB/API calls).
   - **Edit — `public/js/services-grid.js`:** Added persistent cell warning state (`cell-has-duplicate`, data attributes, red border/background) and recovery logic that auto-clears bubble/styles once CASE duplicates are fixed; focus now re-shows warnings when duplicate state still exists.
