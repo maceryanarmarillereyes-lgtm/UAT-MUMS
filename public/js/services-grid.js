@@ -96,7 +96,7 @@
   }
 
   function clear() {
-    DupCheck.clear();
+    DuplicateDetector.clear();
     current = null;
     if (subscription) { try { subscription.unsubscribe(); } catch (_) {} subscription = null; }
     grid.hidden = true;
@@ -105,7 +105,7 @@
   }
 
   async function load(sheet) {
-    DupCheck.clear();
+    DuplicateDetector.clear();
     if (subscription) { try { subscription.unsubscribe(); } catch (_) {} subscription = null; }
     // Invalidate resize cache on new sheet load so columns get measured fresh
     _resizeSheetId = null;
@@ -127,7 +127,7 @@
       return c && c.label && String(c.label).toUpperCase().includes('CASE');
     });
     if (caseCol && current.rows.length > 0) {
-      DupCheck.init(current.rows, caseCol.key);
+      DuplicateDetector.init(current.rows, caseCol.key);
     }
 
     // Auto-refresh QB data in background after 2 seconds
@@ -190,8 +190,8 @@
   }
 
   // FREE TIER OPTIMIZED DUPLICATE DETECTOR
-  // Memory: ~10KB for 500 rows | CPU: O(1) | Network: 0
-  var DupCheck = {
+  // Memory: minimal map/set state | CPU: O(1) lookups | Network: 0
+  var DuplicateDetector = {
     index: null,
     caseKey: null,
     lastBuild: 0,
@@ -212,22 +212,38 @@
         var str = String(val).trim();
         if (str.length < 3) continue;
         var rowIndex = Number.isFinite(row.row_index) ? row.row_index : i;
-        if (!this.index.has(str)) this.index.set(str, rowIndex);
+        this.add(str, rowIndex);
       }
-      console.log('[DUP] Index:', this.index.size, 'cases,', Math.round(JSON.stringify(Array.from(this.index)).length / 1024), 'KB');
+      console.log('[DUP] Index:', this.index.size, 'cases');
     },
 
-    find: function (val, currentIdx) {
+    check: function (val, currentIdx) {
       if (!this.index || !val) return null;
       var str = String(val).trim();
-      var foundIdx = this.index.get(str);
-      return (foundIdx !== undefined && foundIdx !== currentIdx) ? foundIdx : null;
+      var set = this.index.get(str);
+      if (!set || !set.size) return null;
+      var dupRows = [];
+      set.forEach(function (idx) {
+        if (idx !== currentIdx) dupRows.push(idx);
+      });
+      return dupRows.length ? dupRows.sort(function (a, b) { return a - b; }) : null;
     },
 
-    update: function (val, idx) {
+    add: function (val, idx) {
       if (!this.index || !val) return;
       var str = String(val).trim();
-      if (!this.index.has(str)) this.index.set(str, idx);
+      if (!str || str.length < 3) return;
+      if (!this.index.has(str)) this.index.set(str, new Set());
+      this.index.get(str).add(idx);
+    },
+
+    remove: function (val, idx) {
+      if (!this.index || !val) return;
+      var str = String(val).trim();
+      var set = this.index.get(str);
+      if (!set) return;
+      set.delete(idx);
+      if (!set.size) this.index.delete(str);
     },
 
     clear: function () {
@@ -245,26 +261,29 @@
   function checkDuplicateDebounced(input, caseVal, rowIdx) {
     clearTimeout(dupCheckTimer);
     dupCheckTimer = setTimeout(function () {
-      var dupIdx = DupCheck.find(caseVal, rowIdx);
-      if (dupIdx !== null) showDupNotice(input, caseVal, dupIdx);
+      var duplicates = DuplicateDetector.check(caseVal, rowIdx);
+      if (duplicates) showDuplicateBubble(input, caseVal, duplicates);
     }, 300);
   }
 
-  function showDupNotice(inputEl, caseNum, dupRowIdx) {
+  function showDuplicateBubble(inputEl, caseNum, duplicateRows) {
+    grid.querySelectorAll('input.cell').forEach(function (cell) {
+      if (cell !== inputEl && cell._dupBubble) cell._dupBubble = null;
+    });
     document.querySelectorAll('.dup-notice').forEach(function (n) { n.remove(); });
 
     var rect = inputEl.getBoundingClientRect();
-    var notice = document.createElement('div');
-    notice.className = 'dup-notice';
-    notice.innerHTML = '' +
-      '<div class="dup-wrap">' +
+    var bubble = document.createElement('div');
+    bubble.className = 'dup-notice';
+    bubble.innerHTML = '' +
+      '<div class="dup-wrap dup-bubble-inner">' +
       '<span class="dup-ico">⚠</span>' +
-      '<span>Duplicate: <b>' + String(caseNum) + '</b> exists in row <b>' + String(dupRowIdx + 1) + '</b></span>' +
-      '<button data-goto="' + String(dupRowIdx) + '">Go</button>' +
+      '<span>Duplicate: <b>' + String(caseNum) + '</b> exists in row(s) <b>' + duplicateRows.map(function (idx) { return idx + 1; }).join(', ') + '</b></span>' +
+      '<button data-goto="' + String(duplicateRows[0]) + '">Go</button>' +
       '<button class="dup-x">×</button>' +
       '</div>';
 
-    notice.style.cssText = '' +
+    bubble.style.cssText = '' +
       'position:fixed;' +
       'left:' + Math.min(rect.left, window.innerWidth - 300) + 'px;' +
       'top:' + (rect.bottom + 4) + 'px;' +
@@ -278,16 +297,27 @@
       'box-shadow:0 4px 12px rgba(0,0,0,0.4);' +
       'max-width:280px;';
 
-    document.body.appendChild(notice);
+    document.body.appendChild(bubble);
 
-    var removeTimer = setTimeout(function () { notice.remove(); }, 5000);
+    // PERSISTENT: No auto-remove - stays until fixed
+    // Store reference for manual cleanup
+    inputEl._dupBubble = bubble;
+    inputEl._dupCaseNum = caseNum;
 
-    var gotoBtn = notice.querySelector('[data-goto]');
+    // PERMANENT visual indicator on cell
+    inputEl.classList.add('cell-has-duplicate');
+    inputEl.setAttribute('data-dup-case', caseNum);
+    inputEl.setAttribute('data-dup-rows', duplicateRows.join(','));
+
+    // Add persistent left border
+    inputEl.style.borderLeft = '3px solid #ef4444';
+    inputEl.style.backgroundColor = 'rgba(239, 68, 68, 0.08)';
+    inputEl.style.boxShadow = 'inset 0 0 0 1px rgba(239, 68, 68, 0.3)';
+
+    var gotoBtn = bubble.querySelector('[data-goto]');
     if (gotoBtn) {
       gotoBtn.onclick = function () {
-        clearTimeout(removeTimer);
-        notice.remove();
-        var targetRow = document.querySelector('tr[data-row="' + dupRowIdx + '"]');
+        var targetRow = document.querySelector('tr[data-row="' + duplicateRows[0] + '"]');
         if (targetRow) {
           targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
           targetRow.style.outline = '2px solid #ef4444';
@@ -298,16 +328,16 @@
       };
     }
 
-    var closeBtn = notice.querySelector('.dup-x');
+    var closeBtn = bubble.querySelector('.dup-x');
     if (closeBtn) {
       closeBtn.onclick = function () {
-        clearTimeout(removeTimer);
-        notice.remove();
+        bubble.remove();
+        inputEl._dupBubble = null;
+        inputEl.classList.remove('cell-has-duplicate');
+        // Keep visual warning but remove bubble
+        console.log('[DUP] Manually dismissed (still duplicate)');
       };
     }
-
-    inputEl.style.boxShadow = 'inset 3px 0 0 #ef4444';
-    setTimeout(function () { inputEl.style.boxShadow = ''; }, 3000);
   }
 
   function render() {
@@ -469,9 +499,43 @@
             prevVal = val;
             checkDuplicateDebounced(inp, val, rowIndex);
           };
+          var checkIfFixed = function () {
+            var currentVal = String(inp.value || '').trim();
+            var duplicates = DuplicateDetector.check(currentVal, rowIndex);
+            if (!duplicates && inp._dupBubble) {
+              var oldCase = inp._dupCaseNum;
+              inp._dupBubble.remove();
+              inp._dupBubble = null;
+              inp.classList.remove('cell-has-duplicate');
+              inp.style.borderLeft = '';
+              inp.style.backgroundColor = '';
+              inp.style.boxShadow = '';
+              inp.removeAttribute('data-dup-case');
+              inp.removeAttribute('data-dup-rows');
+              delete inp._dupCaseNum;
+              DuplicateDetector.remove(oldCase, rowIndex);
+              DuplicateDetector.add(currentVal, rowIndex);
+              console.log('[DUP] Fixed:', currentVal);
+            }
+          };
+
           inp.addEventListener('blur', handleCheck);
           inp.addEventListener('keydown', function (ev) {
             if (ev.key === 'Enter') setTimeout(handleCheck, 100);
+          });
+          inp.addEventListener('input', function () {
+            if (inp._dupBubble) setTimeout(checkIfFixed, 100);
+          });
+          inp.addEventListener('blur', function () {
+            if (inp._dupBubble) checkIfFixed();
+          });
+          inp.addEventListener('focus', function () {
+            var val = String(inp.value || '').trim();
+            if (!val) return;
+            var duplicates = DuplicateDetector.check(val, rowIndex);
+            if (duplicates && !inp._dupBubble) {
+              showDuplicateBubble(inp, val, duplicates);
+            }
           });
         }
 
@@ -1456,10 +1520,14 @@
       e.target.value = rowObj.data[key] != null ? String(rowObj.data[key]) : '';
       return;
     }
-    undoStack.push({ rowIdx: rowIdx, key: key, prev: rowObj.data[key] != null ? rowObj.data[key] : '', next: value });
+    var prevValue = rowObj.data[key] != null ? rowObj.data[key] : '';
+    undoStack.push({ rowIdx: rowIdx, key: key, prev: prevValue, next: value });
     redoStack = [];
     rowObj.data[key] = value;
-    if (DupCheck.caseKey === key) DupCheck.update(value, rowIdx);
+    if (DuplicateDetector.caseKey === key) {
+      DuplicateDetector.remove(prevValue, rowIdx);
+      DuplicateDetector.add(value, rowIdx);
+    }
     setStatus('unsaved', 'Unsaved');
     updateStatusBar();
     var tKey = rowIdx + ':' + key;
@@ -1869,6 +1937,15 @@
     current.__treeFilteredRows = (current.rows || []).filter(_treeFilter);
     _origRender();
   };
+
+  // Block leave navigation when unresolved duplicate CASE warnings exist
+  window.addEventListener('beforeunload', function (e) {
+    var dups = document.querySelectorAll('.cell-has-duplicate');
+    if (dups.length > 0) {
+      e.preventDefault();
+      e.returnValue = 'May ' + dups.length + ' duplicate CASE# na hindi pa naayos. Sigurado ka?';
+    }
+  });
 
   function getState() { return current; }
   window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter };

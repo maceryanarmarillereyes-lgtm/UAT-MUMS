@@ -191,6 +191,13 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-22 (Persistent duplicate alert state for CASE fields):**
+  - **Edit — `public/js/services-grid.js`:** Replaced transient duplicate popup behavior with persistent duplicate bubbles (`showDuplicateBubble`) that stay visible until resolved/manual dismiss, while preserving client-only detection (no added DB/API calls).
+  - **Edit — `public/js/services-grid.js`:** Added persistent cell warning state (`cell-has-duplicate`, data attributes, red border/background) and recovery logic that auto-clears bubble/styles once CASE duplicates are fixed; focus now re-shows warnings when duplicate state still exists.
+  - **Edit — `public/js/services-grid.js`:** Added `beforeunload` safety prompt when unresolved duplicate CASE indicators are present.
+  - **Edit — `public/css/services.css`:** Added persistent duplicate warning CSS (`.cell-has-duplicate`, pulse animations, `.dup-bubble-inner` emphasis).
+  - **Behavior contract update:** Duplicate alerts now remain visible until data is corrected or user manually dismisses the bubble; duplicate detection remains in-memory and sheet-scoped.
+
 - **2026-04-22 (Free-tier duplicate detection for CASE columns):**
   - **Edit — `public/js/services-grid.js`:** Added lightweight in-memory `DupCheck` index (single-pass `Map`, O(1) lookup, throttled rebuild window) initialized from already-loaded sheet rows, plus `clear()`/load cleanup to release memory on sheet changes.
   - **Edit — `public/js/services-grid.js`:** Added debounced duplicate checks (`300ms`) on CASE inputs (`blur` and Enter) with inline duplicate notice (`Go` jump-to-row + auto-dismiss + input/row highlight) and index refresh on edited CASE values; no additional Supabase or API requests introduced.
