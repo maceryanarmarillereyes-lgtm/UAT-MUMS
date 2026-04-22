@@ -297,8 +297,12 @@
 
   _orig.bulkUpsertRows = async function bulkUpsertRows(sheetId, rowsArray) {
     if (!rowsArray || rowsArray.length === 0) return { error: null };
+    if (_orig.ready) await _orig.ready;
     const c = _orig.client;
-    if (!c) return { error: 'No Supabase client' };
+    if (!c || typeof c.from !== 'function') {
+      console.error('[services] bulkUpsertRows: invalid client instance');
+      return { error: 'No Supabase client' };
+    }
     const payload = rowsArray.map(function (r) {
       return { sheet_id: sheetId, row_index: r.row_index, data: r.data || {} };
     });

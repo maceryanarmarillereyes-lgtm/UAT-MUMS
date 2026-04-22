@@ -629,13 +629,12 @@
             render();
             notify('info', 'Column Hidden', col.label + ' hidden. Click ⊞ Columns to unhide.');
             closeAllCtxMenus();
-            window.supabase.from('services_sheets')
-              .update({ column_defs: current.sheet.column_defs })
-              .eq('id', current.sheet.id)
-              .then(() => { console.log('[Grid] Column hide saved:', col.label); })
+            // updateColumns is async but we don't need to wait
+            window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs)
+              .then(() => console.log('[Grid] Column hide saved:', col.label))
               .catch(err => {
                 console.error('[Grid] Failed to save column hide:', err);
-                col.hidden = false; // revert on error
+                col.hidden = false;
                 render();
               });
           } else if (action === 'autofit-column') {
@@ -1551,9 +1550,7 @@
           // Render grid immediately
           render();
           // Save to DB in background
-          window.supabase.from('services_sheets')
-            .update({ column_defs: current.sheet.column_defs })
-            .eq('id', current.sheet.id)
+          window.servicesDB.updateColumns(current.sheet.id, current.sheet.column_defs)
             .then(() => { console.log('[Grid] Column visibility saved:', col.label); })
             .catch(err => {
               console.error('[Grid] Failed to save column visibility:', err);
