@@ -116,6 +116,17 @@
       if (progressTotal) progressTotal.textContent = String(t);
     };
 
+    // Clear old 15-min cache on first load after deploy
+    if (!localStorage.getItem('cache_v4_migrated')) {
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('mums_rows_') || key.startsWith('svc_')) {
+          localStorage.removeItem(key);
+        }
+      });
+      localStorage.setItem('cache_v4_migrated', 'true');
+      console.log('[MIGRATION] Cleared old cache');
+    }
+
     try {
       updateStatus('Authenticating...');
       const authed = await window.servicesDB.init();
@@ -159,7 +170,7 @@
         try {
           // ALWAYS fetch fresh from DB - NO CACHE
           updateStatus(`Fetching ${sheet.title || 'sheet'} from database...`);
-          const rows = await window.servicesDB.listRows(sheet.id);
+          const rows = await window.servicesDB.listRows(sheet.id, true); // FORCE fresh
 
           // Verify we got fresh data
           console.log(`[LOADER] Fetched ${rows.length} rows for ${sheet.title || 'sheet'}`);
@@ -205,11 +216,19 @@
       }
 
       // Set final timestamp AFTER all sheets done
-      const finalUpdateTime = Date.now();
-      localStorage.setItem('svc_lastFullRefresh', finalUpdateTime.toString());
-      localStorage.setItem('svc_lastFullUpdate', finalUpdateTime.toString());
+      const now = Date.now();
+      localStorage.setItem('svc_lastFullRefresh', now.toString());
+      localStorage.setItem('svc_lastFullUpdate', now.toString());
 
-      console.log('[LOADER] All sheets updated at', new Date(finalUpdateTime).toLocaleTimeString());
+      // Sync timer immediately
+      if (window.updateTimer) {
+        window.updateTimer.last = now;
+        window.updateTimer.startTime = now;
+        window.updateTimer.tick();
+        console.log('[TIMER] Synced after loader');
+      }
+
+      console.log('[LOADER] All sheets updated at', new Date(now).toLocaleTimeString());
 
       updateStatus('Finalizing...');
       await new Promise((r) => setTimeout(r, 250));
@@ -261,10 +280,8 @@
   // ENTERPRISE UPDATE TIMER
   class UpdateTimer {
     constructor() {
-      // Read the ACTUAL last update time (set by loader)
-      const lastUpdate = localStorage.getItem('svc_lastFullUpdate');
-      const parsedUpdate = Number.parseInt(lastUpdate || '', 10);
-      this.startTime = Number.isFinite(parsedUpdate) ? parsedUpdate : Date.now();
+      this.last = this.getLastTimestamp();
+      this.startTime = this.last;
 
       console.log('[TIMER] Initialized with start time:', new Date(this.startTime).toLocaleTimeString());
       console.log('[TIMER] Time since update:', Math.floor((Date.now() - this.startTime) / 1000), 'seconds');
@@ -275,12 +292,22 @@
       this.start();
     }
 
-    start() {
-      this.update();
-      this.interval = setInterval(() => this.update(), 1000);
+    getLastTimestamp() {
+      const parsed = Number.parseInt(
+        localStorage.getItem('svc_lastFullRefresh') || // PREFER REFRESH FIRST
+        localStorage.getItem('svc_lastFullUpdate') ||
+        '',
+        10
+      );
+      return Number.isFinite(parsed) ? parsed : Date.now();
     }
 
-    update() {
+    start() {
+      this.tick();
+      this.interval = setInterval(() => this.tick(), 1000);
+    }
+
+    tick() {
       const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
       const h = Math.floor(elapsed / 3600).toString().padStart(2, '0');
       const m = Math.floor((elapsed % 3600) / 60).toString().padStart(2, '0');
@@ -301,6 +328,10 @@
           this.containerEl.title = 'Data is old (> 30 min) - Refresh recommended';
         }
       }
+    }
+
+    update() {
+      this.tick();
     }
 
     reset() {

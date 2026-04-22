@@ -191,6 +191,13 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-22 (Cache v4 + forced loader freshness + QB DB persistence patch):**
+  - **Edit — `public/js/services-supabase.js`:** `listRows(sheetId, force=false)` now supports localStorage cache version `mums_rows_${sheetId}_v4` with 30-second TTL, force-bypass path for loader, filtered DB query (`sheet_id`), ordered/limited fetch, and explicit DB error throw on fetch failure.
+  - **Edit — `public/js/services.js`:** Added one-time deploy migration block that clears legacy `mums_rows_*` and `svc_*` localStorage keys, switched loader reads to forced fresh `listRows(sheet.id, true)`, persisted both `svc_lastFullRefresh` and `svc_lastFullUpdate` at loader completion, and immediately synchronized `window.updateTimer`.
+  - **Edit — `public/js/services.js`:** `UpdateTimer` now resolves baseline via `getLastTimestamp()` preferring `svc_lastFullRefresh` before `svc_lastFullUpdate`, and exposes `tick()` for immediate post-loader refresh.
+  - **Edit — `public/js/services-qb-lookup.js`:** Reworked `refreshAllLinkedColumns()` to batch Quickbase fetch in chunks, persist linked-column updates directly to `services_rows` via Supabase upsert (`onConflict: id`), and refresh cache key `mums_rows_${sheet.id}_v4` after successful persistence.
+  - **Behavior contract update:** Initial Services boot now invalidates pre-v4 cache once, fetches fresh sheet rows on loader pass, and aligns freshness timer state with persisted timestamps immediately after QB persistence and loader completion.
+
 - **2026-04-22 (Loader always-real refresh + freshness verification hardening):**
   - **Edit — `public/js/services.js`:** Removed startup cache-gate branch (`shouldRefreshAll`) so loader now always does live `servicesDB.listRows()` per sheet, persists per-sheet and full-refresh timestamps after successful fetches, and logs explicit loader progress for DB/QB phases.
   - **Edit — `public/js/services.js`:** Added post-ready freshness verification (`svc_lastFullUpdate` age check) and hardened `UpdateTimer` constructor to initialize from validated persisted timestamp with diagnostics.
