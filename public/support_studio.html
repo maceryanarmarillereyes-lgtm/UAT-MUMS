@@ -3224,7 +3224,23 @@
       <div class="qbcd-row-badge" id="qbcdRowBadge">—</div>
       <div class="qbcd-header-main">
         <div class="qbcd-label">Case Detail View</div>
-        <div class="qbcd-case-num">CASE# <span id="qbcdCaseId">—</span></div>
+        <div class="qbcd-case-header-main">
+          <div class="qbcd-case-num">CASE# <span id="qbcdCaseId">—</span></div>
+          <div class="qbcd-case-quick-actions">
+            <a id="qbcdEditLinkHeader" href="#" target="_blank" rel="noopener noreferrer" class="qbcd-quick-icon-btn qbcd-edit-icon" title="Edit in QuickBase" aria-disabled="true" tabindex="-1">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </a>
+            <a id="qbcdViewLinkHeader" href="#" target="_blank" rel="noopener noreferrer" class="qbcd-quick-icon-btn qbcd-view-icon" title="View in QuickBase" aria-disabled="true" tabindex="-1">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M1 12s4-8 11-8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </a>
+          </div>
+        </div>
         <div class="qbcd-desc" id="qbcdDesc">—</div>
       </div>
       <div class="qbcd-header-right">
@@ -3358,8 +3374,28 @@
       <span class="qbcd-pos" id="qbcdPos">— of —</span>
       <button class="qbcd-nav-btn" id="qbcdNextBtn">Next →</button>
       <div class="qbcd-footer-right">
-        <button class="qbcd-copy-btn" id="qbcdCopyBtn">Copy Case #</button>
-        <button class="qbcd-close-btn" id="qbcdCloseBtn2">Close</button>
+        <a id="qbcdEditLink" href="#" target="_blank" rel="noopener noreferrer" class="qbcd-footer-btn qbcd-edit-btn" aria-disabled="true" tabindex="-1">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          Edit
+        </a>
+        <a id="qbcdViewLink" href="#" target="_blank" rel="noopener noreferrer" class="qbcd-footer-btn qbcd-view-btn" aria-disabled="true" tabindex="-1">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          View
+        </a>
+        <button class="qbcd-footer-btn qbcd-copy-btn" id="qbcdCopyBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span>Copy Case #</span>
+        </button>
+        <button class="qbcd-footer-btn qbcd-close-btn" id="qbcdCloseBtn2">Close</button>
       </div>
     </div>
 

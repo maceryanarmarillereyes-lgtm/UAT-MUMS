@@ -45,6 +45,7 @@ Tab switching is handled client-side by `public/js/support_studio/core_ui.js` (`
 - QuickBase monitoring, table rendering and deep search hooks.
 - QB interceptors normalize/guard responses.
 - Export and deep-search route integration (`qb_search`, `qb_export`).
+- Case Detail modal header/footer include QuickBase edit/view actions that open in a new tab and resolve `rid` from the Case # field (column `3`) to prevent record-id mismatches.
 
 ## D) Knowledge Base + Support Records
 - KB sync + settings + download flow.
@@ -220,4 +221,5 @@ If step 3 is missing, task is incomplete.
 ## 9) Blueprint Change Log
 
 - **2026-04-20** — Initial Support Studio blueprint created with full feature inventory, module mapping, endpoint map, contracts, and mandatory update protocol.
+- **2026-04-22** — Updated QB Case Detail modal UX for Support Studio: added header quick action icons + footer edit/view/copy button set, and aligned QuickBase URLs to use Case # (`fields[3]`) as `rid` with safe `target="_blank"` + `rel="noopener noreferrer"`. Touched: `public/support_studio.html`, `public/js/pages/my_quickbase.js`, `public/css/support_studio/main_studio.css`.
 
