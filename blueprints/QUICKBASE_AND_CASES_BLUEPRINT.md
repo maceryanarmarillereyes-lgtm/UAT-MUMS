@@ -31,6 +31,8 @@
 - [ ] Tab create/save/load/delete still isolated by user.
 - [ ] QB settings parsing still fills realm/table/qid.
 - [ ] Case detail renders with populated column map.
+- [x] Case detail modal exposes QuickBase Edit/View links (header + footer) using record RID fallback (`recordId` → field `3`).
 
 ## Change log
 - **2026-04-20** — Initial QuickBase/cases blueprint created.
+- **2026-04-22** — Added My QuickBase case-detail modal outbound QuickBase Edit/View actions (header quick links + footer actions), with resilient RID resolution and disabled-link fallback when RID is unavailable.

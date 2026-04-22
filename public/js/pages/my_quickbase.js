@@ -3958,6 +3958,13 @@
         // Convert EST→PHT for all timestamp-bearing text fields
         var latest  = _convertNotesESTtoPHT(_val('latest')  || '') || '—';
         var notes   = _convertNotesESTtoPHT(_val('notes')   || '');
+        var ridFromField = snap.fields && snap.fields['3'] && snap.fields['3'].value != null
+          ? String(snap.fields['3'].value)
+          : '';
+        var rid = String(snap.recordId || ridFromField || '').trim();
+        var qbBase = 'https://copeland-coldchainservices.quickbase.com/nav/app/bpvmztzkw/table/bpvmztzr5';
+        var editUrl = rid ? (qbBase + '/action/er?rid=' + encodeURIComponent(rid) + '&rl=bmg5') : '#';
+        var viewUrl = rid ? (qbBase + '/action/dr?rid=' + encodeURIComponent(rid) + '&rl=bmg5') : '#';
 
         // ── Populate fixed DOM slots ─────────────────────────────────────────
         _set('qbcdRowBadge',  snap.rowNum || '—');
@@ -3976,6 +3983,16 @@
         _set('qbcdType2',     type);
         _html('qbcdStatus2',  _badge(status));
         _set('qbcdLatest',    latest);
+        ['qbcdEditLink','qbcdViewLink','qbcdEditLinkHeader','qbcdViewLinkHeader'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          var isEdit = id.toLowerCase().includes('edit');
+          var href = isEdit ? editUrl : viewUrl;
+          el.setAttribute('href', href);
+          el.setAttribute('aria-disabled', href === '#' ? 'true' : 'false');
+          if (href === '#') el.setAttribute('tabindex', '-1');
+          else el.removeAttribute('tabindex');
+        });
 
         // ── Case Notes slot (dedicated) ───────────────────────────────────────
         var notesBlock = document.getElementById('qbcdNotesBlock');
@@ -4091,13 +4108,18 @@
         });
         var _copyBtn = document.getElementById('qbcdCopyBtn');
         if (_copyBtn) {
+          var _copyLabel = _copyBtn.querySelector('span');
           _copyBtn.addEventListener('click', function() {
             var id = (document.getElementById('qbcdCaseId') || {}).textContent || '';
             if (!id || id === '—') return;
             if (navigator.clipboard && navigator.clipboard.writeText) {
               navigator.clipboard.writeText(id).then(function() {
-                _copyBtn.textContent = 'Copied!';
-                setTimeout(function() { _copyBtn.textContent = 'Copy Case #'; }, 1800);
+                if (_copyLabel) _copyLabel.textContent = 'Copied!';
+                else _copyBtn.textContent = 'Copied!';
+                setTimeout(function() {
+                  if (_copyLabel) _copyLabel.textContent = 'Copy Case #';
+                  else _copyBtn.textContent = 'Copy Case #';
+                }, 1800);
               }).catch(function() {});
             }
           });
