@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-22 (Services case detail QuickBase action links):**
+  - **Edit — `public/services.html`:** Extended Services case-detail modal hero with inline QuickBase **Edit/View** action buttons and added footer QuickBase ID indicator (`#svcQbcdRid`) with refreshed action button layout.
+  - **Edit — `public/js/services-grid.js`:** `_openSvcCaseDetailModal(rowIndex)` now resolves QuickBase `rid` (prefers `Record ID#`, falls back to `CASE#`), populates Edit/View URLs (`/action/er` and `/action/dr`), and keeps copy-button feedback compatible with icon+label markup.
+  - **Edit — `public/css/services.css`:** Added premium styles for QuickBase action buttons, footer indicator/dot, and elevated footer button variants used by the Services case-detail modal.
+  - **Behavior contract update:** Opening a case detail now provides direct QuickBase Edit/View deep-links and always surfaces the active QuickBase identifier in the modal footer.
+
 - **2026-04-22 (Cache v4 + forced loader freshness + QB DB persistence patch):**
   - **Edit — `public/js/services-supabase.js`:** `listRows(sheetId, force=false)` now supports localStorage cache version `mums_rows_${sheetId}_v4` with 30-second TTL, force-bypass path for loader, filtered DB query (`sheet_id`), ordered/limited fetch, and explicit DB error throw on fetch failure.
   - **Edit — `public/js/services.js`:** Added one-time deploy migration block that clears legacy `mums_rows_*` and `svc_*` localStorage keys, switched loader reads to forced fresh `listRows(sheet.id, true)`, persisted both `svc_lastFullRefresh` and `svc_lastFullUpdate` at loader completion, and immediately synchronized `window.updateTimer`.

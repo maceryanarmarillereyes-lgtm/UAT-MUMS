@@ -1391,6 +1391,7 @@
 
     window._openSvcCaseDetailModal = function (rowIndex) {
       if (!current) return;
+      var qbBase = 'https://copeland-coldchainservices.quickbase.com/nav/app/bpvmztzkw/table/bpvmztzr5';
 
       var CASE_EXACT = ['case#','case #','case number','case no','case id','case'];
       var cols = (current.sheet && current.sheet.column_defs) || [];
@@ -1410,6 +1411,21 @@
       if (!siteCol) siteCol = cols.find(function (c) { return String(c.label || '').toLowerCase().includes('site'); });
       var siteVal = (rowObj && siteCol) ? String(rowObj.data[siteCol.key] || '').trim() : '';
       var displayRowNum = rowIndex + 1; // 1-based display number for badge
+      var ridCol = cols.find(function (c) { return /^record id#$/i.test(String(c.label || '').trim()); });
+      if (!ridCol) ridCol = cols.find(function (c) {
+        var lower = String(c.label || '').trim().toLowerCase();
+        return lower === 'record id' || lower === 'rid' || lower.indexOf('record id#') !== -1;
+      });
+      var rid = (rowObj && ridCol) ? String(rowObj.data[ridCol.key] || '').trim() : '';
+      if (!rid) rid = caseNum;
+      var editUrl = qbBase + '/action/er?rid=' + encodeURIComponent(rid || '') + '&rl=bmg5';
+      var viewUrl = qbBase + '/action/dr?rid=' + encodeURIComponent(rid || '') + '&rl=bmg5';
+      var editLink = document.getElementById('svcQbcdEditLink');
+      var viewLink = document.getElementById('svcQbcdViewLink');
+      var ridEl = document.getElementById('svcQbcdRid');
+      if (editLink) editLink.href = editUrl;
+      if (viewLink) viewLink.href = viewUrl;
+      if (ridEl) ridEl.textContent = rid || 'N/A';
 
       // Reset & show modal in loading state immediately
       _set('svcQbcdRowBadge', String(displayRowNum)); // Row number badge (96, 460…), not case#
@@ -1455,10 +1471,13 @@
       copyBtn.addEventListener('click', function () {
         var id = (document.getElementById('svcQbcdCaseId') || {}).textContent || '';
         if (!id || id === '—') return;
+        var labelSpan = copyBtn.querySelector('span');
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(id).then(function () {
-            copyBtn.textContent = 'Copied!';
-            setTimeout(function () { copyBtn.textContent = 'Copy Case #'; }, 1800);
+            if (labelSpan) labelSpan.textContent = 'Copied!';
+            setTimeout(function () {
+              if (labelSpan) labelSpan.textContent = 'Copy Case #';
+            }, 1800);
           }).catch(function () {});
         }
       });
