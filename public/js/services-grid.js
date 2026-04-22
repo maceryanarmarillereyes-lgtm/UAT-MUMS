@@ -119,6 +119,15 @@
     undoStack = [];
     redoStack = [];
     current.rows = await window.servicesDB.listRows(sheet.id);
+    console.log('[LOAD] Loaded', current.rows.length, 'rows');
+
+    // Auto-refresh QB data in background after 2 seconds
+    setTimeout(function () {
+      if (window.servicesQB && current && current.rows.length > 0) {
+        console.log('[AUTO-QB] Refreshing QB data...');
+        window.servicesQB.refreshAllLinkedColumns(current, document.getElementById('svcGrid'));
+      }
+    }, 2000);
     autoFitColumns();
     render();
     window.servicesDashboard && window.servicesDashboard.update(current);
@@ -270,16 +279,14 @@
           spellcheck   : false,
           value        : String(formatCellValue(c, rowData.data[c.key]))
         }, td);
-        // Apply "---" styling immediately for date columns
-        if (c && (c.type === 'date' || c.format === 'date' || (c.key && c.key.toLowerCase().includes('date')))) {
-          var rawVal = rowData.data[c.key];
-          var hasCase = current.rows.find(function (r) { return r.row_index === rowIndex; })?.data?.[current.sheet.column_defs.find(function (col) { return col.label && col.label.toUpperCase().includes('CASE'); })?.key];
-          if (hasCase && (!rawVal || rawVal === '')) {
-            inp.value = '---';
-            inp.style.color = '#64748b';
-            inp.style.textAlign = 'center';
-            inp.style.fontStyle = 'italic';
-          }
+        // FORCE "---" for QB-linked date columns with CASE# but no value
+        var isQBDate = c && c.qbLookup && (c.type === 'date' || c.format === 'date' || (c.key && c.key.toLowerCase().includes('date')));
+        var hasCaseId = rowData.data && Object.values(rowData.data).some(function (v) { return String(v).match(/^\d{5,}$/); });
+        if (isQBDate && hasCaseId && (!rowData.data[c.key] || rowData.data[c.key] === '')) {
+          inp.value = '---';
+          inp.style.color = '#64748b';
+          inp.style.fontStyle = 'italic';
+          inp.style.textAlign = 'center';
         }
         // SPECIAL HANDLING FOR DATE COLUMNS
         if (c && (c.type === 'date' || c.format === 'date' || (c.key && c.key.toLowerCase().includes('date')))) {
