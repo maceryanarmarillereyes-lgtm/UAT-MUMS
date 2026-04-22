@@ -191,6 +191,13 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-22 (Blocking loader + pre-open sheet refresh gate):**
+  - **Edit — `public/services.html`:** Added blocking loader shell (`#svcLoadingScreen`) and set workspace root (`#app`) to hidden by default until boot completes.
+  - **Edit — `public/css/services.css`:** Added scoped blocking-loader visuals, per-sheet progress states, and loader transition styles.
+  - **Edit — `public/js/services.js`:** Replaced boot init flow with staged loader pipeline (auth → sheet refresh → per-sheet row counts/cache gate → target sheet open), then reveals UI only after completion; added background QB refresh pass after initial reveal.
+  - **Edit — `public/js/services-qb-lookup.js`:** Added `quickSync(sheetId)` lightweight QB token health probe used by loader-phase background checks.
+  - **Behavior contract update:** Services workspace now blocks first paint until bootstrap refresh completes, reducing stale sheet exposure during startup while preserving existing auth/realtime/write contracts.
+
 - **2026-04-22 (Column resize cross-column bleed fix):**
   - **Edit — `public/js/services-grid.js`:** Fixed `<colgroup>` mapping to match rendered grid structure exactly (`row-num` + visible columns only), eliminating width-index drift that caused non-target columns to move during resize.
   - **Edit — `public/css/services.css`:** Changed fixed-layout width lock from forced `100%` to `max-content` with `min-width:100%` so resizing one column no longer redistributes width across other columns.
