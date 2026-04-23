@@ -40,12 +40,34 @@
   //   ≤9999 rows → 42px   (4 digits)
   function computeRowNumWidth() {
     var totalRows = current && current.rows ? current.rows.length : 0;
-    if (totalRows > 9999) return '48px';
-    if (totalRows > 999)  return '42px';
-    if (totalRows > 99)   return '36px';
-    return '32px';
+    // Generous per digit tier so numbers fit comfortably in JetBrains Mono
+    if (totalRows > 9999) return 52;
+    if (totalRows > 999)  return 42;
+    if (totalRows > 99)   return 38;
+    return 34;
   }
-  var ROW_NUM_COL_WIDTH_PX = '36px'; // default; updated per-render
+  var ROW_NUM_COL_WIDTH_PX = '38px'; // default; updated per-render
+
+  // PERMANENT FIX: Inject a <style> tag so the row-num column width is enforced
+  // at CSS cascade level — immune to table-layout:fixed space distribution
+  // and immune to inline style specificity fights.
+  var _rowNumStyleEl = null;
+  function applyRowNumStyleSheet(w) {
+    if (!_rowNumStyleEl) {
+      _rowNumStyleEl = document.createElement('style');
+      _rowNumStyleEl.id = 'svc-rownum-w';
+      document.head.appendChild(_rowNumStyleEl);
+    }
+    _rowNumStyleEl.textContent =
+      '#svcGrid col[data-key="__rownum__"],' +
+      ' #svcGrid th.row-num,' +
+      ' #svcGrid td.row-num {' +
+      '  width: ' + w + ' !important;' +
+      '  min-width: ' + w + ' !important;' +
+      '  max-width: ' + w + ' !important;' +
+      '  flex: none !important;' +
+      '}';
+  }
 
   function lockRowNumWidth(el) {
     if (!el || !el.style) return;
@@ -529,8 +551,11 @@
       return;
     }
     if (!current) { clear(); return; }
-    // FIX: Recompute row-num width each render so it's always snug to digit count
-    ROW_NUM_COL_WIDTH_PX = computeRowNumWidth();
+    // PERMANENT FIX: Recompute row-num width and inject via stylesheet
+    // so it wins over table-layout:fixed space distribution (min-width:100% side effect)
+    var _rnwPx = computeRowNumWidth();
+    ROW_NUM_COL_WIDTH_PX = _rnwPx + 'px';
+    applyRowNumStyleSheet(ROW_NUM_COL_WIDTH_PX);
     empty.style.display = 'none';
     grid.hidden = false;
     var cols      = (current.sheet.column_defs || []).filter(function (c) { return !c.hidden; });

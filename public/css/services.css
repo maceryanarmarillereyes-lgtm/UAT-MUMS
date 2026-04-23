@@ -329,6 +329,12 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   border-spacing: 0 !important;
 }
 
+/* BASE ANCHOR: row-num col starts at 1px so the injected #svc-rownum-w stylesheet
+   always wins the specificity battle — never inherits space from min-width:100% distribution */
+#svcGrid col[data-key="__rownum__"] {
+  width: 1px !important;
+}
+
 #svcGrid th,
 #svcGrid td {
   overflow: hidden !important;
