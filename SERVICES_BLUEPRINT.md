@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-23 (Services search dedupe + cross-folder search reliability + row-number width lock):**
+  - **Edit — `public/services.html`:** Removed legacy duplicate toolbar search input (`#svcGlobalSearchInput`) and stale global-results container (`#svcGlobalSearchResults`), keeping a single canonical all-columns search input (`#searchAllColumns`) with explicit “all folders” placeholder text.
+  - **Edit — `public/js/services-grid.js`:** Reworked toolbar search to use grid-native filter composition (`_searchAllQuery`) instead of direct DOM hide/show mutations, so search now evaluates against all sheet rows while temporarily bypassing tree-folder filters without mutating row data.
+  - **Edit — `public/js/services-grid.js`:** Hardened `_applyColumnWidths()` to target only first header row cells and skip index `0` (`#` lane), permanently preventing row-number column width bleed caused by filter-row header index drift.
+  - **Behavior contract update:** Services toolbar search now has one source of truth and reliably returns matches across treeview folders; row-number lane remains fixed-width regardless of column resize/auto-width operations.
+
 - **2026-04-23 (All-columns toolbar search behavior + filter-row row-number width fix):**
   - **Edit — `public/js/services-grid.js`:** Updated filter-row corner (`th.row-num`) inline sizing to fixed `56px` width/min/max and pinned sticky-left alignment for row-number lane consistency during horizontal grid movement.
   - **Edit — `public/js/services-grid.js`:** Added `initSearchAll` end-of-module controller for `#searchAllColumns` with debounced row text search, row show/hide + highlight, Escape clear flow, and sheet-switch reset observer.
