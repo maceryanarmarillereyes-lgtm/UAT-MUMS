@@ -91,6 +91,7 @@
       <div class="svc-sheet-toolbar">
         <div class="svc-sheet-tabs" id="svcSheetTabs"></div>
         <div class="svc-toolbar-actions">
+          <input id="svcGlobalSearchInput" class="svc-sheet-search" style="margin:0 8px 0 0;max-width:260px;" placeholder="🔍 Search all folders in this sheet..." autocomplete="off" />
           <button class="svc-btn" id="svcQbUpdateBtn" title="Manually refresh all QB lookup values">🔄 Update</button>
           <button class="svc-btn svc-refresh-btn" id="svcRefreshBtn" title="Refresh page — reloads sheet list and active sheet data (Ctrl+R)">⟳ Refresh</button>
           <button class="svc-btn" id="svcAddRow">+ Row</button>
@@ -104,6 +105,7 @@
           <button class="svc-btn" id="svcColumnsBtn" title="Show/hide columns">⊞ Columns</button>
         </div>
       </div>
+      <div id="svcGlobalSearchResults" style="display:none;position:absolute;top:118px;right:18px;width:420px;max-height:420px;overflow:auto;background:#0b1220;border:1px solid #1e293b;border-radius:8px;box-shadow:0 16px 40px rgba(0,0,0,.45);z-index:40;"></div>
 
       <div class="svc-grid-wrap" id="svcGridWrap">
         <div class="svc-empty-state" id="svcEmptyState">
