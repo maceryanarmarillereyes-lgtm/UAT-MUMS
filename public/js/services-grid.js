@@ -33,13 +33,26 @@
   var _columnFilters = {}; // per-column filter values
   var _searchAllQuery = ''; // toolbar all-columns query
   var isResizing  = false;
-  var ROW_NUM_COL_WIDTH_PX = '46px';
+  // FIX: Row-num width is now computed from the actual max row count
+  // so the column is always snug — no wasted space for 3-digit indices.
+  //   ≤99  rows  → 32px   (2 digits)
+  //   ≤999 rows  → 36px   (3 digits)
+  //   ≤9999 rows → 42px   (4 digits)
+  function computeRowNumWidth() {
+    var totalRows = current && current.rows ? current.rows.length : 0;
+    if (totalRows > 9999) return '48px';
+    if (totalRows > 999)  return '42px';
+    if (totalRows > 99)   return '36px';
+    return '32px';
+  }
+  var ROW_NUM_COL_WIDTH_PX = '36px'; // default; updated per-render
 
   function lockRowNumWidth(el) {
     if (!el || !el.style) return;
-    el.style.setProperty('width', ROW_NUM_COL_WIDTH_PX, 'important');
-    el.style.setProperty('min-width', ROW_NUM_COL_WIDTH_PX, 'important');
-    el.style.setProperty('max-width', ROW_NUM_COL_WIDTH_PX, 'important');
+    var w = ROW_NUM_COL_WIDTH_PX;
+    el.style.setProperty('width',     w, 'important');
+    el.style.setProperty('min-width', w, 'important');
+    el.style.setProperty('max-width', w, 'important');
     el.style.setProperty('box-sizing', 'border-box', 'important');
   }
 
@@ -516,6 +529,8 @@
       return;
     }
     if (!current) { clear(); return; }
+    // FIX: Recompute row-num width each render so it's always snug to digit count
+    ROW_NUM_COL_WIDTH_PX = computeRowNumWidth();
     empty.style.display = 'none';
     grid.hidden = false;
     var cols      = (current.sheet.column_defs || []).filter(function (c) { return !c.hidden; });
