@@ -370,16 +370,22 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
 }
 .svc-grid thead th.row-num,
 .svc-grid tbody td.row-num {
-  /* FIX: width is now set dynamically by JS (lockRowNumWidth / computeRowNumWidth).
-     CSS only provides the sticky positioning and visual style.
-     Do NOT set a fixed width here — it competes with JS !important locks. */
+  /* Dynamic width set by JS via --row-num-w CSS variable */
+  width: var(--row-num-w, 36px) !important;
+  min-width: var(--row-num-w, 36px) !important;
+  max-width: var(--row-num-w, 36px) !important;
+  text-align: center;
+  color: var(--svc-text-dim);
+  cursor: pointer;
+  padding: 8px 4px !important;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  position: relative;
   position: sticky;
   left: 0;
   z-index: 20;
   background: #020617!important;
   border-right: 1px solid #1e293b;
-  text-align: center;
-  padding: 0!important;
   overflow: hidden;
 }
 .svc-grid tbody td {
