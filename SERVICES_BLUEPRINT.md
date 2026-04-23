@@ -192,9 +192,9 @@ If step #3 is missing, task is incomplete.
 ## 7) Blueprint Change Log
 
 - **2026-04-23 (Services row-number lane width tightened to fit content):**
-  - **Edit — `public/js/services-grid.js`:** Added shared `ROW_NUM_COL_WIDTH_PX` constant (`46px`) and applied it to row-number `colgroup`, filter-row corner header, and runtime `_applyColumnWidths()` row header lock to keep the `#` lane consistently narrow.
+  - **Edit — `public/js/services-grid.js`:** Added shared `ROW_NUM_COL_WIDTH_PX` constant (`46px`) plus `lockRowNumWidth(el)` helper that enforces `width/min/max-width` with inline `!important` on row-number `col`, `th`, and `td` nodes during render and `_applyColumnWidths()` pass.
   - **Edit — `public/css/services.css`:** Updated sticky row-number header/body lane width and `.row-header` width from `56px` to `46px` so the first column stays fit-to-number and no longer appears oversized.
-  - **Behavior contract update:** Grid row-number column remains fixed-width and sticky, but now uses a tighter fit without changing filters, auth, realtime, or data-write behavior.
+  - **Behavior contract update:** Grid row-number column remains fixed-width and sticky, now with hard-lock width enforcement across rerenders/filter-row/colgroup without changing filters, auth, realtime, or data-write behavior.
 
 - **2026-04-23 (Services sheet/tree selection visibility hierarchy refresh):**
   - **Edit — `public/css/services.css`:** Updated left sidebar sheet hover + active states to use stronger cyan active lane (`3px` left border + higher-contrast fill/text) so active sheet is immediately distinguishable.
