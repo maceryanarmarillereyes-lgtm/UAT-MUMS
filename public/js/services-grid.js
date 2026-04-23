@@ -31,6 +31,7 @@
   // key: column key string | null (no sort), dir: 'asc' | 'desc'
   var _sortState   = { key: null, dir: 'asc' };
   var _columnFilters = {}; // per-column filter values
+  var _searchAllQuery = ''; // toolbar all-columns query
   var isResizing  = false;
 
   function sanitizeHeaderLabel(label, fallbackIndex) {
@@ -1814,8 +1815,14 @@
 
   function _applyColumnWidths() {
     if (!grid || !current || !current.sheet) return;
-    var headers = grid.querySelectorAll('thead th');
+    var headers = grid.querySelectorAll('thead tr:first-child th');
+    if (headers[0]) {
+      headers[0].style.width = '56px';
+      headers[0].style.minWidth = '56px';
+      headers[0].style.maxWidth = '56px';
+    }
     headers.forEach(function (th, idx) {
+      if (idx === 0) return; // keep row-number lane fixed
       var col = current.sheet.column_defs[idx - 1]; // -1 for row-num column
       if (col && col.width) {
         th.style.width = col.width;
@@ -2268,11 +2275,12 @@
       return;
     }
 
-    // Compose all filters: tree + column
+    // Compose all filters: tree + column + toolbar all-columns search
     var hasTreeFilter = !!_treeFilter;
     var hasColumnFilters = Object.keys(_columnFilters).length > 0;
+    var hasSearchAll = !!_searchAllQuery;
 
-    if (!hasTreeFilter && !hasColumnFilters) {
+    if (!hasTreeFilter && !hasColumnFilters && !hasSearchAll) {
       delete current.__treeFilteredRows;
       _origRender();
       return;
@@ -2280,8 +2288,8 @@
 
     // Apply all filters
     current.__treeFilteredRows = (current.rows || []).filter(function (row) {
-      // 1. Tree filter (existing)
-      if (hasTreeFilter && !_treeFilter(row)) return false;
+      // 1. Tree filter (existing) — bypassed while all-columns search is active
+      if (!hasSearchAll && hasTreeFilter && !_treeFilter(row)) return false;
 
       // 2. Column filters (NEW)
       if (hasColumnFilters) {
@@ -2290,6 +2298,15 @@
           var cellVal = row.data && row.data[key] != null ? String(row.data[key]).toLowerCase() : '';
           if (cellVal.indexOf(filterVal) === -1) return false;
         }
+      }
+
+      // 3. Toolbar all-columns search (matches any cell in row)
+      if (hasSearchAll) {
+        var rowData = row && row.data ? row.data : {};
+        var hit = Object.keys(rowData).some(function (key) {
+          return String(rowData[key] == null ? '' : rowData[key]).toLowerCase().indexOf(_searchAllQuery) !== -1;
+        });
+        if (!hit) return false;
       }
       return true;
     });
@@ -2319,79 +2336,22 @@
     toggleColumnVisibility: toggleColumnVisibility
   };
 
-  // ===== Simple Search All Columns =====
+  // ===== Toolbar Search All Columns =====
   (function initSearchAll() {
     var input = document.getElementById('searchAllColumns');
     if (!input) return;
-
-    var originalTreeFilter = null;
-    var searchActive = false;
     var timer;
+    var basePlaceholder = input.getAttribute('placeholder') || '🔍 Search all...';
 
     function doSearch() {
-      var query = input.value.toLowerCase().trim();
-      var tbody = document.querySelector('#svcGrid tbody');
-      if (!tbody) return;
-
-      var rows = Array.from(tbody.querySelectorAll('tr'));
-
-      // If starting search, save current tree filter and clear it
-      if (query && !searchActive) {
-        searchActive = true;
-        // Store current filter state
-        originalTreeFilter = window._treeFilter || null;
-        // Clear to show all rows
-        if (window.servicesGrid && window.servicesGrid.setTreeFilter) {
-          window.servicesGrid.setTreeFilter(null);
-        }
-        // Wait for render, then apply search
-        setTimeout(function () { applySearchFilter(query); }, 100);
-        return;
+      _searchAllQuery = String(input.value || '').toLowerCase().trim();
+      _renderIsFilterSwitch = true;
+      try {
+        render();
+      } finally {
+        _renderIsFilterSwitch = false;
       }
-
-      // If clearing search, restore tree filter
-      if (!query && searchActive) {
-        searchActive = false;
-        // Clear visual filters first
-        rows.forEach(function (r) {
-          r.style.display = '';
-          r.style.background = '';
-        });
-        // Restore tree filter
-        if (window.servicesGrid && window.servicesGrid.setTreeFilter) {
-          window.servicesGrid.setTreeFilter(originalTreeFilter);
-        }
-        input.placeholder = '🔍 Search all...';
-        return;
-      }
-
-      // Apply search filter
-      if (query) {
-        applySearchFilter(query);
-      }
-    }
-
-    function applySearchFilter(query) {
-      var tbody = document.querySelector('#svcGrid tbody');
-      if (!tbody) return;
-
-      var rows = Array.from(tbody.querySelectorAll('tr'));
-      var matches = 0;
-
-      rows.forEach(function (row) {
-        var text = row.textContent.toLowerCase();
-        var isMatch = text.indexOf(query) !== -1;
-
-        row.style.display = isMatch ? '' : 'none';
-        if (isMatch) {
-          row.style.background = 'rgba(14,165,233,0.06)';
-          matches++;
-        } else {
-          row.style.background = '';
-        }
-      });
-
-      input.placeholder = matches > 0 ? ('Found ' + matches + ' • 🔍 Search all...') : 'No matches • 🔍 Search all...';
+      input.placeholder = _searchAllQuery ? ('Searching all folders…') : basePlaceholder;
     }
 
     input.addEventListener('input', function () {
@@ -2407,14 +2367,14 @@
       }
     });
 
-    // Clear search when switching sheets
+    // Clear search when grid is emptied during sheet switch
     var observer = new MutationObserver(function () {
       if (input.value && !document.querySelector('#svcGrid tbody tr')) {
         input.value = '';
+        _searchAllQuery = '';
+        input.placeholder = basePlaceholder;
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
-
-    console.log('[Search] Initialized');
   })();
 })();
