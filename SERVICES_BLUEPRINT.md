@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-23 (Services grid filter focus + current-sheet search reliability fix):**
+  - **Edit — `public/js/services-grid.js`:** Removed the prior `_columnFilters` render-coupled implementation and replaced it with a DOM-level `.filter-row` injector that filters existing `#svcGrid tbody tr` rows without triggering grid re-render, preserving input focus while typing.
+  - **Edit — `public/js/services-grid.js`:** Replaced prior search injectors with a single current-sheet DOM search flow bound to the existing `Search in current sheet` input placeholder, with debounced match filtering, inline `<mark>` highlighting, Escape-to-clear support, and MutationObserver re-init.
+  - **Behavior contract update:** Column filtering and search now operate directly on rendered DOM rows to avoid focus loss/regression from render loops while maintaining per-sheet scope.
+
 - **2026-04-23 (Services grid Excel-style per-column filters):**
   - **Edit — `public/js/services-grid.js`:** Added persistent `_columnFilters` state, sticky filter header row with per-column inputs, row-number filter corner cell, case-insensitive row filtering on rendered dataset, and footer text update to reflect filtered count (`X of Y rows`).
   - **Edit — `public/js/services-grid.js`:** Header context menu binding now targets only `.header-main-row` to prevent filter-row interference; exported `clearColumnFilters()` and added toolbar `✕ Clear Filters` action button.

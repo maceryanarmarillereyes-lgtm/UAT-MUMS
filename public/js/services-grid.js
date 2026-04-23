@@ -513,31 +513,6 @@
       ? current.__treeFilteredRows.slice().sort(function (a, b) { return a.row_index - b.row_index; })
       : current.rows.slice();
 
-    // APPLY COLUMN FILTERS (Excel-style)
-    var hasColumnFilters = Object.keys(_columnFilters).length > 0;
-    if (hasColumnFilters) {
-      viewRows = viewRows.filter(function(row) {
-        for (var key in _columnFilters) {
-          var filterVal = _columnFilters[key];
-          var cellVal = row.data && row.data[key] != null ? String(row.data[key]).toLowerCase() : '';
-          if (cellVal.indexOf(filterVal) === -1) {
-            return false;
-          }
-        }
-        return true;
-      });
-    }
-
-    // Update footer count
-    setTimeout(function() {
-      var footer = document.querySelector('.svc-grid-footer,.grid-status');
-      if (footer && hasColumnFilters) {
-        var originalCount = current.rows.length;
-        var filteredCount = viewRows.length;
-        footer.textContent = footer.textContent.replace(/\d+ rows/, filteredCount + ' of ' + originalCount + ' rows (filtered)');
-      }
-    }, 0);
-
     // ── Apply sort if active ─────────────────────────────────────────────────
     var isSorted = !!_sortState.key;
     if (isSorted) {
@@ -574,15 +549,7 @@
     var headTr  = mkEl('tr', null, thead);
     headTr.className = 'header-main-row';
 
-    // ADD FILTER ROW (Excel-style)
-    var filterTr = mkEl('tr', { className: 'header-filter-row' }, thead);
-    filterTr.style.background = '#0f172a';
-    filterTr.style.borderBottom = '2px solid #1e293b';
     var thCorner = mkEl('th', { className: 'row-num row-header', textContent: '#' }, headTr);
-    var filterCorner = mkEl('th', { className: 'row-num' }, filterTr);
-    filterCorner.innerHTML = '<div style="text-align:center;color:#475569;font-size:9px;padding:4px;">▼</div>';
-    filterCorner.style.background = '#0f172a';
-    filterCorner.style.padding = '4px';
     cols.forEach(function (c) {
       var th = mkEl('th', { textContent: sanitizeHeaderLabel(c.label, 0) }, headTr);
       th.dataset.key = c.key;
@@ -603,68 +570,6 @@
       resizeHandle.innerHTML = '<div class="resize-grip"></div>';
       th.style.position = 'relative';
       th.appendChild(resizeHandle);
-
-      // Create filter cell
-      var filterTh = mkEl('th', null, filterTr);
-      filterTh.dataset.key = c.key;
-      filterTh.style.padding = '4px';
-      filterTh.style.background = '#0f172a';
-      if (_columnFilters[c.key]) th.classList.add('filtered');
-      else th.classList.remove('filtered');
-
-      if (c.hidden) {
-        filterTh.style.display = 'none';
-      } else {
-        var filterInput = document.createElement('input');
-        filterInput.type = 'text';
-        filterInput.placeholder = 'Filter...';
-        filterInput.dataset.columnKey = c.key;
-        filterInput.className = 'column-filter-input';
-        filterInput.value = _columnFilters[c.key] || '';
-
-        Object.assign(filterInput.style, {
-          width: '100%',
-          height: '24px',
-          padding: '0 6px',
-          background: '#020617',
-          border: '1px solid #334155',
-          borderRadius: '4px',
-          color: '#e2e8f0',
-          fontSize: '11px',
-          outline: 'none'
-        });
-
-        filterInput.addEventListener('focus', function() {
-          this.style.borderColor = '#3b82f6';
-          this.style.boxShadow = '0 0 0 2px rgba(59,130,246,0.15)';
-        });
-
-        filterInput.addEventListener('blur', function() {
-          this.style.borderColor = '#334155';
-          this.style.boxShadow = 'none';
-        });
-
-        filterInput.addEventListener('input', function(e) {
-          var key = e.target.dataset.columnKey;
-          var val = e.target.value.trim();
-
-          if (val) {
-            _columnFilters[key] = val.toLowerCase();
-          } else {
-            delete _columnFilters[key];
-          }
-
-          // Re-render with filters
-          render();
-        });
-
-        // Prevent context menu on filter input
-        filterInput.addEventListener('contextmenu', function(e) {
-          e.stopPropagation();
-        });
-
-        filterTh.appendChild(filterInput);
-      }
 
       resizeHandle.addEventListener('mousedown', function (ev) {
         ev.preventDefault();
@@ -2274,7 +2179,6 @@
   // setTreeFilter(fn) — fn receives a row object {row_index, data}, returns bool.
   // Pass null to remove filter (show all rows).
   var _treeFilter = null;
-  var _columnFilters = {}; // NEW: per-column filters
   // FIX: Flag that render() checks to skip autoResizeColumns + refreshCounts
   // during folder switches. These are the two main sources of folder-switch lag.
   var _renderIsFilterSwitch = false;
@@ -2311,446 +2215,260 @@
     }
   });
 
-  function clearColumnFilters() {
-    _columnFilters = {};
-    var inputs = document.querySelectorAll('.column-filter-input');
-    inputs.forEach(function(input) { input.value = ''; });
-    render();
-  }
-
-  // Export for toolbar
-  window.clearColumnFilters = clearColumnFilters;
-
   function getState() { return current; }
-  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter, saveColumnState: saveColumnState, toggleColumnVisibility: toggleColumnVisibility, clearColumnFilters: clearColumnFilters };
+  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter, saveColumnState: saveColumnState, toggleColumnVisibility: toggleColumnVisibility, clearColumnFilters: function () { if (window.clearColumnFilters) window.clearColumnFilters(); } };
 })();
 
 
-// ===== SEARCH WITHIN CURRENT SHEET ONLY =====
-class ServicesSheetSearch {
-  constructor() {
-    this.init();
-  }
-
-  init() {
-    const input = document.getElementById('svcGlobalSearch');
-    if (!input) return;
-
-    let timeout;
-    input.addEventListener('input', (e) => {
-      clearTimeout(timeout);
-      const q = e.target.value.trim();
-      if (q.length < 2) {
-        this.hideResults();
-        this.clearHighlight();
-        return;
-      }
-      timeout = setTimeout(() => this.search(q), 150);
-    });
-
-    // Keyboard shortcut
-    document.addEventListener('keydown', (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        input.focus();
-        input.select();
-      }
-      if (e.key === 'Escape') {
-        this.hideResults();
-        input.value = '';
-        this.clearHighlight();
-      }
-    });
-
-    // Close on click outside
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.global-search-wrapper')) {
-        this.hideResults();
-      }
-    });
-  }
-
-  search(query) {
-    const table = window.__tabulatorInstance;
-    if (!table) return;
-
-    const q = query.toLowerCase();
-    const results = [];
-    const allData = table.getData();
-
-    // Search through ALL rows in current sheet
-    for (const row of allData) {
-      // Skip internal fields
-      const searchableData = { ...row };
-      delete searchableData.id;
-      delete searchableData._rowId;
-      delete searchableData._sheetId;
-      delete searchableData.row_index;
-
-      const rowText = JSON.stringify(searchableData).toLowerCase();
-
-      if (rowText.includes(q)) {
-        // Find which field matched
-        const match = Object.entries(searchableData).find(([key, val]) =>
-          String(val).toLowerCase().includes(q)
-        );
-
-        if (match) {
-          results.push({
-            rowId: row.id || row._rowId,
-            rowIndex: row.row_index,
-            field: match[0],
-            value: match[1],
-            preview: this.getRowPreview(searchableData),
-            rowData: row
-          });
-        }
-      }
-
-      if (results.length >= 15) break; // Limit results
-    }
-
-    this.showResults(results, query);
-    this.highlightMatches(query);
-  }
-
-  getRowPreview(data) {
-    // Get first 3 non-empty values
-    const values = Object.values(data)
-      .filter(v => v && String(v).trim())
-      .slice(0, 3);
-    return values.join(' • ').substring(0, 80);
-  }
-
-  showResults(results, query) {
-    let dropdown = document.getElementById('svcSearchDropdown');
-    if (!dropdown) {
-      dropdown = document.createElement('div');
-      dropdown.id = 'svcSearchDropdown';
-      dropdown.className = 'search-dropdown';
-      document.querySelector('.global-search-wrapper').appendChild(dropdown);
-    }
-
-    const sheet = window.servicesSheetManager?.getActive();
-    const sheetName = sheet?.title || 'Current Sheet';
-
-    if (results.length === 0) {
-      dropdown.innerHTML = `
-        <div class="search-empty">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-          </svg>
-          <div>No matches in "${sheetName}"</div>
-          <small>Try a different term</small>
-        </div>
-      `;
-    } else {
-      dropdown.innerHTML = `
-        <div class="search-header">
-          <span>${results.length} matches in ${sheetName}</span>
-          <span class="search-query">"${query}"</span>
-        </div>
-        ${results.map(r => `
-          <div class="search-item" onclick="window.servicesSheetSearch.jumpToRow('${r.rowId}')">
-            <div class="search-item-main">
-              <div class="search-item-row">Row ${(Number(r.rowIndex) || 0) + 1}</div>
-              <div class="search-item-field">
-                <span class="field-name">${r.field}:</span>
-                <span class="field-value">${this.highlightText(String(r.value), query)}</span>
-              </div>
-            </div>
-            <div class="search-item-preview">${r.preview}</div>
-          </div>
-        `).join('')}
-      `;
-    }
-
-    dropdown.classList.add('active');
-  }
-
-  hideResults() {
-    document.getElementById('svcSearchDropdown')?.classList.remove('active');
-  }
-
-  jumpToRow(rowId) {
-    this.hideResults();
-
-    const table = window.__tabulatorInstance;
-    if (!table) return;
-
-    // Scroll to row and highlight
-    table.scrollToRow(rowId, 'center', true);
-    table.deselectRow();
-    table.selectRow(rowId);
-
-    const rowEl = table.getRow(rowId)?.getElement();
-    if (rowEl) {
-      rowEl.classList.add('search-target');
-      setTimeout(() => rowEl.classList.remove('search-target'), 3000);
-    }
-
-    // Clear search input after jump
-    setTimeout(() => {
-      const input = document.getElementById('svcGlobalSearch');
-      if (input) input.value = '';
-    }, 500);
-  }
-
-  highlightMatches(query) {
-    const table = window.__tabulatorInstance;
-    if (!table) return;
-
-    // Remove previous highlights
-    this.clearHighlight();
-
-    const q = query.toLowerCase();
-
-    // Add highlight class to matching cells
-    table.getRows().forEach(row => {
-      const data = row.getData();
-      let hasMatch = false;
-
-      Object.entries(data).forEach(([key, val]) => {
-        if (key.startsWith('_') || key === 'id' || key === 'row_index') return;
-
-        if (String(val).toLowerCase().includes(q)) {
-          hasMatch = true;
-          const cell = row.getCell(key);
-          if (cell) {
-            const cellEl = cell.getElement();
-            cellEl.classList.add('cell-match');
-
-            // Highlight text inside cell
-            const originalText = cellEl.textContent;
-            const regex = new RegExp(`(${query})`, 'gi');
-            cellEl.innerHTML = originalText.replace(regex, '<mark>$1</mark>');
-          }
-        }
-      });
-
-      if (hasMatch) {
-        row.getElement().classList.add('row-has-match');
-      }
-    });
-  }
-
-  clearHighlight() {
-    const table = window.__tabulatorInstance;
-    if (!table) return;
-
-    table.getRows().forEach(row => {
-      row.getElement().classList.remove('row-has-match', 'search-target');
-      row.getCells().forEach(cell => {
-        const el = cell.getElement();
-        el.classList.remove('cell-match');
-        // Restore original text (remove marks)
-        if (el.querySelector('mark')) {
-          el.textContent = cell.getValue();
-        }
-      });
-    });
-  }
-
-  highlightText(text, query) {
-    const regex = new RegExp(`(${query})`, 'gi');
-    return text.replace(regex, '<mark>$1</mark>');
-  }
-}
-
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  window.servicesSheetSearch = new ServicesSheetSearch();
-});
-
-// Update search placeholder to be clear
-document.addEventListener('DOMContentLoaded', () => {
-  const input = document.getElementById('svcGlobalSearch');
-  if (input) {
-    input.placeholder = 'Search in current sheet...';
-    input.title = 'Search all columns in this sheet only (⌘K)';
-  }
-});
-
-// Add clear filters button if not exists
-setTimeout(function() {
-  var toolbar = document.querySelector('.svc-toolbar-actions');
-  if (toolbar && !document.getElementById('clearColumnFiltersBtn')) {
-    var btn = document.createElement('button');
-    btn.id = 'clearColumnFiltersBtn';
-    btn.className = 'svc-btn';
-    btn.innerHTML = '✕ Clear Filters';
-    btn.title = 'Clear all column filters';
-    btn.style.marginLeft = '8px';
-    btn.style.background = '#1e293b';
-    btn.style.borderColor = '#334155';
-    btn.onclick = function() { if (window.clearColumnFilters) window.clearColumnFilters(); };
-    toolbar.appendChild(btn);
-  }
-}, 500);
-
-// ===== SEARCH FOR CURRENT TABLE (NO TABULATOR NEEDED) =====
+// ===== FIXED COLUMN FILTERS - NO RERENDER =====
 (function() {
-  // Wait for grid to load
-  const initSearch = () => {
-    const toolbar = document.querySelector('.svc-toolbar-actions');
-    if (!toolbar || document.getElementById('svcGlobalSearch')) return;
+  let filterState = {};
+  let isFiltering = false;
 
-    // Add search box
-    const searchWrap = document.createElement('div');
-    searchWrap.className = 'global-search-wrapper';
-    searchWrap.innerHTML = `
-      <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#64748b;pointer-events:none;z-index:2">
-        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-      </svg>
-      <input id="svcGlobalSearch" type="text" placeholder="Search this sheet..." style="width:280px;height:32px;padding:0 36px 0 32px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#e2e8f0;font-size:13px;" />
-      <kbd style="position:absolute;right:8px;top:50%;transform:translateY(-50%);padding:2px 5px;background:#1e293b;border:1px solid #334155;border-radius:4px;font-size:10px;color:#94a3b8;">⌘K</kbd>
-      <div id="svcSearchDropdown" style="position:absolute;top:calc(100% + 6px);left:0;width:420px;max-height:380px;background:#0f172a;border:1px solid #334155;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,0.5);overflow-y:auto;display:none;z-index:1000;"></div>
-    `;
-    searchWrap.style.position = 'relative';
-    searchWrap.style.display = 'flex';
-    searchWrap.style.alignItems = 'center';
+  function initFilters() {
+    const table = document.getElementById('svcGrid');
+    if (!table || table.querySelector('.filter-row')) return;
 
-    toolbar.insertBefore(searchWrap, toolbar.firstChild);
+    const thead = table.querySelector('thead');
+    const headerRow = thead.querySelector('tr');
+    if (!headerRow) return;
 
-    const input = document.getElementById('svcGlobalSearch');
-    const dropdown = document.getElementById('svcSearchDropdown');
-    let searchTimeout;
+    // Create filter row
+    const filterRow = document.createElement('tr');
+    filterRow.className = 'filter-row';
+    filterRow.style.cssText = 'background:#0f172a;border-bottom:2px solid #1e293b;';
 
-    // Search function
-    const doSearch = (query) => {
-      const q = query.toLowerCase();
-      const table = document.getElementById('svcGrid');
-      if (!table) return;
+    const headers = Array.from(headerRow.querySelectorAll('th'));
 
-      const rows = Array.from(table.querySelectorAll('tbody tr'));
-      const results = [];
-      let matchCount = 0;
+    headers.forEach((th, idx) => {
+      const td = document.createElement('th');
+      td.style.padding = '4px';
+      td.style.background = '#0f172a';
 
-      // Clear previous highlights
-      rows.forEach(row => {
-        row.style.background = '';
-        row.querySelectorAll('td').forEach(td => {
-          td.innerHTML = td.textContent; // Remove marks
-          td.style.background = '';
-        });
-      });
-
-      if (!q || q.length < 2) {
-        dropdown.style.display = 'none';
+      if (idx === 0) {
+        td.innerHTML = '<div style="text-align:center;color:#475569;font-size:9px;">▼</div>';
+        filterRow.appendChild(td);
         return;
       }
 
-      // Search all rows
-      rows.forEach((row, idx) => {
-        const cells = Array.from(row.querySelectorAll('td'));
-        const rowText = cells.map(c => c.textContent).join(' ').toLowerCase();
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = 'Filter...';
+      input.dataset.colIdx = idx;
+      input.className = 'col-filter';
+      input.style.cssText = 'width:100%;height:24px;padding:0 6px;background:#020617;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:11px;outline:none;';
 
-        if (rowText.includes(q)) {
-          matchCount++;
+      // CRITICAL FIX: Don't trigger render, filter DOM directly
+      let typingTimer;
+      input.addEventListener('input', function(e) {
+        clearTimeout(typingTimer);
+        const val = e.target.value.toLowerCase();
+        const colIdx = parseInt(e.target.dataset.colIdx);
 
-          // Highlight matching cells
-          cells.forEach(td => {
-            const text = td.textContent;
-            if (text.toLowerCase().includes(q)) {
-              const regex = new RegExp(`(${query})`, 'gi');
-              td.innerHTML = text.replace(regex, '<mark style="background:rgba(251,191,36,0.3);color:#fde047;padding:1px 2px;border-radius:2px;">$1</mark>');
-              td.style.background = 'rgba(59,130,246,0.1)';
-            }
-          });
+        filterState[colIdx] = val;
 
-          row.style.background = 'rgba(59,130,246,0.05)';
-
-          // Add to results (max 10)
-          if (results.length < 10) {
-            const caseNum = cells[1]?.textContent || '';
-            const site = cells[2]?.textContent || '';
-            results.push({ idx, caseNum, site, row });
-          }
-        }
+        // Debounce to prevent lag
+        typingTimer = setTimeout(() => {
+          applyFilterToDOM();
+        }, 150);
       });
 
-      // Show dropdown
-      if (results.length > 0) {
-        dropdown.innerHTML = `
-          <div style="padding:10px 14px;border-bottom:1px solid #1e293b;font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;">
-            ${matchCount} matches
-          </div>
-          ${results.map(r => `
-            <div class="search-result" data-idx="${r.idx}" style="padding:10px 14px;border-bottom:1px solid #1e293b;cursor:pointer;display:flex;gap:10px;align-items:center;">
-              <div style="font-size:11px;color:#3b82f6;background:rgba(59,130,246,0.15);padding:2px 6px;border-radius:4px;min-width:40px;text-align:center;">${r.idx + 1}</div>
-              <div style="flex:1;min-width:0;">
-                <div style="font-size:13px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.caseNum}</div>
-                <div style="font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.site.substring(0, 60)}</div>
-              </div>
-            </div>
-          `).join('')}
-        `;
-        dropdown.style.display = 'block';
+      input.addEventListener('focus', function() {
+        this.style.borderColor = '#3b82f6';
+        this.style.boxShadow = '0 0 0 2px rgba(59,130,246,0.15)';
+      });
 
-        // Click handlers
-        dropdown.querySelectorAll('.search-result').forEach(el => {
-          el.onclick = () => {
-            const idx = parseInt(el.dataset.idx);
-            const targetRow = rows[idx];
-            if (targetRow) {
-              targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              targetRow.style.background = 'rgba(59,130,246,0.25)';
-              targetRow.style.boxShadow = 'inset 3px 0 0 #3b82f6';
-              setTimeout(() => {
-                targetRow.style.background = 'rgba(59,130,246,0.05)';
-                targetRow.style.boxShadow = '';
-              }, 2000);
-            }
-            dropdown.style.display = 'none';
-            input.value = '';
-          };
-          el.onmouseenter = () => el.style.background = '#1e293b';
-          el.onmouseleave = () => el.style.background = '';
-        });
-      } else {
-        dropdown.innerHTML = `<div style="padding:20px;text-align:center;color:#64748b;font-size:13px;">No matches</div>`;
-        dropdown.style.display = 'block';
-      }
-    };
+      input.addEventListener('blur', function() {
+        this.style.borderColor = '#334155';
+        this.style.boxShadow = 'none';
+      });
 
-    input.addEventListener('input', (e) => {
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => doSearch(e.target.value), 150);
+      // Prevent losing focus
+      input.addEventListener('keydown', function(e) {
+        e.stopPropagation();
+      });
+
+      td.appendChild(input);
+      filterRow.appendChild(td);
     });
 
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        input.value = '';
-        doSearch('');
-        dropdown.style.display = 'none';
-      }
-    });
-
-    // ⌘K shortcut
-    document.addEventListener('keydown', (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        input.focus();
-        input.select();
-      }
-    });
-
-    // Close on outside click
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.global-search-wrapper')) {
-        dropdown.style.display = 'none';
-      }
-    });
-
-    console.log('[Search] Initialized for current sheet');
-  };
-
-  // Try init now and on load
-  if (document.readyState === 'complete') {
-    setTimeout(initSearch, 1000);
-  } else {
-    window.addEventListener('load', () => setTimeout(initSearch, 1000));
+    thead.appendChild(filterRow);
+    console.log('[Filters] Initialized - no rerender mode');
   }
+
+  function applyFilterToDOM() {
+    if (isFiltering) return;
+    isFiltering = true;
+
+    const table = document.getElementById('svcGrid');
+    const tbody = table?.querySelector('tbody');
+    if (!tbody) {
+      isFiltering = false;
+      return;
+    }
+
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    let visibleCount = 0;
+    const hasFilters = Object.values(filterState).some(v => v);
+
+    rows.forEach(row => {
+      if (!hasFilters) {
+        row.style.display = '';
+        visibleCount++;
+        return;
+      }
+
+      const cells = Array.from(row.querySelectorAll('td'));
+      let show = true;
+
+      for (const [colIdx, filterVal] of Object.entries(filterState)) {
+        if (!filterVal) continue;
+
+        const cell = cells[colIdx];
+        if (!cell) continue;
+
+        const cellText = cell.textContent.toLowerCase();
+        if (!cellText.includes(filterVal)) {
+          show = false;
+          break;
+        }
+      }
+
+      row.style.display = show ? '' : 'none';
+      if (show) visibleCount++;
+    });
+
+    // Update count
+    const total = rows.length;
+    const footer = document.querySelector('.svc-grid-footer, #svcGrid')?.parentElement?.querySelector('[class*="rows"], [class*="count"]');
+    if (footer && hasFilters) {
+      const originalText = footer.textContent;
+      if (!originalText.includes('filtered')) {
+        footer.dataset.original = originalText;
+      }
+      footer.textContent = `${visibleCount} of ${total} rows (filtered)`;
+    } else if (footer && footer.dataset.original) {
+      footer.textContent = footer.dataset.original;
+    }
+
+    isFiltering = false;
+  }
+
+  function clearAllFilters() {
+    filterState = {};
+    document.querySelectorAll('.col-filter').forEach(inp => {
+      inp.value = '';
+    });
+    applyFilterToDOM();
+  }
+
+  // Initialize
+  const observer = new MutationObserver(() => {
+    const table = document.getElementById('svcGrid');
+    if (table && table.querySelector('tbody tr') && !table.querySelector('.filter-row')) {
+      setTimeout(initFilters, 100);
+    }
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // Clear button
+  setTimeout(() => {
+    const btn = document.getElementById('clearColumnFiltersBtn') || document.querySelector('#clearFiltersBtn');
+    if (btn) {
+      btn.onclick = clearAllFilters;
+    }
+  }, 1000);
+
+  window.clearColumnFilters = clearAllFilters;
+})();
+
+// ===== FIXED GLOBAL SEARCH (current sheet) =====
+(function() {
+  function initSearch() {
+    const searchInput = document.querySelector('input[placeholder*="Search in current sheet"]');
+    if (!searchInput || searchInput.dataset.initialized) return;
+
+    searchInput.dataset.initialized = 'true';
+    let searchTimer;
+
+    searchInput.addEventListener('input', function(e) {
+      clearTimeout(searchTimer);
+      const query = e.target.value.toLowerCase().trim();
+
+      searchTimer = setTimeout(() => {
+        performSearch(query);
+      }, 200);
+    });
+
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        this.value = '';
+        performSearch('');
+      }
+    });
+
+    console.log('[Search] Initialized');
+  }
+
+  function performSearch(query) {
+    const table = document.getElementById('svcGrid');
+    const tbody = table?.querySelector('tbody');
+    if (!tbody) return;
+
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    // Clear previous highlights
+    rows.forEach(row => {
+      row.style.background = '';
+      row.querySelectorAll('td').forEach(td => {
+        td.innerHTML = td.textContent;
+      });
+    });
+
+    if (!query || query.length < 2) {
+      rows.forEach(r => r.style.display = '');
+      return;
+    }
+
+    let matchCount = 0;
+
+    rows.forEach(row => {
+      const cells = Array.from(row.querySelectorAll('td'));
+      const rowText = cells.map(c => c.textContent.toLowerCase()).join(' ');
+
+      if (rowText.includes(query)) {
+        row.style.display = '';
+        matchCount++;
+
+        // Highlight matches
+        cells.forEach(td => {
+          const text = td.textContent;
+          const lowerText = text.toLowerCase();
+          if (lowerText.includes(query)) {
+            const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')})`, 'gi');
+            td.innerHTML = text.replace(regex, '<mark style="background:rgba(251,191,36,0.3);color:#fde047;padding:1px 2px;border-radius:2px;">$1</mark>');
+          }
+        });
+
+        // Highlight row
+        row.style.background = 'rgba(59,130,246,0.08)';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+
+    // Update placeholder with count
+    const searchInput = document.querySelector('input[placeholder*="Search in current sheet"]');
+    if (searchInput) {
+      searchInput.placeholder = matchCount > 0
+      ? `Found ${matchCount} matches - Search in current sheet...`
+        : 'Search in current sheet...';
+    }
+  }
+
+  // Init on load
+  setTimeout(initSearch, 1500);
 
   // Re-init on sheet change
   const observer = new MutationObserver(() => {
