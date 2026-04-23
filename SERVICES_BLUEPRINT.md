@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-23 (Permanent column filters v2 + fixed global search append):**
+  - **Edit — `public/js/services-grid.js`:** Appended a new `PERMANENT COLUMN FILTERS v2.0` IIFE that injects a sticky per-column filter row, stores filters by sheet in localStorage (`mums_column_filters`), re-applies filters after grid render/mutation events, updates visible row count text, and exposes `window.clearColumnFilters()` plus toolbar clear action.
+  - **Edit — `public/js/services-grid.js`:** Appended a `FIXED GLOBAL SEARCH` IIFE that binds to the existing current-sheet search input, performs DOM-level row filtering with inline `<mark>` highlighting, reports match count in placeholder text, and supports Escape-to-clear behavior.
+  - **Behavior contract update:** Column filters and global search now include an appended DOM-layer implementation that runs independently from the prior search/filter blocks to preserve interactive filtering on the rendered table.
+
 - **2026-04-23 (Services grid filter focus + current-sheet search reliability fix):**
   - **Edit — `public/js/services-grid.js`:** Removed the prior `_columnFilters` render-coupled implementation and replaced it with a DOM-level `.filter-row` injector that filters existing `#svcGrid tbody tr` rows without triggering grid re-render, preserving input focus while typing.
   - **Edit — `public/js/services-grid.js`:** Replaced prior search injectors with a single current-sheet DOM search flow bound to the existing `Search in current sheet` input placeholder, with debounced match filtering, inline `<mark>` highlighting, Escape-to-clear support, and MutationObserver re-init.
