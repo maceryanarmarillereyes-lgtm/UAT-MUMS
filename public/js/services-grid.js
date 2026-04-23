@@ -33,6 +33,7 @@
   var _columnFilters = {}; // per-column filter values
   var _searchAllQuery = ''; // toolbar all-columns query
   var isResizing  = false;
+  var ROW_NUM_COL_WIDTH_PX = '46px';
 
   function sanitizeHeaderLabel(label, fallbackIndex) {
     var s = String(label == null ? '' : label)
@@ -536,7 +537,7 @@
     var colgroup = mkEl('colgroup');
     var rowNumCol = document.createElement('col');
     rowNumCol.setAttribute('data-key', '__rownum__');
-    rowNumCol.style.width = '56px';
+    rowNumCol.style.width = ROW_NUM_COL_WIDTH_PX;
     colgroup.appendChild(rowNumCol);
     cols.forEach(function (c) {
       var col = document.createElement('col');
@@ -653,7 +654,7 @@
     // Filter cell for row number
     var filterCorner = mkEl('th', { className: 'row-num' }, filterTr);
     filterCorner.innerHTML = '<div style="text-align:center;color:#475569;font-size:9px;">▼</div>';
-    filterCorner.style.cssText = 'background:#0f172a;padding:2px;width:56px;min-width:56px;max-width:56px;position:sticky;top:32px;z-index:4;left:0;';
+    filterCorner.style.cssText = 'background:#0f172a;padding:2px;width:' + ROW_NUM_COL_WIDTH_PX + ';min-width:' + ROW_NUM_COL_WIDTH_PX + ';max-width:' + ROW_NUM_COL_WIDTH_PX + ';position:sticky;top:32px;z-index:4;left:0;';
 
     // Filter cells for each column
     cols.forEach(function (c) {
@@ -1817,9 +1818,9 @@
     if (!grid || !current || !current.sheet) return;
     var headers = grid.querySelectorAll('thead tr:first-child th');
     if (headers[0]) {
-      headers[0].style.width = '56px';
-      headers[0].style.minWidth = '56px';
-      headers[0].style.maxWidth = '56px';
+      headers[0].style.width = ROW_NUM_COL_WIDTH_PX;
+      headers[0].style.minWidth = ROW_NUM_COL_WIDTH_PX;
+      headers[0].style.maxWidth = ROW_NUM_COL_WIDTH_PX;
     }
     headers.forEach(function (th, idx) {
       if (idx === 0) return; // keep row-number lane fixed
