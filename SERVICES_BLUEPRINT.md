@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-23 (Services sheet/tree selection visibility hierarchy refresh):**
+  - **Edit — `public/css/services.css`:** Updated left sidebar sheet hover + active states to use stronger cyan active lane (`3px` left border + higher-contrast fill/text) so active sheet is immediately distinguishable.
+  - **Edit — `public/css/services.css`:** Updated tree folder hover + active states to a distinct indigo active treatment separate from sheet active visuals, clarifying folder selection (`All Records`/`COMPLETED`) vs selected sheet context.
+  - **Edit — `public/css/services.css`:** Added explicit badge styling for sheet/folder counts in normal vs active state and toned icon saturation defaults so the `COMPLETED` check icon no longer reads like implicit selection.
+  - **Behavior contract update:** Left navigation now has three clearly separated visual states — hover, active sheet, and active folder — without changing Services data, auth, realtime, or filter contracts.
+
 - **2026-04-23 (Services search dedupe + cross-folder search reliability + row-number width lock):**
   - **Edit — `public/services.html`:** Removed legacy duplicate toolbar search input (`#svcGlobalSearchInput`) and stale global-results container (`#svcGlobalSearchResults`), keeping a single canonical all-columns search input (`#searchAllColumns`) with explicit “all folders” placeholder text.
   - **Edit — `public/js/services-grid.js`:** Reworked toolbar search to use grid-native filter composition (`_searchAllQuery`) instead of direct DOM hide/show mutations, so search now evaluates against all sheet rows while temporarily bypassing tree-folder filters without mutating row data.

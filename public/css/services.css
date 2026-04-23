@@ -196,12 +196,21 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   margin-bottom: 2px;
   animation: svc-fade-in 0.2s ease-out;
 }
-.svc-sheet-item:hover { background: var(--svc-panel-2); color: var(--svc-text); }
-.svc-sheet-item.active {
-  background: linear-gradient(90deg, rgba(34,211,238,0.15), transparent);
-  color: var(--svc-accent);
-  border-color: rgba(34,211,238,0.2);
-  border-left: 3px solid var(--svc-accent);
+.svc-sheet-item:hover {
+  background: rgba(14,165,233,0.08);
+  color: #e2e8f0;
+  border-color: rgba(14,165,233,0.22);
+}
+/* Active Sheet - strong cyan lane to clearly separate from folder-selected state */
+.svc-sheet-item.active,
+.sheet-item.active,
+.sheet-item[data-selected="true"],
+.tree-sheet.active {
+  background: rgba(14,165,233,0.15) !important;
+  border-color: rgba(14,165,233,0.34) !important;
+  border-left: 3px solid #0ea5e9 !important;
+  color: #e2e8f0 !important;
+  font-weight: 600 !important;
 }
 .svc-sheet-item .icon { font-size: 15px; flex-shrink: 0; }
 .svc-sheet-item .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1667,15 +1676,17 @@ input.cell.cell-qb-not-found {
 }
 
 .svc-tv-node:hover {
-  background: var(--svc-panel-2);
-  color: var(--svc-text);
+  background: rgba(148,163,184,0.10);
+  color: #e2e8f0;
+  border-color: rgba(148,163,184,0.24);
 }
 
 .svc-tv-node.svc-tv-active {
-  background: linear-gradient(90deg, rgba(34,211,238,0.12), transparent);
-  color: var(--svc-accent);
-  border-color: rgba(34,211,238,0.18);
-  border-left: 2px solid var(--svc-accent);
+  background: rgba(99,102,241,0.16);
+  color: #e2e8f0;
+  border-color: rgba(99,102,241,0.36);
+  border-left: 3px solid #6366f1;
+  font-weight: 600;
 }
 
 /* ── Tree connector character ─────────────────────────────────────────────── */
@@ -1728,9 +1739,38 @@ input.cell.cell-qb-not-found {
 }
 
 .svc-tv-node.svc-tv-active .svc-tv-count {
-  background: rgba(34,211,238,0.12);
-  color: var(--svc-accent);
-  border-color: rgba(34,211,238,0.25);
+  background: rgba(99,102,241,0.28);
+  color: #eef2ff;
+  border-color: rgba(129,140,248,0.42);
+}
+
+.svc-sheet-item .svc-sheet-count,
+.svc-sheet-item .sheet-count {
+  background: rgba(148,163,184,0.14);
+  color: rgba(203,213,225,0.88);
+  border: 1px solid rgba(148,163,184,0.2);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-weight: 700;
+}
+
+.svc-sheet-item.active .svc-sheet-count,
+.svc-sheet-item.active .sheet-count,
+.sheet-item.active .sheet-count,
+.tree-sheet.active .count {
+  background: #0ea5e9 !important;
+  color: #ffffff !important;
+  border-color: #0ea5e9 !important;
+}
+
+/* Completed/check icon should not look like a selected state by itself */
+.svc-tv-node .svc-tv-icon {
+  opacity: 0.82;
+  filter: saturate(0.7);
+}
+.svc-tv-node.svc-tv-active .svc-tv-icon {
+  opacity: 1;
+  filter: saturate(1);
 }
 
 /* ── Context menu positioning override for treeview ──────────────────────── */
