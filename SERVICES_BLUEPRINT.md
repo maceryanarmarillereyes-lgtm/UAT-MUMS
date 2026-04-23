@@ -191,6 +191,22 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-23 (All-columns toolbar search behavior + filter-row row-number width fix):**
+  - **Edit — `public/js/services-grid.js`:** Updated filter-row corner (`th.row-num`) inline sizing to fixed `56px` width/min/max and pinned sticky-left alignment for row-number lane consistency during horizontal grid movement.
+  - **Edit — `public/js/services-grid.js`:** Added `initSearchAll` end-of-module controller for `#searchAllColumns` with debounced row text search, row show/hide + highlight, Escape clear flow, and sheet-switch reset observer.
+  - **Edit — `public/js/services-grid.js`:** Synced internal tree filter pointer into `window._treeFilter` inside `setTreeFilter()` so temporary search clear/restore can round-trip the prior tree-filter function.
+  - **Behavior contract update:** Services now supports a lightweight toolbar all-columns search layer over rendered rows while preserving existing tree-filter API and grid data contracts.
+
+- **2026-04-23 (Toolbar all-columns search input placeholder reintroduced):**
+  - **Edit — `public/services.html`:** Added toolbar input shell `#searchAllColumns` (inline-styled container + input) in `.svc-toolbar-actions` for all-columns search entry placement after clear-filters area.
+  - **Behavior contract update:** Services toolbar now exposes an additional search input control target (`#searchAllColumns`) without altering auth, realtime, or data write contracts.
+
+- **2026-04-23 (Services grid filter/search rollback to column-filter-only):**
+  - **Edit — `public/js/services-grid.js`:** Removed `searchAllFolders(query)` and deleted the Global Search Controller block (`initGlobalSearch`, result rendering, search input wiring, clear-filter toolbar button integration) from the Services grid module.
+  - **Edit — `public/js/services-grid.js`:** Removed public filter/search helpers `setColumnFilter`, `setGlobalSearch`, `clearAllFilters`, and `getFilterState` from module scope and from `window.servicesGrid` exports.
+  - **Edit — `public/js/services-grid.js`:** Kept `_columnFilters` state, kept the sticky filter-row creation in `render()`, and kept the render wrapper path that composes tree filter + column filters into `current.__treeFilteredRows`.
+  - **Behavior contract update:** Services grid filtering now runs as tree-filter + per-column filter only; global sheet-wide search UI/controller APIs are intentionally removed.
+
 - **2026-04-23 (Current-sheet all-folder global search panel):**
   - **Edit — `public/js/services-grid.js`:** Added `searchAllFolders(query)` that scans all rows in the active sheet (not only current tree-filter subset), annotates each hit with folder metadata, matched field/value, and preview text; exposed as `window.servicesGrid.searchAllFolders`.
   - **Edit — `public/js/services-grid.js`:** Added `initGlobalSearch()` controller for `#svcGlobalSearchInput` with debounced search, dropdown result rendering, matched-text highlighting, and click-to-jump row focus flow that clears tree filter before row reveal.

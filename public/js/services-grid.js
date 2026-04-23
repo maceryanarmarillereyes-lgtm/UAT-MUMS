@@ -31,7 +31,6 @@
   // key: column key string | null (no sort), dir: 'asc' | 'desc'
   var _sortState   = { key: null, dir: 'asc' };
   var _columnFilters = {}; // per-column filter values
-  var _globalSearch = ''; // global search query
   var isResizing  = false;
 
   function sanitizeHeaderLabel(label, fallbackIndex) {
@@ -652,8 +651,8 @@
 
     // Filter cell for row number
     var filterCorner = mkEl('th', { className: 'row-num' }, filterTr);
-    filterCorner.innerHTML = '<div style="text-align:center;color:#475569;font-size:9px;padding:2px;">▼</div>';
-    filterCorner.style.cssText = 'background:#0f172a;padding:2px;position:sticky;top:32px;z-index:4;';
+    filterCorner.innerHTML = '<div style="text-align:center;color:#475569;font-size:9px;">▼</div>';
+    filterCorner.style.cssText = 'background:#0f172a;padding:2px;width:56px;min-width:56px;max-width:56px;position:sticky;top:32px;z-index:4;left:0;';
 
     // Filter cells for each column
     cols.forEach(function (c) {
@@ -2244,11 +2243,13 @@
   // setTreeFilter(fn) — fn receives a row object {row_index, data}, returns bool.
   // Pass null to remove filter (show all rows).
   var _treeFilter = null;
+  window._treeFilter = null;
   // FIX: Flag that render() checks to skip autoResizeColumns + refreshCounts
   // during folder switches. These are the two main sources of folder-switch lag.
   var _renderIsFilterSwitch = false;
   function setTreeFilter(fn) {
     _treeFilter = fn || null;
+    window._treeFilter = _treeFilter;
     _renderIsFilterSwitch = true;
     try {
       render();
@@ -2267,12 +2268,11 @@
       return;
     }
 
-    // Compose all filters: tree + column + global
+    // Compose all filters: tree + column
     var hasTreeFilter = !!_treeFilter;
     var hasColumnFilters = Object.keys(_columnFilters).length > 0;
-    var hasGlobalSearch = !!_globalSearch;
 
-    if (!hasTreeFilter && !hasColumnFilters && !hasGlobalSearch) {
+    if (!hasTreeFilter && !hasColumnFilters) {
       delete current.__treeFilteredRows;
       _origRender();
       return;
@@ -2291,13 +2291,6 @@
           if (cellVal.indexOf(filterVal) === -1) return false;
         }
       }
-
-      // 3. Global search (NEW)
-      if (hasGlobalSearch) {
-        var rowText = JSON.stringify(row.data || {}).toLowerCase();
-        if (rowText.indexOf(_globalSearch) === -1) return false;
-      }
-
       return true;
     });
 
@@ -2315,193 +2308,6 @@
 
   function getState() { return current; }
 
-  // ===== PUBLIC API FOR FILTERS =====
-  function setColumnFilter(key, value) {
-    if (value) {
-      _columnFilters[key] = String(value).toLowerCase();
-    } else {
-      delete _columnFilters[key];
-    }
-    _renderIsFilterSwitch = true;
-    try { render(); } finally { _renderIsFilterSwitch = false; }
-  }
-
-  function setGlobalSearch(query) {
-    _globalSearch = String(query || '').toLowerCase().trim();
-    _renderIsFilterSwitch = true;
-    try { render(); } finally { _renderIsFilterSwitch = false; }
-  }
-
-  function clearAllFilters() {
-    _columnFilters = {};
-    _globalSearch = '';
-    _renderIsFilterSwitch = true;
-    try { render(); } finally { _renderIsFilterSwitch = false; }
-  }
-
-  function getFilterState() {
-    return {
-      columns: Object.assign({}, _columnFilters),
-      global: _globalSearch,
-      hasFilters: Object.keys(_columnFilters).length > 0 || !!_globalSearch
-    };
-  }
-
-  // ===== SEARCH ALL FOLDERS IN CURRENT SHEET =====
-  async function searchAllFolders(query) {
-    if (!current || !query || query.length < 2) return [];
-
-    var searchTerm = String(query).toLowerCase();
-    var results = [];
-    var allRows = current.rows || [];
-
-    console.log('[Search All] Searching', allRows.length, 'rows in', current.sheet && current.sheet.title);
-
-    var getFolderForRow = function (row) {
-      var status = String(row && row.data && row.data.status || '').toLowerCase();
-      var tracking = String(row && row.data && row.data['tracking case progress'] || row && row.data && row.data.tracking_case_progress || '').toLowerCase();
-      if (status.indexOf('completed') !== -1 || tracking.indexOf('completed') !== -1 || status === '5 - completed') {
-        return { id: 'completed', name: 'COMPLETED', icon: '✓' };
-      }
-      return { id: 'all', name: 'All Records', icon: '📄' };
-    };
-
-    for (var i = 0; i < allRows.length; i++) {
-      var row = allRows[i];
-      var rowText = JSON.stringify(row && row.data || {}).toLowerCase();
-      if (rowText.indexOf(searchTerm) === -1) continue;
-
-      var matchedField = '';
-      var matchedValue = '';
-      var data = (row && row.data) || {};
-      for (var key in data) {
-        var valStr = String(data[key] == null ? '' : data[key]);
-        if (valStr.toLowerCase().indexOf(searchTerm) !== -1) {
-          var colDef = (current.sheet.column_defs || []).find(function (c) { return c && c.key === key; });
-          matchedField = (colDef && colDef.label) || key;
-          matchedValue = valStr;
-          break;
-        }
-      }
-
-      var folder = getFolderForRow(row);
-      results.push({
-        sheetId: current.sheet.id,
-        sheetName: current.sheet.title,
-        rowIndex: row.row_index,
-        rowId: row.id,
-        folder: folder,
-        matchedField: matchedField,
-        matchedValue: matchedValue.substring(0, 60),
-        preview: [
-          data.case_number || data['case#'] || '',
-          data.site || '',
-          data.status || ''
-        ].filter(Boolean).join(' • ').substring(0, 80)
-      });
-
-      if (results.length >= 30) break;
-    }
-
-    return results;
-  }
-
-  function initGlobalSearch() {
-    var input = document.getElementById('svcGlobalSearchInput');
-    var resultsDiv = document.getElementById('svcGlobalSearchResults');
-    if (!input || !resultsDiv || input.dataset.searchBound === '1') return;
-    input.dataset.searchBound = '1';
-
-    var highlight = function (txt, query) {
-      var raw = String(txt || '');
-      var q = String(query || '');
-      if (!q) return raw;
-      var safe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return raw.replace(new RegExp('(' + safe + ')', 'ig'), '<mark style="background:rgba(14,165,233,.25);color:#e2e8f0;padding:0 2px;border-radius:2px;">$1</mark>');
-    };
-
-    var displayResults = function (results, query) {
-      if (!results || !results.length) {
-        resultsDiv.innerHTML = '<div style="padding:12px;color:#64748b;font-size:12px;">No matching rows found.</div>';
-        resultsDiv.style.display = query && query.length >= 2 ? 'block' : 'none';
-        return;
-      }
-
-      var html = '\n      <div style="padding:8px 12px;border-bottom:1px solid #1e293b;font-size:11px;color:#64748b;display:flex;justify-content:space-between;align-items:center;">\n        <span style="text-transform:uppercase;font-weight:600;letter-spacing:0.5px;">' + results.length + ' results in ' + (current && current.sheet ? current.sheet.title : 'sheet') + '</span>\n        <span style="text-transform:none;font-weight:400;opacity:0.7;">All folders</span>\n      </div>\n      ' + results.map(function (r) {
-        return '\n        <div class="global-result" data-sheet="' + r.sheetId + '" data-row="' + r.rowIndex + '" data-folder="' + (r.folder && r.folder.id || 'all') + '"\n             style="padding:10px 12px;border-bottom:1px solid #1e293b;cursor:pointer;transition:background 0.1s;">\n          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:5px;">\n            <div style="display:flex;align-items:center;gap:6px;">\n              <span style="font-size:11px;">' + (r.folder && r.folder.icon || '📄') + '</span>\n              <span style="font-size:11px;color:#0ea5e9;font-weight:500;">' + (r.folder && r.folder.name || 'All Records') + '</span>\n            </div>\n            <div style="font-size:10px;color:#475569;background:#1e293b;padding:1px 5px;border-radius:3px;">Row ' + (Number(r.rowIndex) + 1) + '</div>\n          </div>\n          <div style="font-size:11px;color:#94a3b8;margin-bottom:3px;">\n            <span style="color:#64748b;">' + (r.matchedField || 'Field') + ':</span> \n            <span style="color:#e2e8f0;">' + highlight(r.matchedValue, query) + '</span>\n          </div>\n          <div style="font-size:10px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (r.preview || '') + '</div>\n        </div>\n      ';
-      }).join('') + '\n    ';
-
-      resultsDiv.innerHTML = html;
-      resultsDiv.style.display = 'block';
-
-      resultsDiv.querySelectorAll('.global-result').forEach(function (el) {
-        el.addEventListener('click', function () {
-          var rowIndex = parseInt(el.dataset.row, 10);
-
-          if (window.servicesGrid.setTreeFilter) {
-            window.servicesGrid.setTreeFilter(null);
-          }
-
-          setTimeout(function () {
-            var allRecordsBtn = document.querySelector('[data-folder="all"]');
-            if (allRecordsBtn) allRecordsBtn.click();
-          }, 100);
-
-          setTimeout(function () {
-            var row = document.querySelector('#svcGrid tbody tr[data-row="' + rowIndex + '"]');
-            if (row) {
-              row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              row.style.background = 'rgba(14,165,233,0.25)';
-              row.style.boxShadow = 'inset 3px 0 0 #0ea5e9';
-              setTimeout(function () {
-                row.style.background = '';
-                row.style.boxShadow = '';
-              }, 3000);
-              row.querySelectorAll('td').forEach(function (td) {
-                if (String(td.textContent || '').toLowerCase().indexOf(String(query).toLowerCase()) !== -1) {
-                  td.style.background = 'rgba(251,191,36,0.2)';
-                  setTimeout(function () { td.style.background = ''; }, 3000);
-                }
-              });
-            }
-          }, 600);
-
-          resultsDiv.style.display = 'none';
-          input.value = '';
-        });
-      });
-    };
-
-    var searchTimeout;
-    input.addEventListener('input', function () {
-      var query = String(input.value || '').trim();
-      clearTimeout(searchTimeout);
-      if (!query || query.length < 2) {
-        resultsDiv.style.display = 'none';
-        return;
-      }
-      searchTimeout = setTimeout(async function () {
-        window.servicesGrid.setGlobalSearch(query);
-        var results = await window.servicesGrid.searchAllFolders(query);
-        displayResults(results, query);
-      }, 300);
-    });
-
-    input.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') {
-        input.value = '';
-        window.servicesGrid.setGlobalSearch('');
-        resultsDiv.style.display = 'none';
-      }
-    });
-
-    document.addEventListener('click', function (e) {
-      if (!resultsDiv.contains(e.target) && e.target !== input) {
-        resultsDiv.style.display = 'none';
-      }
-    });
-  }
-
   window.servicesGrid = {
     load: load,
     clear: clear,
@@ -2510,35 +2316,105 @@
     saveAllRows: saveAllRows,
     setTreeFilter: setTreeFilter,
     saveColumnState: saveColumnState,
-    toggleColumnVisibility: toggleColumnVisibility,
-    setColumnFilter: setColumnFilter,
-    setGlobalSearch: setGlobalSearch,
-    searchAllFolders: searchAllFolders,
-    clearAllFilters: clearAllFilters,
-    getFilterState: getFilterState
+    toggleColumnVisibility: toggleColumnVisibility
   };
 
-  // Connect global search input to all-folders search
-  setTimeout(initGlobalSearch, 600);
+  // ===== Simple Search All Columns =====
+  (function initSearchAll() {
+    var input = document.getElementById('searchAllColumns');
+    if (!input) return;
 
-  // Add clear filters button
-  setTimeout(function () {
-    var toolbar = document.querySelector('.svc-toolbar-actions');
-    if (toolbar && !document.getElementById('btnClearFilters')) {
-      var btn = document.createElement('button');
-      btn.id = 'btnClearFilters';
-      btn.className = 'svc-btn';
-      btn.innerHTML = '✕ Clear Filters';
-      btn.title = 'Clear all column filters and search';
-      btn.style.cssText = 'margin-left:8px;background:#1e293b;border:1px solid #334155;';
-      btn.onclick = function () {
-        window.servicesGrid.clearAllFilters();
-        var searchInput = document.getElementById('svcGlobalSearchInput');
-        if (searchInput) searchInput.value = '';
-        var resultsDiv = document.getElementById('svcGlobalSearchResults');
-        if (resultsDiv) resultsDiv.style.display = 'none';
-      };
-      toolbar.appendChild(btn);
+    var originalTreeFilter = null;
+    var searchActive = false;
+    var timer;
+
+    function doSearch() {
+      var query = input.value.toLowerCase().trim();
+      var tbody = document.querySelector('#svcGrid tbody');
+      if (!tbody) return;
+
+      var rows = Array.from(tbody.querySelectorAll('tr'));
+
+      // If starting search, save current tree filter and clear it
+      if (query && !searchActive) {
+        searchActive = true;
+        // Store current filter state
+        originalTreeFilter = window._treeFilter || null;
+        // Clear to show all rows
+        if (window.servicesGrid && window.servicesGrid.setTreeFilter) {
+          window.servicesGrid.setTreeFilter(null);
+        }
+        // Wait for render, then apply search
+        setTimeout(function () { applySearchFilter(query); }, 100);
+        return;
+      }
+
+      // If clearing search, restore tree filter
+      if (!query && searchActive) {
+        searchActive = false;
+        // Clear visual filters first
+        rows.forEach(function (r) {
+          r.style.display = '';
+          r.style.background = '';
+        });
+        // Restore tree filter
+        if (window.servicesGrid && window.servicesGrid.setTreeFilter) {
+          window.servicesGrid.setTreeFilter(originalTreeFilter);
+        }
+        input.placeholder = '🔍 Search all...';
+        return;
+      }
+
+      // Apply search filter
+      if (query) {
+        applySearchFilter(query);
+      }
     }
-  }, 1500);
+
+    function applySearchFilter(query) {
+      var tbody = document.querySelector('#svcGrid tbody');
+      if (!tbody) return;
+
+      var rows = Array.from(tbody.querySelectorAll('tr'));
+      var matches = 0;
+
+      rows.forEach(function (row) {
+        var text = row.textContent.toLowerCase();
+        var isMatch = text.indexOf(query) !== -1;
+
+        row.style.display = isMatch ? '' : 'none';
+        if (isMatch) {
+          row.style.background = 'rgba(14,165,233,0.06)';
+          matches++;
+        } else {
+          row.style.background = '';
+        }
+      });
+
+      input.placeholder = matches > 0 ? ('Found ' + matches + ' • 🔍 Search all...') : 'No matches • 🔍 Search all...';
+    }
+
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(doSearch, 250);
+    });
+
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        this.value = '';
+        doSearch();
+        this.blur();
+      }
+    });
+
+    // Clear search when switching sheets
+    var observer = new MutationObserver(function () {
+      if (input.value && !document.querySelector('#svcGrid tbody tr')) {
+        input.value = '';
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    console.log('[Search] Initialized');
+  })();
 })();
