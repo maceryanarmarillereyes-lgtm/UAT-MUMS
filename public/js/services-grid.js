@@ -2462,3 +2462,174 @@ document.addEventListener('DOMContentLoaded', () => {
     input.title = 'Search all columns in this sheet only (⌘K)';
   }
 });
+
+// ===== SEARCH FOR CURRENT TABLE (NO TABULATOR NEEDED) =====
+(function() {
+  // Wait for grid to load
+  const initSearch = () => {
+    const toolbar = document.querySelector('.svc-toolbar-actions');
+    if (!toolbar || document.getElementById('svcGlobalSearch')) return;
+
+    // Add search box
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'global-search-wrapper';
+    searchWrap.innerHTML = `
+      <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#64748b;pointer-events:none;z-index:2">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input id="svcGlobalSearch" type="text" placeholder="Search this sheet..." style="width:280px;height:32px;padding:0 36px 0 32px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#e2e8f0;font-size:13px;" />
+      <kbd style="position:absolute;right:8px;top:50%;transform:translateY(-50%);padding:2px 5px;background:#1e293b;border:1px solid #334155;border-radius:4px;font-size:10px;color:#94a3b8;">⌘K</kbd>
+      <div id="svcSearchDropdown" style="position:absolute;top:calc(100% + 6px);left:0;width:420px;max-height:380px;background:#0f172a;border:1px solid #334155;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,0.5);overflow-y:auto;display:none;z-index:1000;"></div>
+    `;
+    searchWrap.style.position = 'relative';
+    searchWrap.style.display = 'flex';
+    searchWrap.style.alignItems = 'center';
+
+    toolbar.insertBefore(searchWrap, toolbar.firstChild);
+
+    const input = document.getElementById('svcGlobalSearch');
+    const dropdown = document.getElementById('svcSearchDropdown');
+    let searchTimeout;
+
+    // Search function
+    const doSearch = (query) => {
+      const q = query.toLowerCase();
+      const table = document.getElementById('svcGrid');
+      if (!table) return;
+
+      const rows = Array.from(table.querySelectorAll('tbody tr'));
+      const results = [];
+      let matchCount = 0;
+
+      // Clear previous highlights
+      rows.forEach(row => {
+        row.style.background = '';
+        row.querySelectorAll('td').forEach(td => {
+          td.innerHTML = td.textContent; // Remove marks
+          td.style.background = '';
+        });
+      });
+
+      if (!q || q.length < 2) {
+        dropdown.style.display = 'none';
+        return;
+      }
+
+      // Search all rows
+      rows.forEach((row, idx) => {
+        const cells = Array.from(row.querySelectorAll('td'));
+        const rowText = cells.map(c => c.textContent).join(' ').toLowerCase();
+
+        if (rowText.includes(q)) {
+          matchCount++;
+
+          // Highlight matching cells
+          cells.forEach(td => {
+            const text = td.textContent;
+            if (text.toLowerCase().includes(q)) {
+              const regex = new RegExp(`(${query})`, 'gi');
+              td.innerHTML = text.replace(regex, '<mark style="background:rgba(251,191,36,0.3);color:#fde047;padding:1px 2px;border-radius:2px;">$1</mark>');
+              td.style.background = 'rgba(59,130,246,0.1)';
+            }
+          });
+
+          row.style.background = 'rgba(59,130,246,0.05)';
+
+          // Add to results (max 10)
+          if (results.length < 10) {
+            const caseNum = cells[1]?.textContent || '';
+            const site = cells[2]?.textContent || '';
+            results.push({ idx, caseNum, site, row });
+          }
+        }
+      });
+
+      // Show dropdown
+      if (results.length > 0) {
+        dropdown.innerHTML = `
+          <div style="padding:10px 14px;border-bottom:1px solid #1e293b;font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;">
+            ${matchCount} matches
+          </div>
+          ${results.map(r => `
+            <div class="search-result" data-idx="${r.idx}" style="padding:10px 14px;border-bottom:1px solid #1e293b;cursor:pointer;display:flex;gap:10px;align-items:center;">
+              <div style="font-size:11px;color:#3b82f6;background:rgba(59,130,246,0.15);padding:2px 6px;border-radius:4px;min-width:40px;text-align:center;">${r.idx + 1}</div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.caseNum}</div>
+                <div style="font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.site.substring(0, 60)}</div>
+              </div>
+            </div>
+          `).join('')}
+        `;
+        dropdown.style.display = 'block';
+
+        // Click handlers
+        dropdown.querySelectorAll('.search-result').forEach(el => {
+          el.onclick = () => {
+            const idx = parseInt(el.dataset.idx);
+            const targetRow = rows[idx];
+            if (targetRow) {
+              targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              targetRow.style.background = 'rgba(59,130,246,0.25)';
+              targetRow.style.boxShadow = 'inset 3px 0 0 #3b82f6';
+              setTimeout(() => {
+                targetRow.style.background = 'rgba(59,130,246,0.05)';
+                targetRow.style.boxShadow = '';
+              }, 2000);
+            }
+            dropdown.style.display = 'none';
+            input.value = '';
+          };
+          el.onmouseenter = () => el.style.background = '#1e293b';
+          el.onmouseleave = () => el.style.background = '';
+        });
+      } else {
+        dropdown.innerHTML = `<div style="padding:20px;text-align:center;color:#64748b;font-size:13px;">No matches</div>`;
+        dropdown.style.display = 'block';
+      }
+    };
+
+    input.addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => doSearch(e.target.value), 150);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        input.value = '';
+        doSearch('');
+        dropdown.style.display = 'none';
+      }
+    });
+
+    // ⌘K shortcut
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        input.focus();
+        input.select();
+      }
+    });
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.global-search-wrapper')) {
+        dropdown.style.display = 'none';
+      }
+    });
+
+    console.log('[Search] Initialized for current sheet');
+  };
+
+  // Try init now and on load
+  if (document.readyState === 'complete') {
+    setTimeout(initSearch, 1000);
+  } else {
+    window.addEventListener('load', () => setTimeout(initSearch, 1000));
+  }
+
+  // Re-init on sheet change
+  const observer = new MutationObserver(() => {
+    setTimeout(initSearch, 500);
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+})();

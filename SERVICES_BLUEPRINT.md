@@ -191,6 +191,10 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-23 (DOM-native current-table search injector append):**
+  - **Edit — `public/js/services-grid.js`:** Appended a DOM-driven `initSearch()` IIFE at file end that injects a toolbar search control (`#svcGlobalSearch`) and dropdown (`#svcSearchDropdown`) without Tabulator dependency, scans `#svcGrid tbody tr` for matches, highlights matching cells with inline `<mark>`, and supports click-to-scroll result navigation.
+  - **Behavior contract update:** Search can be initialized/re-initialized via load + `MutationObserver` for current rendered table rows, with `Ctrl/Cmd+K` focus shortcut and Escape/outside-click dismissal.
+
 
 - **2026-04-23 (Current-sheet global search scope update):**
   - **Edit — `public/js/services-grid.js`:** Added `ServicesSheetSearch` class and bootstrap hooks to drive search strictly from `window.__tabulatorInstance.getData()` (current sheet only), with dropdown results, match highlighting, `Ctrl/Cmd+K` focus shortcut, and Escape clear behavior.
