@@ -48,9 +48,11 @@
   }
   var ROW_NUM_COL_WIDTH_PX = '38px'; // default; updated per-render
 
-  // PERMANENT FIX: Inject a <style> tag so the row-num column width is enforced
-  // at CSS cascade level — immune to table-layout:fixed space distribution
-  // and immune to inline style specificity fights.
+  // PERMANENT FIX v2: Inject a <style> that targets th.row-num + td.row-num only.
+  // We do NOT target col[data-key="__rownum__"] via CSS — table-layout:fixed
+  // distributes min-width:100% extra space via <col> CSS width, causing bloat.
+  // Instead we set the HTML `width` attribute on <col> directly (most reliable
+  // for table-layout:fixed per HTML spec) and clamp th/td via injected CSS.
   var _rowNumStyleEl = null;
   function applyRowNumStyleSheet(w) {
     if (!_rowNumStyleEl) {
@@ -58,23 +60,33 @@
       _rowNumStyleEl.id = 'svc-rownum-w';
       document.head.appendChild(_rowNumStyleEl);
     }
+    // Only clamp th and td — NOT col (col is set via HTML attribute in lockRowNumWidth)
     _rowNumStyleEl.textContent =
-      '#svcGrid col[data-key="__rownum__"],' +
-      ' #svcGrid th.row-num,' +
+      '#svcGrid th.row-num,' +
       ' #svcGrid td.row-num {' +
       '  width: ' + w + ' !important;' +
       '  min-width: ' + w + ' !important;' +
       '  max-width: ' + w + ' !important;' +
-      '  flex: none !important;' +
+      '  overflow: hidden !important;' +
       '}';
   }
 
   function lockRowNumWidth(el) {
     if (!el || !el.style) return;
     var w = ROW_NUM_COL_WIDTH_PX;
+    var wNum = parseInt(w, 10);
+    // For <col> elements: use the HTML width attribute — this is what
+    // table-layout:fixed actually reads per the HTML spec, immune to CSS cascade fights
+    if (el.tagName && el.tagName.toLowerCase() === 'col') {
+      el.setAttribute('width', String(wNum));
+      el.style.width = w;
+      return;
+    }
+    // For <th> and <td>: use inline !important styles (backed up by injected stylesheet)
     el.style.setProperty('width',     w, 'important');
     el.style.setProperty('min-width', w, 'important');
     el.style.setProperty('max-width', w, 'important');
+    el.style.setProperty('overflow',  'hidden', 'important');
     el.style.setProperty('box-sizing', 'border-box', 'important');
   }
 
