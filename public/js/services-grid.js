@@ -33,14 +33,14 @@
   var _columnFilters = {}; // per-column filter values
   var _searchAllQuery = ''; // toolbar all-columns query
   var isResizing  = false;
-  function computeRowNumWidth() {
-    var totalRows = current && current.rows ? current.rows.length : 0;
-    var digitCount = String(totalRows || 1).length;
-    // 1ch per digit + 16px padding (8px each side)
-    // Using px calc: each digit ~8px in JetBrains Mono 13px + 16px pad
-    return (digitCount * 8) + 20;
+  function computeRowNumWidth(totalRows) {
+    var digits = String(Math.max(totalRows || 1, 1)).length;
+    var px = digits * 9 + 22; // base padding
+    if (px < 36) px = 36;
+    if (px > 72) px = 72;
+    return px + 'px';
   }
-  var ROW_NUM_COL_WIDTH_PX = '38px'; // default; updated per-render
+  var ROW_NUM_COL_WIDTH_PX = '36px'; // default; updated per-render
 
   // PERMANENT FIX v2: Inject a <style> that targets th.row-num + td.row-num only.
   // We do NOT target col[data-key="__rownum__"] via CSS — table-layout:fixed
@@ -65,9 +65,9 @@
       '}';
   }
 
-  function lockRowNumWidth() {
-    var w = computeRowNumWidth() + 'px';
-    ROW_NUM_COL_WIDTH_PX = w;
+  function lockRowNumWidth(th) {
+    if (th) { th.style.width = ROW_NUM_COL_WIDTH_PX; th.style.minWidth = ROW_NUM_COL_WIDTH_PX; th.style.maxWidth = ROW_NUM_COL_WIDTH_PX; }
+    var w = ROW_NUM_COL_WIDTH_PX;
     // Set CSS variable on the grid table — the CSS rule uses var(--row-num-w)
     if (grid) {
       grid.style.setProperty('--row-num-w', w);
@@ -569,6 +569,13 @@
         return _sd === 'desc' ? -cmp : cmp;
       });
     }
+
+    var totalRowsForWidth = (typeof isFilteredView !== 'undefined' && (isFilteredView || isSorted))
+      ? Math.max(viewRows.length, 1)
+      : Math.max((current && current.rows ? current.rows.length : 0) + 2, 10);
+
+    ROW_NUM_COL_WIDTH_PX = computeRowNumWidth(totalRowsForWidth);
+    document.documentElement.style.setProperty('--row-num-w', ROW_NUM_COL_WIDTH_PX);
 
     var totalRows = (isFilteredView || isSorted)
       ? Math.max(viewRows.length, 1)
@@ -1778,6 +1785,7 @@
     ctx.font = '13px Inter, system-ui, -apple-system';
 
     current.sheet.column_defs.forEach(function (col) {
+      if (col.getAttribute && col.getAttribute('data-key') === '__rownum__') return;
       if (col.hidden) return;
 
       var saved = Number(current.sheet.column_widths && current.sheet.column_widths[col.key]);
