@@ -577,7 +577,10 @@
     var colgroup = mkEl('colgroup');
     var rowNumCol = document.createElement('col');
     rowNumCol.setAttribute('data-key', '__rownum__');
-    lockRowNumWidth(rowNumCol);
+    rowNumCol.style.width = ROW_NUM_COL_WIDTH_PX;
+    rowNumCol.style.minWidth = ROW_NUM_COL_WIDTH_PX;
+    rowNumCol.style.maxWidth = ROW_NUM_COL_WIDTH_PX;
+    rowNumCol.setAttribute('width', String(parseInt(ROW_NUM_COL_WIDTH_PX, 10)));
     colgroup.appendChild(rowNumCol);
     cols.forEach(function (c) {
       var col = document.createElement('col');
