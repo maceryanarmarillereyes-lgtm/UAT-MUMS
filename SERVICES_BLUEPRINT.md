@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-23 (Services grid column filters + global search composition):**
+  - **Edit — `public/js/services-grid.js`:** Added grid-local filter state (`_columnFilters`, `_globalSearch`) and upgraded the render wrapper so tree filters, per-column filters, and global search compose together into `current.__treeFilteredRows` without mutating source rows.
+  - **Edit — `public/js/services-grid.js`:** Added sticky Excel-style filter row under headers with per-column inputs, active-filter indicators, public filter API (`setColumnFilter`, `setGlobalSearch`, `clearAllFilters`, `getFilterState`), search-input wiring, and toolbar clear-filters button.
+  - **Edit — `public/css/services.css`:** Added scoped filter-row/input visuals and active-filter dot indicator styles.
+  - **Behavior contract update:** Services grid filtering is now multi-layer (tree + column + global) with clear/reset controls while preserving existing render/state contracts.
+
 - **2026-04-22 (Services case detail QuickBase action links):**
   - **Edit — `public/services.html`:** Extended Services case-detail modal hero with inline QuickBase **Edit/View** action buttons and added footer QuickBase ID indicator (`#svcQbcdRid`) with refreshed action button layout.
   - **Edit — `public/js/services-grid.js`:** `_openSvcCaseDetailModal(rowIndex)` now resolves QuickBase `rid` (prefers `Record ID#`, falls back to `CASE#`), populates Edit/View URLs (`/action/er` and `/action/dr`), and keeps copy-button feedback compatible with icon+label markup.
