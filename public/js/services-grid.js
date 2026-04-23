@@ -33,18 +33,12 @@
   var _columnFilters = {}; // per-column filter values
   var _searchAllQuery = ''; // toolbar all-columns query
   var isResizing  = false;
-  // FIX: Row-num width is now computed from the actual max row count
-  // so the column is always snug — no wasted space for 3-digit indices.
-  //   ≤99  rows  → 32px   (2 digits)
-  //   ≤999 rows  → 36px   (3 digits)
-  //   ≤9999 rows → 42px   (4 digits)
   function computeRowNumWidth() {
     var totalRows = current && current.rows ? current.rows.length : 0;
-    // Generous per digit tier so numbers fit comfortably in JetBrains Mono
-    if (totalRows > 9999) return 52;
-    if (totalRows > 999)  return 42;
-    if (totalRows > 99)   return 38;
-    return 34;
+    var digitCount = String(totalRows || 1).length;
+    // 1ch per digit + 16px padding (8px each side)
+    // Using px calc: each digit ~8px in JetBrains Mono 13px + 16px pad
+    return (digitCount * 8) + 20;
   }
   var ROW_NUM_COL_WIDTH_PX = '38px'; // default; updated per-render
 
@@ -71,23 +65,13 @@
       '}';
   }
 
-  function lockRowNumWidth(el) {
-    if (!el || !el.style) return;
-    var w = ROW_NUM_COL_WIDTH_PX;
-    var wNum = parseInt(w, 10);
-    // For <col> elements: use the HTML width attribute — this is what
-    // table-layout:fixed actually reads per the HTML spec, immune to CSS cascade fights
-    if (el.tagName && el.tagName.toLowerCase() === 'col') {
-      el.setAttribute('width', String(wNum));
-      el.style.width = w;
-      return;
+  function lockRowNumWidth() {
+    var w = computeRowNumWidth() + 'px';
+    ROW_NUM_COL_WIDTH_PX = w;
+    // Set CSS variable on the grid table — the CSS rule uses var(--row-num-w)
+    if (grid) {
+      grid.style.setProperty('--row-num-w', w);
     }
-    // For <th> and <td>: use inline !important styles (backed up by injected stylesheet)
-    el.style.setProperty('width',     w, 'important');
-    el.style.setProperty('min-width', w, 'important');
-    el.style.setProperty('max-width', w, 'important');
-    el.style.setProperty('overflow',  'hidden', 'important');
-    el.style.setProperty('box-sizing', 'border-box', 'important');
   }
 
   function sanitizeHeaderLabel(label, fallbackIndex) {
@@ -563,11 +547,7 @@
       return;
     }
     if (!current) { clear(); return; }
-    // PERMANENT FIX: Recompute row-num width and inject via stylesheet
-    // so it wins over table-layout:fixed space distribution (min-width:100% side effect)
-    var _rnwPx = computeRowNumWidth();
-    ROW_NUM_COL_WIDTH_PX = _rnwPx + 'px';
-    applyRowNumStyleSheet(ROW_NUM_COL_WIDTH_PX);
+    lockRowNumWidth();
     empty.style.display = 'none';
     grid.hidden = false;
     var cols      = (current.sheet.column_defs || []).filter(function (c) { return !c.hidden; });

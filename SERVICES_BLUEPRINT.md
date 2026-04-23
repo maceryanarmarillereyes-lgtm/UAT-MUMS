@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-23 (Dynamic row-number width via CSS variable):**
+  - **Edit — `public/css/services.css`:** Replaced row-number lane block to enforce `width/min-width/max-width` from `--row-num-w` with `!important`, overriding generic header `min-width: 60px` without affecting non-row-number columns.
+  - **Edit — `public/js/services-grid.js`:** Replaced `computeRowNumWidth()` with digit-count formula (`digitCount * 8 + 20`) and changed `lockRowNumWidth()` to set `--row-num-w` on `#svcGrid` instead of applying per-cell inline width locks.
+  - **Edit — `public/js/services-grid.js`:** `render()` now calls `lockRowNumWidth()` at start so width is recalculated before building header/body rows.
+  - **Behavior contract update:** Row-number (`#`) lane now auto-fits by row-count digit length (single/double/triple/quad digits) while preserving sticky alignment, row click actions, auth flow, realtime topics/channels, and existing data contracts.
+
 - **2026-04-23 (Services row-number lane width tightened to fit content):**
   - **Edit — `public/js/services-grid.js`:** Added shared `ROW_NUM_COL_WIDTH_PX` constant (`46px`) plus `lockRowNumWidth(el)` helper that enforces `width/min/max-width` with inline `!important` on row-number `col`, `th`, and `td` nodes during render and `_applyColumnWidths()` pass.
   - **Edit — `public/css/services.css`:** Updated sticky row-number header/body lane width and `.row-header` width from `56px` to `46px` so the first column stays fit-to-number and no longer appears oversized.
