@@ -3772,3 +3772,34 @@ input.cell.cell-qb-not-found {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(14,165,233,0.3);
 }
+
+.filter-row th {
+  border-top: 1px solid #1e293b !important;
+}
+
+.col-filter-input:focus {
+  border-color: #0ea5e9 !important;
+  box-shadow: 0 0 0 2px rgba(14,165,233,0.2) !important;
+  background: #020617 !important;
+}
+
+.col-filter-input::placeholder {
+  color: #475569;
+  font-style: italic;
+}
+
+/* Show filter active indicator */
+th[data-key].has-filter {
+  position: relative;
+}
+
+th[data-key].has-filter::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 5px;
+  height: 5px;
+  background: #0ea5e9;
+  border-radius: 50%;
+}

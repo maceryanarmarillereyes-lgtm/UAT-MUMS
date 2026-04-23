@@ -30,6 +30,8 @@
   // ── Sort State ──────────────────────────────────────────────────────────────
   // key: column key string | null (no sort), dir: 'asc' | 'desc'
   var _sortState   = { key: null, dir: 'asc' };
+  var _columnFilters = {}; // per-column filter values
+  var _globalSearch = ''; // global search query
   var isResizing  = false;
 
   function sanitizeHeaderLabel(label, fallbackIndex) {
@@ -642,6 +644,71 @@
         badge.title       = '🔗 Linked: ' + c.qbLookup.fieldLabel;
         th.appendChild(badge);
       }
+    });
+
+    // ===== ADD FILTER ROW (Excel-style) =====
+    var filterTr = mkEl('tr', { className: 'filter-row' }, thead);
+    filterTr.style.cssText = 'background:#0f172a;border-bottom:1px solid #1e293b;';
+
+    // Filter cell for row number
+    var filterCorner = mkEl('th', { className: 'row-num' }, filterTr);
+    filterCorner.innerHTML = '<div style="text-align:center;color:#475569;font-size:9px;padding:2px;">▼</div>';
+    filterCorner.style.cssText = 'background:#0f172a;padding:2px;position:sticky;top:32px;z-index:4;';
+
+    // Filter cells for each column
+    cols.forEach(function (c) {
+      var filterTh = mkEl('th', null, filterTr);
+      filterTh.dataset.key = c.key;
+      if (_columnFilters[c.key]) filterTh.classList.add('has-filter');
+      filterTh.style.cssText = 'padding:2px 3px;background:#0f172a;position:sticky;top:32px;z-index:4;';
+
+      if (!c.hidden) {
+        var filterInput = document.createElement('input');
+        filterInput.type = 'text';
+        filterInput.placeholder = 'Filter...';
+        filterInput.className = 'col-filter-input';
+        filterInput.dataset.columnKey = c.key;
+        filterInput.value = _columnFilters[c.key] || '';
+
+        filterInput.style.cssText = 'width:100%;height:20px;padding:0 4px;background:#020617;border:1px solid #334155;border-radius:3px;color:#cbd5e1;font-size:11px;outline:none;';
+
+        // Prevent render loop - use filter switch flag
+        filterInput.addEventListener('input', function (e) {
+          e.stopPropagation();
+          var key = this.dataset.columnKey;
+          var val = this.value.trim().toLowerCase();
+
+          if (val) {
+            _columnFilters[key] = val;
+          } else {
+            delete _columnFilters[key];
+          }
+
+          // Trigger filtered render (uses _renderIsFilterSwitch)
+          _renderIsFilterSwitch = true;
+          try {
+            render();
+          } finally {
+            _renderIsFilterSwitch = false;
+          }
+
+          // Restore focus after render
+          setTimeout(function () {
+            var newInput = document.querySelector('.col-filter-input[data-column-key="' + key + '"]');
+            if (newInput) {
+              newInput.focus();
+              newInput.setSelectionRange(newInput.value.length, newInput.value.length);
+            }
+          }, 0);
+        });
+
+        filterInput.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+        filterInput.addEventListener('click', function (e) { e.stopPropagation(); });
+
+        filterTh.appendChild(filterInput);
+      }
+
+      if (c.hidden) filterTh.style.display = 'none';
     });
 
     var tbody = mkEl('tbody');
@@ -2195,12 +2262,45 @@
   // swapping filters does NOT lose data.
   var _origRender = render;
   render = function renderFiltered() {
-    if (!current || !_treeFilter) {
-      if (current) delete current.__treeFilteredRows;
+    if (!current) {
       _origRender();
       return;
     }
-    current.__treeFilteredRows = (current.rows || []).filter(_treeFilter);
+
+    // Compose all filters: tree + column + global
+    var hasTreeFilter = !!_treeFilter;
+    var hasColumnFilters = Object.keys(_columnFilters).length > 0;
+    var hasGlobalSearch = !!_globalSearch;
+
+    if (!hasTreeFilter && !hasColumnFilters && !hasGlobalSearch) {
+      delete current.__treeFilteredRows;
+      _origRender();
+      return;
+    }
+
+    // Apply all filters
+    current.__treeFilteredRows = (current.rows || []).filter(function (row) {
+      // 1. Tree filter (existing)
+      if (hasTreeFilter && !_treeFilter(row)) return false;
+
+      // 2. Column filters (NEW)
+      if (hasColumnFilters) {
+        for (var key in _columnFilters) {
+          var filterVal = _columnFilters[key];
+          var cellVal = row.data && row.data[key] != null ? String(row.data[key]).toLowerCase() : '';
+          if (cellVal.indexOf(filterVal) === -1) return false;
+        }
+      }
+
+      // 3. Global search (NEW)
+      if (hasGlobalSearch) {
+        var rowText = JSON.stringify(row.data || {}).toLowerCase();
+        if (rowText.indexOf(_globalSearch) === -1) return false;
+      }
+
+      return true;
+    });
+
     _origRender();
   };
 
@@ -2214,5 +2314,94 @@
   });
 
   function getState() { return current; }
-  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter, saveColumnState: saveColumnState, toggleColumnVisibility: toggleColumnVisibility };
+
+  // ===== PUBLIC API FOR FILTERS =====
+  function setColumnFilter(key, value) {
+    if (value) {
+      _columnFilters[key] = String(value).toLowerCase();
+    } else {
+      delete _columnFilters[key];
+    }
+    _renderIsFilterSwitch = true;
+    try { render(); } finally { _renderIsFilterSwitch = false; }
+  }
+
+  function setGlobalSearch(query) {
+    _globalSearch = String(query || '').toLowerCase().trim();
+    _renderIsFilterSwitch = true;
+    try { render(); } finally { _renderIsFilterSwitch = false; }
+  }
+
+  function clearAllFilters() {
+    _columnFilters = {};
+    _globalSearch = '';
+    _renderIsFilterSwitch = true;
+    try { render(); } finally { _renderIsFilterSwitch = false; }
+  }
+
+  function getFilterState() {
+    return {
+      columns: Object.assign({}, _columnFilters),
+      global: _globalSearch,
+      hasFilters: Object.keys(_columnFilters).length > 0 || !!_globalSearch
+    };
+  }
+
+  window.servicesGrid = {
+    load: load,
+    clear: clear,
+    render: render,
+    getState: getState,
+    saveAllRows: saveAllRows,
+    setTreeFilter: setTreeFilter,
+    saveColumnState: saveColumnState,
+    toggleColumnVisibility: toggleColumnVisibility,
+    setColumnFilter: setColumnFilter,
+    setGlobalSearch: setGlobalSearch,
+    clearAllFilters: clearAllFilters,
+    getFilterState: getFilterState
+  };
+
+  // Connect to existing search input
+  setTimeout(function () {
+    var searchInput = document.querySelector('input[placeholder*="Search in current sheet"]');
+    if (searchInput && !searchInput.dataset.connected) {
+      searchInput.dataset.connected = 'true';
+
+      var searchTimer;
+      searchInput.addEventListener('input', function () {
+        clearTimeout(searchTimer);
+        var query = this.value;
+        searchTimer = setTimeout(function () {
+          window.servicesGrid.setGlobalSearch(query);
+        }, 300);
+      });
+
+      searchInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          this.value = '';
+          window.servicesGrid.setGlobalSearch('');
+        }
+      });
+    }
+  }, 1000);
+
+  // Add clear filters button
+  setTimeout(function () {
+    var toolbar = document.querySelector('.svc-toolbar-actions');
+    if (toolbar && !document.getElementById('btnClearFilters')) {
+      var btn = document.createElement('button');
+      btn.id = 'btnClearFilters';
+      btn.className = 'svc-btn';
+      btn.innerHTML = '✕ Clear Filters';
+      btn.title = 'Clear all column filters and search';
+      btn.style.cssText = 'margin-left:8px;background:#1e293b;border:1px solid #334155;';
+      btn.onclick = function () {
+        window.servicesGrid.clearAllFilters();
+        var searchInput = document.querySelector('input[placeholder*="Search in current sheet"]');
+        if (searchInput) searchInput.value = '';
+      };
+      toolbar.appendChild(btn);
+    }
+  }, 1500);
 })();
