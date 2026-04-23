@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-23 (Services grid Excel-style per-column filters):**
+  - **Edit — `public/js/services-grid.js`:** Added persistent `_columnFilters` state, sticky filter header row with per-column inputs, row-number filter corner cell, case-insensitive row filtering on rendered dataset, and footer text update to reflect filtered count (`X of Y rows`).
+  - **Edit — `public/js/services-grid.js`:** Header context menu binding now targets only `.header-main-row` to prevent filter-row interference; exported `clearColumnFilters()` and added toolbar `✕ Clear Filters` action button.
+  - **Edit — `public/css/services.css`:** Added sticky header/filter-row styles, filter input placeholder styling, and filtered-column highlight indicator dot.
+  - **Behavior contract update:** Services grid now supports Excel-style AND-filtering across visible columns while preserving tree-filter and sort flows.
+
 - **2026-04-23 (DOM-native current-table search injector append):**
   - **Edit — `public/js/services-grid.js`:** Appended a DOM-driven `initSearch()` IIFE at file end that injects a toolbar search control (`#svcGlobalSearch`) and dropdown (`#svcSearchDropdown`) without Tabulator dependency, scans `#svcGrid tbody tr` for matches, highlights matching cells with inline `<mark>`, and supports click-to-scroll result navigation.
   - **Behavior contract update:** Search can be initialized/re-initialized via load + `MutationObserver` for current rendered table rows, with `Ctrl/Cmd+K` focus shortcut and Escape/outside-click dismissal.

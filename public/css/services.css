@@ -3811,3 +3811,39 @@ input.cell.cell-qb-not-found {
 .premium-tabulator.cell-match mark { background: rgba(251,191,36,0.3); color: #fde047; padding: 1px 2px; border-radius: 2px; font-weight: 500; }
 .premium-tabulator.search-target { animation: pulse 3s ease; }
 @keyframes pulse { 0%,100% { background: transparent; } 10%,30% { background: rgba(59,130,246,0.25); box-shadow: inset 3px 0 0 #3b82f6; } }
+
+.header-filter-row th {
+  position: sticky;
+  top: 34px;
+  z-index: 5;
+  background: #0f172a !important;
+}
+
+.column-filter-input::placeholder {
+  color: #475569;
+  font-style: italic;
+}
+
+.header-main-row th {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: #0f172a;
+}
+
+/* Highlight filtered columns */
+th[data-key].filtered {
+  background: rgba(59, 130, 246, 0.1) !important;
+}
+
+th[data-key].filtered::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  background: #3b82f6;
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.6);
+}
