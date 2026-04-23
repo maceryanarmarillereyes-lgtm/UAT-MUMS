@@ -2216,3 +2216,249 @@
   function getState() { return current; }
   window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter, saveColumnState: saveColumnState, toggleColumnVisibility: toggleColumnVisibility };
 })();
+
+
+// ===== SEARCH WITHIN CURRENT SHEET ONLY =====
+class ServicesSheetSearch {
+  constructor() {
+    this.init();
+  }
+
+  init() {
+    const input = document.getElementById('svcGlobalSearch');
+    if (!input) return;
+
+    let timeout;
+    input.addEventListener('input', (e) => {
+      clearTimeout(timeout);
+      const q = e.target.value.trim();
+      if (q.length < 2) {
+        this.hideResults();
+        this.clearHighlight();
+        return;
+      }
+      timeout = setTimeout(() => this.search(q), 150);
+    });
+
+    // Keyboard shortcut
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        input.focus();
+        input.select();
+      }
+      if (e.key === 'Escape') {
+        this.hideResults();
+        input.value = '';
+        this.clearHighlight();
+      }
+    });
+
+    // Close on click outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.global-search-wrapper')) {
+        this.hideResults();
+      }
+    });
+  }
+
+  search(query) {
+    const table = window.__tabulatorInstance;
+    if (!table) return;
+
+    const q = query.toLowerCase();
+    const results = [];
+    const allData = table.getData();
+
+    // Search through ALL rows in current sheet
+    for (const row of allData) {
+      // Skip internal fields
+      const searchableData = { ...row };
+      delete searchableData.id;
+      delete searchableData._rowId;
+      delete searchableData._sheetId;
+      delete searchableData.row_index;
+
+      const rowText = JSON.stringify(searchableData).toLowerCase();
+
+      if (rowText.includes(q)) {
+        // Find which field matched
+        const match = Object.entries(searchableData).find(([key, val]) =>
+          String(val).toLowerCase().includes(q)
+        );
+
+        if (match) {
+          results.push({
+            rowId: row.id || row._rowId,
+            rowIndex: row.row_index,
+            field: match[0],
+            value: match[1],
+            preview: this.getRowPreview(searchableData),
+            rowData: row
+          });
+        }
+      }
+
+      if (results.length >= 15) break; // Limit results
+    }
+
+    this.showResults(results, query);
+    this.highlightMatches(query);
+  }
+
+  getRowPreview(data) {
+    // Get first 3 non-empty values
+    const values = Object.values(data)
+      .filter(v => v && String(v).trim())
+      .slice(0, 3);
+    return values.join(' • ').substring(0, 80);
+  }
+
+  showResults(results, query) {
+    let dropdown = document.getElementById('svcSearchDropdown');
+    if (!dropdown) {
+      dropdown = document.createElement('div');
+      dropdown.id = 'svcSearchDropdown';
+      dropdown.className = 'search-dropdown';
+      document.querySelector('.global-search-wrapper').appendChild(dropdown);
+    }
+
+    const sheet = window.servicesSheetManager?.getActive();
+    const sheetName = sheet?.title || 'Current Sheet';
+
+    if (results.length === 0) {
+      dropdown.innerHTML = `
+        <div class="search-empty">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <div>No matches in "${sheetName}"</div>
+          <small>Try a different term</small>
+        </div>
+      `;
+    } else {
+      dropdown.innerHTML = `
+        <div class="search-header">
+          <span>${results.length} matches in ${sheetName}</span>
+          <span class="search-query">"${query}"</span>
+        </div>
+        ${results.map(r => `
+          <div class="search-item" onclick="window.servicesSheetSearch.jumpToRow('${r.rowId}')">
+            <div class="search-item-main">
+              <div class="search-item-row">Row ${(Number(r.rowIndex) || 0) + 1}</div>
+              <div class="search-item-field">
+                <span class="field-name">${r.field}:</span>
+                <span class="field-value">${this.highlightText(String(r.value), query)}</span>
+              </div>
+            </div>
+            <div class="search-item-preview">${r.preview}</div>
+          </div>
+        `).join('')}
+      `;
+    }
+
+    dropdown.classList.add('active');
+  }
+
+  hideResults() {
+    document.getElementById('svcSearchDropdown')?.classList.remove('active');
+  }
+
+  jumpToRow(rowId) {
+    this.hideResults();
+
+    const table = window.__tabulatorInstance;
+    if (!table) return;
+
+    // Scroll to row and highlight
+    table.scrollToRow(rowId, 'center', true);
+    table.deselectRow();
+    table.selectRow(rowId);
+
+    const rowEl = table.getRow(rowId)?.getElement();
+    if (rowEl) {
+      rowEl.classList.add('search-target');
+      setTimeout(() => rowEl.classList.remove('search-target'), 3000);
+    }
+
+    // Clear search input after jump
+    setTimeout(() => {
+      const input = document.getElementById('svcGlobalSearch');
+      if (input) input.value = '';
+    }, 500);
+  }
+
+  highlightMatches(query) {
+    const table = window.__tabulatorInstance;
+    if (!table) return;
+
+    // Remove previous highlights
+    this.clearHighlight();
+
+    const q = query.toLowerCase();
+
+    // Add highlight class to matching cells
+    table.getRows().forEach(row => {
+      const data = row.getData();
+      let hasMatch = false;
+
+      Object.entries(data).forEach(([key, val]) => {
+        if (key.startsWith('_') || key === 'id' || key === 'row_index') return;
+
+        if (String(val).toLowerCase().includes(q)) {
+          hasMatch = true;
+          const cell = row.getCell(key);
+          if (cell) {
+            const cellEl = cell.getElement();
+            cellEl.classList.add('cell-match');
+
+            // Highlight text inside cell
+            const originalText = cellEl.textContent;
+            const regex = new RegExp(`(${query})`, 'gi');
+            cellEl.innerHTML = originalText.replace(regex, '<mark>$1</mark>');
+          }
+        }
+      });
+
+      if (hasMatch) {
+        row.getElement().classList.add('row-has-match');
+      }
+    });
+  }
+
+  clearHighlight() {
+    const table = window.__tabulatorInstance;
+    if (!table) return;
+
+    table.getRows().forEach(row => {
+      row.getElement().classList.remove('row-has-match', 'search-target');
+      row.getCells().forEach(cell => {
+        const el = cell.getElement();
+        el.classList.remove('cell-match');
+        // Restore original text (remove marks)
+        if (el.querySelector('mark')) {
+          el.textContent = cell.getValue();
+        }
+      });
+    });
+  }
+
+  highlightText(text, query) {
+    const regex = new RegExp(`(${query})`, 'gi');
+    return text.replace(regex, '<mark>$1</mark>');
+  }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+  window.servicesSheetSearch = new ServicesSheetSearch();
+});
+
+// Update search placeholder to be clear
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('svcGlobalSearch');
+  if (input) {
+    input.placeholder = 'Search in current sheet...';
+    input.title = 'Search all columns in this sheet only (⌘K)';
+  }
+});

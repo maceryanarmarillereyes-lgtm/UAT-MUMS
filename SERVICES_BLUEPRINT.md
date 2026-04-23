@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+
+- **2026-04-23 (Current-sheet global search scope update):**
+  - **Edit — `public/js/services-grid.js`:** Added `ServicesSheetSearch` class and bootstrap hooks to drive search strictly from `window.__tabulatorInstance.getData()` (current sheet only), with dropdown results, match highlighting, `Ctrl/Cmd+K` focus shortcut, and Escape clear behavior.
+  - **Edit — `public/services.html`:** Added toolbar input `#svcGlobalSearch` with explicit placeholder copy indicating current-sheet scope.
+  - **Edit — `public/css/services.css`:** Added scoped global-search dropdown and result-item styles, including current match mark/highlight affordances.
+  - **Behavior contract update:** Services global search now targets only the active sheet dataset; no cross-sheet result surfacing.
 - **2026-04-22 (Services case detail QuickBase action links):**
   - **Edit — `public/services.html`:** Extended Services case-detail modal hero with inline QuickBase **Edit/View** action buttons and added footer QuickBase ID indicator (`#svcQbcdRid`) with refreshed action button layout.
   - **Edit — `public/js/services-grid.js`:** `_openSvcCaseDetailModal(rowIndex)` now resolves QuickBase `rid` (prefers `Record ID#`, falls back to `CASE#`), populates Edit/View URLs (`/action/er` and `/action/dr`), and keeps copy-button feedback compatible with icon+label markup.
