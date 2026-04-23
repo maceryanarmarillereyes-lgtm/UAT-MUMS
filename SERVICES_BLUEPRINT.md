@@ -191,32 +191,6 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
-- **2026-04-23 (Permanent column filters v2 + fixed global search append):**
-  - **Edit — `public/js/services-grid.js`:** Appended a new `PERMANENT COLUMN FILTERS v2.0` IIFE that injects a sticky per-column filter row, stores filters by sheet in localStorage (`mums_column_filters`), re-applies filters after grid render/mutation events, updates visible row count text, and exposes `window.clearColumnFilters()` plus toolbar clear action.
-  - **Edit — `public/js/services-grid.js`:** Appended a `FIXED GLOBAL SEARCH` IIFE that binds to the existing current-sheet search input, performs DOM-level row filtering with inline `<mark>` highlighting, reports match count in placeholder text, and supports Escape-to-clear behavior.
-  - **Behavior contract update:** Column filters and global search now include an appended DOM-layer implementation that runs independently from the prior search/filter blocks to preserve interactive filtering on the rendered table.
-
-- **2026-04-23 (Services grid filter focus + current-sheet search reliability fix):**
-  - **Edit — `public/js/services-grid.js`:** Removed the prior `_columnFilters` render-coupled implementation and replaced it with a DOM-level `.filter-row` injector that filters existing `#svcGrid tbody tr` rows without triggering grid re-render, preserving input focus while typing.
-  - **Edit — `public/js/services-grid.js`:** Replaced prior search injectors with a single current-sheet DOM search flow bound to the existing `Search in current sheet` input placeholder, with debounced match filtering, inline `<mark>` highlighting, Escape-to-clear support, and MutationObserver re-init.
-  - **Behavior contract update:** Column filtering and search now operate directly on rendered DOM rows to avoid focus loss/regression from render loops while maintaining per-sheet scope.
-
-- **2026-04-23 (Services grid Excel-style per-column filters):**
-  - **Edit — `public/js/services-grid.js`:** Added persistent `_columnFilters` state, sticky filter header row with per-column inputs, row-number filter corner cell, case-insensitive row filtering on rendered dataset, and footer text update to reflect filtered count (`X of Y rows`).
-  - **Edit — `public/js/services-grid.js`:** Header context menu binding now targets only `.header-main-row` to prevent filter-row interference; exported `clearColumnFilters()` and added toolbar `✕ Clear Filters` action button.
-  - **Edit — `public/css/services.css`:** Added sticky header/filter-row styles, filter input placeholder styling, and filtered-column highlight indicator dot.
-  - **Behavior contract update:** Services grid now supports Excel-style AND-filtering across visible columns while preserving tree-filter and sort flows.
-
-- **2026-04-23 (DOM-native current-table search injector append):**
-  - **Edit — `public/js/services-grid.js`:** Appended a DOM-driven `initSearch()` IIFE at file end that injects a toolbar search control (`#svcGlobalSearch`) and dropdown (`#svcSearchDropdown`) without Tabulator dependency, scans `#svcGrid tbody tr` for matches, highlights matching cells with inline `<mark>`, and supports click-to-scroll result navigation.
-  - **Behavior contract update:** Search can be initialized/re-initialized via load + `MutationObserver` for current rendered table rows, with `Ctrl/Cmd+K` focus shortcut and Escape/outside-click dismissal.
-
-
-- **2026-04-23 (Current-sheet global search scope update):**
-  - **Edit — `public/js/services-grid.js`:** Added `ServicesSheetSearch` class and bootstrap hooks to drive search strictly from `window.__tabulatorInstance.getData()` (current sheet only), with dropdown results, match highlighting, `Ctrl/Cmd+K` focus shortcut, and Escape clear behavior.
-  - **Edit — `public/services.html`:** Added toolbar input `#svcGlobalSearch` with explicit placeholder copy indicating current-sheet scope.
-  - **Edit — `public/css/services.css`:** Added scoped global-search dropdown and result-item styles, including current match mark/highlight affordances.
-  - **Behavior contract update:** Services global search now targets only the active sheet dataset; no cross-sheet result surfacing.
 - **2026-04-22 (Services case detail QuickBase action links):**
   - **Edit — `public/services.html`:** Extended Services case-detail modal hero with inline QuickBase **Edit/View** action buttons and added footer QuickBase ID indicator (`#svcQbcdRid`) with refreshed action button layout.
   - **Edit — `public/js/services-grid.js`:** `_openSvcCaseDetailModal(rowIndex)` now resolves QuickBase `rid` (prefers `Record ID#`, falls back to `CASE#`), populates Edit/View URLs (`/action/er` and `/action/dr`), and keeps copy-button feedback compatible with icon+label markup.
