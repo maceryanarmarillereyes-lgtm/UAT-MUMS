@@ -191,6 +191,10 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-23 (Toolbar all-columns search input placeholder reintroduced):**
+  - **Edit — `public/services.html`:** Added toolbar input shell `#searchAllColumns` (inline-styled container + input) in `.svc-toolbar-actions` for all-columns search entry placement after clear-filters area.
+  - **Behavior contract update:** Services toolbar now exposes an additional search input control target (`#searchAllColumns`) without altering auth, realtime, or data write contracts.
+
 - **2026-04-23 (Services grid filter/search rollback to column-filter-only):**
   - **Edit — `public/js/services-grid.js`:** Removed `searchAllFolders(query)` and deleted the Global Search Controller block (`initGlobalSearch`, result rendering, search input wiring, clear-filter toolbar button integration) from the Services grid module.
   - **Edit — `public/js/services-grid.js`:** Removed public filter/search helpers `setColumnFilter`, `setGlobalSearch`, `clearAllFilters`, and `getFilterState` from module scope and from `window.servicesGrid` exports.
