@@ -2476,3 +2476,298 @@
   });
   observer.observe(document.body, { childList: true, subtree: true });
 })();
+
+// ===== PERMANENT COLUMN FILTERS v2.0 =====
+(function() {
+  'use strict';
+
+  const FILTER_KEY = 'mums_column_filters';
+  let filters = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}');
+  let filterRow = null;
+
+  function getTable() {
+    return document.getElementById('svcGrid');
+  }
+
+  function getCurrentSheetId() {
+    return window.current?.sheet?.id || 'default';
+  }
+
+  function saveFilters() {
+    const sheetId = getCurrentSheetId();
+    const allFilters = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}');
+    allFilters[sheetId] = filters;
+    localStorage.setItem(FILTER_KEY, JSON.stringify(allFilters));
+  }
+
+  function loadFilters() {
+    const sheetId = getCurrentSheetId();
+    const allFilters = JSON.parse(localStorage.getItem(FILTER_KEY) || '{}');
+    filters = allFilters[sheetId] || {};
+  }
+
+  function createFilterRow() {
+    const table = getTable();
+    if (!table) return false;
+
+    const thead = table.querySelector('thead');
+    if (!thead || thead.querySelector('.filter-row-permanent')) return false;
+
+    const headerRow = thead.querySelector('tr');
+    if (!headerRow) return false;
+
+    // Remove old filter row if exists
+    thead.querySelectorAll('.filter-row-permanent').forEach(el => el.remove());
+
+    filterRow = document.createElement('tr');
+    filterRow.className = 'filter-row-permanent';
+    filterRow.style.cssText = 'background:#0f172a;border-bottom:2px solid #334155;';
+
+    const headers = Array.from(headerRow.querySelectorAll('th'));
+    loadFilters();
+
+    headers.forEach((th, idx) => {
+      const filterCell = document.createElement('th');
+      filterCell.style.cssText = 'padding:3px 4px;background:#0f172a;position:sticky;top:32px;z-index:5;';
+
+      if (idx === 0) {
+        filterCell.innerHTML = '<div style="text-align:center;color:#475569;font-size:9px;">▼</div>';
+      } else {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = 'Filter...';
+        input.value = filters[idx] || '';
+        input.dataset.col = idx;
+        input.style.cssText = 'width:100%;height:22px;padding:0 5px;background:#020617;border:1px solid #334155;border-radius:3px;color:#e2e8f0;font-size:11px;outline:none;font-family:inherit;';
+
+        // Prevent table refresh from stealing focus
+        input.addEventListener('mousedown', e => e.stopPropagation());
+        input.addEventListener('click', e => e.stopPropagation());
+
+        input.addEventListener('focus', function() {
+          this.style.borderColor = '#0ea5e9';
+          this.select();
+        });
+
+        input.addEventListener('blur', function() {
+          this.style.borderColor = '#334155';
+        });
+
+        // THE FIX: Filter without triggering render
+        input.addEventListener('input', function(e) {
+          e.stopPropagation();
+          const col = this.dataset.col;
+          const val = this.value.trim().toLowerCase();
+
+          if (val) {
+            filters[col] = val;
+          } else {
+            delete filters[col];
+          }
+
+          saveFilters();
+          applyFiltersNow();
+        });
+
+        filterCell.appendChild(input);
+      }
+
+      filterRow.appendChild(filterCell);
+    });
+
+    thead.appendChild(filterRow);
+    return true;
+  }
+
+  function applyFiltersNow() {
+    const table = getTable();
+    const tbody = table?.querySelector('tbody');
+    if (!tbody) return;
+
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const activeFilters = Object.entries(filters).filter(([k, v]) => v);
+
+    if (activeFilters.length === 0) {
+      rows.forEach(r => r.style.display = '');
+      updateCount(rows.length, rows.length);
+      return;
+    }
+
+    let visible = 0;
+
+    rows.forEach(row => {
+      const cells = Array.from(row.querySelectorAll('td'));
+      let match = true;
+
+      for (const [colIdx, filterVal] of activeFilters) {
+        const cell = cells[parseInt(colIdx)];
+        if (!cell) continue;
+
+        const cellText = (cell.textContent || cell.innerText || '').toLowerCase().trim();
+
+        // DEBUG: Log first few checks
+        if (visible < 3 && colIdx == 2) {
+          console.log(`Checking col ${colIdx}: "${cellText}" includes "${filterVal}"?`, cellText.includes(filterVal));
+        }
+
+        if (!cellText.includes(filterVal)) {
+          match = false;
+          break;
+        }
+      }
+
+      row.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+
+    updateCount(visible, rows.length);
+    console.log(`[Filter] ${visible}/${rows.length} rows visible`, filters);
+  }
+
+  function updateCount(visible, total) {
+    const footer = document.querySelector('#svcGrid')?.closest('.svc-grid-wrap')?.parentElement?.querySelector('.svc-grid-footer, [class*="status"]');
+    const el = footer || document.querySelector('div[style*="521 rows"]')?.parentElement;
+
+    if (el && visible !== total) {
+      const original = el.dataset.orig || el.textContent;
+      if (!el.dataset.orig) el.dataset.orig = original;
+      el.textContent = original.replace(/\d+ rows/, `${visible} of ${total} rows`);
+      el.style.color = '#0ea5e9';
+    } else if (el && el.dataset.orig) {
+      el.textContent = el.dataset.orig;
+      el.style.color = '';
+    }
+  }
+
+  function clearFilters() {
+    filters = {};
+    saveFilters();
+    document.querySelectorAll('.filter-row-permanent input').forEach(inp => inp.value = '');
+    applyFiltersNow();
+  }
+
+  // Hook into existing render - RECREATE filter row after each render
+  const originalRender = window.render || function() {};
+  if (window.servicesGrid && window.servicesGrid.render) {
+    const orig = window.servicesGrid.render;
+    window.servicesGrid.render = function() {
+      const result = orig.apply(this, arguments);
+      setTimeout(() => {
+        if (createFilterRow()) {
+          setTimeout(applyFiltersNow, 50);
+        }
+      }, 100);
+      return result;
+    };
+  }
+
+  // Initialize
+  let initAttempts = 0;
+  const initInterval = setInterval(() => {
+    if (createFilterRow()) {
+      clearInterval(initInterval);
+      setTimeout(applyFiltersNow, 200);
+      console.log('[Filters] Permanent filters active');
+    } else if (++initAttempts > 20) {
+      clearInterval(initInterval);
+    }
+  }, 300);
+
+  // Re-apply after data changes
+  const observer = new MutationObserver(() => {
+    const table = getTable();
+    if (table && !table.querySelector('.filter-row-permanent')) {
+      setTimeout(() => {
+        if (createFilterRow()) applyFiltersNow();
+      }, 100);
+    }
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // Expose clear function
+  window.clearColumnFilters = clearFilters;
+
+  // Add clear button
+  setTimeout(() => {
+    const toolbar = document.querySelector('.svc-toolbar-actions');
+    let btn = document.getElementById('clearFiltersPermanent');
+    if (toolbar && !btn) {
+      btn = document.createElement('button');
+      btn.id = 'clearFiltersPermanent';
+      btn.className = 'svc-btn';
+      btn.innerHTML = '✕ Clear';
+      btn.title = 'Clear all filters (saved per sheet)';
+      btn.style.cssText = 'margin-left:6px;background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:0 10px;height:28px;border-radius:6px;font-size:12px;cursor:pointer;';
+      btn.onclick = clearFilters;
+      toolbar.appendChild(btn);
+    }
+  }, 2000);
+
+})();
+
+// ===== FIXED GLOBAL SEARCH =====
+(function() {
+  function initGlobalSearch() {
+    const input = document.querySelector('input[placeholder*="Search in current sheet"]');
+    if (!input || input.dataset.fixed) return;
+    input.dataset.fixed = 'true';
+
+    input.addEventListener('input', function() {
+      const query = this.value.toLowerCase().trim();
+      const table = document.getElementById('svcGrid');
+      const tbody = table?.querySelector('tbody');
+      if (!tbody) return;
+
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+
+      // Clear previous
+      rows.forEach(r => {
+        r.style.display = '';
+        r.style.background = '';
+        r.querySelectorAll('td').forEach(td => {
+          if (td.querySelector('mark')) {
+            td.textContent = td.textContent;
+          }
+        });
+      });
+
+      if (!query || query.length < 2) {
+        this.placeholder = 'Search in current sheet...';
+        return;
+      }
+
+      let matches = 0;
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        if (text.includes(query)) {
+          matches++;
+          row.style.background = 'rgba(14,165,233,0.08)';
+
+          // Highlight
+          row.querySelectorAll('td').forEach(td => {
+            const txt = td.textContent;
+            if (txt.toLowerCase().includes(query)) {
+              const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+              td.innerHTML = txt.replace(regex, '<mark style="background:#f59e0b;color:#000;padding:0 2px;border-radius:2px;">$1</mark>');
+            }
+          });
+        } else {
+          row.style.display = 'none';
+        }
+      });
+
+      this.placeholder = `Found ${matches} matches`;
+      setTimeout(() => this.placeholder = 'Search in current sheet...', 2000);
+    });
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        e.target.value = '';
+        e.target.dispatchEvent(new Event('input'));
+      }
+    });
+  }
+
+  setInterval(initGlobalSearch, 1000);
+})();
