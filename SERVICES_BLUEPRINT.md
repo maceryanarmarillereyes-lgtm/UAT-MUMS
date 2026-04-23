@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-23 (Permanent `#` row-number auto-fit clamp refinement):**
+  - **Edit — `public/js/services-grid.js`:** Replaced row-number width calculator with `computeRowNumWidth(totalRows)` using `digits * 9 + 22`, clamped to `36px–72px`, and recalculated width in `render()` before `colgroup` creation.
+  - **Edit — `public/js/services-grid.js`:** `render()` now sets global `ROW_NUM_COL_WIDTH_PX` and pushes `--row-num-w` to document scope, while `rowNumCol` keeps width/min/max + HTML `width` attribute aligned to that computed value.
+  - **Edit — `public/js/services-grid.js`:** `lockRowNumWidth(th)` now hard-applies width/min/max to the passed header/cell first, then syncs grid CSS variable to prevent drift during rerenders/resizes.
+  - **Behavior contract update:** Services `#` column auto-fits based on row-count digit length with hard min/max guard, without touching auth flow, realtime channel naming, Supabase adapters, or layout structure.
+
 - **2026-04-23 (Row-number lane colgroup hard-width sync for fixed table layout):**
   - **Edit — `public/js/services-grid.js`:** Set explicit `style.width/minWidth/maxWidth` and HTML `width` attribute on `col[data-key="__rownum__"]` using `ROW_NUM_COL_WIDTH_PX` during `render()`.
   - **Behavior contract update:** Row-number lane dynamic width now applies to both cell CSS (`--row-num-w`) and the colgroup width source used by fixed table layout, preventing oversized first-column expansion while preserving existing grid behaviors.
