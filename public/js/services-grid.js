@@ -651,8 +651,8 @@
 
     // Filter cell for row number
     var filterCorner = mkEl('th', { className: 'row-num' }, filterTr);
-    filterCorner.innerHTML = '<div style="text-align:center;color:#475569;font-size:9px;padding:2px;">▼</div>';
-    filterCorner.style.cssText = 'background:#0f172a;padding:2px;position:sticky;top:32px;z-index:4;';
+    filterCorner.innerHTML = '<div style="text-align:center;color:#475569;font-size:9px;">▼</div>';
+    filterCorner.style.cssText = 'background:#0f172a;padding:2px;width:56px;min-width:56px;max-width:56px;position:sticky;top:32px;z-index:4;left:0;';
 
     // Filter cells for each column
     cols.forEach(function (c) {
@@ -2243,11 +2243,13 @@
   // setTreeFilter(fn) — fn receives a row object {row_index, data}, returns bool.
   // Pass null to remove filter (show all rows).
   var _treeFilter = null;
+  window._treeFilter = null;
   // FIX: Flag that render() checks to skip autoResizeColumns + refreshCounts
   // during folder switches. These are the two main sources of folder-switch lag.
   var _renderIsFilterSwitch = false;
   function setTreeFilter(fn) {
     _treeFilter = fn || null;
+    window._treeFilter = _treeFilter;
     _renderIsFilterSwitch = true;
     try {
       render();
@@ -2316,4 +2318,103 @@
     saveColumnState: saveColumnState,
     toggleColumnVisibility: toggleColumnVisibility
   };
+
+  // ===== Simple Search All Columns =====
+  (function initSearchAll() {
+    var input = document.getElementById('searchAllColumns');
+    if (!input) return;
+
+    var originalTreeFilter = null;
+    var searchActive = false;
+    var timer;
+
+    function doSearch() {
+      var query = input.value.toLowerCase().trim();
+      var tbody = document.querySelector('#svcGrid tbody');
+      if (!tbody) return;
+
+      var rows = Array.from(tbody.querySelectorAll('tr'));
+
+      // If starting search, save current tree filter and clear it
+      if (query && !searchActive) {
+        searchActive = true;
+        // Store current filter state
+        originalTreeFilter = window._treeFilter || null;
+        // Clear to show all rows
+        if (window.servicesGrid && window.servicesGrid.setTreeFilter) {
+          window.servicesGrid.setTreeFilter(null);
+        }
+        // Wait for render, then apply search
+        setTimeout(function () { applySearchFilter(query); }, 100);
+        return;
+      }
+
+      // If clearing search, restore tree filter
+      if (!query && searchActive) {
+        searchActive = false;
+        // Clear visual filters first
+        rows.forEach(function (r) {
+          r.style.display = '';
+          r.style.background = '';
+        });
+        // Restore tree filter
+        if (window.servicesGrid && window.servicesGrid.setTreeFilter) {
+          window.servicesGrid.setTreeFilter(originalTreeFilter);
+        }
+        input.placeholder = '🔍 Search all...';
+        return;
+      }
+
+      // Apply search filter
+      if (query) {
+        applySearchFilter(query);
+      }
+    }
+
+    function applySearchFilter(query) {
+      var tbody = document.querySelector('#svcGrid tbody');
+      if (!tbody) return;
+
+      var rows = Array.from(tbody.querySelectorAll('tr'));
+      var matches = 0;
+
+      rows.forEach(function (row) {
+        var text = row.textContent.toLowerCase();
+        var isMatch = text.indexOf(query) !== -1;
+
+        row.style.display = isMatch ? '' : 'none';
+        if (isMatch) {
+          row.style.background = 'rgba(14,165,233,0.06)';
+          matches++;
+        } else {
+          row.style.background = '';
+        }
+      });
+
+      input.placeholder = matches > 0 ? ('Found ' + matches + ' • 🔍 Search all...') : 'No matches • 🔍 Search all...';
+    }
+
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(doSearch, 250);
+    });
+
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        this.value = '';
+        doSearch();
+        this.blur();
+      }
+    });
+
+    // Clear search when switching sheets
+    var observer = new MutationObserver(function () {
+      if (input.value && !document.querySelector('#svcGrid tbody tr')) {
+        input.value = '';
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    console.log('[Search] Initialized');
+  })();
 })();

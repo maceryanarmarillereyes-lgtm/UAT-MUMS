@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-23 (All-columns toolbar search behavior + filter-row row-number width fix):**
+  - **Edit — `public/js/services-grid.js`:** Updated filter-row corner (`th.row-num`) inline sizing to fixed `56px` width/min/max and pinned sticky-left alignment for row-number lane consistency during horizontal grid movement.
+  - **Edit — `public/js/services-grid.js`:** Added `initSearchAll` end-of-module controller for `#searchAllColumns` with debounced row text search, row show/hide + highlight, Escape clear flow, and sheet-switch reset observer.
+  - **Edit — `public/js/services-grid.js`:** Synced internal tree filter pointer into `window._treeFilter` inside `setTreeFilter()` so temporary search clear/restore can round-trip the prior tree-filter function.
+  - **Behavior contract update:** Services now supports a lightweight toolbar all-columns search layer over rendered rows while preserving existing tree-filter API and grid data contracts.
+
 - **2026-04-23 (Toolbar all-columns search input placeholder reintroduced):**
   - **Edit — `public/services.html`:** Added toolbar input shell `#searchAllColumns` (inline-styled container + input) in `.svc-toolbar-actions` for all-columns search entry placement after clear-filters area.
   - **Behavior contract update:** Services toolbar now exposes an additional search input control target (`#searchAllColumns`) without altering auth, realtime, or data write contracts.
