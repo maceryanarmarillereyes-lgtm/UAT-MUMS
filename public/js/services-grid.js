@@ -513,6 +513,31 @@
       ? current.__treeFilteredRows.slice().sort(function (a, b) { return a.row_index - b.row_index; })
       : current.rows.slice();
 
+    // APPLY COLUMN FILTERS (Excel-style)
+    var hasColumnFilters = Object.keys(_columnFilters).length > 0;
+    if (hasColumnFilters) {
+      viewRows = viewRows.filter(function(row) {
+        for (var key in _columnFilters) {
+          var filterVal = _columnFilters[key];
+          var cellVal = row.data && row.data[key] != null ? String(row.data[key]).toLowerCase() : '';
+          if (cellVal.indexOf(filterVal) === -1) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+
+    // Update footer count
+    setTimeout(function() {
+      var footer = document.querySelector('.svc-grid-footer,.grid-status');
+      if (footer && hasColumnFilters) {
+        var originalCount = current.rows.length;
+        var filteredCount = viewRows.length;
+        footer.textContent = footer.textContent.replace(/\d+ rows/, filteredCount + ' of ' + originalCount + ' rows (filtered)');
+      }
+    }, 0);
+
     // ── Apply sort if active ─────────────────────────────────────────────────
     var isSorted = !!_sortState.key;
     if (isSorted) {
@@ -547,7 +572,17 @@
 
     var thead   = mkEl('thead');
     var headTr  = mkEl('tr', null, thead);
+    headTr.className = 'header-main-row';
+
+    // ADD FILTER ROW (Excel-style)
+    var filterTr = mkEl('tr', { className: 'header-filter-row' }, thead);
+    filterTr.style.background = '#0f172a';
+    filterTr.style.borderBottom = '2px solid #1e293b';
     var thCorner = mkEl('th', { className: 'row-num row-header', textContent: '#' }, headTr);
+    var filterCorner = mkEl('th', { className: 'row-num' }, filterTr);
+    filterCorner.innerHTML = '<div style="text-align:center;color:#475569;font-size:9px;padding:4px;">▼</div>';
+    filterCorner.style.background = '#0f172a';
+    filterCorner.style.padding = '4px';
     cols.forEach(function (c) {
       var th = mkEl('th', { textContent: sanitizeHeaderLabel(c.label, 0) }, headTr);
       th.dataset.key = c.key;
@@ -568,6 +603,68 @@
       resizeHandle.innerHTML = '<div class="resize-grip"></div>';
       th.style.position = 'relative';
       th.appendChild(resizeHandle);
+
+      // Create filter cell
+      var filterTh = mkEl('th', null, filterTr);
+      filterTh.dataset.key = c.key;
+      filterTh.style.padding = '4px';
+      filterTh.style.background = '#0f172a';
+      if (_columnFilters[c.key]) th.classList.add('filtered');
+      else th.classList.remove('filtered');
+
+      if (c.hidden) {
+        filterTh.style.display = 'none';
+      } else {
+        var filterInput = document.createElement('input');
+        filterInput.type = 'text';
+        filterInput.placeholder = 'Filter...';
+        filterInput.dataset.columnKey = c.key;
+        filterInput.className = 'column-filter-input';
+        filterInput.value = _columnFilters[c.key] || '';
+
+        Object.assign(filterInput.style, {
+          width: '100%',
+          height: '24px',
+          padding: '0 6px',
+          background: '#020617',
+          border: '1px solid #334155',
+          borderRadius: '4px',
+          color: '#e2e8f0',
+          fontSize: '11px',
+          outline: 'none'
+        });
+
+        filterInput.addEventListener('focus', function() {
+          this.style.borderColor = '#3b82f6';
+          this.style.boxShadow = '0 0 0 2px rgba(59,130,246,0.15)';
+        });
+
+        filterInput.addEventListener('blur', function() {
+          this.style.borderColor = '#334155';
+          this.style.boxShadow = 'none';
+        });
+
+        filterInput.addEventListener('input', function(e) {
+          var key = e.target.dataset.columnKey;
+          var val = e.target.value.trim();
+
+          if (val) {
+            _columnFilters[key] = val.toLowerCase();
+          } else {
+            delete _columnFilters[key];
+          }
+
+          // Re-render with filters
+          render();
+        });
+
+        // Prevent context menu on filter input
+        filterInput.addEventListener('contextmenu', function(e) {
+          e.stopPropagation();
+        });
+
+        filterTh.appendChild(filterInput);
+      }
 
       resizeHandle.addEventListener('mousedown', function (ev) {
         ev.preventDefault();
@@ -878,7 +975,7 @@
   function attachHeaderContextMenu() {
     document.querySelectorAll('.svc-col-ctx-menu').forEach(function (m) { m.remove(); });
 
-    grid.querySelectorAll('thead th[data-key]').forEach(function (th) {
+    grid.querySelectorAll('thead tr.header-main-row th[data-key]').forEach(function (th) {
       th.addEventListener('contextmenu', function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -2177,6 +2274,7 @@
   // setTreeFilter(fn) — fn receives a row object {row_index, data}, returns bool.
   // Pass null to remove filter (show all rows).
   var _treeFilter = null;
+  var _columnFilters = {}; // NEW: per-column filters
   // FIX: Flag that render() checks to skip autoResizeColumns + refreshCounts
   // during folder switches. These are the two main sources of folder-switch lag.
   var _renderIsFilterSwitch = false;
@@ -2213,8 +2311,18 @@
     }
   });
 
+  function clearColumnFilters() {
+    _columnFilters = {};
+    var inputs = document.querySelectorAll('.column-filter-input');
+    inputs.forEach(function(input) { input.value = ''; });
+    render();
+  }
+
+  // Export for toolbar
+  window.clearColumnFilters = clearColumnFilters;
+
   function getState() { return current; }
-  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter, saveColumnState: saveColumnState, toggleColumnVisibility: toggleColumnVisibility };
+  window.servicesGrid = { load: load, clear: clear, render: render, getState: getState, saveAllRows: saveAllRows, setTreeFilter: setTreeFilter, saveColumnState: saveColumnState, toggleColumnVisibility: toggleColumnVisibility, clearColumnFilters: clearColumnFilters };
 })();
 
 
@@ -2462,6 +2570,23 @@ document.addEventListener('DOMContentLoaded', () => {
     input.title = 'Search all columns in this sheet only (⌘K)';
   }
 });
+
+// Add clear filters button if not exists
+setTimeout(function() {
+  var toolbar = document.querySelector('.svc-toolbar-actions');
+  if (toolbar && !document.getElementById('clearColumnFiltersBtn')) {
+    var btn = document.createElement('button');
+    btn.id = 'clearColumnFiltersBtn';
+    btn.className = 'svc-btn';
+    btn.innerHTML = '✕ Clear Filters';
+    btn.title = 'Clear all column filters';
+    btn.style.marginLeft = '8px';
+    btn.style.background = '#1e293b';
+    btn.style.borderColor = '#334155';
+    btn.onclick = function() { if (window.clearColumnFilters) window.clearColumnFilters(); };
+    toolbar.appendChild(btn);
+  }
+}, 500);
 
 // ===== SEARCH FOR CURRENT TABLE (NO TABULATOR NEEDED) =====
 (function() {
