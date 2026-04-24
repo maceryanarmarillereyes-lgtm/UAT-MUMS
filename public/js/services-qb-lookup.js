@@ -686,7 +686,43 @@
     var rowsWithCase = current.rows.filter(function (r) {
       return r.data && r.data[caseCol.key] && String(r.data[caseCol.key]).trim();
     });
-    if (!rowsWithCase.length) return;
+    if (!rowsWithCase.length && !current.rows.length) return;
+
+    // ── FIX B: Wipe stale QB values for rows that have NO case number ─────────
+    // These rows were previously painted by autofill (case# was set then cleared).
+    // Without this guard, stale STATUS/TRACKING values persist from Supabase on load.
+    current.rows.forEach(function (row) {
+      if (!row.data) return;
+      var caseVal = String(row.data[caseCol.key] || '').trim();
+      if (caseVal) return; // row has a case# — handled by normal autofill path
+      var hasStale = linkedCols.some(function (lc) {
+        var v = row.data[lc.key];
+        return v !== '' && v != null && v !== '---' && v !== '—';
+      });
+      if (!hasStale) return;
+      // Clear stale linked data from row.data + DOM
+      linkedCols.forEach(function (lc) {
+        row.data[lc.key] = '';
+        var inp = gridEl.querySelector(
+          'input.cell[data-row="' + row.row_index + '"][data-key="' + lc.key + '"]'
+        );
+        if (inp) {
+          inp.value       = '';
+          inp.readOnly    = false;
+          inp.placeholder = '';
+          inp.title       = '';
+          inp.classList.remove('cell-qb-linked', 'cell-qb-pending', 'cell-qb-not-found');
+        }
+      });
+      // Persist the cleared values back to Supabase so stale data is removed
+      if (window.servicesDB && current.sheet && current.sheet.id) {
+        window.servicesDB.upsertRow(current.sheet.id, row.row_index, row.data)
+          .catch(function (err) {
+            console.warn('[qb-lookup] Failed to clear stale QB data for row', row.row_index, err);
+          });
+      }
+    });
+    // ── END FIX B ─────────────────────────────────────────────────────────────
 
     function rowNeedsLookup(row, nk) {
       if (force) return true;

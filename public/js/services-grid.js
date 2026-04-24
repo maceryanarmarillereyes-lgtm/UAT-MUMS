@@ -1909,6 +1909,33 @@
       DuplicateDetector.add(value, rowIdx);
       refreshDuplicateIndicatorsDebounced();
     }
+
+    // ── FIX: Clear linked QB columns when CASE# is wiped ─────────────────────
+    // When the user clears the CASE# cell, stale QB values (STATUS, TRACKING…)
+    // must be erased from row.data immediately — otherwise they persist in
+    // Supabase and reappear on every page reload even without a case number.
+    var caseColDef = getCaseColumnDef();
+    if (caseColDef && key === caseColDef.key && !String(value || '').trim()) {
+      var linkedColDefs = (current.sheet.column_defs || []).filter(function (c) {
+        return c && c.qbLookup && String(c.qbLookup.fieldId || '').trim();
+      });
+      linkedColDefs.forEach(function (lc) {
+        // Clear from row.data
+        rowObj.data[lc.key] = '';
+        // Clear from DOM input if visible
+        var linkedInp = grid.querySelector(
+          'input.cell[data-row="' + rowIdx + '"][data-key="' + lc.key + '"]'
+        );
+        if (linkedInp) {
+          linkedInp.value       = '';
+          linkedInp.readOnly    = false;
+          linkedInp.placeholder = '';
+          linkedInp.title       = '';
+          linkedInp.classList.remove('cell-qb-linked', 'cell-qb-pending', 'cell-qb-not-found');
+        }
+      });
+    }
+    // ── END FIX ───────────────────────────────────────────────────────────────
     setStatus('unsaved', 'Unsaved');
     updateStatusBar();
     var tKey = rowIdx + ':' + key;
