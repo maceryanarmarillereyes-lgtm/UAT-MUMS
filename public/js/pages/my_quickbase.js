@@ -4276,10 +4276,32 @@
 
       async function _sendCaseToSheet(sheetId, caseNum, description) {
         if (!_initEnv()) return { ok: false, error: 'MUMS_ENV not configured' };
-        // Resolve the sheet's actual first column key (e.g. col_a, not col_0)
-        // so the case number is written to the column that is VISIBLE in the grid.
         var firstColKey = await _getSheetFirstColKey(sheetId);
-        // Get max row_index — one tiny GET, no SDK overhead
+        var targetCase  = String(caseNum).trim();
+
+        // ★ DUPLICATE GUARD — scan every existing row in this sheet for caseNum.
+        // Covers BOTH QB-sent rows (_qb_case_num) AND manually-typed rows (any col).
+        // If found → return alreadyExists:true. No new row created.
+        try {
+          var allRows = await _pgGet('services_rows',
+            'select=row_index,data&sheet_id=eq.' + encodeURIComponent(sheetId) + '&limit=5000');
+          var dup = (allRows || []).find(function(r) {
+            var d = r.data || {};
+            // Check dedicated QB field first (fast path)
+            if (String(d._qb_case_num || '').trim() === targetCase) return true;
+            // Check the sheet's first (Case#) column
+            if (String(d[firstColKey]  || '').trim() === targetCase) return true;
+            // Full scan across all columns — covers manually-typed entries in any column
+            return Object.values(d).some(function(v) {
+              return String(v == null ? '' : v).trim() === targetCase;
+            });
+          });
+          if (dup) {
+            return { ok: true, alreadyExists: true, rowIndex: dup.row_index };
+          }
+        } catch (_) { /* non-fatal — fall through to normal insert */ }
+
+        // No duplicate — proceed with insert
         var existing = await _pgGet('services_rows',
           'select=row_index&sheet_id=eq.' + encodeURIComponent(sheetId)
           + '&order=row_index.desc&limit=1');
@@ -4288,12 +4310,11 @@
         var rowData = {
           _qb_sent:     true,
           _qb_ack:      false,
-          _qb_case_num: String(caseNum),
+          _qb_case_num: targetCase,
           _qb_sent_at:  new Date().toISOString(),
           _qb_desc:     String(description || '')
         };
-        // Write to the real first column key — this is what the grid renders
-        rowData[firstColKey] = String(caseNum);
+        rowData[firstColKey] = targetCase;
         await _pgUpsert('services_rows', {
           sheet_id:  sheetId,
           row_index: nextIdx,
@@ -4337,55 +4358,98 @@
               td.appendChild(badge);
             }
             badge.textContent = 'SERVICES';
-            badge.title = 'Sent to: ' + list.map(function(s) { return s.sheetTitle; }).join(', ');
+            // ★ FIX: Accurate hover tooltip — "Found in: [Sheet Name(s)]"
+            // Works for both QB-sent rows AND manually-typed case#s.
+            var sheetNames = list.map(function(s) { return s.sheetTitle || 'Sheet'; }).join(', ');
+            badge.title = '📋 Found in: ' + sheetNames;
           } else {
             if (badge) badge.remove();
           }
         });
       }
 
-      // ★ BUG2 FIX: Fetch QB-sent rows from the Services DB and stamp SERVICES
-      // badges on any case# that exists in any sheet — across ALL users/sessions.
-      // This replaces the localStorage-only approach which was invisible to other
-      // users and cleared on logout/browser wipe.
+      // ★ FULL FIX: Detect SERVICES badge for ALL case#s in any sheet —
+      // whether sent via QB right-click OR manually typed by a user.
+      // Approach: (1) fetch all active sheets + their column_defs to locate
+      // the Case# column per sheet; (2) fetch ALL services_rows (no _qb_sent
+      // filter); (3) extract caseNum from the correct column; (4) rebuild
+      // freshMap from scratch so deletions are reflected immediately.
       var _dbTagRefreshPending = false;
       async function _refreshServicesTagsFromDB() {
         if (!_initEnv()) return;
-        if (_dbTagRefreshPending) return; // dedupe concurrent calls
+        if (_dbTagRefreshPending) return;
         _dbTagRefreshPending = true;
         try {
-          // Fetch all QB-sent rows (across all sheets, all users)
-          var rows = await _pgGet('services_rows',
-            'select=data,sheet_id&data->>_qb_sent=eq.true&limit=2000');
-          if (!rows || !rows.length) return;
-          // Collect unique sheet IDs so we can look up titles
-          var sheetIdSet = {};
-          rows.forEach(function(r) { if (r.sheet_id) sheetIdSet[r.sheet_id] = 1; });
-          var sheetIds = Object.keys(sheetIdSet);
-          var sheetsData = [];
-          if (sheetIds.length) {
-            sheetsData = await _pgGet('services_sheets',
-              'select=id,title&id=in.(' + sheetIds.join(',') + ')&limit=500');
+          // Step 1: Fetch ALL active sheets with column_defs to find Case# col key
+          var sheets = await _pgGet('services_sheets',
+            'select=id,title,column_defs&is_archived=eq.false&limit=500');
+          if (!sheets || !sheets.length) {
+            saveSentMap({});
+            refreshAllBadges();
+            return;
           }
-          var sheetTitleMap = {};
-          (sheetsData || []).forEach(function(s) {
-            sheetTitleMap[s.id] = s.title || 'Untitled';
+
+          // Build per-sheet metadata: title + which column holds the case#
+          var sheetMeta = {};
+          sheets.forEach(function(s) {
+            var colDefs = Array.isArray(s.column_defs) ? s.column_defs : [];
+            // Find the CASE# column by label (case-insensitive match)
+            var caseCol = colDefs.find(function(c) {
+              return String(c.label || '').toUpperCase().includes('CASE');
+            }) || colDefs[0]; // fall back to first column
+            sheetMeta[s.id] = {
+              title:      s.title || 'Untitled',
+              caseColKey: caseCol ? (caseCol.key || null) : null
+            };
           });
-          // ★ BUG2 PERMANENT FIX: REBUILD sentMap from DB, not merge.
-          // Previous logic ONLY added entries — never removed them.
-          // If a case was deleted from services_rows (via deleteQbRow or
-          // manual sheet delete), the badge stayed permanently in localStorage.
-          // Fix: build a clean freshMap from current DB rows only, then save it.
-          // Badges will now accurately reflect what's actually in the DB.
+
+          // Step 2: Fetch ALL rows (no _qb_sent filter) — covers manual entries
+          var rows = await _pgGet('services_rows',
+            'select=data,sheet_id&limit=5000');
+          if (!rows || !rows.length) {
+            saveSentMap({});
+            refreshAllBadges();
+            return;
+          }
+
+          // Step 3: Build freshMap from DB-authoritative data
           var freshMap = {};
           rows.forEach(function(row) {
-            var d = row.data || {};
-            // Accept _qb_case_num (always set by sendCaseToSheet) or fall back
-            // to the first-column value (col_a / col_0) for legacy rows
-            var caseNum = String(d._qb_case_num || d.col_a || d.col_0 || '').trim();
-            if (!caseNum || caseNum === 'undefined') return;
-            var sheetId    = row.sheet_id;
-            var sheetTitle = sheetTitleMap[sheetId] || 'Sheet';
+            var d       = row.data || {};
+            var sheetId = row.sheet_id;
+            var meta    = sheetMeta[sheetId];
+            if (!meta) return; // row belongs to an archived/deleted sheet
+
+            // Priority 1: explicit _qb_case_num (QB-sent rows)
+            var caseNum = String(d._qb_case_num || '').trim();
+
+            // Priority 2: the sheet's designated Case# column (manually typed)
+            if (!caseNum && meta.caseColKey) {
+              caseNum = String(d[meta.caseColKey] || '').trim();
+            }
+
+            // Priority 3: legacy col_a / col_0 fallback
+            if (!caseNum) {
+              caseNum = String(d.col_a || d.col_0 || '').trim();
+            }
+
+            // Priority 4: scan all values for a 5+ digit numeric case# pattern
+            if (!caseNum) {
+              var vals = Object.values(d);
+              for (var vi = 0; vi < vals.length; vi++) {
+                var v = String(vals[vi] == null ? '' : vals[vi]).trim();
+                if (/^\d{5,}$/.test(v)) { caseNum = v; break; }
+              }
+            }
+
+            // Skip internal flags, empty, or invalid values
+            if (!caseNum
+              || caseNum === 'undefined'
+              || caseNum === 'true'
+              || caseNum === 'false'
+              || caseNum.length < 4) return;
+
+            var sheetTitle = meta.title;
             if (!freshMap[caseNum]) freshMap[caseNum] = [];
             if (!freshMap[caseNum].some(function(e) { return e.sheetId === sheetId; })) {
               freshMap[caseNum].push({
@@ -4395,13 +4459,11 @@
               });
             }
           });
-          // Overwrite localStorage with the DB-authoritative map.
-          // Any case removed from the sheet is now also removed from badges.
+
+          // Overwrite localStorage — deletions + manual entries now both reflected
           saveSentMap(freshMap);
-          // Re-paint badges with the freshly-rebuilt (DB-authoritative) map
           refreshAllBadges();
         } catch (err) {
-          // Non-fatal: badges fall back to localStorage values
           console.warn('[QBSendToSheet] _refreshServicesTagsFromDB:', err && err.message || err);
         } finally {
           _dbTagRefreshPending = false;
@@ -4488,6 +4550,24 @@
           // Fire async write — does NOT block the UI thread
           _sendCaseToSheet(sheetId, caseNum, descText || '').then(function(result) {
             if (!result.ok) throw new Error(result.error || 'Write failed');
+
+            // ★ DUPLICATE GUARD: Case# already exists in this sheet
+            // No new row was created — show info toast, still paint the badge.
+            if (result.alreadyExists) {
+              item.classList.remove('qb-send-ctx-item-sending');
+              item.classList.add('qb-send-ctx-item-sent');
+              if (arrowEl) arrowEl.textContent = '✓';
+              recordSent(caseNum, sheetId, sheetTitle);
+              refreshAllBadges();
+              if (window.mumsToast && typeof window.mumsToast.show === 'function') {
+                window.mumsToast.show('info', 'Already in Sheet',
+                  'Case# ' + caseNum + ' already exists in "' + sheetTitle + '"', 4000);
+              }
+              setTimeout(closeAllQbCtx, 900);
+              return;
+            }
+
+            // New row created successfully
             recordSent(caseNum, sheetId, sheetTitle);
             refreshAllBadges();
             // Update item to "sent" state
