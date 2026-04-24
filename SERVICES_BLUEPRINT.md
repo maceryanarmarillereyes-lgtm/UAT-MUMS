@@ -505,3 +505,8 @@ If step #3 is missing, task is incomplete.
   - **Patch — `functions/api/quickbase/bulk-lookup.js`:** Added QB object-value normalization (`name/email/display`) so User/List-User fields no longer surface as `[object Object]` in linked columns.
   - **Patch — `public/js/services-qb-lookup.js`:** Removed per-row `queuePersistRow()` calls during lookup paint and enforced one bulk `services_rows` upsert payload with `sheet_id`, `row_index`, `data`, and `updated_at`.
   - **Patch — `public/js/services-qb-lookup.js`:** UI paint now normalizes object values (`name/email`) before assigning `inp.value`, preventing `[object Object]` in grid cells.
+
+- **2026-04-24 (Services # column hard-width CSS lock):** MACE-cleared UI stability patch to keep row number column fixed without JS resizing dependencies.
+  - **Update — `public/css/services.css`:** Appended permanent `#svcGrid` table-layout override (`fixed`) plus strict 49px width/min/max constraints for `__rownum__` col, `th.row-num`, `td.row-num`, and `.row-num` selectors.
+  - **Behavior contract:** `#` column width is now CSS-enforced and centered, with overflow clipped and horizontal padding removed.
+  - **Files changed:** `public/css/services.css`, `SERVICES_BLUEPRINT.md`.
