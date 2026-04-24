@@ -39,6 +39,7 @@ The Services workspace is a spreadsheet-style module for authenticated users, ba
 - CSV export and force-save bulk upsert.
 - Column sanitization self-heal (`sanitizeHeaderLabel`) then persisted.
 - Row number lane (`__rownum__`) is hard-locked to `49px`; auto-fit must never mutate this lane (auto-fit applies to data columns only).
+- Legacy synthetic row-number defs/width entries (`rownum`, `__rownum__`) are sanitized out on load/state-save to prevent ghost wide `#` columns after migrations.
 
 ### D) Treeview folders (per sheet)
 - Folder definitions stored in `services_treeview_folders`.
@@ -521,3 +522,5 @@ If step #3 is missing, task is incomplete.
 
 ## Blueprint Change Log
 - 2026-04-24: Locked Services `#` column to 49px and documented that auto-fit excludes `__rownum__`.
+
+- 2026-04-24: Added row-number migration guard to drop legacy synthetic keys (`rownum`, `__rownum__`) from `column_defs` and persisted width maps.

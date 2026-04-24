@@ -33,14 +33,17 @@
   var _columnFilters = {}; // per-column filter values
   var _searchAllQuery = ''; // toolbar all-columns query
   var isResizing  = false;
-  function computeRowNumWidth(totalRows) {
-    var digits = String(Math.max(totalRows || 1, 1)).length;
-    var px = digits * 9 + 22;
-    if (px < 36) px = 36;
-    if (px > 72) px = 72;
-    return px; // return number only, no 'px'
+  var ROW_NUM_LOCK_PX = 49;
+
+  function isSyntheticRowNumKey(key) {
+    var k = String(key == null ? '' : key).trim().toLowerCase();
+    return k === 'rownum' || k === '__rownum__';
   }
-  var ROW_NUM_COL_WIDTH_PX = '36px'; // default; updated per-render
+  function computeRowNumWidth(totalRows) {
+    void totalRows;
+    return ROW_NUM_LOCK_PX;
+  }
+  var ROW_NUM_COL_WIDTH_PX = ROW_NUM_LOCK_PX + 'px'; // locked width
   function lockRowNumWidth(th) {
     if (!th) return;
     th.style.setProperty('width', ROW_NUM_COL_WIDTH_PX, 'important');
@@ -67,13 +70,21 @@
 
   function normalizeColumnDefs(columnDefs) {
     var changed = false;
-    var normalized = (columnDefs || []).map(function (c, idx) {
-      var next = Object.assign({}, c || {});
-      var safeLabel = sanitizeHeaderLabel(next.label, idx);
-      if (next.label !== safeLabel) changed = true;
-      next.label = safeLabel;
-      return next;
-    });
+    var normalized = (columnDefs || [])
+      .filter(function (c) {
+        if (isSyntheticRowNumKey(c && c.key)) {
+          changed = true;
+          return false;
+        }
+        return true;
+      })
+      .map(function (c, idx) {
+        var next = Object.assign({}, c || {});
+        var safeLabel = sanitizeHeaderLabel(next.label, idx);
+        if (next.label !== safeLabel) changed = true;
+        next.label = safeLabel;
+        return next;
+      });
     return { normalized: normalized, changed: changed };
   }
 
@@ -93,11 +104,23 @@
   }
 
 
+
+  function sanitizeColumnWidthsMap(widths) {
+    var out = {};
+    Object.keys(widths || {}).forEach(function (key) {
+      if (isSyntheticRowNumKey(key)) return;
+      var raw = Number(widths[key]);
+      if (!raw) return;
+      out[key] = Math.max(60, Math.min(800, raw));
+    });
+    return out;
+  }
+
   async function saveColumnState() {
     if (!current || !current.sheet || !current.sheet.id || isResizing) return;
     var columnDefs = Array.isArray(current.sheet.column_defs) ? current.sheet.column_defs : [];
     var state = {
-      widths: current.sheet.column_widths || {},
+      widths: sanitizeColumnWidthsMap(current.sheet.column_widths || {}),
       hidden: columnDefs.filter(function (c) { return !!(c && c.hidden); }).map(function (c) { return c.key; })
     };
 
@@ -215,7 +238,7 @@
       try {
         var localState = JSON.parse(localStateRaw);
         current.sheet.column_state = localState;
-        current.sheet.column_widths = Object.assign({}, localState.widths || {});
+        current.sheet.column_widths = sanitizeColumnWidthsMap(localState.widths || {});
         if (Array.isArray(localState.hidden)) {
           localState.hidden.forEach(function (key) {
             var localCol = current.sheet.column_defs.find(function (c) { return c && c.key === key; });
@@ -226,7 +249,7 @@
       } catch (_) {}
     } else if (sheet.column_state) {
       current.sheet.column_state = sheet.column_state;
-      current.sheet.column_widths = Object.assign({}, (sheet.column_state && sheet.column_state.widths) || {});
+      current.sheet.column_widths = sanitizeColumnWidthsMap((sheet.column_state && sheet.column_state.widths) || {});
       if (Array.isArray(sheet.column_state.hidden)) {
         sheet.column_state.hidden.forEach(function (key) {
           var col = current.sheet.column_defs.find(function (c) { return c && c.key === key; });
