@@ -40,8 +40,10 @@
     return k === 'rownum' || k === '__rownum__';
   }
   function computeRowNumWidth(totalRows) {
-    void totalRows;
-    return ROW_NUM_LOCK_PX;
+    var digits = String(Math.max(totalRows, 1)).length;
+    // Base padding (left+right) is 8px, font is 13px JetBrains Mono (approx 8px per char)
+    // We add a little extra buffer for the sticky border.
+    return Math.max(36, (digits * 8) + 16);
   }
   var ROW_NUM_COL_WIDTH_PX = ROW_NUM_LOCK_PX + 'px'; // locked width
   function lockRowNumWidth(th) {

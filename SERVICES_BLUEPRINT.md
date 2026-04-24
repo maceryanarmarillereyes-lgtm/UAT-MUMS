@@ -514,13 +514,14 @@ If step #3 is missing, task is incomplete.
   - **Patch — `public/js/services-qb-lookup.js`:** Removed per-row `queuePersistRow()` calls during lookup paint and enforced one bulk `services_rows` upsert payload with `sheet_id`, `row_index`, `data`, and `updated_at`.
   - **Patch — `public/js/services-qb-lookup.js`:** UI paint now normalizes object values (`name/email`) before assigning `inp.value`, preventing `[object Object]` in grid cells.
 
-- **2026-04-24 (Services # column hard-width CSS lock):** MACE-cleared UI stability patch to keep row number column fixed without JS resizing dependencies.
-  - **Update — `public/css/services.css`:** Appended permanent `#svcGrid` table-layout override (`fixed`) plus strict 49px width/min/max constraints for `__rownum__` col, `th.row-num`, `td.row-num`, and `.row-num` selectors.
-  - **Behavior contract:** `#` column width is now CSS-enforced and centered, with overflow clipped and horizontal padding removed.
-  - **Files changed:** `public/css/services.css`, `SERVICES_BLUEPRINT.md`.
+- **2026-04-24 (Services # column dynamic auto-fit):** MACE-cleared UI improvement to make row number column width dynamic based on digit count.
+  - **Update — `public/js/services-grid.js`:** Replaced fixed `ROW_NUM_LOCK_PX` with dynamic `computeRowNumWidth(totalRows)` that calculates width based on the number of digits in `totalRows`.
+  - **Update — `public/css/services.css`:** Changed fixed 49px overrides to use `var(--row-num-w)` CSS variable, allowing the JS-calculated width to take effect while maintaining strict layout constraints.
+  - **Behavior contract:** `#` column width now auto-fits to the maximum row index digits (e.g., ~36px for 1-2 digits, ~44px for 3 digits, etc.), ensuring no wasted space.
+  - **Files changed:** `public/js/services-grid.js`, `public/css/services.css`, `SERVICES_BLUEPRINT.md`.
 
 
 ## Blueprint Change Log
-- 2026-04-24: Locked Services `#` column to 49px and documented that auto-fit excludes `__rownum__`.
+- 2026-04-24: Implemented dynamic auto-fit for Services `#` column width based on row digit count.
 
 - 2026-04-24: Added row-number migration guard to drop legacy synthetic keys (`rownum`, `__rownum__`) from `column_defs` and persisted width maps.
