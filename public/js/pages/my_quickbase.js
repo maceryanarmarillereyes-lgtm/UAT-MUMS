@@ -4344,6 +4344,65 @@
         });
       }
 
+      // ★ BUG2 FIX: Fetch QB-sent rows from the Services DB and stamp SERVICES
+      // badges on any case# that exists in any sheet — across ALL users/sessions.
+      // This replaces the localStorage-only approach which was invisible to other
+      // users and cleared on logout/browser wipe.
+      var _dbTagRefreshPending = false;
+      async function _refreshServicesTagsFromDB() {
+        if (!_initEnv()) return;
+        if (_dbTagRefreshPending) return; // dedupe concurrent calls
+        _dbTagRefreshPending = true;
+        try {
+          // Fetch all QB-sent rows (across all sheets, all users)
+          var rows = await _pgGet('services_rows',
+            'select=data,sheet_id&data->>_qb_sent=eq.true&limit=2000');
+          if (!rows || !rows.length) return;
+          // Collect unique sheet IDs so we can look up titles
+          var sheetIdSet = {};
+          rows.forEach(function(r) { if (r.sheet_id) sheetIdSet[r.sheet_id] = 1; });
+          var sheetIds = Object.keys(sheetIdSet);
+          var sheetsData = [];
+          if (sheetIds.length) {
+            sheetsData = await _pgGet('services_sheets',
+              'select=id,title&id=in.(' + sheetIds.join(',') + ')&limit=500');
+          }
+          var sheetTitleMap = {};
+          (sheetsData || []).forEach(function(s) {
+            sheetTitleMap[s.id] = s.title || 'Untitled';
+          });
+          // Merge DB data into the local sentMap
+          var m = loadSentMap();
+          var changed = false;
+          rows.forEach(function(row) {
+            var d = row.data || {};
+            // Accept _qb_case_num (always set by sendCaseToSheet) or fall back
+            // to the first-column value (col_a / col_0) for legacy rows
+            var caseNum = String(d._qb_case_num || d.col_a || d.col_0 || '').trim();
+            if (!caseNum || caseNum === 'undefined') return;
+            var sheetId    = row.sheet_id;
+            var sheetTitle = sheetTitleMap[sheetId] || 'Sheet';
+            if (!m[caseNum]) m[caseNum] = [];
+            if (!m[caseNum].some(function(e) { return e.sheetId === sheetId; })) {
+              m[caseNum].push({
+                sheetId:    sheetId,
+                sheetTitle: sheetTitle,
+                sentAt:     d._qb_sent_at || ''
+              });
+              changed = true;
+            }
+          });
+          if (changed) saveSentMap(m);
+          // Re-paint badges with the merged (DB + local) map
+          refreshAllBadges();
+        } catch (err) {
+          // Non-fatal: badges fall back to localStorage values
+          console.warn('[QBSendToSheet] _refreshServicesTagsFromDB:', err && err.message || err);
+        } finally {
+          _dbTagRefreshPending = false;
+        }
+      }
+
       // ── Build & show context menu ────────────────────────────────────────────
       async function showSendToSheetMenu(e, caseNum, descText) {
         closeAllQbCtx();
@@ -4506,6 +4565,9 @@
             }
           });
           refreshAllBadges();
+          // ★ BUG2 FIX: Also check the DB so badges appear for cases sent by
+          // ANY user from ANY session — not just the current browser's localStorage.
+          _refreshServicesTagsFromDB();
         };
         if (typeof requestIdleCallback === 'function') {
           requestIdleCallback(run, { timeout: 500 });

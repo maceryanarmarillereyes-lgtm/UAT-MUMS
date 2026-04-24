@@ -264,8 +264,51 @@
     });
   }
 
+  // ★ BUG1 FIX: After ACK, removes ✓/✕ buttons and restores a plain read-only
+  // input showing the case number. Preserves all data-* attrs so cell lookups
+  // (applyRowToGrid, duplicate detector) continue to work correctly.
+  function _removeQbButtonsFromRow(tr, rowData) {
+    if (!tr) return;
+    var wrap = tr.querySelector('.svc-qb-case-cell-wrap');
+    if (!wrap) return;
+    var caseTd = wrap.parentNode;
+    if (!caseTd) return;
+    var existingInp = wrap.querySelector('input.cell');
+    // Prefer explicit _qb_case_num, fall back to whatever was in the input
+    var caseNum = ((rowData && rowData.data && rowData.data._qb_case_num)
+      ? String(rowData.data._qb_case_num)
+      : (existingInp ? existingInp.value : '')).trim();
+    var dataRow = existingInp ? existingInp.dataset.row  : '';
+    var dataKey = existingInp ? existingInp.dataset.key  : '';
+    var dataFmt = existingInp ? existingInp.dataset.format : 'auto';
+    var dataRaw = existingInp ? existingInp.dataset.raw   : caseNum;
+    // Swap wrapper out for a plain (read-only) input
+    caseTd.removeChild(wrap);
+    caseTd.classList.remove('svc-qb-case-col');
+    var plainInp = document.createElement('input');
+    plainInp.className    = 'cell';
+    plainInp.type         = 'text';
+    plainInp.value        = caseNum;
+    plainInp.readOnly     = true;
+    plainInp.dataset.row  = dataRow;
+    plainInp.dataset.key  = dataKey;
+    plainInp.dataset.format = dataFmt;
+    plainInp.dataset.raw  = dataRaw;
+    caseTd.appendChild(plainInp);
+  }
+
   function applyRowToGrid(row) {
     if (!current || !row) return;
+    // ★ BUG1 FIX: When a realtime UPDATE marks _qb_ack=true for a pending row,
+    // remove the action buttons and restore the plain cell immediately.
+    if (row.data && row.data._qb_ack === true) {
+      var ackTr = grid.querySelector('tbody tr[data-row="' + row.row_index + '"]');
+      if (ackTr && ackTr.classList.contains('svc-qb-row-pending')) {
+        ackTr.classList.remove('svc-qb-row-pending');
+        ackTr.classList.add('svc-qb-row-acked');
+        _removeQbButtonsFromRow(ackTr, row);
+      }
+    }
     (current.sheet.column_defs || []).forEach(function (c) {
       var inp = grid.querySelector('input.cell[data-row="' + row.row_index + '"][data-key="' + c.key + '"]');
       if (inp && document.activeElement !== inp) {
@@ -812,8 +855,15 @@
             await window.servicesDB.ackQbRow(current.sheet.id, rowIndex);
             tr.classList.remove('svc-qb-row-pending');
             tr.classList.add('svc-qb-row-acked');
+            // ★ BUG1 FIX: Remove ✓/✕ buttons and restore the plain case-number cell.
+            // The case number is preserved from rowData — it never disappears.
+            _removeQbButtonsFromRow(tr, rowData);
+          } catch (err) {
+            // On failure re-enable so user can retry
             _qbAckBtn.textContent = '✓';
-          } catch (_) { _qbAckBtn.textContent = '✓'; _qbAckBtn.disabled = false; }
+            _qbAckBtn.disabled = false;
+            console.error('[services-grid] ackQbRow failed:', err);
+          }
         });
         // DELETE button (X) — will be placed in Case# column, not row-num cell
         _qbDelBtn = document.createElement('button');
