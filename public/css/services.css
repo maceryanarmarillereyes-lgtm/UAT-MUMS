@@ -3889,3 +3889,27 @@ th[data-key].has-filter::after {
   border-radius: 50%;
 }
 
+
+/* NUCLEAR OVERRIDE - # column 49px - 2026-04-24 */
+#svcGrid col[data-key="__rownum__"] {
+  width: 49px !important;
+  min-width: 49px !important;
+  max-width: 49px !important;
+}
+#svcGrid thead th.row-num,
+#svcGrid tbody td.row-num,
+#svcGrid th.row-num,
+#svcGrid td.row-num {
+  width: 49px !important;
+  min-width: 49px !important;
+  max-width: 49px !important;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+}
+#svcGrid {
+  table-layout: fixed !important;
+}

@@ -193,6 +193,10 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-24 (Nuclear CSS override for Services `#` column fixed at 49px):**
+  - **Edit — `public/css/services.css`:** Added a late-file `#svcGrid` nuclear override block that hard-locks `col[data-key="__rownum__"]` and all `.row-num` header/body cells to exactly `49px` width/min/max with `!important`, plus fixed-layout enforcement on `#svcGrid`.
+  - **Behavior contract update:** Row-number lane remains forced to 49px even if earlier selectors or runtime style writes attempt to resize it; no auth/realtime/API/router logic touched.
+
 - **2026-04-24 (Services `#` column hard-lock 49px + duplicate CSS cleanup):**
   - **Edit — `public/css/services.css`:** Replaced the primary `.svc-grid thead th.row-num, .svc-grid tbody td.row-num` sizing rule to fixed `49px` width/min/max with zero horizontal padding and removed the duplicated late-file `#svcGrid`/row-num override block that was reintroducing conflicting width behavior.
   - **Edit — `public/css/services.css`:** Updated the `#svcGrid` fixed-layout override to `width: auto` + `min-width: 0` so the table no longer forces `min-width: 100%` expansion.
