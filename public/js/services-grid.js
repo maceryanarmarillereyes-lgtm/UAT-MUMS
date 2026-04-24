@@ -302,9 +302,10 @@
     caseKey: null,
     lastBuild: 0,
 
-    init: function (rows, key) {
+    init: function (rows, key, forceRebuild) {
       var now = Date.now();
-      if (this.index && this.caseKey === key && (now - this.lastBuild < 5000)) return;
+      // Allow forced rebuild (e.g. after +Row or render()) — skip throttle guard
+      if (!forceRebuild && this.index && this.caseKey === key && (now - this.lastBuild < 5000)) return;
 
       this.caseKey = key;
       this.index = new Map();
@@ -894,6 +895,16 @@
     attachHeaderContextMenu();
     attachRowContextMenu();
     updateStatusBar();
+
+    // FIX-DUP-3: Always rebuild the DuplicateDetector after every render()
+    // — covers +Row, filter switch, sort, resize, undo, restore.
+    // Using forceRebuild=true bypasses the 5-second throttle guard so newly
+    // added rows (row_index not yet in index) are registered immediately.
+    var caseColAfterRender = getCaseColumnDef();
+    if (caseColAfterRender && current && current.rows.length > 0) {
+      DuplicateDetector.init(current.rows, caseColAfterRender.key, true);
+    }
+
     refreshDuplicateIndicators();
 
     // ── Column resize ──────────────────────────────────────────────────────────
@@ -957,6 +968,8 @@
     grid.querySelectorAll('input.cell').forEach(function (inp) {
       inp.addEventListener('input', onCellInput);
       inp.addEventListener('keydown', onCellKey);
+      // FIX-DUP-2: Commit final value to DuplicateDetector index on blur
+      inp.addEventListener('blur', onCellCommit);
     });
   }
 
@@ -1905,8 +1918,16 @@
     redoStack = [];
     rowObj.data[key] = value;
     if (DuplicateDetector.caseKey === key) {
-      DuplicateDetector.remove(prevValue, rowIdx);
-      DuplicateDetector.add(value, rowIdx);
+      // FIX-DUP-1: Remove the previous committed value from index.
+      // Do NOT add the new (possibly still-typing) value here — partial keystrokes
+      // like "1", "10", "103" would pollute the index. The add() happens on blur
+      // (via onCellCommit) AFTER the user has finished typing the full case number.
+      var prevStr = String(prevValue || '').trim();
+      if (prevStr.length >= 3) {
+        DuplicateDetector.remove(prevStr, rowIdx);
+      }
+      // Trigger duplicate check on the live value so the warning bubble appears
+      // as the user types — but without corrupting the index with partial values.
       refreshDuplicateIndicatorsDebounced();
     }
 
@@ -1949,6 +1970,21 @@
     }, SAVE_DEBOUNCE_MS));
   }
 
+  // FIX-DUP-2: Commit final case# to the DuplicateDetector index ONLY after the
+  // user finishes typing (blur / Enter). This prevents partial keystrokes ("1",
+  // "10", "103"…) from polluting the index and causing false duplicate flags.
+  function onCellCommit(e) {
+    var key = e.target.dataset.key;
+    if (!DuplicateDetector.index || DuplicateDetector.caseKey !== key) return;
+    var rowIdx = +e.target.dataset.row;
+    var finalVal = String(e.target.value || '').trim();
+    // Re-register the committed value so check() can find cross-row duplicates
+    if (finalVal.length >= 3) {
+      DuplicateDetector.add(finalVal, rowIdx);
+    }
+    refreshDuplicateIndicatorsDebounced();
+  }
+
   function onCellKey(e) {
     var row  = +e.target.dataset.row;
     var key  = e.target.dataset.key;
@@ -1983,9 +2019,17 @@
 
   addRowBtn.addEventListener('click', function () {
     if (!current) return;
+    // FIX-DUP-5: Use the max row_index across ALL rows (not just length) to avoid
+    // collision when rows have been deleted or loaded out of order.
     var maxIdx = current.rows.reduce(function (m, r) { return Math.max(m, r.row_index); }, -1);
-    current.rows.push({ row_index: maxIdx + 1, data: {} });
+    var newRowIdx = maxIdx + 1;
+    // Guard: if this index already exists (shouldn't happen, but defensive), increment
+    while (current.rows.some(function (r) { return r.row_index === newRowIdx; })) {
+      newRowIdx++;
+    }
+    current.rows.push({ row_index: newRowIdx, data: {} });
     render();
+    // render() now calls DuplicateDetector.init(forceRebuild=true) at end — new row registered
   });
 
   addColBtn.addEventListener('click', async function () {
@@ -2045,7 +2089,17 @@
     if (window.updateTimer) window.updateTimer.reset();
     localStorage.setItem('svc_lastFullUpdate', Date.now().toString());
     await saveColumnState();
-    var nonEmpty = current.rows.filter(function (r) {
+
+    // FIX-DUP-4: Deduplicate current.rows by row_index before sending to Supabase.
+    // If two entries share the same row_index (e.g. a phantom row from +Row that never
+    // got a unique index), PostgreSQL's ON CONFLICT fires twice on the same row →
+    // "ON CONFLICT DO UPDATE command cannot affect row a second time".
+    // Strategy: last-writer-wins (keep the last occurrence in the array).
+    var rowMap = new Map();
+    current.rows.forEach(function (r) { rowMap.set(r.row_index, r); });
+    var dedupedRows = Array.from(rowMap.values());
+
+    var nonEmpty = dedupedRows.filter(function (r) {
       return r.data && Object.values(r.data).some(function (v) { return v !== '' && v != null; });
     });
     if (nonEmpty.length === 0) { notify('info', 'Nothing to Save', 'No data yet.'); return; }
@@ -2055,6 +2109,8 @@
       var result = await window.servicesDB.bulkUpsertRows(current.sheet.id,
         nonEmpty.map(function (r) { return { row_index: r.row_index, data: r.data }; }));
       if (result && result.error) throw new Error(result.error.message || 'Write failed');
+      // Sync current.rows to the deduped set so future saves are clean
+      current.rows = dedupedRows;
       setStatus('saved', '✓ All saved');
       notify('success', 'Saved', nonEmpty.length + ' rows saved.');
       window.servicesDashboard && window.servicesDashboard.update(current);
