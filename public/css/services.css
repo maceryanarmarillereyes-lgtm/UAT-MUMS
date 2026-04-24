@@ -3890,3 +3890,22 @@ th[data-key].has-filter::after {
   background: #0ea5e9;
   border-radius: 50%;
 }
+
+/* --- PERMANENT FIX: Services # column — 2026-04-24 --- */
+#svcGrid {
+  table-layout: fixed !important;
+  width: max-content !important;
+}
+
+#svcGrid col[data-key="__rownum__"],
+#svcGrid th.row-num,
+#svcGrid td.row-num,
+#svcGrid .row-num {
+  width: 49px !important;
+  min-width: 49px !important;
+  max-width: 49px !important;
+  overflow: hidden !important;
+  text-align: center !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
