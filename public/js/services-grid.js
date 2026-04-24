@@ -788,50 +788,51 @@
       rowNumTd.dataset.row = String(rowIndex);
 
       // ── QB-SENT ROW: blink + ACK/DELETE controls ─────────────────────────
+      // FIX: Buttons are created here but NOT appended to rowNumTd.
+      // They will be injected into the FIRST DATA COLUMN td (Case# column) below.
       var _isQbSent = rowData.data && rowData.data._qb_sent === true;
       var _isQbAck  = rowData.data && rowData.data._qb_ack  === true;
+      var _qbAckBtn = null, _qbDelBtn = null;
       if (_isQbSent) {
         tr.classList.add(_isQbAck ? 'svc-qb-row-acked' : 'svc-qb-row-pending');
         tr.setAttribute('data-qb-sent-row', '1');
-        // ACK button (checkmark)
-        var ackBtn = document.createElement('button');
-        ackBtn.className = 'svc-qb-ack-btn';
-        ackBtn.type = 'button';
-        ackBtn.title = _isQbAck ? 'Already acknowledged' : 'Acknowledge — clears highlight';
-        ackBtn.innerHTML = '✓';
-        ackBtn.disabled = _isQbAck;
-        ackBtn.addEventListener('click', async function(ev) {
+        // ACK button (checkmark) — will be placed in Case# column, not row-num cell
+        _qbAckBtn = document.createElement('button');
+        _qbAckBtn.className = 'svc-qb-ack-btn';
+        _qbAckBtn.type = 'button';
+        _qbAckBtn.title = _isQbAck ? 'Already acknowledged' : 'Acknowledge — clears highlight';
+        _qbAckBtn.innerHTML = '✓';
+        _qbAckBtn.disabled = _isQbAck;
+        _qbAckBtn.addEventListener('click', async function(ev) {
           ev.stopPropagation();
           if (!window.servicesDB || !window.servicesDB.ackQbRow) return;
-          ackBtn.disabled = true;
-          ackBtn.textContent = '⏳';
+          _qbAckBtn.disabled = true;
+          _qbAckBtn.textContent = '⏳';
           try {
             await window.servicesDB.ackQbRow(current.sheet.id, rowIndex);
             tr.classList.remove('svc-qb-row-pending');
             tr.classList.add('svc-qb-row-acked');
-            ackBtn.textContent = '✓';
-          } catch (_) { ackBtn.textContent = '✓'; ackBtn.disabled = false; }
+            _qbAckBtn.textContent = '✓';
+          } catch (_) { _qbAckBtn.textContent = '✓'; _qbAckBtn.disabled = false; }
         });
-        rowNumTd.appendChild(ackBtn);
-        // DELETE button (X)
-        var delQbBtn = document.createElement('button');
-        delQbBtn.className = 'svc-qb-del-btn';
-        delQbBtn.type = 'button';
-        delQbBtn.title = 'Remove this QB-sent case from the sheet';
-        delQbBtn.innerHTML = '✕';
-        delQbBtn.addEventListener('click', async function(ev) {
+        // DELETE button (X) — will be placed in Case# column, not row-num cell
+        _qbDelBtn = document.createElement('button');
+        _qbDelBtn.className = 'svc-qb-del-btn';
+        _qbDelBtn.type = 'button';
+        _qbDelBtn.title = 'Remove this QB-sent case from the sheet';
+        _qbDelBtn.innerHTML = '✕';
+        _qbDelBtn.addEventListener('click', async function(ev) {
           ev.stopPropagation();
           if (!confirm('Remove Case# ' + (rowData.data._qb_case_num || '') + ' from this sheet?')) return;
           if (!window.servicesDB || !window.servicesDB.deleteQbRow) return;
-          delQbBtn.disabled = true;
+          _qbDelBtn.disabled = true;
           try {
             await window.servicesDB.deleteQbRow(current.sheet.id, rowIndex);
-          } catch (_) { delQbBtn.disabled = false; }
+          } catch (_) { _qbDelBtn.disabled = false; }
         });
-        rowNumTd.appendChild(delQbBtn);
       }
-      // ── END QB-SENT ROW ────────────────────────────────────────────────────
-      cols.forEach(function (c) {
+      // ── END QB-SENT ROW (buttons injected into first data col below) ───────
+      cols.forEach(function (c, _colIdx) {
         var td  = mkEl('td', null, tr);
         var savedWidth = Number(current.sheet.column_widths && current.sheet.column_widths[c.key]);
         if (savedWidth) {
@@ -929,6 +930,28 @@
           inp.style.color = '#64748b';
           inp.style.textAlign = 'center';
         }
+
+        // ── FIX: Inject ACK/DELETE buttons into FIRST DATA COLUMN (Case# col) ──
+        // Previously buttons were in the row-num (#) cell which hid them behind
+        // the narrow row number column. Now they appear beside the case number.
+        if (_isQbSent && _colIdx === 0 && _qbAckBtn && _qbDelBtn) {
+          // If the case number wasn't written to this column, show it via inp value
+          if (!inp.value && rowData.data._qb_case_num) {
+            inp.value = String(rowData.data._qb_case_num);
+            inp.dataset.raw = inp.value;
+          }
+          // Wrap input + buttons inside a flex container so they sit inline
+          var _qbCaseWrap = document.createElement('div');
+          _qbCaseWrap.className = 'svc-qb-case-cell-wrap';
+          // Move inp into wrapper (td → wrap → inp)
+          td.removeChild(inp);
+          _qbCaseWrap.appendChild(inp);
+          _qbCaseWrap.appendChild(_qbAckBtn);
+          _qbCaseWrap.appendChild(_qbDelBtn);
+          td.appendChild(_qbCaseWrap);
+          td.classList.add('svc-qb-case-col');
+        }
+        // ── END QB BUTTON INJECTION ─────────────────────────────────────────────
       });
     }
 

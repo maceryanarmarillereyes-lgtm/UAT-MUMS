@@ -11617,6 +11617,7 @@ body[data-theme="ivory_executive"] .services-btn:hover {
 /* ── SERVICES Badge on qb-case-id cell ────────────────────────────────────── */
 td.qb-case-id {
   position: relative;
+  text-align: center !important;   /* FIX: Case# column always centered */
 }
 .qb-services-badge {
   display: inline-block;
@@ -11668,23 +11669,43 @@ td.qb-case-id {
   box-shadow: inset 4px 0 0 #4ade80 !important;
 }
 
-/* ── ACK / DELETE buttons in Services grid row-num cell ─────────────────── */
+/* ── QB-sent: Case# cell flex wrapper ─────────────────────────────────── */
+/* FIX: ACK/DELETE buttons now live in the first data column (Case# col)   */
+/* alongside the case number input — not in the narrow row-num (#) cell.   */
+.svc-qb-case-cell-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+.svc-qb-case-cell-wrap input.cell {
+  flex: 1;
+  min-width: 0;
+  color: #22d3ee !important;
+  font-weight: 700 !important;
+}
+td.svc-qb-case-col {
+  padding: 0 4px !important;
+  overflow: visible !important;
+}
+
+/* ── ACK / DELETE buttons in Services grid — Case# column ───────────────── */
 .svc-qb-ack-btn,
 .svc-qb-del-btn {
-  display: block;
-  width: 18px;
-  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
   border-radius: 4px;
   border: none;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
-  line-height: 18px;
-  text-align: center;
-  margin: 1px auto 0;
+  line-height: 1;
   padding: 0;
   transition: all 0.15s;
-  flex-shrink: 0;
 }
 .svc-qb-ack-btn {
   background: rgba(74,222,128,0.15);

@@ -939,11 +939,13 @@
         qbRecordId: recordId,
         fields: r && r.fields ? r.fields : {},
       }).replace(/'/g, '&#39;'));
-      return `<tr${rowClassAttr}${rowStyleAttr}><td class="qb-row-num-cell"${tdStyle}><button type="button" class="qb-row-num-pill qb-row-detail-btn" data-action="case-view-details" data-rid="${esc(recordId)}" data-row='${rowDataAttr}' data-qb-snap-idx="${rowSnapIdx}" title="View case details" aria-label="View case #${esc(recordId)}">${globalRowNum}</button></td>${vcCell}<td class="qb-case-id"${tdStyle}>${esc(recordId)}</td>${cells}</tr>`;
+      // FIX: qb-case-id always centered; inline style overrides tdStyle for this cell only
+      var _caseIdStyle = ' style="text-align:center' + (rowCf.cellStyle ? ';' + rowCf.cellStyle : '') + '"';
+      return `<tr${rowClassAttr}${rowStyleAttr}><td class="qb-row-num-cell"${tdStyle}><button type="button" class="qb-row-num-pill qb-row-detail-btn" data-action="case-view-details" data-rid="${esc(recordId)}" data-row='${rowDataAttr}' data-qb-snap-idx="${rowSnapIdx}" title="View case details" aria-label="View case #${esc(recordId)}">${globalRowNum}</button></td>${vcCell}<td class="qb-case-id"${_caseIdStyle}>${esc(recordId)}</td>${cells}</tr>`;
     }).join('');
 
     const vcThPrefix = vcEnabled ? vcHeader : '';
-    host.innerHTML = `<div class="qb-table-inner"><table class="qb-data-table"><thead><tr><th class="qb-row-num-th">#</th>${vcThPrefix}<th>Case #</th>${headers}</tr></thead><tbody>${body}</tbody></table></div>`;
+    host.innerHTML = `<div class="qb-table-inner"><table class="qb-data-table"><thead><tr><th class="qb-row-num-th">#</th>${vcThPrefix}<th style="text-align:center">Case #</th>${headers}</tr></thead><tbody>${body}</tbody></table></div>`;
 
     // ── APPLY DYNAMIC CASE NOTES COLUMN WIDTH ─────────────────────────────────
     // Sets CSS variable --qb-cn-w so the qb-cn-col class gets the computed width.
@@ -4257,8 +4259,26 @@
           'select=id,title,sort_order&is_archived=eq.false&order=sort_order.asc');
       }
 
+      // ── FIX: Fetch the sheet's first column key so case number lands in the
+      // correct column. Default column_defs use col_a/col_b/col_c — NOT col_0.
+      // Writing col_0 was silently discarded because no column had that key.
+      async function _getSheetFirstColKey(sheetId) {
+        try {
+          var rows = await _pgGet('services_sheets',
+            'select=column_defs&id=eq.' + encodeURIComponent(sheetId) + '&limit=1');
+          var colDefs = rows && rows[0] && rows[0].column_defs;
+          if (Array.isArray(colDefs) && colDefs.length > 0 && colDefs[0].key) {
+            return colDefs[0].key;
+          }
+        } catch (_) {}
+        return 'col_a'; // fallback — matches the DB default column_defs
+      }
+
       async function _sendCaseToSheet(sheetId, caseNum, description) {
         if (!_initEnv()) return { ok: false, error: 'MUMS_ENV not configured' };
+        // Resolve the sheet's actual first column key (e.g. col_a, not col_0)
+        // so the case number is written to the column that is VISIBLE in the grid.
+        var firstColKey = await _getSheetFirstColKey(sheetId);
         // Get max row_index — one tiny GET, no SDK overhead
         var existing = await _pgGet('services_rows',
           'select=row_index&sheet_id=eq.' + encodeURIComponent(sheetId)
@@ -4270,9 +4290,10 @@
           _qb_ack:      false,
           _qb_case_num: String(caseNum),
           _qb_sent_at:  new Date().toISOString(),
-          _qb_desc:     String(description || ''),
-          col_0:        String(caseNum)
+          _qb_desc:     String(description || '')
         };
+        // Write to the real first column key — this is what the grid renders
+        rowData[firstColKey] = String(caseNum);
         await _pgUpsert('services_rows', {
           sheet_id:  sheetId,
           row_index: nextIdx,

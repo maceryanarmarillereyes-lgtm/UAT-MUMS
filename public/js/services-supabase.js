@@ -214,6 +214,21 @@
     // Sets data._qb_sent=true, _qb_ack=false so the Services grid can highlight it.
     async sendCaseToSheet(sheetId, caseNum, description) {
       const c = await db(); if (!c) return { ok: false, error: 'No DB client' };
+      // FIX: Resolve the actual first column key of this sheet.
+      // Default column_defs use col_a/col_b/col_c — writing to col_0 was silently
+      // discarded because no column had that key, so case# never appeared in the grid.
+      let firstColKey = 'col_a'; // safe default matches DB default column_defs
+      try {
+        const { data: sheetMeta } = await c
+          .from('services_sheets')
+          .select('column_defs')
+          .eq('id', sheetId)
+          .limit(1)
+          .single();
+        if (sheetMeta && Array.isArray(sheetMeta.column_defs) && sheetMeta.column_defs.length > 0) {
+          firstColKey = sheetMeta.column_defs[0].key || 'col_a';
+        }
+      } catch (_) {}
       // Find current max row_index for this sheet
       const { data: existing, error: fetchErr } = await c
         .from('services_rows')
@@ -230,8 +245,8 @@
         _qb_sent_at: new Date().toISOString(),
         _qb_desc: String(description || ''),
       };
-      // Also write to first key so it shows in the grid's first column
-      rowData['col_0'] = String(caseNum);
+      // Write to the real first column key — this is what the grid renders
+      rowData[firstColKey] = String(caseNum);
       var { error: upsertErr } = await c.from('services_rows')
         .upsert(
           { sheet_id: sheetId, row_index: nextIdx, data: rowData },
