@@ -191,6 +191,13 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-24 (Final row-number `#` fixed-layout enforcement and debug cleanup):**
+  - **Edit — `public/js/services-grid.js`:** Enforced `#svcGrid` fixed layout at render start (`table-layout: fixed`, `width: max-content`) before `colgroup` build so column widths are consistently respected.
+  - **Edit — `public/js/services-grid.js`:** Hardened row-number `col` + `th` width locks using inline `setProperty(..., 'important')` for width/min-width/max-width and kept HTML `width` attribute numeric sync.
+  - **Edit — `public/js/services-grid.js`:** Kept `computeRowNumWidth(totalRows)` formula at `digits * 9 + 22` (clamped `36px–72px`) for correct 3-digit sizing (e.g., 521 rows -> `49px`).
+  - **Edit — `public/js/services-grid.js`:** Removed temporary `[ROWNUM-DEBUG]` console probes and delayed DOM debug snapshot block.
+  - **Behavior contract update:** Services row-number lane is now fixed-width stable under rerender/filter/sort flows with no auth, realtime, API, or CSS contract changes.
+
 - **2026-04-23 (Temporary debug probe for `#` row-number width path):**
   - **Edit — `public/js/services-grid.js`:** Added `[ROWNUM-DEBUG]` console probes in `computeRowNumWidth(totalRows)`, `render()`, `lockRowNumWidth(th)`, colgroup width application, and a delayed final DOM snapshot check.
   - **Behavior contract update:** No auth/realtime/data/CSS logic changes; this update is diagnostics-only to trace width computation, CSS variable propagation, colgroup width attribute/style, and post-render measured widths.
