@@ -11707,3 +11707,15 @@ td.qb-case-id {
   box-shadow: 0 0 8px rgba(248,113,113,0.25);
   transform: scale(1.1);
 }
+
+/* QB Send-to-Sheet — v3 perf additions */
+.qb-send-ctx-item-error .qb-send-ctx-arrow {
+  color: #f87171 !important;
+}
+.qb-send-ctx-item.qb-send-ctx-item-sending {
+  opacity: 0.75;
+  pointer-events: none;
+}
+.qb-send-ctx-item.qb-send-ctx-item-error {
+  opacity: 0.8;
+}
