@@ -550,6 +550,10 @@
       return;
     }
     if (!current) { clear(); return; }
+    if (grid) {
+      grid.style.removeProperty('--row-num-w');
+    }
+    document.documentElement.style.removeProperty('--row-num-w');
     lockRowNumWidth();
     empty.style.display = 'none';
     grid.hidden = false;
@@ -578,7 +582,7 @@
       : Math.max((current && current.rows ? current.rows.length : 0) + 2, 10);
 
     ROW_NUM_COL_WIDTH_PX = computeRowNumWidth(totalRowsForWidth) + 'px';
-    document.documentElement.style.setProperty('--row-num-w', ROW_NUM_COL_WIDTH_PX);
+    document.documentElement.style.removeProperty('--row-num-w');
 
     var totalRows = (isFilteredView || isSorted)
       ? Math.max(viewRows.length, 1)
@@ -587,9 +591,9 @@
     var colgroup = mkEl('colgroup');
     var rowNumCol = document.createElement('col');
     rowNumCol.setAttribute('data-key', '__rownum__');
-    rowNumCol.style.setProperty('width', ROW_NUM_COL_WIDTH_PX, 'important');
-    rowNumCol.style.setProperty('min-width', ROW_NUM_COL_WIDTH_PX, 'important');
-    rowNumCol.style.setProperty('max-width', ROW_NUM_COL_WIDTH_PX, 'important');
+    rowNumCol.style.setProperty('width', '49px', 'important');
+    rowNumCol.style.setProperty('min-width', '49px', 'important');
+    rowNumCol.style.setProperty('max-width', '49px', 'important');
     rowNumCol.setAttribute('width', String(parseInt(ROW_NUM_COL_WIDTH_PX,10)));
     colgroup.appendChild(rowNumCol);
     cols.forEach(function (c) {
@@ -943,7 +947,7 @@
     // Skip autoFit for rowNum — force it first
     var _rnw = computeRowNumWidth(totalRowsForWidth);
     ROW_NUM_COL_WIDTH_PX = _rnw + 'px';
-    document.documentElement.style.setProperty('--row-num-w', ROW_NUM_COL_WIDTH_PX);
+    document.documentElement.style.removeProperty('--row-num-w');
     // Then run autoFit for data columns only
     autoFitColumns();
 
@@ -999,7 +1003,7 @@
     // Single source of truth for # width
     var px = computeRowNumWidth(totalRowsForWidth);
     ROW_NUM_COL_WIDTH_PX = px + 'px';
-    document.documentElement.style.setProperty('--row-num-w', ROW_NUM_COL_WIDTH_PX);
+    document.documentElement.style.removeProperty('--row-num-w');
   }
 
   function attachCellHandlers() {

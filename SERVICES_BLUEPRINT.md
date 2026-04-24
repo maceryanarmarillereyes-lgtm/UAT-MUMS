@@ -193,6 +193,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-24 (Services `#` column hard-lock 49px + duplicate CSS cleanup):**
+  - **Edit — `public/css/services.css`:** Replaced the primary `.svc-grid thead th.row-num, .svc-grid tbody td.row-num` sizing rule to fixed `49px` width/min/max with zero horizontal padding and removed the duplicated late-file `#svcGrid`/row-num override block that was reintroducing conflicting width behavior.
+  - **Edit — `public/css/services.css`:** Updated the `#svcGrid` fixed-layout override to `width: auto` + `min-width: 0` so the table no longer forces `min-width: 100%` expansion.
+  - **Edit — `public/js/services-grid.js`:** At render start, now clears table/root `--row-num-w` CSS variables before row-number lock runs; row-number `<col>` width/min/max are explicitly set to `49px !important`.
+  - **Behavior contract update:** Services row-number lane (`#` column) now remains deterministic at 49px without duplicate CSS source conflicts, while preserving existing auth/realtime/API logic.
+
 - **2026-04-24 (Services `#` column single-source width lock cleanup):**
   - **Edit — `public/js/services-grid.js`:** Removed legacy row-number style injectors `enforceRowNumStyle()` and `applyRowNumStyleSheet()` to eliminate conflicting width enforcement paths.
   - **Edit — `public/js/services-grid.js`:** Removed post-load `setTimeout(enforceRowNumStyle, 50)` and replaced end-of-`render()` force-style call with a single `computeRowNumWidth(totalRowsForWidth)` -> `ROW_NUM_COL_WIDTH_PX` -> `--row-num-w` assignment.
