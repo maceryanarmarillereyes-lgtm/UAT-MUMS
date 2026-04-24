@@ -327,11 +327,14 @@
     check: function (val, currentIdx) {
       if (!this.index || !val) return null;
       var str = String(val).trim();
+      if (!str || str.length < 3) return null;
       var set = this.index.get(str);
       if (!set || !set.size) return null;
+      // Coerce to Number — dataset attributes are strings; strict !== would false-positive
+      var numIdx = Number(currentIdx);
       var dupRows = [];
       set.forEach(function (idx) {
-        if (idx !== currentIdx) dupRows.push(idx);
+        if (idx !== numIdx) dupRows.push(idx);
       });
       return dupRows.length ? dupRows.sort(function (a, b) { return a - b; }) : null;
     },
@@ -341,7 +344,7 @@
       var str = String(val).trim();
       if (!str || str.length < 3) return;
       if (!this.index.has(str)) this.index.set(str, new Set());
-      this.index.get(str).add(idx);
+      this.index.get(str).add(Number(idx));
     },
 
     remove: function (val, idx) {
@@ -349,7 +352,7 @@
       var str = String(val).trim();
       var set = this.index.get(str);
       if (!set) return;
-      set.delete(idx);
+      set.delete(Number(idx));
       if (!set.size) this.index.delete(str);
     },
 
@@ -378,8 +381,8 @@
   function checkDuplicateDebounced(input, caseVal, rowIdx) {
     clearTimeout(dupCheckTimer);
     dupCheckTimer = setTimeout(function () {
-      var duplicates = DuplicateDetector.check(caseVal, rowIdx);
-      if (duplicates) showDuplicateBubble(input, caseVal, duplicates);
+      var duplicates = DuplicateDetector.check(caseVal, Number(rowIdx));
+      if (duplicates && duplicates.length) applyDuplicateStyles(input, caseVal, duplicates);
     }, 300);
   }
 
@@ -390,39 +393,128 @@
     }) || null;
   }
 
+  // ── DUP TOOLTIP ──────────────────────────────────────────────────────────────
+  // Shows a hover tooltip on the red-highlighted cell. No floating bubble.
+  // One singleton tooltip element reused across all cells.
+  var _dupTooltipEl = null;
+  var _dupTooltipTimer = null;
+
+  function getDupTooltip() {
+    if (!_dupTooltipEl) {
+      _dupTooltipEl = document.createElement('div');
+      _dupTooltipEl.id = 'svc-dup-tooltip';
+      _dupTooltipEl.style.cssText = [
+        'position:fixed',
+        'z-index:99999',
+        'background:#1e293b',
+        'border:1px solid #ef4444',
+        'border-radius:7px',
+        'padding:7px 12px',
+        'font-size:12px',
+        'color:#f1f5f9',
+        'box-shadow:0 4px 18px rgba(0,0,0,0.5)',
+        'pointer-events:none',
+        'display:none',
+        'max-width:260px',
+        'line-height:1.5',
+        'white-space:nowrap'
+      ].join(';');
+      document.body.appendChild(_dupTooltipEl);
+    }
+    return _dupTooltipEl;
+  }
+
+  function showDupTooltip(inp, caseNum, dupRows) {
+    var tt = getDupTooltip();
+    tt.innerHTML =
+      '<span style="color:#f87171;font-weight:700;">⚠ Duplicate CASE#</span><br>' +
+      '<span style="color:#94a3b8;">Also in row</span> ' +
+      '<b style="color:#fbbf24;">' + dupRows.map(function (r) { return r + 1; }).join(', ') + '</b>';
+    tt.style.display = 'block';
+
+    // Position relative to the input
+    var rect = inp.getBoundingClientRect();
+    var ttLeft = Math.min(rect.left, window.innerWidth - 270);
+    var ttTop  = rect.bottom + 5;
+    if (ttTop + 70 > window.innerHeight) ttTop = rect.top - 58;
+    tt.style.left = ttLeft + 'px';
+    tt.style.top  = ttTop  + 'px';
+  }
+
+  function hideDupTooltip() {
+    clearTimeout(_dupTooltipTimer);
+    var tt = getDupTooltip();
+    tt.style.display = 'none';
+  }
+
   function applyDuplicateStyles(inputEl, caseNum, duplicateRows) {
     inputEl.classList.add('cell-has-duplicate');
-    inputEl.setAttribute('data-dup-case', caseNum);
+    inputEl.setAttribute('data-dup-case', String(caseNum));
     inputEl.setAttribute('data-dup-rows', duplicateRows.join(','));
-    inputEl.style.borderLeft = '3px solid #ef4444';
-    inputEl.style.backgroundColor = 'rgba(239, 68, 68, 0.08)';
-    inputEl.style.boxShadow = 'inset 0 0 0 1px rgba(239, 68, 68, 0.3)';
+    inputEl._dupCaseNum  = caseNum;
+    inputEl._dupRowsList = duplicateRows;
   }
 
   function clearDuplicateStyles(inputEl) {
     inputEl.classList.remove('cell-has-duplicate');
-    inputEl.style.borderLeft = '';
-    inputEl.style.backgroundColor = '';
-    inputEl.style.boxShadow = '';
     inputEl.removeAttribute('data-dup-case');
     inputEl.removeAttribute('data-dup-rows');
     delete inputEl._dupCaseNum;
+    delete inputEl._dupRowsList;
+    // Remove any legacy bubble reference
+    if (inputEl._dupBubble) {
+      try { inputEl._dupBubble.remove(); } catch (_) {}
+      inputEl._dupBubble = null;
+    }
+    hideDupTooltip();
+  }
+
+  // Tooltip delegation on the grid wrapper (survives render() innerHTML replacements
+  // because the wrapper div itself is never replaced, only its children are).
+  (function attachDupTooltipDelegation() {
+    var wrapper = document.getElementById('svcGridWrap') || document.getElementById('svcGridWrapper') || grid.parentElement;
+    var target  = wrapper || document.body;
+
+    target.addEventListener('mouseover', function (e) {
+      var inp = e.target.closest ? e.target.closest('input.cell-has-duplicate') : null;
+      if (!inp) { hideDupTooltip(); return; }
+      var caseNum  = inp._dupCaseNum  || inp.getAttribute('data-dup-case') || '';
+      var rowsList = inp._dupRowsList ||
+        (inp.getAttribute('data-dup-rows') || '').split(',').map(Number).filter(function (n) { return !isNaN(n); });
+      if (caseNum && rowsList.length) showDupTooltip(inp, caseNum, rowsList);
+    });
+
+    target.addEventListener('mouseout', function (e) {
+      var related = e.relatedTarget;
+      if (related && related.id === 'svc-dup-tooltip') return;
+      if (related && related.closest && related.closest('#svc-dup-tooltip')) return;
+      if (related && related.classList && related.classList.contains('cell-has-duplicate')) return;
+      hideDupTooltip();
+    });
+  }());
+
+  // ── Legacy showDuplicateBubble — replaced by tooltip, kept as no-op guard ──
+  function showDuplicateBubble(inputEl, caseNum, duplicateRows) {
+    // Replaced by hover tooltip. Apply styles only.
+    applyDuplicateStyles(inputEl, caseNum, duplicateRows);
   }
 
   function refreshDuplicateIndicators() {
     var caseCol = getCaseColumnDef();
     if (!caseCol) return;
     grid.querySelectorAll('input.cell[data-key="' + caseCol.key + '"]').forEach(function (inp) {
+      // CRITICAL: parse as Number — dataset.row is a string, check() uses !==
+      // "520" !== 520 → every row falsely flagged as its own duplicate
       var rowIdx = Number(inp.dataset.row);
       var val = String(inp.value || '').trim();
+      if (!val || val.length < 3) {
+        clearDuplicateStyles(inp);
+        return;
+      }
       var duplicates = DuplicateDetector.check(val, rowIdx);
-      if (duplicates) {
+      if (duplicates && duplicates.length) {
         applyDuplicateStyles(inp, val, duplicates);
       } else {
-        if (inp._dupBubble) {
-          inp._dupBubble.remove();
-          inp._dupBubble = null;
-        }
         clearDuplicateStyles(inp);
       }
     });
@@ -431,70 +523,6 @@
   function refreshDuplicateIndicatorsDebounced() {
     clearTimeout(dupPaintTimer);
     dupPaintTimer = setTimeout(refreshDuplicateIndicators, 120);
-  }
-
-  function showDuplicateBubble(inputEl, caseNum, duplicateRows) {
-    grid.querySelectorAll('input.cell').forEach(function (cell) {
-      if (cell !== inputEl && cell._dupBubble) cell._dupBubble = null;
-    });
-    document.querySelectorAll('.dup-notice').forEach(function (n) { n.remove(); });
-
-    var rect = inputEl.getBoundingClientRect();
-    var bubble = document.createElement('div');
-    bubble.className = 'dup-notice';
-    bubble.innerHTML = '' +
-      '<div class="dup-wrap dup-bubble-inner">' +
-      '<span class="dup-ico">⚠</span>' +
-      '<span>Duplicate: <b>' + String(caseNum) + '</b> exists in row(s) <b>' + duplicateRows.map(function (idx) { return idx + 1; }).join(', ') + '</b></span>' +
-      '<button data-goto="' + String(duplicateRows[0]) + '">Go</button>' +
-      '<button class="dup-x">×</button>' +
-      '</div>';
-
-    bubble.style.cssText = '' +
-      'position:fixed;' +
-      'left:' + Math.min(rect.left, window.innerWidth - 300) + 'px;' +
-      'top:' + (rect.bottom + 4) + 'px;' +
-      'z-index:9999;' +
-      'background:#1e293b;' +
-      'border:1px solid #ef4444;' +
-      'border-radius:6px;' +
-      'padding:8px 10px;' +
-      'font-size:12px;' +
-      'color:#e2e8f0;' +
-      'box-shadow:0 4px 12px rgba(0,0,0,0.4);' +
-      'max-width:280px;';
-
-    document.body.appendChild(bubble);
-
-    // PERSISTENT: No auto-remove - stays until fixed
-    // Store reference for manual cleanup
-    inputEl._dupBubble = bubble;
-    inputEl._dupCaseNum = caseNum;
-    applyDuplicateStyles(inputEl, caseNum, duplicateRows);
-
-    var gotoBtn = bubble.querySelector('[data-goto]');
-    if (gotoBtn) {
-      gotoBtn.onclick = function () {
-        var targetRow = document.querySelector('tr[data-row="' + duplicateRows[0] + '"]');
-        if (targetRow) {
-          targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          targetRow.style.outline = '2px solid #ef4444';
-          setTimeout(function () { targetRow.style.outline = ''; }, 2000);
-          var inp = targetRow.querySelector('input[data-key*="case" i]');
-          if (inp) inp.focus();
-        }
-      };
-    }
-
-    var closeBtn = bubble.querySelector('.dup-x');
-    if (closeBtn) {
-      closeBtn.onclick = function () {
-        bubble.remove();
-        inputEl._dupBubble = null;
-        // Keep visual warning but remove bubble
-        console.log('[DUP] Manually dismissed (still duplicate)');
-      };
-    }
   }
 
   function render() {
@@ -747,8 +775,12 @@
       }
       var rowNumTd = mkEl('td', {
         className: 'row-num',
-        textContent: String(rowIndex + 1),
-        title: 'Row ' + (rowIndex + 1) + ' - Click to select'
+        // BUG1 FIX: Display sequential position (i+1) not row_index+1.
+        // row_index is the DB storage key and can have gaps after deletes.
+        // Showing row_index+1 causes doubled numbers when padding rows share
+        // the same value as existing rows. i is always 0,1,2,3... sequential.
+        textContent: String(i + 1),
+        title: 'Row ' + (i + 1)
       }, tr);
       // Lock per-row width — isolated from all column resize operations
       rowNumTd.style.cssText = 'width:' + _rnWidth + 'px;min-width:' + _rnWidth + 'px;max-width:' + _rnWidth + 'px;';
@@ -833,45 +865,18 @@
 
         var isCase = c && c.key && c.label && String(c.label).toUpperCase().includes('CASE');
         if (isCase) {
-          var prevVal = '';
-          var handleCheck = function () {
-            var val = String(inp.value || '').trim();
-            if (!val || val === prevVal || val.length < 3) return;
-            prevVal = val;
-            checkDuplicateDebounced(inp, val, rowIndex);
-          };
-          var checkIfFixed = function () {
-            var currentVal = String(inp.value || '').trim();
-            var duplicates = DuplicateDetector.check(currentVal, rowIndex);
-            if (!duplicates && inp._dupBubble) {
-              var oldCase = inp._dupCaseNum;
-              inp._dupBubble.remove();
-              inp._dupBubble = null;
-              clearDuplicateStyles(inp);
-              DuplicateDetector.remove(oldCase, rowIndex);
-              DuplicateDetector.add(currentVal, rowIndex);
-              console.log('[DUP] Fixed:', currentVal);
-            }
-          };
-
-          inp.addEventListener('blur', handleCheck);
-          inp.addEventListener('keydown', function (ev) {
-            if (ev.key === 'Enter') setTimeout(handleCheck, 100);
-          });
-          inp.addEventListener('input', function () {
-            if (inp._dupBubble) setTimeout(checkIfFixed, 100);
-          });
-          inp.addEventListener('blur', function () {
-            if (inp._dupBubble) checkIfFixed();
-          });
+          // Duplicate check fires on blur (onCellCommit registered in attachCellHandlers)
+          // and on focus (re-show tooltip if already flagged).
           inp.addEventListener('focus', function () {
             var val = String(inp.value || '').trim();
-            if (!val) return;
-            var duplicates = DuplicateDetector.check(val, rowIndex);
-            if (duplicates && !inp._dupBubble) {
-              showDuplicateBubble(inp, val, duplicates);
+            if (!val || val.length < 3) return;
+            var duplicates = DuplicateDetector.check(val, Number(inp.dataset.row));
+            if (duplicates && duplicates.length) {
+              applyDuplicateStyles(inp, val, duplicates);
+              showDupTooltip(inp, val, duplicates);
             }
           });
+          inp.addEventListener('blur', function () { hideDupTooltip(); });
         }
 
         // BUG2 FIX: Style '---' placeholder for date columns with no value
@@ -1971,17 +1976,27 @@
   }
 
   // FIX-DUP-2: Commit final case# to the DuplicateDetector index ONLY after the
-  // user finishes typing (blur / Enter). This prevents partial keystrokes ("1",
-  // "10", "103"…) from polluting the index and causing false duplicate flags.
+  // user finishes typing (blur). This prevents partial keystrokes from polluting
+  // the index. Always Number() rowIdx to match the Set storage type.
   function onCellCommit(e) {
     var key = e.target.dataset.key;
     if (!DuplicateDetector.index || DuplicateDetector.caseKey !== key) return;
-    var rowIdx = +e.target.dataset.row;
+    var rowIdx   = Number(e.target.dataset.row);
     var finalVal = String(e.target.value || '').trim();
-    // Re-register the committed value so check() can find cross-row duplicates
     if (finalVal.length >= 3) {
       DuplicateDetector.add(finalVal, rowIdx);
+      // Immediately check: is this a duplicate of another row?
+      var dups = DuplicateDetector.check(finalVal, rowIdx);
+      if (dups && dups.length) {
+        applyDuplicateStyles(e.target, finalVal, dups);
+      } else {
+        clearDuplicateStyles(e.target);
+      }
+    } else {
+      clearDuplicateStyles(e.target);
     }
+    // Also refresh all other cells — the newly-committed value might make
+    // another existing row a duplicate too.
     refreshDuplicateIndicatorsDebounced();
   }
 

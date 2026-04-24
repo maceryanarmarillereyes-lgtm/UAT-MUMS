@@ -3569,48 +3569,29 @@ input.cell.cell-qb-not-found {
 .notify-title { font-weight: 600; color: #f1f5f9; font-size: 13.5px; line-height: 1.3; }
 .notify-message { color: #94a3b8; font-size: 12.5px; margin-top: 2px; line-height: 1.4; }
 
-.dup-notice button {
-  background: #334155;
-  border: none;
-  color: #e2e8f0;
-  padding: 2px 8px;
-  margin-left: 6px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 11px;
-}
-.dup-notice button:hover { background: #475569; }
-.dup-ico { color: #f87171; margin-right: 4px; }
+/* ── DUPLICATE DETECTION — tooltip-only, no floating bubble ── */
 
-.cell-has-duplicate {
-  position: relative;
+/* Red background on the duplicate CASE# input cell */
+input.cell-has-duplicate {
+  background: rgba(239, 68, 68, 0.18) !important;
+  border-left: 3px solid #ef4444 !important;
+  color: #fca5a5 !important;
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.4) !important;
 }
 
-.cell-has-duplicate::after {
-  content: '⚠';
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #ef4444;
-  font-size: 14px;
-  pointer-events: none;
-  animation: dupPulse 2s infinite;
+/* Singleton hover tooltip — positioned by JS */
+#svc-dup-tooltip {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  border-radius: 7px;
+  padding: 8px 13px;
+  white-space: nowrap;
+  animation: dupTooltipIn 0.12s ease;
 }
-
-@keyframes dupPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-/* Make bubble more prominent for persistent */
-.dup-bubble-inner {
-  animation: dupBorderPulse 2s infinite;
-}
-
-@keyframes dupBorderPulse {
-  0%, 100% { border-color: #ef4444; box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(239,68,68,0.2); }
-  50% { border-color: #f87171; box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(239,68,68,0.4), 0 0 20px rgba(239,68,68,0.2); }
+@keyframes dupTooltipIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 
