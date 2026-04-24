@@ -191,6 +191,13 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-24 (Bulletproof `#` width style injection + render-block bypass):**
+  - **Edit — `public/js/services-grid.js`:** Updated `computeRowNumWidth(totalRows)` to return numeric pixel value only (`36..72` clamp) and converted to px string at render usage sites.
+  - **Edit — `public/js/services-grid.js`:** Added global `enforceRowNumStyle()` that re-injects `#rownum-force-style` on each call, hard-locking `#svcGrid` fixed layout and row-number `col/th/td` widths with `!important`.
+  - **Edit — `public/js/services-grid.js`:** Added post-load safety hook (`setTimeout(enforceRowNumStyle, 50)`) immediately after `[LOAD] Loaded ... rows` log to apply row-number width even when render is blocked by loader/resizing guards.
+  - **Edit — `public/js/services-grid.js`:** Removed prior inline `svcTable.style.tableLayout/width` render block and moved enforcement to style injection path to avoid drift across rerenders.
+  - **Behavior contract update:** Row-number lane width is now force-applied globally after load and after each successful render, without auth/realtime/API/router changes.
+
 - **2026-04-24 (Final row-number `#` fixed-layout enforcement and debug cleanup):**
   - **Edit — `public/js/services-grid.js`:** Enforced `#svcGrid` fixed layout at render start (`table-layout: fixed`, `width: max-content`) before `colgroup` build so column widths are consistently respected.
   - **Edit — `public/js/services-grid.js`:** Hardened row-number `col` + `th` width locks using inline `setProperty(..., 'important')` for width/min-width/max-width and kept HTML `width` attribute numeric sync.
