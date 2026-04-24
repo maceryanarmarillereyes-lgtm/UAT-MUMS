@@ -209,6 +209,59 @@
       if (error) console.error('[services] upsertRow:', error.message);
     },
 
+    // ── QB → SHEET BRIDGE ──────────────────────────────────────────────────────
+    // Appends a new row at the bottom of the sheet with the QB case number.
+    // Sets data._qb_sent=true, _qb_ack=false so the Services grid can highlight it.
+    async sendCaseToSheet(sheetId, caseNum, description) {
+      const c = await db(); if (!c) return { ok: false, error: 'No DB client' };
+      // Find current max row_index for this sheet
+      const { data: existing, error: fetchErr } = await c
+        .from('services_rows')
+        .select('row_index')
+        .eq('sheet_id', sheetId)
+        .order('row_index', { ascending: false })
+        .limit(1);
+      if (fetchErr) return { ok: false, error: fetchErr.message };
+      var nextIdx = existing && existing.length > 0 ? (existing[0].row_index + 1) : 0;
+      var rowData = {
+        _qb_sent: true,
+        _qb_ack: false,
+        _qb_case_num: String(caseNum),
+        _qb_sent_at: new Date().toISOString(),
+        _qb_desc: String(description || ''),
+      };
+      // Also write to first key so it shows in the grid's first column
+      rowData['col_0'] = String(caseNum);
+      var { error: upsertErr } = await c.from('services_rows')
+        .upsert(
+          { sheet_id: sheetId, row_index: nextIdx, data: rowData },
+          { onConflict: 'sheet_id,row_index', ignoreDuplicates: false }
+        );
+      if (upsertErr) return { ok: false, error: upsertErr.message };
+      return { ok: true, rowIndex: nextIdx };
+    },
+
+    // Acknowledge a QB-sent row (clears the cyan blink)
+    async ackQbRow(sheetId, rowIndex) {
+      const c = await db(); if (!c) return;
+      // Fetch current data first
+      const { data: rows } = await c.from('services_rows')
+        .select('data').eq('sheet_id', sheetId).eq('row_index', rowIndex).limit(1);
+      if (!rows || !rows.length) return;
+      var merged = Object.assign({}, rows[0].data, { _qb_ack: true });
+      await c.from('services_rows')
+        .update({ data: merged })
+        .eq('sheet_id', sheetId).eq('row_index', rowIndex);
+    },
+
+    // Delete a QB-sent row from the sheet
+    async deleteQbRow(sheetId, rowIndex) {
+      const c = await db(); if (!c) return;
+      await c.from('services_rows')
+        .delete()
+        .eq('sheet_id', sheetId).eq('row_index', rowIndex);
+    },
+
     async updateColumns(sheetId, column_defs) {
       const c = await db(); if (!c) return;
       const { error } = await c.from('services_sheets')

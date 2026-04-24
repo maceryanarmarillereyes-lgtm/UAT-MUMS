@@ -4165,6 +4165,213 @@
     // ── END _initQbCaseDetailModal ────────────────────────────────────────────
 
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // QB → SERVICES SHEET: "Send to Sheet" Right-Click Feature
+    // ═══════════════════════════════════════════════════════════════════════════
+    (function _initQbSendToSheet() {
+      const LS_SENT_KEY = 'mums_qb_sent_v1';
+
+      // ── Persist helpers ────────────────────────────────────────────────────
+      function loadSentMap() {
+        try { return JSON.parse(localStorage.getItem(LS_SENT_KEY) || '{}'); } catch (_) { return {}; }
+      }
+      function saveSentMap(m) {
+        try { localStorage.setItem(LS_SENT_KEY, JSON.stringify(m)); } catch (_) {}
+      }
+      function recordSent(caseNum, sheetId, sheetTitle) {
+        var m = loadSentMap();
+        if (!m[caseNum]) m[caseNum] = [];
+        // Avoid dupes
+        if (!m[caseNum].some(function(e) { return e.sheetId === sheetId; })) {
+          m[caseNum].push({ sheetId, sheetTitle, sentAt: new Date().toISOString() });
+        }
+        saveSentMap(m);
+      }
+      function getSentSheets(caseNum) {
+        var m = loadSentMap();
+        return m[caseNum] || [];
+      }
+
+      // ── Close all open QB context menus ─────────────────────────────────────
+      function closeAllQbCtx() {
+        document.querySelectorAll('.qb-send-ctx-root').forEach(function(m) { m.remove(); });
+      }
+
+      // ── Refresh badges on all visible qb-case-id cells ──────────────────────
+      function refreshAllBadges() {
+        var sent = loadSentMap();
+        document.querySelectorAll('td.qb-case-id[data-case-num]').forEach(function(td) {
+          var cn = td.getAttribute('data-case-num');
+          var sheets = sent[cn] || [];
+          var badge = td.querySelector('.qb-services-badge');
+          if (sheets.length > 0) {
+            if (!badge) {
+              badge = document.createElement('div');
+              badge.className = 'qb-services-badge';
+              td.appendChild(badge);
+            }
+            badge.textContent = 'SERVICES';
+            badge.title = 'Sent to: ' + sheets.map(function(s) { return s.sheetTitle; }).join(', ');
+          } else {
+            if (badge) badge.remove();
+          }
+        });
+      }
+
+      // ── Build the context menu DOM ───────────────────────────────────────────
+      async function showSendToSheetMenu(e, caseNum, descText) {
+        closeAllQbCtx();
+        e.preventDefault();
+        e.stopPropagation();
+
+        var menu = document.createElement('div');
+        menu.className = 'qb-send-ctx-root';
+        menu.style.cssText = 'position:fixed;z-index:99999;left:' + e.clientX + 'px;top:' + e.clientY + 'px;';
+
+        // ── Loading state ──────────────────────────────────────────────────────
+        menu.innerHTML = '<div class="qb-send-ctx-loading">Loading sheets…</div>';
+        document.body.appendChild(menu);
+
+        // Reposition if off-screen
+        var rect = menu.getBoundingClientRect();
+        if (rect.right > window.innerWidth - 8) {
+          menu.style.left = Math.max(8, e.clientX - rect.width) + 'px';
+        }
+        if (rect.bottom > window.innerHeight - 8) {
+          menu.style.top = Math.max(8, e.clientY - rect.height - 8) + 'px';
+        }
+
+        // ── Fetch sheets (from servicesDB if available) ───────────────────────
+        var sheets = [];
+        try {
+          if (window.servicesDB && window.servicesDB.listSheets) {
+            sheets = await window.servicesDB.listSheets();
+          }
+        } catch (_) {}
+
+        // ── Rebuild menu with sheets ───────────────────────────────────────────
+        var alreadySent = getSentSheets(caseNum);
+        var alreadySentIds = alreadySent.map(function(s) { return s.sheetId; });
+
+        var html = '<div class="qb-send-ctx-header">'
+          + '<span class="qb-send-ctx-case-label">Case# ' + caseNum + '</span>'
+          + '</div>'
+          + '<div class="qb-send-ctx-divider"></div>'
+          + '<div class="qb-send-ctx-item-group-label">SEND TO SHEET</div>';
+
+        if (!sheets || sheets.length === 0) {
+          html += '<div class="qb-send-ctx-empty">No sheets available.<br>Open Services to create one.</div>';
+        } else {
+          sheets.forEach(function(sheet) {
+            var already = alreadySentIds.includes(sheet.id);
+            html += '<div class="qb-send-ctx-item' + (already ? ' qb-send-ctx-item-sent' : '') + '"'
+              + ' data-sheet-id="' + sheet.id + '"'
+              + ' data-sheet-title="' + (sheet.title || 'Untitled') + '"'
+              + ' title="' + (already ? '✓ Already sent to this sheet' : 'Send Case# ' + caseNum + ' to ' + (sheet.title || 'Untitled')) + '">'
+              + '<span class="qb-send-ctx-sheet-icon">📋</span>'
+              + '<span class="qb-send-ctx-sheet-name">' + (sheet.title || 'Untitled') + '</span>'
+              + (already ? '<span class="qb-send-ctx-sent-tick">✓</span>' : '<span class="qb-send-ctx-arrow">→</span>')
+              + '</div>';
+          });
+        }
+        menu.innerHTML = html;
+
+        // ── Sheet click handler ────────────────────────────────────────────────
+        menu.addEventListener('click', async function(ev) {
+          var item = ev.target.closest('[data-sheet-id]');
+          if (!item) return;
+          var sheetId = item.getAttribute('data-sheet-id');
+          var sheetTitle = item.getAttribute('data-sheet-title') || 'Sheet';
+          var alreadyDone = item.classList.contains('qb-send-ctx-item-sent');
+          if (alreadyDone) return; // Already sent — ignore
+
+          // Show sending state
+          item.classList.add('qb-send-ctx-item-sending');
+          item.querySelector('.qb-send-ctx-arrow') && (item.querySelector('.qb-send-ctx-arrow').textContent = '⏳');
+
+          try {
+            if (!window.servicesDB || !window.servicesDB.sendCaseToSheet) {
+              throw new Error('Services not loaded. Open the Services workspace first.');
+            }
+            // Ensure servicesDB is initialised
+            if (window.servicesDB.init) await window.servicesDB.init();
+            var result = await window.servicesDB.sendCaseToSheet(sheetId, caseNum, descText || '');
+            if (!result.ok) throw new Error(result.error || 'Failed to send');
+
+            // Record locally
+            recordSent(caseNum, sheetId, sheetTitle);
+            refreshAllBadges();
+
+            // Visual feedback — success
+            item.classList.remove('qb-send-ctx-item-sending');
+            item.classList.add('qb-send-ctx-item-sent');
+            item.querySelector('.qb-send-ctx-arrow') && (item.querySelector('.qb-send-ctx-arrow').textContent = '✓');
+
+            // Toast (if window.mumsToast exists)
+            if (window.mumsToast && typeof window.mumsToast.show === 'function') {
+              window.mumsToast.show('success', 'Sent to Sheet', 'Case# ' + caseNum + ' → ' + sheetTitle, 3500);
+            }
+
+            setTimeout(closeAllQbCtx, 900);
+          } catch (err) {
+            item.classList.remove('qb-send-ctx-item-sending');
+            item.querySelector('.qb-send-ctx-arrow') && (item.querySelector('.qb-send-ctx-arrow').textContent = '✗');
+            if (window.mumsToast && typeof window.mumsToast.show === 'function') {
+              window.mumsToast.show('error', 'Send Failed', err.message || 'Unknown error', 5000);
+            } else {
+              alert('Send to Sheet failed: ' + (err.message || 'Unknown error'));
+            }
+          }
+        });
+
+        // Close on outside click / Escape
+        function _close(ev) {
+          if (!menu.contains(ev.target)) { closeAllQbCtx(); document.removeEventListener('mousedown', _close); }
+        }
+        function _esc(ev) { if (ev.key === 'Escape') { closeAllQbCtx(); document.removeEventListener('keydown', _esc); } }
+        setTimeout(function() {
+          document.addEventListener('mousedown', _close);
+          document.addEventListener('keydown', _esc);
+        }, 50);
+      }
+
+      // ── Delegate contextmenu on #qbDataBody ──────────────────────────────────
+      var _dataBody2 = root.querySelector('#qbDataBody');
+      if (_dataBody2) {
+        _dataBody2.addEventListener('contextmenu', function(e) {
+          var td = e.target && e.target.closest ? e.target.closest('td.qb-case-id') : null;
+          if (!td) return;
+          var caseNum = td.getAttribute('data-case-num') || td.textContent.trim();
+          if (!caseNum) return;
+          // Find the short description in the same row for context
+          var tr = td.closest('tr');
+          var descCell = tr ? tr.querySelector('td:not(.qb-row-num-cell):not(.qb-case-id):not(.qb-vc-cell)') : null;
+          var descText = descCell ? descCell.textContent.trim().slice(0, 120) : '';
+          showSendToSheetMenu(e, caseNum, descText);
+        });
+      }
+
+      // ── Patch renderRows to inject data-case-num attr onto qb-case-id cells ──
+      // We can't modify renderRows directly; instead use MutationObserver to stamp it.
+      var _stampObs = new MutationObserver(function() {
+        document.querySelectorAll('td.qb-case-id:not([data-case-num])').forEach(function(td) {
+          var txt = td.textContent.trim();
+          if (txt) {
+            td.setAttribute('data-case-num', txt);
+            td.style.cursor = 'context-menu';
+            td.title = 'Right-click to send to a Services Sheet';
+          }
+        });
+        refreshAllBadges();
+      });
+      var _tableWrap = root.querySelector('#qbDataBody') || root;
+      _stampObs.observe(_tableWrap, { childList: true, subtree: true });
+
+      // Initial stamp
+      refreshAllBadges();
+    })();
+    // ── END _initQbSendToSheet ────────────────────────────────────────────────
+
     try {
     root.querySelector('#qbOpenSettingsBtn').onclick = openSettings;
 

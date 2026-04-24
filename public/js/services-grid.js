@@ -786,6 +786,51 @@
       rowNumTd.style.cssText = 'width:' + _rnWidth + 'px;min-width:' + _rnWidth + 'px;max-width:' + _rnWidth + 'px;';
       rowNumTd.dataset.rowIndex = rowIndex;
       rowNumTd.dataset.row = String(rowIndex);
+
+      // ── QB-SENT ROW: blink + ACK/DELETE controls ─────────────────────────
+      var _isQbSent = rowData.data && rowData.data._qb_sent === true;
+      var _isQbAck  = rowData.data && rowData.data._qb_ack  === true;
+      if (_isQbSent) {
+        tr.classList.add(_isQbAck ? 'svc-qb-row-acked' : 'svc-qb-row-pending');
+        tr.setAttribute('data-qb-sent-row', '1');
+        // ACK button (checkmark)
+        var ackBtn = document.createElement('button');
+        ackBtn.className = 'svc-qb-ack-btn';
+        ackBtn.type = 'button';
+        ackBtn.title = _isQbAck ? 'Already acknowledged' : 'Acknowledge — clears highlight';
+        ackBtn.innerHTML = '✓';
+        ackBtn.disabled = _isQbAck;
+        ackBtn.addEventListener('click', async function(ev) {
+          ev.stopPropagation();
+          if (!window.servicesDB || !window.servicesDB.ackQbRow) return;
+          ackBtn.disabled = true;
+          ackBtn.textContent = '⏳';
+          try {
+            await window.servicesDB.ackQbRow(current.sheet.id, rowIndex);
+            tr.classList.remove('svc-qb-row-pending');
+            tr.classList.add('svc-qb-row-acked');
+            ackBtn.textContent = '✓';
+          } catch (_) { ackBtn.textContent = '✓'; ackBtn.disabled = false; }
+        });
+        rowNumTd.appendChild(ackBtn);
+        // DELETE button (X)
+        var delQbBtn = document.createElement('button');
+        delQbBtn.className = 'svc-qb-del-btn';
+        delQbBtn.type = 'button';
+        delQbBtn.title = 'Remove this QB-sent case from the sheet';
+        delQbBtn.innerHTML = '✕';
+        delQbBtn.addEventListener('click', async function(ev) {
+          ev.stopPropagation();
+          if (!confirm('Remove Case# ' + (rowData.data._qb_case_num || '') + ' from this sheet?')) return;
+          if (!window.servicesDB || !window.servicesDB.deleteQbRow) return;
+          delQbBtn.disabled = true;
+          try {
+            await window.servicesDB.deleteQbRow(current.sheet.id, rowIndex);
+          } catch (_) { delQbBtn.disabled = false; }
+        });
+        rowNumTd.appendChild(delQbBtn);
+      }
+      // ── END QB-SENT ROW ────────────────────────────────────────────────────
       cols.forEach(function (c) {
         var td  = mkEl('td', null, tr);
         var savedWidth = Number(current.sheet.column_widths && current.sheet.column_widths[c.key]);
