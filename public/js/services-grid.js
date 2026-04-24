@@ -915,6 +915,11 @@
     // so we MUST re-apply column widths. If cache exists → apply synchronously via
     // rAF (deferred one frame so the browser has measured the new nodes).
     // If no cache → run full measurement as normal.
+    // Skip autoFit for rowNum — force it first
+    var _rnw = computeRowNumWidth(totalRowsForWidth);
+    ROW_NUM_COL_WIDTH_PX = _rnw + 'px';
+    document.documentElement.style.setProperty('--row-num-w', ROW_NUM_COL_WIDTH_PX);
+    // Then run autoFit for data columns only
     autoFitColumns();
 
     // refreshCounts builds treeview DOM — skip on filter switches (treeview
@@ -1768,7 +1773,7 @@
     ctx.font = '13px Inter, system-ui, -apple-system';
 
     current.sheet.column_defs.forEach(function (col) {
-      if (col.getAttribute && col.getAttribute('data-key') === '__rownum__') return;
+      if (!col || !col.key) return;
       if (col.hidden) return;
 
       var saved = Number(current.sheet.column_widths && current.sheet.column_widths[col.key]);
@@ -1789,7 +1794,10 @@
       });
 
       // NEW: Increase floor from 80 to 140, ceiling from 300 to 400
-      col.width = Math.min(Math.max(maxWidth, 140), 400) + 'px';
+      // Never auto-size the row number column
+      if (col.key !== '__rownum__') {
+        col.width = Math.min(Math.max(maxWidth, 140), 400) + 'px';
+      }
     });
 
     _applyColumnWidths();
