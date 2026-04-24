@@ -34,10 +34,12 @@
   var _searchAllQuery = ''; // toolbar all-columns query
   var isResizing  = false;
   function computeRowNumWidth(totalRows) {
+    console.log('[ROWNUM-DEBUG] computeRowNumWidth IN', { totalRows: totalRows });
     var digits = String(Math.max(totalRows || 1, 1)).length;
     var px = digits * 9 + 22; // base padding
     if (px < 36) px = 36;
     if (px > 72) px = 72;
+    console.log('[ROWNUM-DEBUG] compute OUT', { digits: digits, px: px, result: px + 'px' });
     return px + 'px';
   }
   var ROW_NUM_COL_WIDTH_PX = '36px'; // default; updated per-render
@@ -66,6 +68,7 @@
   }
 
   function lockRowNumWidth(th) {
+    console.log('[ROWNUM-DEBUG] lockRowNumWidth called', { thText: th?.textContent, currentWidth: ROW_NUM_COL_WIDTH_PX });
     if (th) { th.style.width = ROW_NUM_COL_WIDTH_PX; th.style.minWidth = ROW_NUM_COL_WIDTH_PX; th.style.maxWidth = ROW_NUM_COL_WIDTH_PX; }
     var w = ROW_NUM_COL_WIDTH_PX;
     // Set CSS variable on the grid table — the CSS rule uses var(--row-num-w)
@@ -575,7 +578,15 @@
       : Math.max((current && current.rows ? current.rows.length : 0) + 2, 10);
 
     ROW_NUM_COL_WIDTH_PX = computeRowNumWidth(totalRowsForWidth);
+    console.log('[ROWNUM-DEBUG] RENDER', {
+      totalRowsForWidth: totalRowsForWidth,
+      isFilteredView: isFilteredView, isSorted: isSorted,
+      viewRowsLen: (typeof viewRows !== 'undefined' ? viewRows.length : 'n/a'),
+      currentRowsLen: (current && current.rows ? current.rows.length : 'n/a'),
+      computedWidth: ROW_NUM_COL_WIDTH_PX
+    });
     document.documentElement.style.setProperty('--row-num-w', ROW_NUM_COL_WIDTH_PX);
+    console.log('[ROWNUM-DEBUG] CSS var set to', getComputedStyle(document.documentElement).getPropertyValue('--row-num-w'));
 
     var totalRows = (isFilteredView || isSorted)
       ? Math.max(viewRows.length, 1)
@@ -588,6 +599,10 @@
     rowNumCol.style.minWidth = ROW_NUM_COL_WIDTH_PX;
     rowNumCol.style.maxWidth = ROW_NUM_COL_WIDTH_PX;
     rowNumCol.setAttribute('width', String(parseInt(ROW_NUM_COL_WIDTH_PX, 10)));
+    console.log('[ROWNUM-DEBUG] colgroup applied', {
+      styleWidth: rowNumCol.style.width,
+      attrWidth: rowNumCol.getAttribute('width')
+    });
     colgroup.appendChild(rowNumCol);
     cols.forEach(function (c) {
       var col = document.createElement('col');
@@ -987,6 +1002,21 @@
       };
       wrap.addEventListener('scroll', wrap._qbScrollHandler, { passive: true });
     })();
+
+    setTimeout(function () {
+      var col = document.querySelector('#svcGrid col[data-key="__rownum__"]');
+      var th = document.querySelector('#svcGrid th.row-num');
+      var td = document.querySelector('#svcGrid td.row-num');
+      console.log('[ROWNUM-DEBUG] FINAL DOM', {
+        col_style: col?.style.width,
+        col_attr: col?.getAttribute('width'),
+        th_offsetWidth: th?.offsetWidth,
+        th_computed: th ? getComputedStyle(th).width : null,
+        td_offsetWidth: td?.offsetWidth,
+        cssVar: getComputedStyle(document.documentElement).getPropertyValue('--row-num-w'),
+        localStorageColumns: localStorage.getItem('mums_columns') || localStorage.getItem('services_columns')
+      });
+    }, 100);
   }
 
   function attachCellHandlers() {

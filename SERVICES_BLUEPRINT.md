@@ -191,6 +191,10 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-23 (Temporary debug probe for `#` row-number width path):**
+  - **Edit — `public/js/services-grid.js`:** Added `[ROWNUM-DEBUG]` console probes in `computeRowNumWidth(totalRows)`, `render()`, `lockRowNumWidth(th)`, colgroup width application, and a delayed final DOM snapshot check.
+  - **Behavior contract update:** No auth/realtime/data/CSS logic changes; this update is diagnostics-only to trace width computation, CSS variable propagation, colgroup width attribute/style, and post-render measured widths.
+
 - **2026-04-23 (Permanent `#` row-number auto-fit clamp refinement):**
   - **Edit — `public/js/services-grid.js`:** Replaced row-number width calculator with `computeRowNumWidth(totalRows)` using `digits * 9 + 22`, clamped to `36px–72px`, and recalculated width in `render()` before `colgroup` creation.
   - **Edit — `public/js/services-grid.js`:** `render()` now sets global `ROW_NUM_COL_WIDTH_PX` and pushes `--row-num-w` to document scope, while `rowNumCol` keeps width/min/max + HTML `width` attribute aligned to that computed value.
