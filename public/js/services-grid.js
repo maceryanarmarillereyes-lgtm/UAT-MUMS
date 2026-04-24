@@ -31,32 +31,7 @@
   // key: column key string | null (no sort), dir: 'asc' | 'desc'
   var _sortState   = { key: null, dir: 'asc' };
   var _columnFilters = {}; // per-column filter values
-  var _searchAllQuery = ''; // toolbar all-columns query
   var isResizing  = false;
-  var ROW_NUM_LOCK_PX = 49;
-
-  function isSyntheticRowNumKey(key) {
-    var k = String(key == null ? '' : key).trim().toLowerCase();
-    return k === 'rownum' || k === '__rownum__';
-  }
-  function computeRowNumWidth(totalRows) {
-    var digits = String(Math.max(totalRows, 1)).length;
-    // Base padding (left+right) is 8px, font is 13px JetBrains Mono (approx 8px per char)
-    // We add a little extra buffer for the sticky border.
-    return Math.max(36, (digits * 8) + 16);
-  }
-  var ROW_NUM_COL_WIDTH_PX = ROW_NUM_LOCK_PX + 'px'; // locked width
-  function lockRowNumWidth(th) {
-    if (!th) return;
-    th.style.setProperty('width', ROW_NUM_COL_WIDTH_PX, 'important');
-    th.style.setProperty('min-width', ROW_NUM_COL_WIDTH_PX, 'important');
-    th.style.setProperty('max-width', ROW_NUM_COL_WIDTH_PX, 'important');
-    var w = ROW_NUM_COL_WIDTH_PX;
-    // Set CSS variable on the grid table — the CSS rule uses var(--row-num-w)
-    if (grid) {
-      grid.style.setProperty('--row-num-w', w);
-    }
-  }
 
   function sanitizeHeaderLabel(label, fallbackIndex) {
     var s = String(label == null ? '' : label)
@@ -72,21 +47,13 @@
 
   function normalizeColumnDefs(columnDefs) {
     var changed = false;
-    var normalized = (columnDefs || [])
-      .filter(function (c) {
-        if (isSyntheticRowNumKey(c && c.key)) {
-          changed = true;
-          return false;
-        }
-        return true;
-      })
-      .map(function (c, idx) {
-        var next = Object.assign({}, c || {});
-        var safeLabel = sanitizeHeaderLabel(next.label, idx);
-        if (next.label !== safeLabel) changed = true;
-        next.label = safeLabel;
-        return next;
-      });
+    var normalized = (columnDefs || []).map(function (c, idx) {
+      var next = Object.assign({}, c || {});
+      var safeLabel = sanitizeHeaderLabel(next.label, idx);
+      if (next.label !== safeLabel) changed = true;
+      next.label = safeLabel;
+      return next;
+    });
     return { normalized: normalized, changed: changed };
   }
 
@@ -106,23 +73,11 @@
   }
 
 
-
-  function sanitizeColumnWidthsMap(widths) {
-    var out = {};
-    Object.keys(widths || {}).forEach(function (key) {
-      if (isSyntheticRowNumKey(key)) return;
-      var raw = Number(widths[key]);
-      if (!raw) return;
-      out[key] = Math.max(60, Math.min(800, raw));
-    });
-    return out;
-  }
-
   async function saveColumnState() {
     if (!current || !current.sheet || !current.sheet.id || isResizing) return;
     var columnDefs = Array.isArray(current.sheet.column_defs) ? current.sheet.column_defs : [];
     var state = {
-      widths: sanitizeColumnWidthsMap(current.sheet.column_widths || {}),
+      widths: current.sheet.column_widths || {},
       hidden: columnDefs.filter(function (c) { return !!(c && c.hidden); }).map(function (c) { return c.key; })
     };
 
@@ -240,7 +195,7 @@
       try {
         var localState = JSON.parse(localStateRaw);
         current.sheet.column_state = localState;
-        current.sheet.column_widths = sanitizeColumnWidthsMap(localState.widths || {});
+        current.sheet.column_widths = Object.assign({}, localState.widths || {});
         if (Array.isArray(localState.hidden)) {
           localState.hidden.forEach(function (key) {
             var localCol = current.sheet.column_defs.find(function (c) { return c && c.key === key; });
@@ -251,7 +206,7 @@
       } catch (_) {}
     } else if (sheet.column_state) {
       current.sheet.column_state = sheet.column_state;
-      current.sheet.column_widths = sanitizeColumnWidthsMap((sheet.column_state && sheet.column_state.widths) || {});
+      current.sheet.column_widths = Object.assign({}, (sheet.column_state && sheet.column_state.widths) || {});
       if (Array.isArray(sheet.column_state.hidden)) {
         sheet.column_state.hidden.forEach(function (key) {
           var col = current.sheet.column_defs.find(function (c) { return c && c.key === key; });
@@ -269,6 +224,7 @@
     redoStack = [];
     current.rows = await window.servicesDB.listRows(sheet.id);
     console.log('[LOAD] Loaded', current.rows.length, 'rows');
+
     var caseCol = (current.sheet.column_defs || []).find(function (c) {
       return c && c.label && String(c.label).toUpperCase().includes('CASE');
     });
@@ -550,11 +506,6 @@
       return;
     }
     if (!current) { clear(); return; }
-    if (grid) {
-      grid.style.removeProperty('--row-num-w');
-    }
-    document.documentElement.style.removeProperty('--row-num-w');
-    lockRowNumWidth();
     empty.style.display = 'none';
     grid.hidden = false;
     var cols      = (current.sheet.column_defs || []).filter(function (c) { return !c.hidden; });
@@ -577,13 +528,6 @@
       });
     }
 
-    var totalRowsForWidth = (typeof isFilteredView !== 'undefined' && (isFilteredView || isSorted))
-      ? Math.max(viewRows.length, 1)
-      : Math.max((current && current.rows ? current.rows.length : 0) + 2, 10);
-
-    ROW_NUM_COL_WIDTH_PX = computeRowNumWidth(totalRowsForWidth) + 'px';
-    document.documentElement.style.removeProperty('--row-num-w');
-
     var totalRows = (isFilteredView || isSorted)
       ? Math.max(viewRows.length, 1)
       : Math.max(current.rows.length + 2, 10);
@@ -591,10 +535,7 @@
     var colgroup = mkEl('colgroup');
     var rowNumCol = document.createElement('col');
     rowNumCol.setAttribute('data-key', '__rownum__');
-    rowNumCol.style.setProperty('width', '49px', 'important');
-    rowNumCol.style.setProperty('min-width', '49px', 'important');
-    rowNumCol.style.setProperty('max-width', '49px', 'important');
-    rowNumCol.setAttribute('width', String(parseInt(ROW_NUM_COL_WIDTH_PX,10)));
+    rowNumCol.style.width = '56px';
     colgroup.appendChild(rowNumCol);
     cols.forEach(function (c) {
       var col = document.createElement('col');
@@ -608,7 +549,6 @@
     var thead   = mkEl('thead');
     var headTr  = mkEl('tr', null, thead);
     var thCorner = mkEl('th', { className: 'row-num row-header', textContent: '#' }, headTr);
-    lockRowNumWidth(thCorner);
     cols.forEach(function (c) {
       var th = mkEl('th', { textContent: sanitizeHeaderLabel(c.label, 0) }, headTr);
       th.dataset.key = c.key;
@@ -711,9 +651,8 @@
 
     // Filter cell for row number
     var filterCorner = mkEl('th', { className: 'row-num' }, filterTr);
-    filterCorner.innerHTML = '<div style="text-align:center;color:#475569;font-size:9px;">▼</div>';
-    filterCorner.style.cssText = 'background:#0f172a;padding:2px;position:sticky;top:32px;z-index:4;left:0;';
-    lockRowNumWidth(filterCorner);
+    filterCorner.innerHTML = '<div style="text-align:center;color:#475569;font-size:9px;padding:2px;">▼</div>';
+    filterCorner.style.cssText = 'background:#0f172a;padding:2px;position:sticky;top:32px;z-index:4;';
 
     // Filter cells for each column
     cols.forEach(function (c) {
@@ -798,7 +737,6 @@
         textContent: String(rowIndex + 1),
         title: 'Row ' + (rowIndex + 1) + ' - Click to select'
       }, tr);
-      lockRowNumWidth(rowNumTd);
       rowNumTd.dataset.rowIndex = rowIndex;
       rowNumTd.dataset.row = String(rowIndex);
       cols.forEach(function (c) {
@@ -944,11 +882,6 @@
     // so we MUST re-apply column widths. If cache exists → apply synchronously via
     // rAF (deferred one frame so the browser has measured the new nodes).
     // If no cache → run full measurement as normal.
-    // Skip autoFit for rowNum — force it first
-    var _rnw = computeRowNumWidth(totalRowsForWidth);
-    ROW_NUM_COL_WIDTH_PX = _rnw + 'px';
-    document.documentElement.style.removeProperty('--row-num-w');
-    // Then run autoFit for data columns only
     autoFitColumns();
 
     // refreshCounts builds treeview DOM — skip on filter switches (treeview
@@ -999,11 +932,6 @@
       };
       wrap.addEventListener('scroll', wrap._qbScrollHandler, { passive: true });
     })();
-
-    // Single source of truth for # width
-    var px = computeRowNumWidth(totalRowsForWidth);
-    ROW_NUM_COL_WIDTH_PX = px + 'px';
-    document.documentElement.style.removeProperty('--row-num-w');
   }
 
   function attachCellHandlers() {
@@ -1802,7 +1730,6 @@
     ctx.font = '13px Inter, system-ui, -apple-system';
 
     current.sheet.column_defs.forEach(function (col) {
-      if (!col || !col.key) return;
       if (col.hidden) return;
 
       var saved = Number(current.sheet.column_widths && current.sheet.column_widths[col.key]);
@@ -1823,10 +1750,7 @@
       });
 
       // NEW: Increase floor from 80 to 140, ceiling from 300 to 400
-      // Never auto-size the row number column
-      if (col.key !== '__rownum__') {
-        col.width = Math.min(Math.max(maxWidth, 140), 400) + 'px';
-      }
+      col.width = Math.min(Math.max(maxWidth, 140), 400) + 'px';
     });
 
     _applyColumnWidths();
@@ -1890,14 +1814,8 @@
 
   function _applyColumnWidths() {
     if (!grid || !current || !current.sheet) return;
-    var headers = grid.querySelectorAll('thead tr:first-child th');
-    if (headers[0]) {
-      lockRowNumWidth(headers[0]);
-    }
-    var rowNumCells = grid.querySelectorAll('th.row-num, td.row-num, col[data-key="__rownum__"]');
-    rowNumCells.forEach(lockRowNumWidth);
+    var headers = grid.querySelectorAll('thead th');
     headers.forEach(function (th, idx) {
-      if (idx === 0) return; // keep row-number lane fixed
       var col = current.sheet.column_defs[idx - 1]; // -1 for row-num column
       if (col && col.width) {
         th.style.width = col.width;
@@ -2325,13 +2243,11 @@
   // setTreeFilter(fn) — fn receives a row object {row_index, data}, returns bool.
   // Pass null to remove filter (show all rows).
   var _treeFilter = null;
-  window._treeFilter = null;
   // FIX: Flag that render() checks to skip autoResizeColumns + refreshCounts
   // during folder switches. These are the two main sources of folder-switch lag.
   var _renderIsFilterSwitch = false;
   function setTreeFilter(fn) {
     _treeFilter = fn || null;
-    window._treeFilter = _treeFilter;
     _renderIsFilterSwitch = true;
     try {
       render();
@@ -2350,12 +2266,11 @@
       return;
     }
 
-    // Compose all filters: tree + column + toolbar all-columns search
+    // Compose all filters: tree + column
     var hasTreeFilter = !!_treeFilter;
     var hasColumnFilters = Object.keys(_columnFilters).length > 0;
-    var hasSearchAll = !!_searchAllQuery;
 
-    if (!hasTreeFilter && !hasColumnFilters && !hasSearchAll) {
+    if (!hasTreeFilter && !hasColumnFilters) {
       delete current.__treeFilteredRows;
       _origRender();
       return;
@@ -2363,8 +2278,8 @@
 
     // Apply all filters
     current.__treeFilteredRows = (current.rows || []).filter(function (row) {
-      // 1. Tree filter (existing) — bypassed while all-columns search is active
-      if (!hasSearchAll && hasTreeFilter && !_treeFilter(row)) return false;
+      // 1. Tree filter (existing)
+      if (hasTreeFilter && !_treeFilter(row)) return false;
 
       // 2. Column filters (NEW)
       if (hasColumnFilters) {
@@ -2373,15 +2288,6 @@
           var cellVal = row.data && row.data[key] != null ? String(row.data[key]).toLowerCase() : '';
           if (cellVal.indexOf(filterVal) === -1) return false;
         }
-      }
-
-      // 3. Toolbar all-columns search (matches any cell in row)
-      if (hasSearchAll) {
-        var rowData = row && row.data ? row.data : {};
-        var hit = Object.keys(rowData).some(function (key) {
-          return String(rowData[key] == null ? '' : rowData[key]).toLowerCase().indexOf(_searchAllQuery) !== -1;
-        });
-        if (!hit) return false;
       }
       return true;
     });
@@ -2410,46 +2316,4 @@
     saveColumnState: saveColumnState,
     toggleColumnVisibility: toggleColumnVisibility
   };
-
-  // ===== Toolbar Search All Columns =====
-  (function initSearchAll() {
-    var input = document.getElementById('searchAllColumns');
-    if (!input) return;
-    var timer;
-    var basePlaceholder = input.getAttribute('placeholder') || '🔍 Search all...';
-
-    function doSearch() {
-      _searchAllQuery = String(input.value || '').toLowerCase().trim();
-      _renderIsFilterSwitch = true;
-      try {
-        render();
-      } finally {
-        _renderIsFilterSwitch = false;
-      }
-      input.placeholder = _searchAllQuery ? ('Searching all folders…') : basePlaceholder;
-    }
-
-    input.addEventListener('input', function () {
-      clearTimeout(timer);
-      timer = setTimeout(doSearch, 250);
-    });
-
-    input.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') {
-        this.value = '';
-        doSearch();
-        this.blur();
-      }
-    });
-
-    // Clear search when grid is emptied during sheet switch
-    var observer = new MutationObserver(function () {
-      if (input.value && !document.querySelector('#svcGrid tbody tr')) {
-        input.value = '';
-        _searchAllQuery = '';
-        input.placeholder = basePlaceholder;
-      }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  })();
 })();

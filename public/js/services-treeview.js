@@ -153,6 +153,7 @@
     allNode.dataset.folderId = '__main__'; // unified key (was '__all__', caused mismatch with onSheetOpened)
     allNode.dataset.sheetId  = sheetId;
     allNode.innerHTML =
+      '<span class="svc-tv-connector">└</span>' +
       '<span class="svc-tv-icon">📋</span>' +
       '<span class="svc-tv-label">All Records</span>' +
       '<span class="svc-tv-count">' + getRowCount(sheetId) + '</span>';
@@ -183,6 +184,7 @@
           'tabindex="-1">⟳</button>';
 
       node.innerHTML =
+        '<span class="svc-tv-connector">' + (isLast ? '└' : '├') + '</span>' +
         '<span class="svc-tv-icon">' + (f.icon || '📁') + '</span>' +
         '<span class="svc-tv-label">' + eh(f.name) + '</span>' +
         countBadge +

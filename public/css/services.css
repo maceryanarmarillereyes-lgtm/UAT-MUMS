@@ -182,54 +182,30 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
 }
 .svc-sheet-search:focus { border-color: var(--svc-accent); }
 .svc-sheet-list { flex: 1; padding: 4px 8px; overflow-y: auto; }
-/* ── SHEET ITEM — Parent-level row (level 0) ──────────────────────────────
-   Design intent: Sheet is a PARENT. Must look clearly different from child
-   folder nodes — bigger, brighter, with a pill-style prominent look when active.
-   ─────────────────────────────────────────────────────────────────────────── */
 .svc-sheet-item {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--svc-radius-sm);
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s, box-shadow 0.12s;
+  transition: all 0.12s;
   color: var(--svc-text-dim);
   font-size: 13px;
-  font-weight: 500;
   border: 1px solid transparent;
-  margin-bottom: 1px;
-  position: relative;
+  margin-bottom: 2px;
+  animation: svc-fade-in 0.2s ease-out;
 }
-.svc-sheet-item:hover {
-  background: rgba(14,165,233,0.08);
-  color: #e2e8f0;
-  border-color: rgba(14,165,233,0.18);
+.svc-sheet-item:hover { background: var(--svc-panel-2); color: var(--svc-text); }
+.svc-sheet-item.active {
+  background: linear-gradient(90deg, rgba(34,211,238,0.15), transparent);
+  color: var(--svc-accent);
+  border-color: rgba(34,211,238,0.2);
+  border-left: 3px solid var(--svc-accent);
 }
-
-/* ── Active sheet: solid accent pill, clearly the parent-level selection ──── */
-.svc-sheet-item.active,
-.sheet-item.active,
-.sheet-item[data-selected="true"],
-.tree-sheet.active {
-  background: rgba(14,165,233,0.13) !important;
-  border-color: rgba(14,165,233,0.30) !important;
-  border-left: 3px solid #0ea5e9 !important;
-  color: #e2e8f0 !important;
-  font-weight: 600 !important;
-  box-shadow: inset 0 0 0 1px rgba(14,165,233,0.10) !important;
-}
-.svc-sheet-item .icon { font-size: 14px; flex-shrink: 0; line-height: 1; }
+.svc-sheet-item .icon { font-size: 15px; flex-shrink: 0; }
 .svc-sheet-item .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.svc-sheet-item .menu {
-  opacity: 0;
-  transition: opacity 0.15s;
-  color: var(--svc-text-dim);
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-size: 14px;
-  flex-shrink: 0;
-}
+.svc-sheet-item .menu { opacity: 0; transition: opacity 0.15s; color: var(--svc-text-dim); padding: 2px 4px; border-radius: 4px; }
 .svc-sheet-item:hover .menu { opacity: 1; }
 .svc-sheet-item .menu:hover { color: var(--svc-accent); background: rgba(34,211,238,0.1); }
 .svc-left-footer {
@@ -320,10 +296,13 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   width: auto;
   min-width: 100%;
 }
-#svcGrid {
+#svcGrid,
+#svcGrid table {
   table-layout: fixed !important;
-  width: auto !important;
-  min-width: 0 !important;
+  width: max-content !important;
+  min-width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
 }
 
 #svcGrid th,
@@ -367,24 +346,16 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
 }
 .svc-grid thead th.row-num,
 .svc-grid tbody td.row-num {
-  width: 49px !important;
-  min-width: 49px !important;
-  max-width: 49px !important;
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-  text-align: center;
-  color: var(--svc-text-dim);
-  cursor: pointer;
-  padding: 8px 0 !important;
-  font-variant-numeric: tabular-nums;
-  user-select: none;
-  position: relative;
+  width: 56px!important;
+  min-width: 56px!important;
+  max-width: 56px!important;
   position: sticky;
   left: 0;
   z-index: 20;
   background: #020617!important;
   border-right: 1px solid #1e293b;
-  overflow: hidden;
+  text-align: center;
+  padding: 0!important;
 }
 .svc-grid tbody td {
   padding: 0;
@@ -400,7 +371,7 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   user-select: none;
 }
 .row-header {
-  /* width controlled by JS lockRowNumWidth */
+  width: 56px !important;
   user-select: none;
   cursor: pointer;
 }
@@ -1655,60 +1626,39 @@ input.cell.cell-qb-not-found {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   TREEVIEW — services-treeview.js  (v2 — Premium Hierarchy)
-   ════════════════════════════════════════════════════════════════════════════
-   HIERARCHY DESIGN SYSTEM:
-     Level 0 = Sheet (.svc-sheet-item)        — parent, prominent
-     Level 1 = Folder node (.svc-tv-node)     — child, visually subordinate
-   
-   Visual cues that establish hierarchy:
-     • Left bracket line: .svc-tv-container has a left border connecting children
-     • Children are indented under their parent sheet
-     • Sheet active = cyan (cool blue) — strong parent selection signal
-     • Folder active = indigo — clearly different, child-level selection
-     • Count badges: sheet shows solid pill, folder shows hollow pill
+   TREEVIEW — services-treeview.js
+   Premium enterprise folder tree for the left sidebar
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Sheet wrapper ────────────────────────────────────────────────────────── */
+/* ── Sheet wrapper: groups sheet item + its treeview container ────────────── */
 .svc-sheet-wrapper {
   display: flex;
   flex-direction: column;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
-/* ── TreeView container — left bracket connects children to parent sheet ──── */
+/* ── TreeView container (injected below each sheet item) ─────────────────── */
 .svc-tv-container {
   display: flex;
   flex-direction: column;
-  /* Left bracket: a subtle vertical line that visually "groups" folder nodes
-     under their parent sheet item */
-  margin-left: 18px;
-  padding: 2px 0 4px 10px;
-  border-left: 1px solid rgba(148,163,184,0.14);
+  padding: 0 0 2px 0;
   overflow: hidden;
-  transition: border-color 0.15s;
-}
-
-.svc-sheet-wrapper:has(.svc-sheet-item.active) .svc-tv-container {
-  border-left-color: rgba(14,165,233,0.30);
 }
 
 .svc-tv-container:empty {
   display: none;
 }
 
-/* ── Folder / All Records node — Level 1 child ───────────────────────────── */
+/* ── Folder / All Records node ───────────────────────────────────────────── */
 .svc-tv-node {
   display: flex;
   align-items: center;
-  gap: 7px;
-  /* Reduced left padding — indent is handled by the container's margin+padding */
-  padding: 5px 8px 5px 10px;
+  gap: 6px;
+  padding: 5px 12px 5px 28px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
-  font-weight: 500;
-  color: rgba(148,163,184,0.7);
+  color: var(--svc-text-dim);
   transition: background 0.12s, color 0.12s, border-color 0.12s;
   border: 1px solid transparent;
   position: relative;
@@ -1717,44 +1667,39 @@ input.cell.cell-qb-not-found {
 }
 
 .svc-tv-node:hover {
-  background: rgba(148,163,184,0.09);
-  color: #cbd5e1;
-  border-color: rgba(148,163,184,0.18);
+  background: var(--svc-panel-2);
+  color: var(--svc-text);
 }
 
-/* ── Active folder: indigo accent — DISTINCT from sheet's cyan accent ─────── */
 .svc-tv-node.svc-tv-active {
-  background: rgba(99,102,241,0.13);
-  color: #c7d2fe;
-  border-color: rgba(99,102,241,0.28);
-  border-left: 2px solid #818cf8;
-  font-weight: 600;
+  background: linear-gradient(90deg, rgba(34,211,238,0.12), transparent);
+  color: var(--svc-accent);
+  border-color: rgba(34,211,238,0.18);
+  border-left: 2px solid var(--svc-accent);
 }
 
-/* ── "All Records" node gets cyan tint to match parent sheet ──────────────── */
-.svc-tv-node[data-folder-id="__main__"].svc-tv-active {
-  background: rgba(14,165,233,0.10);
-  color: #bae6fd;
-  border-color: rgba(14,165,233,0.25);
-  border-left: 2px solid #38bdf8;
-}
-
-/* ── Tree connector ───────────────────────────────────────────────────────── */
+/* ── Tree connector character ─────────────────────────────────────────────── */
 .svc-tv-connector {
-  display: none; /* Hidden — hierarchy is now shown by container bracket */
+  position: absolute;
+  left: 14px;
+  font-size: 10px;
+  color: rgba(148,163,184,0.3);
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1;
+  pointer-events: none;
+  transition: color 0.12s;
+}
+
+.svc-tv-node:hover .svc-tv-connector,
+.svc-tv-node.svc-tv-active .svc-tv-connector {
+  color: rgba(34,211,238,0.4);
 }
 
 /* ── Folder icon ──────────────────────────────────────────────────────────── */
 .svc-tv-icon {
-  font-size: 12px;
+  font-size: 13px;
   flex-shrink: 0;
   line-height: 1;
-  opacity: 0.75;
-  transition: opacity 0.12s;
-}
-.svc-tv-node:hover .svc-tv-icon,
-.svc-tv-node.svc-tv-active .svc-tv-icon {
-  opacity: 1;
 }
 
 /* ── Folder label ─────────────────────────────────────────────────────────── */
@@ -1763,7 +1708,7 @@ input.cell.cell-qb-not-found {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  letter-spacing: 0.01em;
+  font-weight: 500;
 }
 
 /* ── Row count badge ──────────────────────────────────────────────────────── */
@@ -1772,53 +1717,23 @@ input.cell.cell-qb-not-found {
   font-weight: 700;
   padding: 1px 6px;
   border-radius: 999px;
-  background: rgba(148,163,184,0.08);
-  color: rgba(148,163,184,0.55);
-  border: 1px solid rgba(148,163,184,0.14);
+  background: rgba(148,163,184,0.1);
+  color: rgba(148,163,184,0.6);
+  border: 1px solid rgba(148,163,184,0.12);
   flex-shrink: 0;
   font-family: 'JetBrains Mono', monospace;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
-  min-width: 22px;
+  min-width: 20px;
   text-align: center;
 }
 
-/* Active folder — count badge gets indigo tint */
 .svc-tv-node.svc-tv-active .svc-tv-count {
-  background: rgba(99,102,241,0.22);
-  color: #c7d2fe;
-  border-color: rgba(129,140,248,0.35);
-}
-/* Active All Records — count badge gets cyan tint */
-.svc-tv-node[data-folder-id="__main__"].svc-tv-active .svc-tv-count {
-  background: rgba(14,165,233,0.18);
-  color: #bae6fd;
-  border-color: rgba(56,189,248,0.35);
+  background: rgba(34,211,238,0.12);
+  color: var(--svc-accent);
+  border-color: rgba(34,211,238,0.25);
 }
 
-/* ── Sheet-level count badge (different from folder count) ───────────────── */
-.svc-sheet-item .svc-sheet-count,
-.svc-sheet-item .sheet-count {
-  background: rgba(148,163,184,0.12);
-  color: rgba(203,213,225,0.8);
-  border: 1px solid rgba(148,163,184,0.18);
-  border-radius: 999px;
-  padding: 1px 7px;
-  font-size: 10px;
-  font-weight: 700;
-  font-family: 'JetBrains Mono', monospace;
-  flex-shrink: 0;
-}
-/* Active sheet — count badge is solid cyan pill */
-.svc-sheet-item.active .svc-sheet-count,
-.svc-sheet-item.active .sheet-count,
-.sheet-item.active .sheet-count,
-.tree-sheet.active .count {
-  background: rgba(14,165,233,0.22) !important;
-  color: #bae6fd !important;
-  border-color: rgba(56,189,248,0.38) !important;
-}
-
-/* ── Context menu positioning ─────────────────────────────────────────────── */
+/* ── Context menu positioning override for treeview ──────────────────────── */
 .svc-tv-ctx-menu {
   position: fixed;
   z-index: 99999;
@@ -3887,29 +3802,4 @@ th[data-key].has-filter::after {
   height: 5px;
   background: #0ea5e9;
   border-radius: 50%;
-}
-
-
-/* NUCLEAR OVERRIDE - # column 49px - 2026-04-24 */
-#svcGrid col[data-key="__rownum__"] {
-  width: 49px !important;
-  min-width: 49px !important;
-  max-width: 49px !important;
-}
-#svcGrid thead th.row-num,
-#svcGrid tbody td.row-num,
-#svcGrid th.row-num,
-#svcGrid td.row-num {
-  width: 49px !important;
-  min-width: 49px !important;
-  max-width: 49px !important;
-  padding-left: 4px !important;
-  padding-right: 4px !important;
-  box-sizing: border-box !important;
-  overflow: hidden !important;
-  text-overflow: clip !important;
-  white-space: nowrap !important;
-}
-#svcGrid {
-  table-layout: fixed !important;
 }
