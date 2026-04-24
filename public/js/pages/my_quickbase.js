@@ -4167,9 +4167,83 @@
 
     // ═══════════════════════════════════════════════════════════════════════════
     // QB → SERVICES SHEET: "Send to Sheet" Right-Click Feature
+    // ROOT-CAUSE FIX: uses window.__MUMS_SB_CLIENT (already alive on index.html
+    // via realtime.js / store.js) instead of window.servicesDB which only exists
+    // on services.html. Zero dependency on services-supabase.js.
     // ═══════════════════════════════════════════════════════════════════════════
     (function _initQbSendToSheet() {
       const LS_SENT_KEY = 'mums_qb_sent_v1';
+
+      // ── Get the live Supabase client (already created by realtime.js / store.js) ──
+      function _getSbClient() {
+        // Priority: shared singleton → global window.supabase SDK instance
+        var c = window.__MUMS_SB_CLIENT;
+        if (c && typeof c.from === 'function') return c;
+        // Fallback: if MUMS_ENV is set, build a minimal client on the fly
+        var env = window.MUMS_ENV || {};
+        var url = env.SUPABASE_URL;
+        var key = env.SUPABASE_ANON_KEY;
+        if (url && key && window.supabase && typeof window.supabase.createClient === 'function') {
+          window.__MUMS_SB_CLIENT = window.supabase.createClient(url, key, {
+            auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false },
+            realtime: { params: { eventsPerSecond: 4 } }
+          });
+          // Restore session so RLS queries work
+          try {
+            var raw = localStorage.getItem('mums_supabase_session') ||
+                      sessionStorage.getItem('mums_supabase_session');
+            if (raw) {
+              var sess = JSON.parse(raw);
+              if (sess && sess.access_token && sess.refresh_token) {
+                window.__MUMS_SB_CLIENT.auth.setSession({
+                  access_token: sess.access_token,
+                  refresh_token: sess.refresh_token
+                });
+              }
+            }
+          } catch (_) {}
+          return window.__MUMS_SB_CLIENT;
+        }
+        return null;
+      }
+
+      // ── Direct Supabase helpers (no servicesDB needed) ─────────────────────
+      async function _listSheets() {
+        var c = _getSbClient();
+        if (!c) return [];
+        var res = await c.from('services_sheets')
+          .select('id,title,sort_order')
+          .eq('is_archived', false)
+          .order('sort_order', { ascending: true });
+        return (res && res.data) ? res.data : [];
+      }
+
+      async function _sendCaseToSheet(sheetId, caseNum, description) {
+        var c = _getSbClient();
+        if (!c) return { ok: false, error: 'No Supabase client — check MUMS_ENV' };
+        // Get next row_index
+        var existing = await c.from('services_rows')
+          .select('row_index')
+          .eq('sheet_id', sheetId)
+          .order('row_index', { ascending: false })
+          .limit(1);
+        var nextIdx = (existing.data && existing.data.length > 0)
+          ? (existing.data[0].row_index + 1) : 0;
+        var rowData = {
+          _qb_sent:     true,
+          _qb_ack:      false,
+          _qb_case_num: String(caseNum),
+          _qb_sent_at:  new Date().toISOString(),
+          _qb_desc:     String(description || ''),
+          col_0:        String(caseNum)   // visible in column 1 of the grid
+        };
+        var res = await c.from('services_rows').upsert(
+          { sheet_id: sheetId, row_index: nextIdx, data: rowData },
+          { onConflict: 'sheet_id,row_index', ignoreDuplicates: false }
+        );
+        if (res.error) return { ok: false, error: res.error.message };
+        return { ok: true, rowIndex: nextIdx };
+      }
 
       // ── Persist helpers ────────────────────────────────────────────────────
       function loadSentMap() {
@@ -4181,15 +4255,13 @@
       function recordSent(caseNum, sheetId, sheetTitle) {
         var m = loadSentMap();
         if (!m[caseNum]) m[caseNum] = [];
-        // Avoid dupes
         if (!m[caseNum].some(function(e) { return e.sheetId === sheetId; })) {
-          m[caseNum].push({ sheetId, sheetTitle, sentAt: new Date().toISOString() });
+          m[caseNum].push({ sheetId: sheetId, sheetTitle: sheetTitle, sentAt: new Date().toISOString() });
         }
         saveSentMap(m);
       }
       function getSentSheets(caseNum) {
-        var m = loadSentMap();
-        return m[caseNum] || [];
+        return (loadSentMap()[caseNum] || []);
       }
 
       // ── Close all open QB context menus ─────────────────────────────────────
@@ -4197,7 +4269,7 @@
         document.querySelectorAll('.qb-send-ctx-root').forEach(function(m) { m.remove(); });
       }
 
-      // ── Refresh badges on all visible qb-case-id cells ──────────────────────
+      // ── Refresh SERVICES badges on all qb-case-id cells ─────────────────────
       function refreshAllBadges() {
         var sent = loadSentMap();
         document.querySelectorAll('td.qb-case-id[data-case-num]').forEach(function(td) {
@@ -4218,121 +4290,123 @@
         });
       }
 
-      // ── Build the context menu DOM ───────────────────────────────────────────
+      // ── Build and show the right-click context menu ──────────────────────────
       async function showSendToSheetMenu(e, caseNum, descText) {
         closeAllQbCtx();
         e.preventDefault();
         e.stopPropagation();
 
+        // Mount menu immediately with loading state
         var menu = document.createElement('div');
         menu.className = 'qb-send-ctx-root';
         menu.style.cssText = 'position:fixed;z-index:99999;left:' + e.clientX + 'px;top:' + e.clientY + 'px;';
-
-        // ── Loading state ──────────────────────────────────────────────────────
-        menu.innerHTML = '<div class="qb-send-ctx-loading">Loading sheets…</div>';
+        menu.innerHTML = '<div class="qb-send-ctx-header"><span class="qb-send-ctx-case-label">Case# ' + caseNum + '</span></div>'
+          + '<div class="qb-send-ctx-loading">⏳ Loading sheets…</div>';
         document.body.appendChild(menu);
 
-        // Reposition if off-screen
-        var rect = menu.getBoundingClientRect();
-        if (rect.right > window.innerWidth - 8) {
-          menu.style.left = Math.max(8, e.clientX - rect.width) + 'px';
-        }
-        if (rect.bottom > window.innerHeight - 8) {
-          menu.style.top = Math.max(8, e.clientY - rect.height - 8) + 'px';
-        }
-
-        // ── Fetch sheets (from servicesDB if available) ───────────────────────
+        // Fetch sheets using direct Supabase client
         var sheets = [];
+        var fetchErr = null;
         try {
-          if (window.servicesDB && window.servicesDB.listSheets) {
-            sheets = await window.servicesDB.listSheets();
-          }
-        } catch (_) {}
+          sheets = await _listSheets();
+        } catch (err) {
+          fetchErr = err.message || String(err);
+        }
 
-        // ── Rebuild menu with sheets ───────────────────────────────────────────
-        var alreadySent = getSentSheets(caseNum);
+        // Reposition if off right/bottom edge
+        var rect = menu.getBoundingClientRect();
+        if (rect.right  > window.innerWidth  - 8) menu.style.left = Math.max(8, e.clientX - 240) + 'px';
+        if (rect.bottom > window.innerHeight - 8) menu.style.top  = Math.max(8, e.clientY - (sheets.length * 44 + 80)) + 'px';
+
+        // Rebuild menu content
+        var alreadySent    = getSentSheets(caseNum);
         var alreadySentIds = alreadySent.map(function(s) { return s.sheetId; });
 
         var html = '<div class="qb-send-ctx-header">'
           + '<span class="qb-send-ctx-case-label">Case# ' + caseNum + '</span>'
           + '</div>'
-          + '<div class="qb-send-ctx-divider"></div>'
           + '<div class="qb-send-ctx-item-group-label">SEND TO SHEET</div>';
 
-        if (!sheets || sheets.length === 0) {
-          html += '<div class="qb-send-ctx-empty">No sheets available.<br>Open Services to create one.</div>';
+        if (fetchErr) {
+          html += '<div class="qb-send-ctx-empty">⚠ ' + fetchErr + '</div>';
+        } else if (!sheets || sheets.length === 0) {
+          html += '<div class="qb-send-ctx-empty">No sheets found.<br>Open Services to create one.</div>';
         } else {
           sheets.forEach(function(sheet) {
-            var already = alreadySentIds.includes(sheet.id);
+            var already = alreadySentIds.indexOf(sheet.id) !== -1;
             html += '<div class="qb-send-ctx-item' + (already ? ' qb-send-ctx-item-sent' : '') + '"'
               + ' data-sheet-id="' + sheet.id + '"'
               + ' data-sheet-title="' + (sheet.title || 'Untitled') + '"'
-              + ' title="' + (already ? '✓ Already sent to this sheet' : 'Send Case# ' + caseNum + ' to ' + (sheet.title || 'Untitled')) + '">'
+              + ' title="' + (already ? '✓ Already sent to this sheet' : 'Send Case# ' + caseNum + ' → ' + (sheet.title || 'Untitled')) + '">'
               + '<span class="qb-send-ctx-sheet-icon">📋</span>'
               + '<span class="qb-send-ctx-sheet-name">' + (sheet.title || 'Untitled') + '</span>'
-              + (already ? '<span class="qb-send-ctx-sent-tick">✓</span>' : '<span class="qb-send-ctx-arrow">→</span>')
+              + (already
+                  ? '<span class="qb-send-ctx-sent-tick">✓</span>'
+                  : '<span class="qb-send-ctx-arrow">→</span>')
               + '</div>';
           });
         }
+
         menu.innerHTML = html;
 
-        // ── Sheet click handler ────────────────────────────────────────────────
+        // ── Sheet selection handler ────────────────────────────────────────────
         menu.addEventListener('click', async function(ev) {
           var item = ev.target.closest('[data-sheet-id]');
-          if (!item) return;
-          var sheetId = item.getAttribute('data-sheet-id');
+          if (!item || item.classList.contains('qb-send-ctx-item-sent')) return;
+          var sheetId    = item.getAttribute('data-sheet-id');
           var sheetTitle = item.getAttribute('data-sheet-title') || 'Sheet';
-          var alreadyDone = item.classList.contains('qb-send-ctx-item-sent');
-          if (alreadyDone) return; // Already sent — ignore
 
-          // Show sending state
           item.classList.add('qb-send-ctx-item-sending');
-          item.querySelector('.qb-send-ctx-arrow') && (item.querySelector('.qb-send-ctx-arrow').textContent = '⏳');
+          var arrowEl = item.querySelector('.qb-send-ctx-arrow');
+          if (arrowEl) arrowEl.textContent = '⏳';
 
           try {
-            if (!window.servicesDB || !window.servicesDB.sendCaseToSheet) {
-              throw new Error('Services not loaded. Open the Services workspace first.');
-            }
-            // Ensure servicesDB is initialised
-            if (window.servicesDB.init) await window.servicesDB.init();
-            var result = await window.servicesDB.sendCaseToSheet(sheetId, caseNum, descText || '');
-            if (!result.ok) throw new Error(result.error || 'Failed to send');
+            var result = await _sendCaseToSheet(sheetId, caseNum, descText || '');
+            if (!result.ok) throw new Error(result.error || 'Write failed');
 
-            // Record locally
             recordSent(caseNum, sheetId, sheetTitle);
             refreshAllBadges();
 
-            // Visual feedback — success
             item.classList.remove('qb-send-ctx-item-sending');
             item.classList.add('qb-send-ctx-item-sent');
-            item.querySelector('.qb-send-ctx-arrow') && (item.querySelector('.qb-send-ctx-arrow').textContent = '✓');
+            if (arrowEl) arrowEl.textContent = '✓';
 
-            // Toast (if window.mumsToast exists)
+            // Toast notification
             if (window.mumsToast && typeof window.mumsToast.show === 'function') {
               window.mumsToast.show('success', 'Sent to Sheet', 'Case# ' + caseNum + ' → ' + sheetTitle, 3500);
             }
-
             setTimeout(closeAllQbCtx, 900);
           } catch (err) {
             item.classList.remove('qb-send-ctx-item-sending');
-            item.querySelector('.qb-send-ctx-arrow') && (item.querySelector('.qb-send-ctx-arrow').textContent = '✗');
+            if (arrowEl) arrowEl.textContent = '✗';
+            var msg = err && err.message ? err.message : String(err);
             if (window.mumsToast && typeof window.mumsToast.show === 'function') {
-              window.mumsToast.show('error', 'Send Failed', err.message || 'Unknown error', 5000);
+              window.mumsToast.show('error', 'Send Failed', msg, 5000);
             } else {
-              alert('Send to Sheet failed: ' + (err.message || 'Unknown error'));
+              alert('Send to Sheet failed:\n' + msg);
             }
           }
         });
 
         // Close on outside click / Escape
-        function _close(ev) {
-          if (!menu.contains(ev.target)) { closeAllQbCtx(); document.removeEventListener('mousedown', _close); }
+        function _onOutside(ev) {
+          if (!menu.contains(ev.target)) {
+            closeAllQbCtx();
+            document.removeEventListener('mousedown', _onOutside);
+            document.removeEventListener('keydown',   _onEsc);
+          }
         }
-        function _esc(ev) { if (ev.key === 'Escape') { closeAllQbCtx(); document.removeEventListener('keydown', _esc); } }
+        function _onEsc(ev) {
+          if (ev.key === 'Escape') {
+            closeAllQbCtx();
+            document.removeEventListener('mousedown', _onOutside);
+            document.removeEventListener('keydown',   _onEsc);
+          }
+        }
         setTimeout(function() {
-          document.addEventListener('mousedown', _close);
-          document.addEventListener('keydown', _esc);
-        }, 50);
+          document.addEventListener('mousedown', _onOutside);
+          document.addEventListener('keydown',   _onEsc);
+        }, 60);
       }
 
       // ── Delegate contextmenu on #qbDataBody ──────────────────────────────────
@@ -4343,16 +4417,14 @@
           if (!td) return;
           var caseNum = td.getAttribute('data-case-num') || td.textContent.trim();
           if (!caseNum) return;
-          // Find the short description in the same row for context
-          var tr = td.closest('tr');
+          var tr       = td.closest('tr');
           var descCell = tr ? tr.querySelector('td:not(.qb-row-num-cell):not(.qb-case-id):not(.qb-vc-cell)') : null;
           var descText = descCell ? descCell.textContent.trim().slice(0, 120) : '';
           showSendToSheetMenu(e, caseNum, descText);
         });
       }
 
-      // ── Patch renderRows to inject data-case-num attr onto qb-case-id cells ──
-      // We can't modify renderRows directly; instead use MutationObserver to stamp it.
+      // ── MutationObserver: stamp data-case-num + tooltip on every render ────────
       var _stampObs = new MutationObserver(function() {
         document.querySelectorAll('td.qb-case-id:not([data-case-num])').forEach(function(td) {
           var txt = td.textContent.trim();
@@ -4364,11 +4436,15 @@
         });
         refreshAllBadges();
       });
-      var _tableWrap = root.querySelector('#qbDataBody') || root;
-      _stampObs.observe(_tableWrap, { childList: true, subtree: true });
+      _stampObs.observe(_dataBody2 || root, { childList: true, subtree: true });
 
-      // Initial stamp
+      // Initial stamp pass
+      document.querySelectorAll('td.qb-case-id:not([data-case-num])').forEach(function(td) {
+        var txt = td.textContent.trim();
+        if (txt) { td.setAttribute('data-case-num', txt); td.style.cursor = 'context-menu'; }
+      });
       refreshAllBadges();
+
     })();
     // ── END _initQbSendToSheet ────────────────────────────────────────────────
 
