@@ -38,6 +38,7 @@ The Services workspace is a spreadsheet-style module for authenticated users, ba
 - Undo/redo controls.
 - CSV export and force-save bulk upsert.
 - Column sanitization self-heal (`sanitizeHeaderLabel`) then persisted.
+- Row number lane (`__rownum__`) is hard-locked to `49px`; auto-fit must never mutate this lane (auto-fit applies to data columns only).
 
 ### D) Treeview folders (per sheet)
 - Folder definitions stored in `services_treeview_folders`.
@@ -516,3 +517,7 @@ If step #3 is missing, task is incomplete.
   - **Update — `public/css/services.css`:** Appended permanent `#svcGrid` table-layout override (`fixed`) plus strict 49px width/min/max constraints for `__rownum__` col, `th.row-num`, `td.row-num`, and `.row-num` selectors.
   - **Behavior contract:** `#` column width is now CSS-enforced and centered, with overflow clipped and horizontal padding removed.
   - **Files changed:** `public/css/services.css`, `SERVICES_BLUEPRINT.md`.
+
+
+## Blueprint Change Log
+- 2026-04-24: Locked Services `#` column to 49px and documented that auto-fit excludes `__rownum__`.
