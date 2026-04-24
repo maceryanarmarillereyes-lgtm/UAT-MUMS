@@ -38,9 +38,32 @@
     var px = digits * 9 + 22;
     if (px < 36) px = 36;
     if (px > 72) px = 72;
-    return px + 'px';
+    return px; // return number only, no 'px'
   }
   var ROW_NUM_COL_WIDTH_PX = '36px'; // default; updated per-render
+  function enforceRowNumStyle() {
+    var totalRows = (window.current && window.current.rows) ? window.current.rows.length : 521;
+    var px = computeRowNumWidth(totalRows);
+    var pxStr = px + 'px';
+
+    // Remove old style if exists
+    var old = document.getElementById('rownum-force-style');
+    if (old) old.remove();
+
+    // Inject new style with !important — hindi na ma-ooverride
+    var st = document.createElement('style');
+    st.id = 'rownum-force-style';
+    st.textContent = '\n' +
+      '    #svcGrid { table-layout: fixed !important; width: max-content !important; }\n' +
+      '    #svcGrid col[data-key="__rownum__"] { width: ' + pxStr + ' !important; min-width: ' + pxStr + ' !important; max-width: ' + pxStr + ' !important; }\n' +
+      '    #svcGrid th.row-num, #svcGrid td.row-num { width: ' + pxStr + ' !important; min-width: ' + pxStr + ' !important; max-width: ' + pxStr + ' !important; overflow: hidden !important; text-align: center !important; }\n' +
+      '  ';
+    document.head.appendChild(st);
+
+    // Also update CSS variable for consistency
+    document.documentElement.style.setProperty('--row-num-w', pxStr);
+    return pxStr;
+  }
 
   // PERMANENT FIX v2: Inject a <style> that targets th.row-num + td.row-num only.
   // We do NOT target col[data-key="__rownum__"] via CSS — table-layout:fixed
@@ -268,6 +291,8 @@
     redoStack = [];
     current.rows = await window.servicesDB.listRows(sheet.id);
     console.log('[LOAD] Loaded', current.rows.length, 'rows');
+    // Ensure style is applied even if render is blocked
+    setTimeout(enforceRowNumStyle, 50);
 
     var caseCol = (current.sheet.column_defs || []).find(function (c) {
       return c && c.label && String(c.label).toUpperCase().includes('CASE');
@@ -577,19 +602,12 @@
       ? Math.max(viewRows.length, 1)
       : Math.max((current && current.rows ? current.rows.length : 0) + 2, 10);
 
-    ROW_NUM_COL_WIDTH_PX = computeRowNumWidth(totalRowsForWidth);
+    ROW_NUM_COL_WIDTH_PX = computeRowNumWidth(totalRowsForWidth) + 'px';
     document.documentElement.style.setProperty('--row-num-w', ROW_NUM_COL_WIDTH_PX);
 
     var totalRows = (isFilteredView || isSorted)
       ? Math.max(viewRows.length, 1)
       : Math.max(current.rows.length + 2, 10);
-
-    // --- FIX: Force fixed table layout para respetuhin ang col widths ---
-    var svcTable = document.getElementById('svcGrid');
-    if (svcTable) {
-      svcTable.style.tableLayout = 'fixed';
-      svcTable.style.width = 'max-content';
-    }
 
     var colgroup = mkEl('colgroup');
     var rowNumCol = document.createElement('col');
@@ -998,6 +1016,8 @@
       wrap.addEventListener('scroll', wrap._qbScrollHandler, { passive: true });
     })();
 
+    // Force style after every render — kahit ma-block dati, ito tatakbo
+    try { enforceRowNumStyle(); } catch(e) {}
   }
 
   function attachCellHandlers() {
