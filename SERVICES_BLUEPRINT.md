@@ -193,6 +193,13 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-24 (Services grid row-number column isolated from resize/auto-fit/state):**
+  - **Edit — `public/js/services-grid.js`:** Row-number `<col data-key="__rownum__">` now sets `data-fixed="true"` and hard-locks `width/min-width/max-width` to `49px` at colgroup build plus post-render forced lock.
+  - **Edit — `public/js/services-grid.js`:** `autoFitColumns()` now skips synthetic `__rownum__` immediately so `#` lane never participates in auto-fit measurements.
+  - **Edit — `public/js/services-grid.js`:** Column-resize mousemove path now early-returns when active column key is `__rownum__`, preventing manual width mutation.
+  - **Edit — `public/js/services-grid.js`:** Column-state persistence now filters out `__rownum__` before `localStorage`/DB state save.
+  - **Behavior contract update:** Row-number lane is now fully isolated from resize/autofit/persistence flows while keeping row click behavior (`showCaseDetails/openCaseView`) unchanged.
+
 - **2026-04-24 (Nuclear CSS override for Services `#` column fixed at 49px):**
   - **Edit — `public/css/services.css`:** Added a late-file `#svcGrid` nuclear override block that hard-locks `col[data-key="__rownum__"]` and all `.row-num` header/body cells to exactly `49px` width/min/max with `!important`, plus fixed-layout enforcement on `#svcGrid`.
   - **Behavior contract update:** Row-number lane remains forced to 49px even if earlier selectors or runtime style writes attempt to resize it; no auth/realtime/API/router logic touched.

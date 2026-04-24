@@ -121,8 +121,13 @@
   async function saveColumnState() {
     if (!current || !current.sheet || !current.sheet.id || isResizing) return;
     var columnDefs = Array.isArray(current.sheet.column_defs) ? current.sheet.column_defs : [];
+    var widths = sanitizeColumnWidthsMap(current.sheet.column_widths || {});
+    var filteredWidths = {};
+    Object.keys(widths).forEach(function (k) {
+      if (k !== '__rownum__') filteredWidths[k] = widths[k];
+    });
     var state = {
-      widths: sanitizeColumnWidthsMap(current.sheet.column_widths || {}),
+      widths: filteredWidths,
       hidden: columnDefs.filter(function (c) { return !!(c && c.hidden); }).map(function (c) { return c.key; })
     };
 
@@ -591,10 +596,10 @@
     var colgroup = mkEl('colgroup');
     var rowNumCol = document.createElement('col');
     rowNumCol.setAttribute('data-key', '__rownum__');
-    rowNumCol.style.setProperty('width', '49px', 'important');
-    rowNumCol.style.setProperty('min-width', '49px', 'important');
-    rowNumCol.style.setProperty('max-width', '49px', 'important');
-    rowNumCol.setAttribute('width', String(parseInt(ROW_NUM_COL_WIDTH_PX,10)));
+    rowNumCol.setAttribute('data-fixed', 'true'); // MARK AS FIXED
+    rowNumCol.style.width = '49px';
+    rowNumCol.style.minWidth = '49px';
+    rowNumCol.style.maxWidth = '49px';
     colgroup.appendChild(rowNumCol);
     cols.forEach(function (c) {
       var col = document.createElement('col');
@@ -659,8 +664,9 @@
           var newWidth = Math.max(60, Math.min(800, startWidth + delta));
           var leftPx = (th.getBoundingClientRect().left + newWidth) + 'px';
           preview.style.left = leftPx;
-          var colEl = grid.querySelector('colgroup col[data-key="' + colKey + '"]');
-          if (colEl) colEl.style.width = newWidth + 'px';
+          var currentCol = grid.querySelector('colgroup col[data-key="' + colKey + '"]');
+          if (currentCol && currentCol.getAttribute('data-key') === '__rownum__') return; // NEVER resize #
+          if (currentCol) currentCol.style.width = newWidth + 'px';
         }
 
         function onMouseUp() {
@@ -932,6 +938,11 @@
     grid.appendChild(colgroup);
     grid.appendChild(thead);
     grid.appendChild(tbody);
+
+    var rn = grid.querySelector('col[data-key="__rownum__"]');
+    if (rn) {
+      rn.style.cssText = 'width:49px!important;min-width:49px!important;max-width:49px!important;';
+    }
 
     attachCellHandlers();
     attachHeaderContextMenu();
@@ -1803,6 +1814,7 @@
 
     current.sheet.column_defs.forEach(function (col) {
       if (!col || !col.key) return;
+      if (col.key === '__rownum__' || (typeof col.getAttribute === 'function' && col.getAttribute('data-key') === '__rownum__')) return; // SKIP # column
       if (col.hidden) return;
 
       var saved = Number(current.sheet.column_widths && current.sheet.column_widths[col.key]);
