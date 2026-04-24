@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-24 (Services `#` column single-source width lock cleanup):**
+  - **Edit — `public/js/services-grid.js`:** Removed legacy row-number style injectors `enforceRowNumStyle()` and `applyRowNumStyleSheet()` to eliminate conflicting width enforcement paths.
+  - **Edit — `public/js/services-grid.js`:** Removed post-load `setTimeout(enforceRowNumStyle, 50)` and replaced end-of-`render()` force-style call with a single `computeRowNumWidth(totalRowsForWidth)` -> `ROW_NUM_COL_WIDTH_PX` -> `--row-num-w` assignment.
+  - **Edit — `public/js/services-grid.js`:** Kept `col[data-key="__rownum__"]` as the only row-number selector path for row-number cell locking in `_applyColumnWidths()`.
+  - **Behavior contract update:** Row-number width now has one source of truth (render-time computed width + lock helper), reducing race conditions without auth/realtime/API/router changes.
+
 - **2026-04-24 (Bulletproof `#` width style injection + render-block bypass):**
   - **Edit — `public/js/services-grid.js`:** Updated `computeRowNumWidth(totalRows)` to return numeric pixel value only (`36..72` clamp) and converted to px string at render usage sites.
   - **Edit — `public/js/services-grid.js`:** Added global `enforceRowNumStyle()` that re-injects `#rownum-force-style` on each call, hard-locking `#svcGrid` fixed layout and row-number `col/th/td` widths with `!important`.

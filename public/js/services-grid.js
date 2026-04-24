@@ -41,53 +41,6 @@
     return px; // return number only, no 'px'
   }
   var ROW_NUM_COL_WIDTH_PX = '36px'; // default; updated per-render
-  function enforceRowNumStyle() {
-    var totalRows = (window.current && window.current.rows) ? window.current.rows.length : 521;
-    var px = computeRowNumWidth(totalRows);
-    var pxStr = px + 'px';
-
-    // Remove old style if exists
-    var old = document.getElementById('rownum-force-style');
-    if (old) old.remove();
-
-    // Inject new style with !important — hindi na ma-ooverride
-    var st = document.createElement('style');
-    st.id = 'rownum-force-style';
-    st.textContent = '\n' +
-      '    #svcGrid { table-layout: fixed !important; width: max-content !important; }\n' +
-      '    #svcGrid col[data-key="__rownum__"] { width: ' + pxStr + ' !important; min-width: ' + pxStr + ' !important; max-width: ' + pxStr + ' !important; }\n' +
-      '    #svcGrid th.row-num, #svcGrid td.row-num { width: ' + pxStr + ' !important; min-width: ' + pxStr + ' !important; max-width: ' + pxStr + ' !important; overflow: hidden !important; text-align: center !important; }\n' +
-      '  ';
-    document.head.appendChild(st);
-
-    // Also update CSS variable for consistency
-    document.documentElement.style.setProperty('--row-num-w', pxStr);
-    return pxStr;
-  }
-
-  // PERMANENT FIX v2: Inject a <style> that targets th.row-num + td.row-num only.
-  // We do NOT target col[data-key="__rownum__"] via CSS — table-layout:fixed
-  // distributes min-width:100% extra space via <col> CSS width, causing bloat.
-  // Instead we set the HTML `width` attribute on <col> directly (most reliable
-  // for table-layout:fixed per HTML spec) and clamp th/td via injected CSS.
-  var _rowNumStyleEl = null;
-  function applyRowNumStyleSheet(w) {
-    if (!_rowNumStyleEl) {
-      _rowNumStyleEl = document.createElement('style');
-      _rowNumStyleEl.id = 'svc-rownum-w';
-      document.head.appendChild(_rowNumStyleEl);
-    }
-    // Only clamp th and td — NOT col (col is set via HTML attribute in lockRowNumWidth)
-    _rowNumStyleEl.textContent =
-      '#svcGrid th.row-num,' +
-      ' #svcGrid td.row-num {' +
-      '  width: ' + w + ' !important;' +
-      '  min-width: ' + w + ' !important;' +
-      '  max-width: ' + w + ' !important;' +
-      '  overflow: hidden !important;' +
-      '}';
-  }
-
   function lockRowNumWidth(th) {
     if (!th) return;
     th.style.setProperty('width', ROW_NUM_COL_WIDTH_PX, 'important');
@@ -291,9 +244,6 @@
     redoStack = [];
     current.rows = await window.servicesDB.listRows(sheet.id);
     console.log('[LOAD] Loaded', current.rows.length, 'rows');
-    // Ensure style is applied even if render is blocked
-    setTimeout(enforceRowNumStyle, 50);
-
     var caseCol = (current.sheet.column_defs || []).find(function (c) {
       return c && c.label && String(c.label).toUpperCase().includes('CASE');
     });
@@ -1016,8 +966,10 @@
       wrap.addEventListener('scroll', wrap._qbScrollHandler, { passive: true });
     })();
 
-    // Force style after every render — kahit ma-block dati, ito tatakbo
-    try { enforceRowNumStyle(); } catch(e) {}
+    // Single source of truth for # width
+    var px = computeRowNumWidth(totalRowsForWidth);
+    ROW_NUM_COL_WIDTH_PX = px + 'px';
+    document.documentElement.style.setProperty('--row-num-w', ROW_NUM_COL_WIDTH_PX);
   }
 
   function attachCellHandlers() {
