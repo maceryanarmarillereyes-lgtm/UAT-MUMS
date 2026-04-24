@@ -4371,9 +4371,13 @@
           (sheetsData || []).forEach(function(s) {
             sheetTitleMap[s.id] = s.title || 'Untitled';
           });
-          // Merge DB data into the local sentMap
-          var m = loadSentMap();
-          var changed = false;
+          // ★ BUG2 PERMANENT FIX: REBUILD sentMap from DB, not merge.
+          // Previous logic ONLY added entries — never removed them.
+          // If a case was deleted from services_rows (via deleteQbRow or
+          // manual sheet delete), the badge stayed permanently in localStorage.
+          // Fix: build a clean freshMap from current DB rows only, then save it.
+          // Badges will now accurately reflect what's actually in the DB.
+          var freshMap = {};
           rows.forEach(function(row) {
             var d = row.data || {};
             // Accept _qb_case_num (always set by sendCaseToSheet) or fall back
@@ -4382,18 +4386,19 @@
             if (!caseNum || caseNum === 'undefined') return;
             var sheetId    = row.sheet_id;
             var sheetTitle = sheetTitleMap[sheetId] || 'Sheet';
-            if (!m[caseNum]) m[caseNum] = [];
-            if (!m[caseNum].some(function(e) { return e.sheetId === sheetId; })) {
-              m[caseNum].push({
+            if (!freshMap[caseNum]) freshMap[caseNum] = [];
+            if (!freshMap[caseNum].some(function(e) { return e.sheetId === sheetId; })) {
+              freshMap[caseNum].push({
                 sheetId:    sheetId,
                 sheetTitle: sheetTitle,
                 sentAt:     d._qb_sent_at || ''
               });
-              changed = true;
             }
           });
-          if (changed) saveSentMap(m);
-          // Re-paint badges with the merged (DB + local) map
+          // Overwrite localStorage with the DB-authoritative map.
+          // Any case removed from the sheet is now also removed from badges.
+          saveSentMap(freshMap);
+          // Re-paint badges with the freshly-rebuilt (DB-authoritative) map
           refreshAllBadges();
         } catch (err) {
           // Non-fatal: badges fall back to localStorage values

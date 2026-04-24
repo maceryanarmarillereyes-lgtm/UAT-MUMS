@@ -837,49 +837,58 @@
       var _isQbAck  = rowData.data && rowData.data._qb_ack  === true;
       var _qbAckBtn = null, _qbDelBtn = null;
       if (_isQbSent) {
+        // ★ BUG1 PERMANENT FIX: Only add pending class for unacknowledged rows.
+        // Acknowledged rows get the 'acked' class only — no buttons, no blink.
+        // Previously: buttons were ALWAYS created for _qb_sent rows, ACK btn just
+        // got disabled=true. On every refresh the buttons reappeared because the
+        // render loop always ran this block. Fix: skip button creation entirely
+        // when _isQbAck===true so acknowledged rows render as plain read-only cells.
         tr.classList.add(_isQbAck ? 'svc-qb-row-acked' : 'svc-qb-row-pending');
         tr.setAttribute('data-qb-sent-row', '1');
-        // ACK button (checkmark) — will be placed in Case# column, not row-num cell
-        _qbAckBtn = document.createElement('button');
-        _qbAckBtn.className = 'svc-qb-ack-btn';
-        _qbAckBtn.type = 'button';
-        _qbAckBtn.title = _isQbAck ? 'Already acknowledged' : 'Acknowledge — clears highlight';
-        _qbAckBtn.innerHTML = '✓';
-        _qbAckBtn.disabled = _isQbAck;
-        _qbAckBtn.addEventListener('click', async function(ev) {
-          ev.stopPropagation();
-          if (!window.servicesDB || !window.servicesDB.ackQbRow) return;
-          _qbAckBtn.disabled = true;
-          _qbAckBtn.textContent = '⏳';
-          try {
-            await window.servicesDB.ackQbRow(current.sheet.id, rowIndex);
-            tr.classList.remove('svc-qb-row-pending');
-            tr.classList.add('svc-qb-row-acked');
-            // ★ BUG1 FIX: Remove ✓/✕ buttons and restore the plain case-number cell.
-            // The case number is preserved from rowData — it never disappears.
-            _removeQbButtonsFromRow(tr, rowData);
-          } catch (err) {
-            // On failure re-enable so user can retry
-            _qbAckBtn.textContent = '✓';
-            _qbAckBtn.disabled = false;
-            console.error('[services-grid] ackQbRow failed:', err);
-          }
-        });
-        // DELETE button (X) — will be placed in Case# column, not row-num cell
-        _qbDelBtn = document.createElement('button');
-        _qbDelBtn.className = 'svc-qb-del-btn';
-        _qbDelBtn.type = 'button';
-        _qbDelBtn.title = 'Remove this QB-sent case from the sheet';
-        _qbDelBtn.innerHTML = '✕';
-        _qbDelBtn.addEventListener('click', async function(ev) {
-          ev.stopPropagation();
-          if (!confirm('Remove Case# ' + (rowData.data._qb_case_num || '') + ' from this sheet?')) return;
-          if (!window.servicesDB || !window.servicesDB.deleteQbRow) return;
-          _qbDelBtn.disabled = true;
-          try {
-            await window.servicesDB.deleteQbRow(current.sheet.id, rowIndex);
-          } catch (_) { _qbDelBtn.disabled = false; }
-        });
+
+        if (!_isQbAck) {
+          // ACK button (checkmark) — only for PENDING (not-yet-acknowledged) rows
+          _qbAckBtn = document.createElement('button');
+          _qbAckBtn.className = 'svc-qb-ack-btn';
+          _qbAckBtn.type = 'button';
+          _qbAckBtn.title = 'Acknowledge — clears highlight';
+          _qbAckBtn.innerHTML = '✓';
+          _qbAckBtn.addEventListener('click', async function(ev) {
+            ev.stopPropagation();
+            if (!window.servicesDB || !window.servicesDB.ackQbRow) return;
+            _qbAckBtn.disabled = true;
+            _qbAckBtn.textContent = '⏳';
+            try {
+              await window.servicesDB.ackQbRow(current.sheet.id, rowIndex);
+              tr.classList.remove('svc-qb-row-pending');
+              tr.classList.add('svc-qb-row-acked');
+              // Remove ✓/✕ buttons immediately — restores plain read-only cell
+              // Also update local row.data so next render() won't recreate buttons
+              var localRow = current.rows.find(function(r) { return r.row_index === rowIndex; });
+              if (localRow && localRow.data) localRow.data._qb_ack = true;
+              _removeQbButtonsFromRow(tr, rowData);
+            } catch (err) {
+              _qbAckBtn.textContent = '✓';
+              _qbAckBtn.disabled = false;
+              console.error('[services-grid] ackQbRow failed:', err);
+            }
+          });
+          // DELETE button (X) — only for PENDING rows
+          _qbDelBtn = document.createElement('button');
+          _qbDelBtn.className = 'svc-qb-del-btn';
+          _qbDelBtn.type = 'button';
+          _qbDelBtn.title = 'Remove this QB-sent case from the sheet';
+          _qbDelBtn.innerHTML = '✕';
+          _qbDelBtn.addEventListener('click', async function(ev) {
+            ev.stopPropagation();
+            if (!confirm('Remove Case# ' + (rowData.data._qb_case_num || '') + ' from this sheet?')) return;
+            if (!window.servicesDB || !window.servicesDB.deleteQbRow) return;
+            _qbDelBtn.disabled = true;
+            try {
+              await window.servicesDB.deleteQbRow(current.sheet.id, rowIndex);
+            } catch (_) { _qbDelBtn.disabled = false; }
+          });
+        }
       }
       // ── END QB-SENT ROW (buttons injected into first data col below) ───────
       cols.forEach(function (c, _colIdx) {
@@ -982,9 +991,10 @@
         }
 
         // ── FIX: Inject ACK/DELETE buttons into FIRST DATA COLUMN (Case# col) ──
-        // Previously buttons were in the row-num (#) cell which hid them behind
-        // the narrow row number column. Now they appear beside the case number.
-        if (_isQbSent && _colIdx === 0 && _qbAckBtn && _qbDelBtn) {
+        // Only for PENDING (unacknowledged) rows — _qbAckBtn/_qbDelBtn are null
+        // for acknowledged rows so this block is naturally skipped, but the
+        // !_isQbAck guard makes the intent explicit and prevents future regressions.
+        if (_isQbSent && !_isQbAck && _colIdx === 0 && _qbAckBtn && _qbDelBtn) {
           // If the case number wasn't written to this column, show it via inp value
           if (!inp.value && rowData.data._qb_case_num) {
             inp.value = String(rowData.data._qb_case_num);
