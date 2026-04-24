@@ -346,9 +346,9 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
 }
 .svc-grid thead th.row-num,
 .svc-grid tbody td.row-num {
-  width: 56px!important;
-  min-width: 56px!important;
-  max-width: 56px!important;
+  /* Width is set dynamically via inline styles in services-grid.js   */
+  /* based on digit count of max row number. Do NOT hardcode 56px here */
+  /* to avoid !important fighting with dynamic inline width values.    */
   position: sticky;
   left: 0;
   z-index: 20;
@@ -356,6 +356,9 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   border-right: 1px solid #1e293b;
   text-align: center;
   padding: 0!important;
+  /* Prevent any flex/auto sizing from overriding the inline width */
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 .svc-grid tbody td {
   padding: 0;
@@ -371,7 +374,7 @@ html, body { margin: 0; height: 100%; font-family: 'Inter', system-ui, sans-seri
   user-select: none;
 }
 .row-header {
-  width: 56px !important;
+  /* Width set dynamically via inline style in JS — no hardcode here */
   user-select: none;
   cursor: pointer;
 }

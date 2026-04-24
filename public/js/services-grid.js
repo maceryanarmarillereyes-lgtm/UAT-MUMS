@@ -532,10 +532,19 @@
       ? Math.max(viewRows.length, 1)
       : Math.max(current.rows.length + 2, 10);
 
+    // ── Row-num column: dynamic width based on max row number digits ─────────────
+    // ISOLATED from user column resizes: never touched by _applyColumnWidths(),
+    // resize handles, or table-layout:auto reflows. Width locks via colgroup +
+    // inline styles on th/td (inline styles in fixed layout beat everything).
+    var _totalRows = current.rows.length || 0;
+    var _rnDigits  = String(Math.max(_totalRows, 1)).length;
+    var _rnWidth   = Math.max(44, _rnDigits * 9 + 28);
+    current.__rowNumWidth = _rnWidth; // cache for _applyColumnWidths
+
     var colgroup = mkEl('colgroup');
     var rowNumCol = document.createElement('col');
     rowNumCol.setAttribute('data-key', '__rownum__');
-    rowNumCol.style.width = '56px';
+    rowNumCol.style.cssText = 'width:' + _rnWidth + 'px;min-width:' + _rnWidth + 'px;max-width:' + _rnWidth + 'px;';
     colgroup.appendChild(rowNumCol);
     cols.forEach(function (c) {
       var col = document.createElement('col');
@@ -549,6 +558,8 @@
     var thead   = mkEl('thead');
     var headTr  = mkEl('tr', null, thead);
     var thCorner = mkEl('th', { className: 'row-num row-header', textContent: '#' }, headTr);
+    // Lock row-num header width via inline style so no resize/reflow can override it
+    thCorner.style.cssText = 'width:' + _rnWidth + 'px;min-width:' + _rnWidth + 'px;max-width:' + _rnWidth + 'px;';
     cols.forEach(function (c) {
       var th = mkEl('th', { textContent: sanitizeHeaderLabel(c.label, 0) }, headTr);
       th.dataset.key = c.key;
@@ -651,6 +662,7 @@
 
     // Filter cell for row number
     var filterCorner = mkEl('th', { className: 'row-num' }, filterTr);
+    filterCorner.style.cssText = 'width:' + _rnWidth + 'px;min-width:' + _rnWidth + 'px;max-width:' + _rnWidth + 'px;';
     filterCorner.innerHTML = '<div style="text-align:center;color:#475569;font-size:9px;padding:2px;">▼</div>';
     filterCorner.style.cssText = 'background:#0f172a;padding:2px;position:sticky;top:32px;z-index:4;';
 
@@ -737,6 +749,8 @@
         textContent: String(rowIndex + 1),
         title: 'Row ' + (rowIndex + 1) + ' - Click to select'
       }, tr);
+      // Lock per-row width — isolated from all column resize operations
+      rowNumTd.style.cssText = 'width:' + _rnWidth + 'px;min-width:' + _rnWidth + 'px;max-width:' + _rnWidth + 'px;';
       rowNumTd.dataset.rowIndex = rowIndex;
       rowNumTd.dataset.row = String(rowIndex);
       cols.forEach(function (c) {
@@ -750,6 +764,7 @@
         }
         if (c.hidden) td.style.display = 'none';
         td.setAttribute('data-col', c.key);
+        td.setAttribute('data-key', c.key); // enables _applyColumnWidths key-based targeting
         var inputType = 'text';
         var validation = c && c.validation && c.validation.type === 'list' && Array.isArray(c.validation.options)
           ? c.validation.options.filter(function (v) { return String(v || '').trim() !== ''; })
@@ -867,6 +882,10 @@
     }
 
     grid.innerHTML = '';
+    // ISOLATE FIX: Force fixed layout BEFORE appending children so browser
+    // never runs table-layout:auto on any render cycle — row-num width is
+    // determined solely by colgroup + inline styles, never by content reflow.
+    grid.style.tableLayout = 'fixed';
     grid.appendChild(colgroup);
     grid.appendChild(thead);
     grid.appendChild(tbody);
@@ -1814,19 +1833,44 @@
 
   function _applyColumnWidths() {
     if (!grid || !current || !current.sheet) return;
-    var headers = grid.querySelectorAll('thead th');
-    headers.forEach(function (th, idx) {
-      var col = current.sheet.column_defs[idx - 1]; // -1 for row-num column
-      if (col && col.width) {
-        th.style.width = col.width;
-        th.style.minWidth = col.width;
-        th.style.maxWidth = col.width;
-        var colCells = grid.querySelectorAll('tbody tr td:nth-child(' + (idx + 1) + ')');
-        colCells.forEach(function (td) {
-          td.style.width = col.width;
-          td.style.minWidth = col.width;
-          td.style.maxWidth = col.width;
-        });
+
+    // ── Re-lock row-num column first (idx=0) — never allow data col widths to bleed ──
+    var rnWidth = (current.__rowNumWidth || 44) + 'px';
+    var rnColEl = grid.querySelector('colgroup col[data-key="__rownum__"]');
+    if (rnColEl) rnColEl.style.cssText = 'width:' + rnWidth + ';min-width:' + rnWidth + ';max-width:' + rnWidth + ';';
+    grid.querySelectorAll('thead th.row-num').forEach(function (th) {
+      th.style.width = rnWidth; th.style.minWidth = rnWidth; th.style.maxWidth = rnWidth;
+    });
+    grid.querySelectorAll('tbody td.row-num').forEach(function (td) {
+      td.style.width = rnWidth; td.style.minWidth = rnWidth; td.style.maxWidth = rnWidth;
+    });
+
+    // ── Apply widths to DATA columns only (idx >= 1) ─────────────────────────────
+    var headers = grid.querySelectorAll('thead th[data-key]'); // only th with data-key = real cols
+    headers.forEach(function (th) {
+      var colKey = th.dataset.key;
+      if (!colKey) return;
+      var col = (current.sheet.column_defs || []).find(function (c) { return c.key === colKey; });
+      if (!col || !col.width) return;
+      var w = col.width;
+      th.style.width = w; th.style.minWidth = w; th.style.maxWidth = w;
+      // Update colgroup col element
+      var colEl = grid.querySelector('colgroup col[data-key="' + colKey + '"]');
+      if (colEl) colEl.style.width = w;
+      // Update all td cells in this column
+      var tds = grid.querySelectorAll('tbody tr td[data-key="' + colKey + '"]');
+      if (tds.length) {
+        tds.forEach(function (td) { td.style.width = w; td.style.minWidth = w; td.style.maxWidth = w; });
+      } else {
+        // Fallback: nth-child (only for non-row-num columns)
+        var colIdx = Array.from(grid.querySelectorAll('thead th')).indexOf(th);
+        if (colIdx > 0) {
+          grid.querySelectorAll('tbody tr td:nth-child(' + (colIdx + 1) + ')').forEach(function (td) {
+            if (!td.classList.contains('row-num')) {
+              td.style.width = w; td.style.minWidth = w; td.style.maxWidth = w;
+            }
+          });
+        }
       }
     });
   }
