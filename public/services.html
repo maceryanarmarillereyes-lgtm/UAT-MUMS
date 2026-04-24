@@ -91,7 +91,14 @@
       <div class="svc-sheet-toolbar">
         <div class="svc-sheet-tabs" id="svcSheetTabs"></div>
         <div class="svc-toolbar-actions">
-          <input id="svcGlobalSearchInput" class="svc-sheet-search" style="margin:0 8px 0 0;max-width:260px;" placeholder="🔍 Search all folders in this sheet..." autocomplete="off" />
+          <button class="svc-btn svc-search-trigger-btn" id="svcSearchTriggerBtn" title="Search current sheet (Ctrl+F)">
+            <svg class="svc-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M9.5 9.5L12.5 12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Search
+            <kbd class="svc-search-kbd">Ctrl+F</kbd>
+          </button>
           <button class="svc-btn" id="svcQbUpdateBtn" title="Manually refresh all QB lookup values">🔄 Update</button>
           <button class="svc-btn svc-refresh-btn" id="svcRefreshBtn" title="Refresh page — reloads sheet list and active sheet data (Ctrl+R)">⟳ Refresh</button>
           <button class="svc-btn" id="svcAddRow">+ Row</button>
@@ -105,7 +112,57 @@
           <button class="svc-btn" id="svcColumnsBtn" title="Show/hide columns">⊞ Columns</button>
         </div>
       </div>
-      <div id="svcGlobalSearchResults" style="display:none;position:absolute;top:118px;right:18px;width:420px;max-height:420px;overflow:auto;background:#0b1220;border:1px solid #1e293b;border-radius:8px;box-shadow:0 16px 40px rgba(0,0,0,.45);z-index:40;"></div>
+
+      <!-- ── COMMAND PALETTE SEARCH ──────────────────────────────────────────── -->
+      <div id="svcSearchPalette" class="svc-search-palette" aria-hidden="true">
+        <div class="svc-search-backdrop" id="svcSearchBackdrop"></div>
+        <div class="svc-search-panel" role="dialog" aria-label="Sheet Search">
+          <div class="svc-search-header">
+            <div class="svc-search-input-wrap">
+              <svg class="svc-search-input-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="7" cy="7" r="5" stroke="#64748b" stroke-width="1.5"/>
+                <path d="M11 11L14 14" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              <input id="svcSearchInput"
+                     class="svc-search-input"
+                     type="text"
+                     placeholder="Search rows, folders, values…"
+                     autocomplete="off"
+                     spellcheck="false"
+                     aria-label="Search current sheet" />
+              <div class="svc-search-scope-badge" id="svcSearchScopeBadge">No sheet</div>
+              <button class="svc-search-clear" id="svcSearchClear" title="Clear (Esc)" aria-label="Clear search">✕</button>
+            </div>
+            <div class="svc-search-meta" id="svcSearchMeta"></div>
+          </div>
+          <div class="svc-search-body" id="svcSearchBody">
+            <div class="svc-search-idle" id="svcSearchIdle">
+              <div class="svc-search-idle-icon">🔍</div>
+              <div class="svc-search-idle-text">Type to search across all rows and folders</div>
+              <div class="svc-search-tips">
+                <span class="tip"><kbd>↑↓</kbd> Navigate</span>
+                <span class="tip"><kbd>Enter</kbd> Go to</span>
+                <span class="tip"><kbd>Esc</kbd> Close</span>
+              </div>
+            </div>
+            <div class="svc-search-results" id="svcSearchResults" style="display:none;"></div>
+            <div class="svc-search-empty" id="svcSearchEmpty" style="display:none;">
+              <div class="svc-search-empty-icon">∅</div>
+              <div class="svc-search-empty-text">No results found</div>
+              <div class="svc-search-empty-sub" id="svcSearchEmptySub"></div>
+            </div>
+          </div>
+          <div class="svc-search-footer">
+            <span class="svc-search-footer-left" id="svcSearchFooterCount"></span>
+            <span class="svc-search-footer-right">
+              <span class="tip"><kbd>↑↓</kbd> Navigate</span>
+              <span class="tip"><kbd>Enter</kbd> Go to result</span>
+              <span class="tip"><kbd>Esc</kbd> Close</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <!-- ── END SEARCH PALETTE ────────────────────────────────────────────── -->
 
       <div class="svc-grid-wrap" id="svcGridWrap">
         <div class="svc-empty-state" id="svcEmptyState">
@@ -266,7 +323,9 @@
                 loadScript('/js/services-sheet-manager.js', function () {
                   loadScript('/js/services-treeview.js', function () {
                     loadScript('/js/services-conditional-format.js', function () {
-                      loadScript('/js/services.js');
+                      loadScript('/js/services-search.js', function () {
+                        loadScript('/js/services.js');
+                      });
                     });
                   });
                 });
