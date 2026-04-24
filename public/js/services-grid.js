@@ -2300,7 +2300,10 @@
     }
   }
 
-  // Patch render() to honour _treeFilter —————————————————————————————————————
+  // ── Toolbar all-columns search query (ported from mumsold1) ────────────────
+  var _searchAllQuery = ''; // toolbar all-columns query
+
+  // Patch render() to honour _treeFilter + _columnFilters + _searchAllQuery ────
   // We intercept current.rows at render time; original rows stay intact so that
   // swapping filters does NOT lose data.
   var _origRender = render;
@@ -2310,11 +2313,12 @@
       return;
     }
 
-    // Compose all filters: tree + column
-    var hasTreeFilter = !!_treeFilter;
+    // Compose all filters: tree + column + toolbar all-columns search
+    var hasTreeFilter    = !!_treeFilter;
     var hasColumnFilters = Object.keys(_columnFilters).length > 0;
+    var hasSearchAll     = !!_searchAllQuery;
 
-    if (!hasTreeFilter && !hasColumnFilters) {
+    if (!hasTreeFilter && !hasColumnFilters && !hasSearchAll) {
       delete current.__treeFilteredRows;
       _origRender();
       return;
@@ -2322,10 +2326,10 @@
 
     // Apply all filters
     current.__treeFilteredRows = (current.rows || []).filter(function (row) {
-      // 1. Tree filter (existing)
-      if (hasTreeFilter && !_treeFilter(row)) return false;
+      // 1. Tree filter — bypassed while all-columns search is active
+      if (!hasSearchAll && hasTreeFilter && !_treeFilter(row)) return false;
 
-      // 2. Column filters (NEW)
+      // 2. Column filters
       if (hasColumnFilters) {
         for (var key in _columnFilters) {
           var filterVal = _columnFilters[key];
@@ -2333,11 +2337,76 @@
           if (cellVal.indexOf(filterVal) === -1) return false;
         }
       }
+
+      // 3. Toolbar all-columns search (matches any cell in the row)
+      if (hasSearchAll) {
+        var rowData = row && row.data ? row.data : {};
+        var hit = Object.keys(rowData).some(function (k) {
+          return String(rowData[k] == null ? '' : rowData[k]).toLowerCase().indexOf(_searchAllQuery) !== -1;
+        });
+        if (!hit) return false;
+      }
+
       return true;
     });
 
     _origRender();
   };
+
+  // ── Toolbar Search All Columns — initSearchAll (ported from mumsold1) ───────
+  // Wired to #searchAllColumns input in services.html.
+  // Debounced 250ms; Escape clears; MutationObserver auto-clears on sheet switch.
+  (function initSearchAll() {
+    var input = document.getElementById('searchAllColumns');
+    if (!input) return;
+    var timer;
+    var basePlaceholder = input.getAttribute('placeholder') || '🔍 Search all…';
+
+    function doSearch() {
+      _searchAllQuery = String(input.value || '').toLowerCase().trim();
+      _renderIsFilterSwitch = true;
+      try {
+        render();
+      } finally {
+        _renderIsFilterSwitch = false;
+      }
+      input.placeholder = _searchAllQuery ? 'Searching all folders…' : basePlaceholder;
+    }
+
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(doSearch, 250);
+    });
+
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        this.value = '';
+        doSearch();
+        this.blur();
+      }
+    });
+
+    // Ctrl+F focuses the search input
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        var tag = document.activeElement && document.activeElement.tagName;
+        if (tag === 'INPUT' && document.activeElement.id === 'searchAllColumns') return;
+        e.preventDefault();
+        input.focus();
+        input.select();
+      }
+    });
+
+    // Auto-clear when sheet switches (grid tbody emptied)
+    var observer = new MutationObserver(function () {
+      if (input.value && !document.querySelector('#svcGrid tbody tr')) {
+        input.value        = '';
+        _searchAllQuery    = '';
+        input.placeholder  = basePlaceholder;
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  })();
 
   // Block leave navigation when unresolved duplicate CASE warnings exist
   window.addEventListener('beforeunload', function (e) {
