@@ -27,6 +27,7 @@
   }
 
   function debouncedRefresh() {
+    if (window.__MUMS_PAUSED) return;
     clearTimeout(_refreshDebounce);
     _refreshDebounce = setTimeout(refresh, 500);
   }

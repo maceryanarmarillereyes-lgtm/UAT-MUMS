@@ -45,3 +45,9 @@ This layer is the platform backbone: session lifecycle, user hydration, local st
 
 ## Change log
 - **2026-04-20** — Initial auth/sync blueprint created.
+- **2026-04-25** — Added global Pause Session idle auto-pause framework across auth/sync stack.
+  - **New — `server/routes/settings/pause_session.js`:** Added authenticated GET + Super Admin POST endpoint for `pause_session` global setting (`enabled`, `timeout_minutes`) backed by `mums_global_settings`.
+  - **Edit — `api/handler.js` + `functions/api/[[path]].js`:** Registered dual-platform `/api/settings/pause-session` and `/api/settings/pause_session` router aliases.
+  - **Edit — `public/js/app.js` + `public/js/pause-session-manager.js`:** Boot now initializes `PauseSessionManager` for all authenticated users; manager enforces idle timer, kills realtime channels, stops polling/fetch activity, and shows a blocking resume overlay.
+  - **Edit — `public/js/realtime.js` + `public/js/presence_watchdog.js` + `public/js/sync_status_ui.js`:** Exposed realtime client/channel teardown hooks, added watchdog `stop()` API, and paused sync-status debounced transitions while session is paused.
+
