@@ -11,6 +11,14 @@ function sendJson(res, statusCode, body) {
   res.end(JSON.stringify(body));
 }
 
+function coerceBoolean(v) {
+  if (v === true || v === false) return v;
+  const s = String(v == null ? '' : v).trim().toLowerCase();
+  if (s === 'true' || s === '1' || s === 'yes' || s === 'on') return true;
+  if (s === 'false' || s === '0' || s === 'no' || s === 'off') return false;
+  return null;
+}
+
 function isSuperAdmin(profile) {
   const role = String((profile && profile.role) || '').trim().toUpperCase().replace(/\s+/g, '_');
   return role === 'SUPER_ADMIN';
@@ -31,7 +39,25 @@ function readBody(req) {
   return new Promise((resolve, reject) => {
     try {
       if (req && typeof req.body !== 'undefined' && req.body !== null) {
-        if (typeof req.body === 'object' && !Array.isArray(req.body)) return resolve(req.body);
+        if (typeof req.body === 'object' && !Array.isArray(req.body)) {
+          // Node runtime usually provides plain object for JSON.
+          if (
+            Object.prototype.hasOwnProperty.call(req.body, 'enabled') ||
+            Object.prototype.hasOwnProperty.call(req.body, 'timeout_minutes')
+          ) {
+            return resolve(req.body);
+          }
+          // Some adapters can pass Uint8Array/Buffer-like body objects.
+          const td = typeof TextDecoder !== 'undefined' ? new TextDecoder() : null;
+          const maybeBytes = (req.body instanceof Uint8Array)
+            ? req.body
+            : (req.body && req.body.buffer instanceof ArrayBuffer ? new Uint8Array(req.body.buffer) : null);
+          if (td && maybeBytes) {
+            const asText = td.decode(maybeBytes).trim();
+            if (!asText) return resolve({});
+            try { return resolve(JSON.parse(asText)); } catch (_) { return resolve({}); }
+          }
+        }
         if (typeof req.body === 'string') {
           try { return resolve(req.body ? JSON.parse(req.body) : {}); } catch (_) { return resolve({}); }
         }
@@ -127,7 +153,8 @@ module.exports = async (req, res) => {
       return sendJson(res, 400, { ok: false, error: 'invalid_json' });
     }
 
-    if (typeof body.enabled !== 'boolean') {
+    const enabled = coerceBoolean(body.enabled);
+    if (enabled === null) {
       return sendJson(res, 400, { ok: false, error: 'invalid_enabled', message: 'enabled must be a boolean.' });
     }
 
@@ -140,7 +167,7 @@ module.exports = async (req, res) => {
       });
     }
 
-    const out = await writePauseSessionSettings({ enabled: body.enabled, timeout_minutes: timeout }, {
+    const out = await writePauseSessionSettings({ enabled, timeout_minutes: timeout }, {
       userId: user.id,
       name: String((profile && (profile.name || profile.username)) || 'Super Admin')
     });

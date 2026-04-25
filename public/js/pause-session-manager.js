@@ -23,7 +23,12 @@
       ];
       this.userRole = this._getCurrentRole();
       this._loadConfigPromise = null;
-      this.channel = new BroadcastChannel('mums_activity');
+      this.channel = null;
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          this.channel = new BroadcastChannel('mums_activity');
+        }
+      } catch (_) {}
     }
 
     async init(){
@@ -63,7 +68,7 @@
       window.__MUMS_PAUSED = true;
 
       // Broadcast to other tabs
-      try { this.channel.postMessage({type:'pause'}); } catch(_){}
+      try { this.channel && this.channel.postMessage({type:'pause'}); } catch(_){}
 
       this._unbindActivityListeners();
       if (this.checkerTimer) {
@@ -148,23 +153,25 @@
       const now = Date.now();
       this.lastActivity = now;
       try { localStorage.setItem(this.lastActivityKey, String(now)); } catch(_){}
-      try { this.channel.postMessage({type:'activity', ts: now}); } catch(_){}
+      try { this.channel && this.channel.postMessage({type:'activity', ts: now}); } catch(_){}
     }
 
     _setupCrossTab(){
-      this.channel.onmessage = (e) => {
-        if (!e.data) return;
-        if (e.data.type === 'activity') {
-          this.lastActivity = Number(e.data.ts) || Date.now();
-          try { localStorage.setItem(this.lastActivityKey, String(this.lastActivity)); } catch(_){}
-        }
-        if (e.data.type === 'pause') {
-          this._showOverlay();
-        }
-        if (e.data.type === 'resume') {
-          this._resumeFromBroadcast();
-        }
-      };
+      if (this.channel) {
+        this.channel.onmessage = (e) => {
+          if (!e.data) return;
+          if (e.data.type === 'activity') {
+            this.lastActivity = Number(e.data.ts) || Date.now();
+            try { localStorage.setItem(this.lastActivityKey, String(this.lastActivity)); } catch(_){}
+          }
+          if (e.data.type === 'pause') {
+            this._applyPauseFromBroadcast();
+          }
+          if (e.data.type === 'resume') {
+            this._resumeFromBroadcast();
+          }
+        };
+      }
       window.addEventListener('storage', (e) => {
         if (e.key === this.lastActivityKey) {
           this.lastActivity = Number(e.newValue || Date.now());
@@ -213,11 +220,24 @@
       btn.textContent = 'Return to Session';
       btn.setAttribute('style', 'height:42px;padding:0 22px;border-radius:10px;border:1px solid rgba(56,189,248,.45);background:linear-gradient(135deg,#0ea5e9,#22d3ee);color:#082f49;font-weight:800;cursor:pointer;');
       btn.onclick = () => {
-        try { this.channel.postMessage({type:'resume'}); } catch(_){}
+        try { this.channel && this.channel.postMessage({type:'resume'}); } catch(_){}
         this._resumeFromBroadcast();
       };
       overlay.appendChild(btn);
       document.body.appendChild(overlay);
+    }
+
+    _applyPauseFromBroadcast(){
+      if (this._paused) return;
+      this._paused = true;
+      window.__MUMS_PAUSED = true;
+      this._unbindActivityListeners();
+      if (this.checkerTimer) {
+        clearInterval(this.checkerTimer);
+        this.checkerTimer = null;
+      }
+      this._blockFetches();
+      this._showOverlay();
     }
 
     _resumeFromBroadcast(){
@@ -328,7 +348,7 @@
             }
           } else {
             if (statusEl) {
-              statusEl.textContent = '✗ Save failed.';
+              statusEl.textContent = `✗ ${data && (data.message || data.error) ? String(data.message || data.error) : 'Save failed.'}`;
               statusEl.style.opacity = '1';
               statusEl.style.color = '#ef4444';
             }

@@ -55,3 +55,6 @@ This layer is the platform backbone: session lifecycle, user hydration, local st
   - **Edit — `server/routes/settings/pause_session.js`:** Extended allowed timeout values to include `1` minute for both normalization and validation error messaging.
   - **Edit — `public/index.html`:** Added `1 minute` option in Pause Session timeout selector.
   - **Edit — `public/js/pause-session-manager.js`:** Added cross-tab activity synchronization using `BroadcastChannel('mums_activity')` + `localStorage` activity key replication, shortened idle checker cadence to 15s, and broadcast pause/resume events across tabs while preserving existing pause teardown behavior.
+- **2026-04-25** — Pause Session save stability + cross-tab pause application fix.
+  - **Edit — `server/routes/settings/pause_session.js`:** Hardened request-body parsing for adapter-delivered object/byte payloads and normalized `enabled` boolean inputs (`true/false`, `1/0`, `on/off`) before validation to prevent false `400 invalid_enabled` rejects.
+  - **Edit — `public/js/pause-session-manager.js`:** Added safe `BroadcastChannel` initialization fallback, applied real pause state (`__MUMS_PAUSED`, fetch block, checker stop) when pause event is received from another tab, and surfaced API error message text in Save status for faster diagnostics.
