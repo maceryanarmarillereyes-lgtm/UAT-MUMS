@@ -71,8 +71,6 @@
   var heartbeatCoalesceTimer = null;
   var consecutiveAuthErrors = 0;
   var authBackoffUntil = 0;
-  var backupPollTimer = null;
-  var stopped = false;
 
   // ── HELPERS ─────────────────────────────────────────────────────────────────
   function now() { return Date.now(); }
@@ -140,7 +138,6 @@
 
   // ── CORE HEARTBEAT ──────────────────────────────────────────────────────────
   async function fireHeartbeat(reason) {
-    if (stopped) return;
     if (authBackoffUntil && now() < authBackoffUntil) return;
     if (hbInFlight) return;
     hbInFlight = true;
@@ -314,7 +311,6 @@
   // Secondary poll at WATCHDOG_POLL_MS to back up presence_client.js.
   // Skips firing if presence_client.js already beat recently (reads lastBeat from session).
   function backupPoll() {
-    if (stopped) return;
     if (document.hidden) return; // Don't poll when tab is hidden — save resources
     var stale = (now() - (readLastBeat() || lastBeatAt)) > WATCHDOG_GAP_MS;
     if (stale) {
@@ -406,19 +402,8 @@
     setTimeout(function () { fireHeartbeat('init'); }, 1200);
 
     // Backup poll — offset from presence_client's interval deliberately
-    backupPollTimer = setInterval(backupPoll, WATCHDOG_POLL_MS);
+    setInterval(backupPoll, WATCHDOG_POLL_MS);
   }
-
-
-  function stop() {
-    stopped = true;
-    try { if (backupPollTimer) clearInterval(backupPollTimer); } catch (_) {}
-    backupPollTimer = null;
-    try { if (heartbeatCoalesceTimer) clearTimeout(heartbeatCoalesceTimer); } catch (_) {}
-    heartbeatCoalesceTimer = null;
-  }
-
-  window.presenceWatchdog = { stop: stop };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

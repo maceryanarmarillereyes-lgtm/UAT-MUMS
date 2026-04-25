@@ -191,16 +191,6 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
-- **2026-04-25 (Conditional formatting render-cycle hardening + row-id mapping):**
-  - **Edit — `public/js/services-grid.js`:** Removed legacy hardcoded `evaluateConditionalFormat()` prototype logic and added deterministic post-render/post-row-update `svcConditionalFormat.paint()` calls via `requestAnimationFrame` so conditional formatting is reapplied after every DOM rebuild.
-  - **Edit — `public/js/services-grid.js`:** Each grid row now carries `data-row-id` from the persisted row id so conditional formatting can map rows by immutable identity across sort/filter/treeview reordering.
-  - **Edit — `public/js/services-conditional-format.js`:** `paintGrid()` now maps DOM rows by `data-row-id` fallback `data-row`, and row highlighting uses `tr.cf-row-highlighted` with CSS custom properties (`--cf-row-bg`, `--cf-row-accent`) instead of transient per-cell inline backgrounds that were being wiped on render.
-  - **Edit — `public/js/services-conditional-format.js` + `public/css/services.css`:** Swatch buttons now emit persistent selected states via `.cf-color-btn.active`, and rule action controls are always visible with dark-theme-safe contrast and touch-size targets.
-  - **Behavior contract update:** Conditional formatting paint is now render-cycle-safe and row-order-safe; full-row highlights persist across renders and continue to target correct records after sort/filter transitions.
-
-- **2026-04-25 (Pause Session network suppression guard):**
-  - **Edit — `public/js/services-sheet-manager.js`:** Added `window.__MUMS_PAUSED` guard at the start of sheet-list debounced realtime refresh so Services sidebar sync requests do not fire while idle pause is active.
-  - **Behavior contract update:** Services sheet realtime refresh now hard-stops during global Pause Session mode and resumes only after full page reload.
 - **2026-04-23 (Services grid filter/search rollback to column-filter-only):**
   - **Edit — `public/js/services-grid.js`:** Removed `searchAllFolders(query)` and deleted the Global Search Controller block (`initGlobalSearch`, result rendering, search input wiring, clear-filter toolbar button integration) from the Services grid module.
   - **Edit — `public/js/services-grid.js`:** Removed public filter/search helpers `setColumnFilter`, `setGlobalSearch`, `clearAllFilters`, and `getFilterState` from module scope and from `window.servicesGrid` exports.

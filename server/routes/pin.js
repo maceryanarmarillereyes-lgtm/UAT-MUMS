@@ -12,7 +12,7 @@
    bcrypt is not available in Cloudflare Workers, so we use
    PBKDF2 via the Web Crypto API (available in both Node 18+ and CF Workers).
 */
-const { getUserFromJwt, getProfileForUserId, serviceUpdate, serviceSelect, serviceUpsert, invalidateProfileCache } = require('../lib/supabase');
+const { getUserFromJwt, getProfileForUserId, serviceUpdate, serviceSelect, serviceUpsert } = require('../lib/supabase');
 
 function sendJson(res, code, body) {
   res.statusCode = code;
@@ -166,34 +166,13 @@ module.exports = async (req, res) => {
     // ── GET /api/pin/status ────────────────────────────────────────────────
     if (action === 'status' && method === 'GET') {
       const policy = await readPinPolicy();
-
-      // FIX-PIN-1: Admin-mode — allow SA/SU/TL to read another user's PIN status
-      // by passing ?target_user_id=<uuid> in the query string.
-      const urlObj = new URL('http://x' + url); // parse query params
-      const targetQp = urlObj.searchParams.get('target_user_id') || '';
-      const actorRole = String(actor.role || '').toUpperCase();
-
-      let subjectProfile = actor; // default: own profile
-
-      if (targetQp && targetQp !== actor.user_id) {
-        // Only elevated roles can read another user's PIN status
-        if (!canManagePin(actorRole)) {
-          return sendJson(res, 403, { ok: false, error: 'insufficient_permission' });
-        }
-        const targetProfile = await getProfileForUserId(targetQp);
-        if (!targetProfile) {
-          return sendJson(res, 404, { ok: false, error: 'target_user_not_found' });
-        }
-        subjectProfile = targetProfile;
-      }
-
-      const pinIsSet = !!(subjectProfile.pin_hash);
+      const pinIsSet = !!(actor.pin_hash);
       return sendJson(res, 200, {
         ok: true,
         pinSet: pinIsSet,
-        pinSetAt: subjectProfile.pin_set_at || null,
-        pinLastUsedAt: subjectProfile.pin_last_used_at || null,
-        pinFailCount: Number(subjectProfile.pin_fail_count) || 0,
+        pinSetAt: actor.pin_set_at || null,
+        pinLastUsedAt: actor.pin_last_used_at || null,
+        pinFailCount: actor.pin_fail_count || 0,
         policy
       });
     }
@@ -213,8 +192,6 @@ module.exports = async (req, res) => {
         pin_last_fail_at: null
       }, { user_id: 'eq.' + actor.user_id });
       if (!upd.ok) return sendJson(res, 500, { ok: false, error: 'pin_save_failed' });
-      // Invalidate cache so next status read is fresh
-      invalidateProfileCache(actor.user_id);
       console.log(`[PIN] Setup by user ${actor.user_id}`);
       return sendJson(res, 200, { ok: true, message: 'PIN created successfully.' });
     }
@@ -301,12 +278,6 @@ module.exports = async (req, res) => {
         pin_last_used_at: null
       }, { user_id: 'eq.' + targetUserId });
       if (!upd.ok) return sendJson(res, 500, { ok: false, error: 'reset_failed' });
-
-      // FIX-PIN-2: Invalidate profile cache so the next /api/pin/status call
-      // reads fresh data from the DB — not the stale cached profile with old pin_hash.
-      invalidateProfileCache(targetUserId);
-      invalidateProfileCache(actor.user_id);
-
       console.log(`[PIN] Reset by ${actor.user_id} (${actorRole}) for user ${targetUserId}`);
       return sendJson(res, 200, { ok: true, message: `PIN cleared for ${target.name || targetUserId}. User will be prompted to create a new PIN on next login.` });
     }

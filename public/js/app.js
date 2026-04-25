@@ -5949,15 +5949,6 @@ async function boot(){
     __bootPerf.end('auth_require_user_ms');
     if(!user) return;
 
-    try{
-      if (window.PauseSessionManager) {
-        window.pauseManager = new window.PauseSessionManager();
-        if (window.pauseManager && typeof window.pauseManager.init === 'function') {
-          window.pauseManager.init();
-        }
-      }
-    }catch(_){ }
-
     // ── SECURITY PIN GATE ──────────────────────────────────────────────────
     // Must pass PIN verification before the app renders.
     // PinController.gate() checks policy → shows overlay if needed.

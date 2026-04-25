@@ -70,8 +70,6 @@ async function getRoutes(env) {
     // BUG FIX 2026-04-16: settings/mailbox_status was missing from Cloudflare router
     // (present in api/handler.js Vercel but absent here — caused 404 on Save in General Settings)
     'settings/mailbox_status': unwrapCjs(await import('../../server/routes/settings/mailbox_status.js')),
-    'settings/pause-session': unwrapCjs(await import('../../server/routes/settings/pause_session.js')),
-    'settings/pause_session': unwrapCjs(await import('../../server/routes/settings/pause_session.js')),
     'settings/global_quickbase': unwrapCjs(await import('../../server/routes/settings/global_quickbase.js')),
     'settings/global_calendar': unwrapCjs(await import('../../server/routes/settings/global_calendar.js')),
     'calendar/records': unwrapCjs(await import('../../server/routes/calendar/records.js')),

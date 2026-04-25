@@ -61,8 +61,6 @@ const ROUTES = {
   'catalog/history': require('../server/routes/catalog/history'),
   'settings/login_mode': require('../server/routes/settings/login_mode'),
   'settings/mailbox_status': require('../server/routes/settings/mailbox_status'),
-  'settings/pause-session': require('../server/routes/settings/pause_session'),
-  'settings/pause_session': require('../server/routes/settings/pause_session'),
 
   'overall_stats': require('../server/routes/overall_stats'),
 

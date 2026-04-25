@@ -1164,8 +1164,6 @@ function applyRemoteKey(key, value){
     flushQueue: (trigger)=>flushQueue(trigger||'manual'),
     forceReconnect: ()=>{ try{ userExplicitlyLoggedOut = false; forcePollingOnly = false; wsFailureCount = 0; resetRealtimeCircuit(); connectCloudMandatory(); }catch(_){ } },
     resetCircuit: ()=>{ try{ resetRealtimeCircuit(); }catch(_){ } },
-    getRealtimeClient: ()=>{ try{ return sbClient || window.__MUMS_SB_CLIENT || null; }catch(_){ return null; } },
-    removeAllChannels: ()=>{ try{ const c = sbClient || window.__MUMS_SB_CLIENT; if(c && typeof c.removeAllChannels === 'function') c.removeAllChannels(); }catch(_){ } },
     init: ()=>{ try{ initRealtimeSync(); }catch(_){ } }
   };
 })();

@@ -319,27 +319,24 @@
       if (badge) badge.remove();
     });
     // Also clear row-level highlights set on <tr>
-    grid.querySelectorAll('tr.cf-row-highlighted').forEach(function (tr) {
-      tr.classList.remove('cf-row-highlighted');
+    grid.querySelectorAll('tr[data-cf-row]').forEach(function (tr) {
       tr.removeAttribute('data-cf-row');
-      tr.style.removeProperty('--cf-row-bg');
-      tr.style.removeProperty('--cf-row-accent');
-      tr.querySelectorAll('input.cell').forEach(function (inp) {
-        inp.style.removeProperty('color');
-        inp.style.removeProperty('font-weight');
-        inp.style.removeProperty('font-style');
-        inp.style.removeProperty('text-decoration');
-        inp.dataset.cfQbStripped = '';
+      tr.querySelectorAll('td').forEach(function (td) {
+        td.style.removeProperty('background');
+        td.style.removeProperty('border-top');
+        td.style.removeProperty('border-bottom');
+        td.style.removeProperty('border-left');
+        td.style.removeProperty('box-shadow');
+        var inp = td.querySelector('input.cell');
+        if (inp) {
+          inp.style.removeProperty('color');
+          inp.style.removeProperty('font-weight');
+          inp.style.removeProperty('font-style');
+          inp.style.removeProperty('text-decoration');
+          // BUG1 FIX: Do NOT restore cell-qb-linked — neutralized, no restore needed
+          inp.dataset.cfQbStripped = '';
+        }
       });
-    });
-
-    // Build fast DOM row lookups keyed by immutable row id + fallback row index.
-    var trByRowId = {};
-    var trByRowIndex = {};
-    grid.querySelectorAll('tbody tr').forEach(function (tr) {
-      if (!tr) return;
-      if (tr.dataset && tr.dataset.rowId) trByRowId[String(tr.dataset.rowId)] = tr;
-      if (tr.dataset && tr.dataset.row != null) trByRowIndex[String(tr.dataset.row)] = tr;
     });
 
     // ── Collect which rows need row-highlight so we can apply after per-cell pass
@@ -368,14 +365,10 @@
       rows.forEach(function (row, rowPos) {
         if (!row || !row.data) return;
         var rowIdx = row.row_index != null ? row.row_index : rowPos;
-        var rowId = row.id != null ? String(row.id) : '';
         var cellValue = row.data[col.key] != null ? row.data[col.key] : '';
         var cellStr = String(cellValue).trim();
 
-        var tr = (rowId && trByRowId[rowId]) || trByRowIndex[String(rowIdx)] || null;
-        if (!tr) return;
-
-        var td = tr.querySelector('td input.cell[data-key="'+col.key+'"]');
+        var td = grid.querySelector('td input.cell[data-row="'+rowIdx+'"][data-key="'+col.key+'"]');
         if (td) td = td.parentElement;
         if (!td) return;
 
@@ -402,11 +395,8 @@
             if (matched) {
               if (rule.highlightRow) {
                 // Queue row-level highlight — applied after per-cell loop
-                var rowKey = rowId || ('rowidx:' + rowIdx);
-                if (!rowHighlights[rowKey]) {
-                  rowHighlights[rowKey] = {
-                    rowId: rowId,
-                    rowIndex: rowIdx,
+                if (!rowHighlights[rowIdx]) {
+                  rowHighlights[rowIdx] = {
                     bgColor: rule.bgColor || '',
                     textColor: rule.textColor || '',
                     bold: !!rule.bold,
@@ -481,42 +471,75 @@
     // ── Apply row-level highlights ──────────────────────────────────────────
     // Uses semi-transparent fill (enterprise look) + left accent bar on row-num
     // Grid lines are preserved via explicit box-shadow reinforcement
-    Object.keys(rowHighlights).forEach(function (rowKey) {
-      var hl = rowHighlights[rowKey];
-      var tr = (hl.rowId && trByRowId[String(hl.rowId)]) || trByRowIndex[String(hl.rowIndex)];
+    Object.keys(rowHighlights).forEach(function (rowIdxStr) {
+      var rowIdx = parseInt(rowIdxStr, 10);
+      var hl = rowHighlights[rowIdx];
+
+      // FIX-6: Find <tr> by data-row-id (set in render() as tr.dataset.rowId = rowIndex).
+      // Previously used DOM querySelector('td input[data-row]') which is correct but
+      // we explicitly use tr[data-row-id] for clarity and to match the FIX-6 contract.
+      // This survives sort/filter because data-row-id is the stable DB row_index, not DOM position.
+      var tr = grid.querySelector('tbody tr[data-row="' + rowIdx + '"]');
+      if (!tr) {
+        // Fallback: try via cell data-row attribute (same result, belt+suspenders)
+        var anyCell = grid.querySelector('td input.cell[data-row="'+rowIdx+'"]');
+        if (anyCell) tr = anyCell.closest('tr');
+      }
       if (!tr) return;
 
       tr.setAttribute('data-cf-row', '1');
-      tr.classList.add('cf-row-highlighted');
 
-      // ── Compute semi-transparent background (35% opacity) ─────────────────
-      // FIX-CF-ROW-HL: Was 0.13 (13%) — nearly invisible on dark backgrounds.
-      // 0.35 (35%) is clearly visible while keeping the semi-transparent look.
-      var semiBg = hl.bgColor ? hexToRgba(hl.bgColor, 0.35) : '';
+      // ── Compute semi-transparent background (13% opacity) ─────────────────
+      var semiBg = hl.bgColor ? hexToRgba(hl.bgColor, 0.13) : '';
       // ── Accent color for the left bar ─────────────────────────────────────
       var accentColor = hl.borderColor || hl.bgColor || '';
 
-      if (semiBg) tr.style.setProperty('--cf-row-bg', semiBg);
-      if (accentColor) tr.style.setProperty('--cf-row-accent', accentColor);
-
-      tr.querySelectorAll('input.cell').forEach(function (inp) {
-        if (hl.textColor) {
-          inp.style.setProperty('color', hl.textColor, 'important');
-        } else if (hl.bgColor) {
-          var luminance = (function (hex) {
-            var c = hex.replace('#','');
-            if (c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
-            var r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);
-            return (0.299*r+0.587*g+0.114*b)/255;
-          })(hl.bgColor);
-          inp.style.setProperty('color', luminance > 0.55 ? '#1e293b' : '#f1f5f9', 'important');
+      // Paint ALL td in this row
+      var tds = tr.querySelectorAll('td');
+      tds.forEach(function (td, tdIdx) {
+        if (td.classList.contains('row-num')) {
+          // Row number cell: solid left accent bar + subtle fill
+          if (accentColor) {
+            td.style.boxShadow = 'inset 4px 0 0 ' + accentColor;
+          }
+          if (semiBg) {
+            td.style.background = semiBg;
+          }
+          return;
         }
-        inp.style.setProperty('font-weight', hl.bold ? '700' : 'normal', 'important');
-        inp.style.setProperty('font-style', hl.italic ? 'italic' : 'normal', 'important');
-        var dec2 = [];
-        if (hl.strikethrough) dec2.push('line-through');
-        if (hl.underline) dec2.push('underline');
-        inp.style.setProperty('text-decoration', dec2.join(' ') || 'none', 'important');
+
+        // Data cells: semi-transparent fill + faint bottom/right borders preserved
+        td.setAttribute('data-cf-applied', '1');
+        if (semiBg) {
+          td.style.background = semiBg;
+        }
+        // Reinforce grid lines so they stay visible over colored background
+        // Uses box-shadow instead of border overrides (non-destructive)
+        td.style.boxShadow = [
+          'inset -1px 0 0 rgba(148,163,184,0.18)',   // right divider
+          'inset 0 -1px 0 rgba(148,163,184,0.18)'    // bottom divider
+        ].join(', ');
+
+        var inp = td.querySelector('input.cell');
+        if (inp) {
+          if (hl.textColor) {
+            inp.style.setProperty('color', hl.textColor, 'important');
+          } else if (hl.bgColor) {
+            var luminance = (function (hex) {
+              var c = hex.replace('#','');
+              if (c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+              var r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);
+              return (0.299*r+0.587*g+0.114*b)/255;
+            })(hl.bgColor);
+            inp.style.setProperty('color', luminance > 0.55 ? '#1e293b' : '#f1f5f9', 'important');
+          }
+          inp.style.setProperty('font-weight', hl.bold   ? '700'    : 'normal',  'important');
+          inp.style.setProperty('font-style',  hl.italic ? 'italic' : 'normal',  'important');
+          var dec2 = [];
+          if (hl.strikethrough) dec2.push('line-through');
+          if (hl.underline)     dec2.push('underline');
+          inp.style.setProperty('text-decoration', dec2.join(' ') || 'none', 'important');
+        }
       });
     });
   }
@@ -1168,22 +1191,48 @@
   }
 
   function renderSwatches(container, palette, currentHex, onChange, allowNone) {
+    // Track all swatch elements so we can update active state on click
+    // without calling renderEditor() (which would rebuild the whole panel).
+    var allSwatches = [];
+
+    function _updateActive(selectedHex) {
+      allSwatches.forEach(function (item) {
+        var isActive = item.hex === selectedHex || (!selectedHex && item.hex === '');
+        item.el.classList.toggle('cf-swatch-active', isActive);
+      });
+    }
+
     if (allowNone) {
       var noneBtn = mkEl('div', {
-        className: 'svc-cf-swatch cf-color-btn' + (!currentHex ? ' cf-swatch-active active' : ''),
+        className: 'svc-cf-swatch' + (!currentHex ? ' cf-swatch-active' : ''),
         title: 'None',
         style: 'background:transparent;border:1.5px dashed rgba(148,163,184,0.3);position:relative;'
       }, container);
       noneBtn.innerHTML = '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:10px;color:#475569;">∅</span>';
-      noneBtn.addEventListener('click', function () { onChange(''); });
+      allSwatches.push({ el: noneBtn, hex: '' });
+      noneBtn.addEventListener('click', function () {
+        // FIX-1: Immediately update active class before calling onChange.
+        // onChange → syncDraftToRule → paintGrid (does NOT call renderEditor),
+        // so the palette DOM stays alive. Update active class in place.
+        _updateActive('');
+        onChange('');
+      });
     }
+
     palette.forEach(function (hex) {
       var sw = mkEl('div', {
-        className: 'svc-cf-swatch cf-color-btn' + (hex === currentHex ? ' cf-swatch-active active' : ''),
+        className: 'svc-cf-swatch' + (hex === currentHex ? ' cf-swatch-active' : ''),
         style: 'background:' + hex + ';',
         title: hex
       }, container);
-      sw.addEventListener('click', function () { onChange(hex); });
+      allSwatches.push({ el: sw, hex: hex });
+      sw.addEventListener('click', function () {
+        // FIX-1: Update active class in-place — no re-render needed.
+        // This fixes RC-1: selected swatch was never visually marked because
+        // the palette wasn't rebuilt after onClick (syncDraftToRule doesn't call renderEditor).
+        _updateActive(hex);
+        onChange(hex);
+      });
     });
   }
 
@@ -1405,13 +1454,27 @@
   ───────────────────────────────────────────────────────────────────────── */
 
   function hookGridRender() {
-    // services-grid now owns render-cycle paint orchestration.
-    // Keep this watcher only as a one-time bootstrap fallback for late script order.
     if (!window.servicesGrid) {
       setTimeout(hookGridRender, 200);
       return;
     }
-    requestAnimationFrame(paintGrid);
+    // Guard: only hook once — prevents double-wrapping on hot reload
+    if (window.servicesGrid._cfHooked) return;
+    window.servicesGrid._cfHooked = true;
+
+    // FIX-5: render() now directly calls svcConditionalFormat.paint() via rAF (in services-grid.js).
+    // We only need to hook load() here for the initial async sheet load paint.
+    // Wrapping render() here would cause double-paint (once from rAF in render(), once from here).
+    var origLoad = window.servicesGrid.load;
+    window.servicesGrid.load = async function (sheet) {
+      try { await origLoad.call(this, sheet); } catch (e) { throw e; }
+      // Use rAF (not setTimeout) to be consistent with the render() hook pattern.
+      requestAnimationFrame(paintGrid);
+    };
+
+    // NOTE: render() hook removed — services-grid.js render() now calls
+    // requestAnimationFrame(svcConditionalFormat.paint) directly after innerHTML is set.
+    // This is more reliable than a patched wrapper and eliminates the 50ms race condition.
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
@@ -1443,12 +1506,5 @@
     _paintSuspended = false;
     setTimeout(paintGrid, 120); // allow row.data to settle
   });
-
-  // Test hooks are intentionally read-only and do not affect runtime behavior.
-  window.__svcCfTestHooks = window.__svcCfTestHooks || {
-    evalRule: evalRule,
-    paintGrid: paintGrid,
-    hexToRgba: hexToRgba
-  };
 
 })();
