@@ -1114,64 +1114,103 @@ function openUserModal(actor, user){
   UI.openModal('userModal');
 }
 
+// ── PIN helper: wait for a valid auth token (mirrors security_pin.js) ─────────
+function _waitForPinToken(maxMs) {
+  maxMs = maxMs || 5000;
+  var start = Date.now();
+  return new Promise(function(resolve) {
+    function check() {
+      var tok = '';
+      try {
+        if (window.CloudAuth && typeof CloudAuth.accessToken === 'function') tok = CloudAuth.accessToken() || '';
+      } catch(_) {}
+      if (!tok) {
+        try {
+          var raw = localStorage.getItem('mums_supabase_session') || sessionStorage.getItem('mums_supabase_session');
+          if (raw) { var p = JSON.parse(raw); tok = (p && p.access_token) ? p.access_token : ''; }
+        } catch(_) {}
+      }
+      if (tok) return resolve(tok);
+      if (Date.now() - start > maxMs) return resolve(''); // timeout — proceed anyway
+      setTimeout(check, 80);
+    }
+    check();
+  });
+}
+
 // ── PIN helper: load status for a target user ──────────────────────────────
 async function _loadUserPinStatus(targetUserId, targetName) {
-  const badge = document.getElementById('u_pin_status_badge');
+  const badge      = document.getElementById('u_pin_status_badge');
   const statusText = document.getElementById('u_pin_status_text');
-  const setPill = document.getElementById('u_pin_set_date');
-  const lastUsed = document.getElementById('u_pin_last_used');
-  const failCount = document.getElementById('u_pin_fail_count');
+  const setPill    = document.getElementById('u_pin_set_date');
+  const lastUsed   = document.getElementById('u_pin_last_used');
+  const failCount  = document.getElementById('u_pin_fail_count');
+
+  // Show loading state
+  if (statusText) statusText.textContent = 'CHECKING…';
 
   try {
-    const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
+    // FIX-PIN-3: Wait for a valid token before calling APIs
+    const tok = await _waitForPinToken(5000);
+
+    // FIX-PIN-1: Pass target_user_id so server reads the TARGET's PIN, not actor's own
     const res = await fetch('/api/pin/status?target_user_id=' + encodeURIComponent(targetUserId), {
       headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' }
     });
+
+    if (!res.ok) {
+      // HTTP-level error (401, 403, 500)
+      var errText = '';
+      try { var errData = await res.json(); errText = errData.error || String(res.status); } catch(_) { errText = String(res.status); }
+      console.warn('[PIN Status] HTTP error:', errText);
+      if (statusText) {
+        statusText.textContent = res.status === 401 ? 'AUTH ERROR' : res.status === 403 ? 'NO ACCESS' : 'ERROR';
+      }
+      return;
+    }
+
     const data = await res.json().catch(function() { return {}; });
 
-    // Use own status endpoint — admin reading another user requires a different approach
-    // Since we only have own-status endpoint, we read from the users list profile data
-    // which is already in Store — fall back to Store
-    const storeUsers = window.Store && Store.getUsers ? Store.getUsers() : [];
-    const targetProfile = storeUsers.find(function(u) {
-      return String(u && (u.user_id || u.id || '')) === String(targetUserId);
-    });
+    if (!data.ok) {
+      if (statusText) statusText.textContent = 'UNKNOWN';
+      return;
+    }
 
-    const pinSet = !!(targetProfile && targetProfile.pin_hash) || (data.ok && data.pinSet);
-    const pinSetAt = (targetProfile && targetProfile.pin_set_at) || (data.ok && data.pinSetAt) || null;
-    const pinLastUsed = (targetProfile && targetProfile.pin_last_used_at) || null;
-    const fails = (targetProfile && targetProfile.pin_fail_count) || 0;
+    // FIX-PIN-1: Server now returns the TARGET user's real PIN data
+    const pinSet     = !!data.pinSet;
+    const pinSetAt   = data.pinSetAt   || null;
+    const pinLastUsedAt = data.pinLastUsedAt || null;
+    const fails      = Number(data.pinFailCount) || 0;
 
     if (badge && statusText) {
       if (pinSet) {
         badge.style.background = 'rgba(16,185,129,.1)';
-        badge.style.border = '1px solid rgba(16,185,129,.22)';
-        badge.style.color = '#10b981';
+        badge.style.border     = '1px solid rgba(16,185,129,.22)';
+        badge.style.color      = '#10b981';
         statusText.textContent = 'PIN ACTIVE';
         var dot = badge.querySelector('div');
         if (dot) { dot.style.background = '#10b981'; dot.style.boxShadow = '0 0 6px #10b981'; }
       } else {
         badge.style.background = 'rgba(244,63,94,.08)';
-        badge.style.border = '1px solid rgba(244,63,94,.2)';
-        badge.style.color = '#f43f5e';
+        badge.style.border     = '1px solid rgba(244,63,94,.2)';
+        badge.style.color      = '#f43f5e';
         statusText.textContent = 'NOT SET';
         var dot2 = badge.querySelector('div');
         if (dot2) { dot2.style.background = '#f43f5e'; dot2.style.boxShadow = 'none'; }
       }
     }
-    if (setPill) {
-      setPill.textContent = pinSetAt ? new Date(pinSetAt).toLocaleDateString() : (pinSet ? 'Set' : '—');
-    }
+    if (setPill)   setPill.textContent = pinSetAt ? new Date(pinSetAt).toLocaleDateString() : (pinSet ? 'Set' : '—');
     if (lastUsed) {
-      lastUsed.textContent = pinLastUsed ? new Date(pinLastUsed).toLocaleDateString() : '—';
-      lastUsed.style.color = pinLastUsed ? '#10b981' : 'var(--muted)';
+      lastUsed.textContent = pinLastUsedAt ? new Date(pinLastUsedAt).toLocaleDateString() : '—';
+      lastUsed.style.color = pinLastUsedAt ? '#10b981' : 'var(--muted)';
     }
     if (failCount) {
-      failCount.textContent = String(fails || 0);
+      failCount.textContent = String(fails);
       failCount.style.color = fails > 0 ? '#f43f5e' : '#f59e0b';
     }
   } catch(e) {
-    if (statusText) statusText.textContent = 'UNKNOWN';
+    console.error('[PIN Status] Error:', e);
+    if (statusText) statusText.textContent = 'ERROR';
   }
 }
 
@@ -1186,31 +1225,57 @@ async function _resetUserPin(targetUserId, targetName, forceClear) {
   const resetBtn = document.getElementById('u_pin_reset_btn');
   const clearBtn = document.getElementById('u_pin_clear_btn');
   var btn = forceClear ? clearBtn : resetBtn;
-  if (btn) { btn.disabled = true; btn.textContent = label + 'ing…'; }
+
+  // FIX-PIN-3: Disable BOTH buttons during operation to prevent double-click
+  if (resetBtn) { resetBtn.disabled = true; }
+  if (clearBtn) { clearBtn.disabled = true; }
+  if (btn) { btn.textContent = label + 'ing…'; }
 
   try {
-    const tok = window.CloudAuth && typeof CloudAuth.accessToken === 'function' ? CloudAuth.accessToken() : '';
+    // FIX-PIN-3: Wait for valid token before calling API
+    const tok = await _waitForPinToken(5000);
+    if (!tok) {
+      if (window.UI && UI.toast) UI.toast('Session token unavailable. Please refresh the page.', 'error');
+      return;
+    }
+
     const res = await fetch('/api/pin/reset', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: targetUserId })
     });
+
+    // FIX-PIN-3: Check HTTP status explicitly before parsing JSON
+    if (!res.ok && res.status === 401) {
+      if (window.UI && UI.toast) UI.toast('Authorization failed. Please refresh and try again.', 'error');
+      return;
+    }
+    if (!res.ok && res.status === 403) {
+      if (window.UI && UI.toast) UI.toast('You do not have permission to reset this user\'s PIN.', 'error');
+      return;
+    }
+
     const data = await res.json().catch(function() { return {}; });
     if (data.ok) {
       if (window.UI && UI.toast) UI.toast(data.message || 'PIN cleared successfully.', 'success');
-      // Refresh PIN status display
-      _loadUserPinStatus(targetUserId, targetName);
+      // FIX-PIN-2: Refresh status display — server has already invalidated cache
+      // Add a small delay so the DB write settles before we re-read
+      setTimeout(function() { _loadUserPinStatus(targetUserId, targetName); }, 400);
     } else {
-      if (window.UI && UI.toast) UI.toast((data.message || 'Failed to reset PIN.'), 'error');
+      if (window.UI && UI.toast) UI.toast(data.message || 'Failed to reset PIN.', 'error');
     }
   } catch(e) {
+    console.error('[PIN Reset] Error:', e);
     if (window.UI && UI.toast) UI.toast('Network error. Please try again.', 'error');
   } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = forceClear
-        ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Force Clear PIN'
-        : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Send Reset Request';
+    // Re-enable buttons and restore labels
+    if (resetBtn) {
+      resetBtn.disabled = false;
+      resetBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Send Reset Request';
+    }
+    if (clearBtn) {
+      clearBtn.disabled = false;
+      clearBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Force Clear PIN';
     }
   }
 }
