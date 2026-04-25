@@ -17,18 +17,11 @@
       this._saveBound = false;
       this._paused = false;
       this._origFetch = window.fetch;
-      this._blockedIntervalKeys = [
-        'presenceInterval','syncInterval','__mumsPresenceTimer','__mumsOnlineBarTimer','__mumsClockTimer',
-        '__mumsGmtOverviewTimer','annTimer'
-      ];
+      this._blockedIntervalKeys = ['presenceInterval','syncInterval','__mumsPresenceTimer','__mumsOnlineBarTimer','__mumsClockTimer','__mumsGmtOverviewTimer','annTimer'];
       this.userRole = this._getCurrentRole();
       this._loadConfigPromise = null;
       this.channel = null;
-      try {
-        if (typeof BroadcastChannel !== 'undefined') {
-          this.channel = new BroadcastChannel('mums_activity');
-        }
-      } catch (_) {}
+      try { if (typeof BroadcastChannel!== 'undefined') { this.channel = new BroadcastChannel('mums_activity'); } } catch(_){}
     }
 
     async init(){
@@ -232,10 +225,13 @@
       this._paused = true;
       window.__MUMS_PAUSED = true;
       this._unbindActivityListeners();
-      if (this.checkerTimer) {
-        clearInterval(this.checkerTimer);
-        this.checkerTimer = null;
-      }
+      if (this.checkerTimer) { clearInterval(this.checkerTimer); this.checkerTimer = null; }
+      try { if (window.__MUMS_SB_CLIENT?.removeAllChannels) window.__MUMS_SB_CLIENT.removeAllChannels(); } catch(_){}
+      try { const c = window.Realtime?.getRealtimeClient?.(); if (c?.removeAllChannels) c.removeAllChannels(); } catch(_){}
+      try { if (window.servicesDB?.client?.removeAllChannels) window.servicesDB.client.removeAllChannels(); } catch(_){}
+      try { if (window.odpDB?.client?.removeAllChannels) window.odpDB.client.removeAllChannels(); } catch(_){}
+      this._blockedIntervalKeys.forEach(k=>{ try { if(window[k]){ clearInterval(window[k]); clearTimeout(window[k]); window[k]=null; } }catch(_){} });
+      try { window.presenceWatchdog?.stop?.(); } catch(_){}
       this._blockFetches();
       this._showOverlay();
     }
