@@ -799,12 +799,15 @@
       var rowData = (isFilteredView || isSorted)
         ? (viewRows[i] || { row_index: i, data: {} })
         : (current.rows.find(function (r) { return r.row_index === i; }) || { row_index: i, data: {} });
-      if (typeof rowData._cfMatch === 'undefined') {
-        var cf = evaluateConditionalFormat(rowData, current.sheet.column_defs || []);
-        rowData._cfMatch = !!cf.match;
-        rowData._cfRuleId = cf.ruleId || '';
-        rowData._cfColor = cf.color || '';
-      }
+      // FIX-CF-ROW-HL: Always re-evaluate on each render() — removed stale cache
+      // guard (typeof _cfMatch === 'undefined'). The old guard meant that once a
+      // row was evaluated it was never re-checked, so CF rule changes made after
+      // the first render would be ignored until a full page reload. Re-evaluating
+      // each render is safe and negligible perf impact (~519 simple fn calls).
+      var cf = evaluateConditionalFormat(rowData, current.sheet.column_defs || []);
+      rowData._cfMatch = !!cf.match;
+      rowData._cfRuleId = cf.ruleId || '';
+      rowData._cfColor = cf.color || '';
       var rowIndex = Number.isFinite(rowData.row_index) ? rowData.row_index : i;
       var tr = mkEl('tr', { className: 'grid-row' }, tbody);
       tr.dataset.row = String(rowIndex);

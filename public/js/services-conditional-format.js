@@ -483,8 +483,10 @@
 
       tr.setAttribute('data-cf-row', '1');
 
-      // ── Compute semi-transparent background (13% opacity) ─────────────────
-      var semiBg = hl.bgColor ? hexToRgba(hl.bgColor, 0.13) : '';
+      // ── Compute semi-transparent background (35% opacity) ─────────────────
+      // FIX-CF-ROW-HL: Was 0.13 (13%) — nearly invisible on dark backgrounds.
+      // 0.35 (35%) is clearly visible while keeping the semi-transparent look.
+      var semiBg = hl.bgColor ? hexToRgba(hl.bgColor, 0.35) : '';
       // ── Accent color for the left bar ─────────────────────────────────────
       var accentColor = hl.borderColor || hl.bgColor || '';
 
@@ -493,11 +495,14 @@
       tds.forEach(function (td, tdIdx) {
         if (td.classList.contains('row-num')) {
           // Row number cell: solid left accent bar + subtle fill
+          // FIX-CF-ROW-HL: Use setProperty + 'important' so inline style wins
+          // over CSS specificity from .svc-grid tbody tr[data-cf-applied="true"]
+          // and other !important rules that could override the row highlight color.
           if (accentColor) {
-            td.style.boxShadow = 'inset 4px 0 0 ' + accentColor;
+            td.style.setProperty('box-shadow', 'inset 4px 0 0 ' + accentColor, 'important');
           }
           if (semiBg) {
-            td.style.background = semiBg;
+            td.style.setProperty('background', semiBg, 'important');
           }
           return;
         }
@@ -505,14 +510,16 @@
         // Data cells: semi-transparent fill + faint bottom/right borders preserved
         td.setAttribute('data-cf-applied', '1');
         if (semiBg) {
-          td.style.background = semiBg;
+          // FIX-CF-ROW-HL: Use setProperty + 'important' so user-defined row
+          // highlight color wins over any competing CSS !important rules.
+          td.style.setProperty('background', semiBg, 'important');
         }
         // Reinforce grid lines so they stay visible over colored background
         // Uses box-shadow instead of border overrides (non-destructive)
-        td.style.boxShadow = [
+        td.style.setProperty('box-shadow', [
           'inset -1px 0 0 rgba(148,163,184,0.18)',   // right divider
           'inset 0 -1px 0 rgba(148,163,184,0.18)'    // bottom divider
-        ].join(', ');
+        ].join(', '), 'important');
 
         var inp = td.querySelector('input.cell');
         if (inp) {
@@ -1439,7 +1446,13 @@
     var origRender = window.servicesGrid.render;
     window.servicesGrid.render = function () {
       origRender.call(this);
-      setTimeout(paintGrid, 50);
+      // FIX-CF-ROW-HL: Use requestAnimationFrame instead of setTimeout(50).
+      // render() does grid.innerHTML='' (full DOM rebuild), wiping all inline CF
+      // styles. rAF fires on the very next browser paint frame (~16ms) instead of
+      // 50ms later, eliminating the "flash then disappear" visual artifact where
+      // row highlights briefly vanish after every render call (sort, filter, resize,
+      // realtime updates, etc.).
+      requestAnimationFrame(paintGrid);
     };
   }
 
