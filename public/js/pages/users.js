@@ -66,11 +66,23 @@ function canCreateRole(actor, targetRole) {
 
   const isCloudMode = !!(window.CloudAuth && CloudAuth.isEnabled && CloudAuth.isEnabled() && window.CloudUsers && typeof CloudUsers.refreshIntoLocalStore === 'function');
 
+  // FIX-DELETE-GUARD: IDs confirmed deleted by this tab's API call.
+  // Filters every renderRows() call so a stale background in-flight refresh
+  // that overwrites the store (started before delete, resolves after) can NEVER
+  // bring a confirmed-deleted user back. Server-confirmed = API returned 200.
+  if(!window.__mumsDeletedIds) window.__mumsDeletedIds = new Set();
+
   function renderRows(){
     const tbody = root.querySelector('tbody[data-users-tbody]');
     if(!tbody) return;
     // Always re-read to reflect realtime changes.
     users = Store.getUsers();
+    // FIX-DELETE-GUARD: Strip any server-confirmed deleted users from the
+    // render list, regardless of what the store currently holds.
+    // This guards against stale in-flight refreshes overwriting the store.
+    if(window.__mumsDeletedIds && window.__mumsDeletedIds.size > 0){
+      users = users.filter(u => !window.__mumsDeletedIds.has(String(u && u.id || '')));
+    }
 
     // Requirement: Team Leads should only see users belonging to their own shift/team.
     // (Admins/Super Admins retain full visibility.)
@@ -598,32 +610,34 @@ if (!createAllowed) {
           try{ UI.toast ? UI.toast(msg, 'error') : alert(msg); }catch(_){ alert(msg); }
           return;
         }
-        // Optimistic local removal so UI updates instantly (no flash of deleted user).
+        // FIX-DELETE-GUARD: Mark ID as server-confirmed deleted IMMEDIATELY.
+        // Every subsequent renderRows() call — including those triggered by any
+        // stale background in-flight Store.refreshUserList() — will filter this
+        // ID out of the render list, making it impossible for the user to reappear.
+        if(!window.__mumsDeletedIds) window.__mumsDeletedIds = new Set();
+        window.__mumsDeletedIds.add(String(id));
+
+        // Optimistic local removal so the in-memory store is also clean.
         try{ Store.deleteUser(id); }catch(_){ }
 
-        // FIX-DELETE-RACE: Broadcast FIRST so other tabs/sessions get the signal immediately.
-        // We do this BEFORE the authoritative re-fetch so the echo from our own rawWrite
-        // arrives AFTER Store.refreshUserList() has stamped _refreshUserListAt, making the
-        // debounce block the echo and preventing a second redundant fetch from overwriting
-        // the correctly-updated store with a potentially-stale result.
+        // Single authoritative direct re-fetch (bypasses Store.refreshUserList's
+        // in-flight dedup and debounce, which could return a stale pre-delete
+        // promise and overwrite the store with the OLD list containing the user).
         try{
-          const rawWrite = (typeof Store.__rawWrite === 'function') ? Store.__rawWrite : (typeof Store.__writeRaw === 'function') ? Store.__writeRaw : null;
-          if(rawWrite) rawWrite('mums_user_events', { type:'user_deleted', ts: Date.now(), userId: id }, { silent: true });
-          // Use silent:true so the rawWrite itself does NOT fire mums:store on THIS tab.
-          // Other tabs get it via the localStorage storage event (cross-tab bridge).
-          // This tab does the authoritative refresh below — no duplicate fetch needed.
-          if(rawWrite) rawWrite('mums_user_list_updated', { ts: Date.now(), reason:'user_deleted', userId: id }, { silent: true });
+          if(window.CloudUsers && typeof CloudUsers.refreshIntoLocalStore === 'function'){
+            await CloudUsers.refreshIntoLocalStore();
+          }
         }catch(_){}
 
-        // Single authoritative re-fetch via Store.refreshUserList().
-        // - Stamps _refreshUserListAt so the 800ms debounce blocks any echo-triggered calls.
-        // - Replaces the old direct refreshIntoLocalStore() call which bypassed the debounce,
-        //   allowing a second async fetch to race and re-add the deleted user to the store.
+        // Broadcast to other tabs via localStorage storage event.
+        // Pass fromRealtime:true so write() skips Realtime.onLocalWrite (no WS broadcast)
+        // but still writes localStorage → cross-tab storage event fires correctly.
+        // silent is intentionally NOT set so other-tab bridge listener sees the key.
         try{
-          if(window.Store && typeof Store.refreshUserList === 'function'){
-            await Store.refreshUserList({ reason: 'user_deleted' });
-          } else if(window.CloudUsers && typeof CloudUsers.refreshIntoLocalStore === 'function'){
-            await CloudUsers.refreshIntoLocalStore();
+          const rawWrite = (typeof Store.__rawWrite === 'function') ? Store.__rawWrite : null;
+          if(rawWrite){
+            rawWrite('mums_user_events', { type:'user_deleted', ts: Date.now(), userId: id }, { fromRealtime: true });
+            rawWrite('mums_user_list_updated', { ts: Date.now(), reason:'user_deleted', userId: id }, { fromRealtime: true });
           }
         }catch(_){}
       }else{

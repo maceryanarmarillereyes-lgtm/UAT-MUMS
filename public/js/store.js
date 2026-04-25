@@ -2638,7 +2638,7 @@ Store.startMailboxOverrideSync = function(opts){
   Store.refreshUserList = async function(opts){
     const now = Date.now();
     if(_refreshUserListInFlight) return _refreshUserListInFlight;
-    if(now - _refreshUserListAt < 2000) return { ok:true, skipped:true };
+    if(now - _refreshUserListAt < 800) return { ok:true, skipped:true };
     _refreshUserListAt = now;
 
     _refreshUserListInFlight = (async ()=>{
