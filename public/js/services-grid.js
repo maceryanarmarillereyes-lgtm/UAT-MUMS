@@ -153,18 +153,6 @@
     return value || '';
   }
 
-  function evaluateConditionalFormat(row, columns) {
-    var safeRow = row || {};
-    var data = safeRow.data || {};
-    var status = String(data.status || '');
-    var tracking = String(data.tracking_case_progress || '');
-
-    if (status.includes('Waiting') || tracking === 'Mace Ryan Reyes') {
-      return { match: true, ruleId: 'waiting', color: '#2d1b0e' };
-    }
-    return { match: false };
-  }
-
   function clear() {
     DuplicateDetector.clear();
     current = null;
@@ -297,6 +285,15 @@
     caseTd.appendChild(plainInp);
   }
 
+  function requestConditionalFormatPaint() {
+    if (!window.svcConditionalFormat || typeof window.svcConditionalFormat.paint !== 'function') return;
+    requestAnimationFrame(function () {
+      if (window.svcConditionalFormat && typeof window.svcConditionalFormat.paint === 'function') {
+        window.svcConditionalFormat.paint();
+      }
+    });
+  }
+
   function applyRowToGrid(row) {
     if (!current || !row) return;
     // ★ BUG1 FIX: When a realtime UPDATE marks _qb_ack=true for a pending row,
@@ -329,6 +326,8 @@
       tr.classList.add('qb-updated');
       setTimeout(function () { tr.classList.remove('qb-updated'); }, 650);
     }
+    // Re-apply dynamic conditional formatting after realtime single-row updates.
+    requestConditionalFormatPaint();
   }
 
   function mkEl(tag, props, parent) {
@@ -799,26 +798,12 @@
       var rowData = (isFilteredView || isSorted)
         ? (viewRows[i] || { row_index: i, data: {} })
         : (current.rows.find(function (r) { return r.row_index === i; }) || { row_index: i, data: {} });
-      // FIX-CF-ROW-HL: Always re-evaluate on each render() — removed stale cache
-      // guard (typeof _cfMatch === 'undefined'). The old guard meant that once a
-      // row was evaluated it was never re-checked, so CF rule changes made after
-      // the first render would be ignored until a full page reload. Re-evaluating
-      // each render is safe and negligible perf impact (~519 simple fn calls).
-      var cf = evaluateConditionalFormat(rowData, current.sheet.column_defs || []);
-      rowData._cfMatch = !!cf.match;
-      rowData._cfRuleId = cf.ruleId || '';
-      rowData._cfColor = cf.color || '';
       var rowIndex = Number.isFinite(rowData.row_index) ? rowData.row_index : i;
       var tr = mkEl('tr', { className: 'grid-row' }, tbody);
       tr.dataset.row = String(rowIndex);
-      if (rowData._cfMatch) {
-        tr.setAttribute('data-cf-applied', 'true');
-        tr.setAttribute('data-cf-rule', rowData._cfRuleId);
-        tr.style.setProperty('--cf-bg', rowData._cfColor);
-      } else {
-        tr.removeAttribute('data-cf-applied');
-        tr.removeAttribute('data-cf-rule');
-      }
+      // Keep immutable DB id on the row so conditional-format paint can map
+      // correctly even when view order changes due to sort/filter/tree views.
+      if (rowData && rowData.id != null) tr.dataset.rowId = String(rowData.id);
       var rowNumTd = mkEl('td', {
         className: 'row-num',
         // BUG1 FIX: Display sequential position (i+1) not row_index+1.
@@ -1098,6 +1083,9 @@
       };
       wrap.addEventListener('scroll', wrap._qbScrollHandler, { passive: true });
     })();
+
+    // Ensure every render cycle ends with conditional formatting paint after DOM rebuild.
+    requestConditionalFormatPaint();
   }
 
   function attachCellHandlers() {
