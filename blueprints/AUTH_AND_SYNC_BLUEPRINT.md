@@ -51,3 +51,7 @@ This layer is the platform backbone: session lifecycle, user hydration, local st
   - **Edit — `public/js/app.js` + `public/js/pause-session-manager.js`:** Boot now initializes `PauseSessionManager` for all authenticated users; manager enforces idle timer, kills realtime channels, stops polling/fetch activity, and shows a blocking resume overlay.
   - **Edit — `public/js/realtime.js` + `public/js/presence_watchdog.js` + `public/js/sync_status_ui.js`:** Exposed realtime client/channel teardown hooks, added watchdog `stop()` API, and paused sync-status debounced transitions while session is paused.
 
+- **2026-04-25** — Pause Session timeout + cross-tab consistency hardening.
+  - **Edit — `server/routes/settings/pause_session.js`:** Extended allowed timeout values to include `1` minute for both normalization and validation error messaging.
+  - **Edit — `public/index.html`:** Added `1 minute` option in Pause Session timeout selector.
+  - **Edit — `public/js/pause-session-manager.js`:** Added cross-tab activity synchronization using `BroadcastChannel('mums_activity')` + `localStorage` activity key replication, shortened idle checker cadence to 15s, and broadcast pause/resume events across tabs while preserving existing pause teardown behavior.
