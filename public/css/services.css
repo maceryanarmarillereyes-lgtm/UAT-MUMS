@@ -2618,38 +2618,38 @@ input.cell.cell-qb-not-found {
   text-overflow: ellipsis;
 }
 .cf-rule-del-btn {
-  background: none;
-  border: none;
-  color: #374151;
+  background: rgba(248,113,113,0.14);
+  border: 1px solid rgba(248,113,113,0.35);
+  color: #fda4af;
   cursor: pointer;
   font-size: 13px;
-  padding: 3px 5px;
-  border-radius: 5px;
-  opacity: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 7px;
   transition: all 0.15s;
   flex-shrink: 0;
 }
-.cf-rule-card:hover .cf-rule-del-btn { opacity: 1; }
-.cf-rule-del-btn:hover { background: rgba(248,113,113,0.2); color: #f87171; }
+.cf-rule-del-btn:hover { background: rgba(248,113,113,0.24); color: #fee2e2; transform: scale(1.04); }
 .cf-rule-order-btns {
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
 .cf-rule-order-btn {
-  background: none;
-  border: none;
-  color: #374151;
+  background: rgba(34,211,238,0.12);
+  border: 1px solid rgba(34,211,238,0.3);
+  color: #67e8f9;
   cursor: pointer;
   font-size: 10px;
-  padding: 1px 4px;
-  border-radius: 3px;
+  width: 28px;
+  height: 14px;
+  padding: 0;
+  border-radius: 4px;
   line-height: 1;
-  opacity: 0;
   transition: all 0.15s;
 }
-.cf-rule-card:hover .cf-rule-order-btn { opacity: 1; }
-.cf-rule-order-btn:hover { background: rgba(255,255,255,0.08); color: #94a3b8; }
+.cf-rule-order-btn:hover { background: rgba(34,211,238,0.2); color: #cffafe; transform: scale(1.04); }
 
 /* Empty state */
 .svc-cf-rules-empty {
@@ -2804,6 +2804,11 @@ input.cell.cell-qb-not-found {
   border-color: #fff;
   box-shadow: 0 0 0 2px rgba(34,211,238,0.5);
   transform: scale(1.1);
+}
+.cf-color-btn.active {
+  outline: 2px solid #22d3ee;
+  outline-offset: -2px;
+  box-shadow: 0 0 0 2px rgba(34,211,238,0.5), 0 0 14px rgba(34,211,238,0.28);
 }
 .svc-cf-custom-color {
   width: 28px; height: 28px;
@@ -3288,23 +3293,18 @@ input.cell.cell-qb-not-found {
 /* Row highlight: the row-num column gets a solid left accent bar via box-shadow
    (set inline by paintGrid). This CSS ensures the row-num td is position:relative
    so the accent renders correctly and provides the "active row" visual cue. */
-#svcGrid tbody tr[data-cf-row] td.row-num {
+#svcGrid tbody tr.cf-row-highlighted td {
+  background-color: var(--cf-row-bg, transparent) !important;
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+#svcGrid tbody tr.cf-row-highlighted td.row-num {
   position: relative;
   font-weight: 700;
   color: #e2e8f0;
+  box-shadow: inset 4px 0 0 var(--cf-row-accent, transparent) !important;
 }
-
-/* Data cells in highlighted rows: remove the default hover bg so CF bg wins */
-#svcGrid tbody tr[data-cf-row]:hover td:not(.row-num) {
-  /* box-shadow set by JS takes precedence over hover bg
-     — no override needed here, but reset hover background */
-  background: inherit;
-}
-
-/* When row is highlighted, make the row-num separator line tinted */
-#svcGrid tbody tr[data-cf-row] td {
-  /* transition for smooth paint/unpaint */
-  transition: background 0.12s ease, box-shadow 0.12s ease;
+#svcGrid tbody tr.cf-row-highlighted:hover td:not(.row-num) {
+  background-color: var(--cf-row-bg, transparent) !important;
 }
 
 /* 2. CONDITIONAL FORMATTING - medium priority (overrides zebra) */
