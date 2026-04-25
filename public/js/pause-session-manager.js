@@ -4,12 +4,13 @@
   const CONFIG_KEY = 'mums_pause_config';
   const SESSION_KEY = 'mums_supabase_session';
   const DEFAULT_CONFIG = { enabled: true, timeout_minutes: 10 };
-  const ALLOWED_TIMEOUTS = new Set([5,10,30,60]);
+  const ALLOWED_TIMEOUTS = new Set([1,5,10,30,60]); // ADDED 1
 
   class PauseSessionManager {
     constructor(){
       this.config = this._loadCachedConfig();
-      this.lastActivity = Date.now();
+      this.lastActivityKey = 'mums_last_activity';
+      this.lastActivity = Number(localStorage.getItem(this.lastActivityKey) || Date.now());
       this.checkerTimer = null;
       this.activityHandler = this._onActivity.bind(this);
       this._eventsBound = false;
@@ -22,11 +23,13 @@
       ];
       this.userRole = this._getCurrentRole();
       this._loadConfigPromise = null;
+      this.channel = new BroadcastChannel('mums_activity');
     }
 
     async init(){
       await this.loadConfig();
       this._bindSettingsPanel();
+      this._setupCrossTab();
       if (this.config && this.config.enabled) {
         this._bindActivityListeners();
         this._startChecker();
@@ -58,6 +61,9 @@
       if (this._paused) return;
       this._paused = true;
       window.__MUMS_PAUSED = true;
+
+      // Broadcast to other tabs
+      try { this.channel.postMessage({type:'pause'}); } catch(_){}
 
       this._unbindActivityListeners();
       if (this.checkerTimer) {
@@ -138,7 +144,33 @@
       try { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); } catch (_) {}
     }
 
-    _onActivity(){ this.lastActivity = Date.now(); }
+    _onActivity(){ 
+      const now = Date.now();
+      this.lastActivity = now;
+      try { localStorage.setItem(this.lastActivityKey, String(now)); } catch(_){}
+      try { this.channel.postMessage({type:'activity', ts: now}); } catch(_){}
+    }
+
+    _setupCrossTab(){
+      this.channel.onmessage = (e) => {
+        if (!e.data) return;
+        if (e.data.type === 'activity') {
+          this.lastActivity = Number(e.data.ts) || Date.now();
+          try { localStorage.setItem(this.lastActivityKey, String(this.lastActivity)); } catch(_){}
+        }
+        if (e.data.type === 'pause') {
+          this._showOverlay();
+        }
+        if (e.data.type === 'resume') {
+          this._resumeFromBroadcast();
+        }
+      };
+      window.addEventListener('storage', (e) => {
+        if (e.key === this.lastActivityKey) {
+          this.lastActivity = Number(e.newValue || Date.now());
+        }
+      });
+    }
 
     _bindActivityListeners(){
       if (this._eventsBound) return;
@@ -146,7 +178,7 @@
       ['mousemove','keydown','scroll','touchstart'].forEach((evt)=>{
         window.addEventListener(evt, this.activityHandler, { passive: true });
       });
-      this.lastActivity = Date.now();
+      this._onActivity();
     }
 
     _unbindActivityListeners(){
@@ -161,11 +193,12 @@
       if (this.checkerTimer) clearInterval(this.checkerTimer);
       this.checkerTimer = setInterval(()=>{
         if (!this.config || !this.config.enabled || this._paused) return;
+        const last = Number(localStorage.getItem(this.lastActivityKey) || this.lastActivity || Date.now());
         const timeoutMs = Number(this.config.timeout_minutes || 10) * 60000;
-        if ((Date.now() - this.lastActivity) > timeoutMs) {
+        if ((Date.now() - last) > timeoutMs) {
           this.pause();
         }
-      }, 30000);
+      }, 15000);
     }
 
     _showOverlay(){
@@ -179,9 +212,20 @@
       btn.type = 'button';
       btn.textContent = 'Return to Session';
       btn.setAttribute('style', 'height:42px;padding:0 22px;border-radius:10px;border:1px solid rgba(56,189,248,.45);background:linear-gradient(135deg,#0ea5e9,#22d3ee);color:#082f49;font-weight:800;cursor:pointer;');
-      btn.onclick = function(){ location.reload(); };
+      btn.onclick = () => {
+        try { this.channel.postMessage({type:'resume'}); } catch(_){}
+        this._resumeFromBroadcast();
+      };
       overlay.appendChild(btn);
       document.body.appendChild(overlay);
+    }
+
+    _resumeFromBroadcast(){
+      this._paused = false;
+      window.__MUMS_PAUSED = false;
+      document.getElementById('mums-pause-overlay')?.remove();
+      this._onActivity();
+      location.reload();
     }
 
     _blockFetches(){
@@ -276,7 +320,7 @@
           if (res.ok && data && data.ok && data.settings) {
             this.config = this._normalizeConfig(data.settings);
             this._saveCachedConfig(this.config);
-            this.lastActivity = Date.now();
+            this._onActivity();
             if (statusEl) {
               statusEl.textContent = '✓ Pause session settings saved.';
               statusEl.style.opacity = '1';

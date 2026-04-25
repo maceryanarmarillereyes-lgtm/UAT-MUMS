@@ -2,7 +2,7 @@ const { getUserFromJwt, getProfileForUserId } = require('../../lib/supabase');
 const { serviceSelect, serviceUpsert } = require('../../lib/supabase');
 
 const SETTING_KEY = 'pause_session';
-const ALLOWED_TIMEOUTS = new Set([5, 10, 30, 60]);
+const ALLOWED_TIMEOUTS = new Set([1, 5, 10, 30, 60]);
 const DEFAULT_SETTINGS = Object.freeze({ enabled: true, timeout_minutes: 10 });
 
 function sendJson(res, statusCode, body) {
@@ -136,7 +136,7 @@ module.exports = async (req, res) => {
       return sendJson(res, 400, {
         ok: false,
         error: 'invalid_timeout',
-        message: 'timeout_minutes must be one of: 5, 10, 30, 60.'
+        message: 'timeout_minutes must be one of: 1, 5, 10, 30, 60.'
       });
     }
 
