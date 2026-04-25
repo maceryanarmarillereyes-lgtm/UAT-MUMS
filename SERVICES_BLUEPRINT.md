@@ -191,6 +191,9 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-25 (Pause Session network suppression guard):**
+  - **Edit — `public/js/services-sheet-manager.js`:** Added `window.__MUMS_PAUSED` guard at the start of sheet-list debounced realtime refresh so Services sidebar sync requests do not fire while idle pause is active.
+  - **Behavior contract update:** Services sheet realtime refresh now hard-stops during global Pause Session mode and resumes only after full page reload.
 - **2026-04-23 (Services grid filter/search rollback to column-filter-only):**
   - **Edit — `public/js/services-grid.js`:** Removed `searchAllFolders(query)` and deleted the Global Search Controller block (`initGlobalSearch`, result rendering, search input wiring, clear-filter toolbar button integration) from the Services grid module.
   - **Edit — `public/js/services-grid.js`:** Removed public filter/search helpers `setColumnFilter`, `setGlobalSearch`, `clearAllFilters`, and `getFilterState` from module scope and from `window.servicesGrid` exports.
