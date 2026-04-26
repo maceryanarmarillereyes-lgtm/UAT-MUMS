@@ -18,7 +18,6 @@
     { perm:'view_master_schedule', label:'Master Schedule', icon:'📅', href:'#master_schedule', desc:'View team master schedule blocks.' },
     { perm:'create_users', label:'User Management', icon:'👤', href:'#users', desc:'Manage users and their profiles.' },
     { perm:'manage_announcements', label:'Announcements', icon:'📣', href:'#announcements', desc:'Publish announcements to teams.' },
-    { perm:'view_dashboard', label:'My Notes', icon:'📝', href:'#', desc:'Open My Notes Command Center Pro.', action:'my_notes' },
   ].filter(i=>extras.includes(i.perm));
 
   root.innerHTML = `
@@ -32,10 +31,10 @@
     ${items.length ? `
       <div class="cards" style="grid-template-columns:repeat(3, minmax(0,1fr));margin-top:12px">
         ${items.map(i=>`
-          <a class="card" href="${i.href}" data-action="${i.action||''}" style="text-decoration:none">
+          <a class="card" href="${i.href}" style="text-decoration:none">
             <div class="row" style="justify-content:space-between;align-items:center">
               <div style="font-weight:900">${UI.esc(i.label)}</div>
-              <div style="font-size:18px">${i.action==='my_notes' ? '<img src="public/Widget Images/MY_NOTES.png" alt="My Notes" style="width:18px;height:18px;object-fit:contain;border-radius:3px" />' : i.icon}</div>
+              <div style="font-size:18px">${i.icon}</div>
             </div>
             <div class="small muted" style="margin-top:8px">${UI.esc(i.desc)}</div>
           </a>
@@ -47,12 +46,4 @@
       </div>
     `}
   `;
-
-  root.querySelectorAll('[data-action="my_notes"]').forEach(el=>{
-    el.addEventListener('click', (ev)=>{
-      ev.preventDefault();
-      window.MyNotesCommandCenter?.open?.();
-    });
-  });
-
 });

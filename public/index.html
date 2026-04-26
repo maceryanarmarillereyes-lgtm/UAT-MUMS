@@ -75,14 +75,9 @@
         </div>
       </div>
       <div class="topbar-actions">
-        <!-- My Notes Button -->
-        <button class="btn ghost iconbtn" id="myNotesTopBtn" type="button" title="My Notes" aria-label="My Notes" onclick="if(window.MyNotesCommandCenter&&window.MyNotesCommandCenter.open)window.MyNotesCommandCenter.open();">
-          <img src="public/Widget Images/MY_NOTES.png" alt="My Notes" style="width:16px;height:16px;object-fit:contain;border-radius:3px" />
-        </button>
-
         <!-- Release Notes Button -->
         <button class="btn ghost iconbtn" id="releaseNotesBtn" type="button" title="Release Notes" aria-label="Release Notes" style="position:relative" onclick="if(window.__mumsOpenReleaseNotes)window.__mumsOpenReleaseNotes();">
-          <img src="public/Widget Images/MY_NOTES.png" alt="My Notes" style="width:16px;height:16px;object-fit:contain;border-radius:3px" />
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
           <span class="rn-new-dot" id="rnNewDot" style="display:none;position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:#22d3ee;box-shadow:0 0 6px rgba(34,211,238,.7)"></span>
         </button>
 
@@ -1430,7 +1425,6 @@
 
   <script src="/js/env_runtime.js?v=p1-664"></script>
   <script src="/js/remote_patch.js?v=p1-664"></script>
-  <script src="/js/my-notes.js?v=p1-664" defer></script>
   <script>
     // Load Supabase UMD as a first-party script when possible.
     //
