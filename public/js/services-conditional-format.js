@@ -1,3 +1,11 @@
+/* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
+   Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
+   Database/API Adapters · Tab Isolation · Virtual Column State ·
+   QuickBase Settings Persistence · Auth Flow.
+   DO NOT modify any existing logic, layout, or structure in this file without
+   first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
+   Violations will cause regressions. When in doubt — STOP and REPORT. */
+
 /**
  * services-conditional-format.js — v1.0
  * Conditional Formatting engine for Services Workspace (MUMS).
@@ -319,23 +327,24 @@
       if (badge) badge.remove();
     });
     // Also clear row-level highlights set on <tr>
-    grid.querySelectorAll('tr[data-cf-row]').forEach(function (tr) {
+    grid.querySelectorAll('tr.cf-row-highlighted, tr[data-cf-row]').forEach(function (tr) {
       tr.removeAttribute('data-cf-row');
-      tr.querySelectorAll('td').forEach(function (td) {
-        td.style.removeProperty('background');
-        td.style.removeProperty('border-top');
-        td.style.removeProperty('border-bottom');
-        td.style.removeProperty('border-left');
-        td.style.removeProperty('box-shadow');
-        var inp = td.querySelector('input.cell');
-        if (inp) {
-          inp.style.removeProperty('color');
-          inp.style.removeProperty('font-weight');
-          inp.style.removeProperty('font-style');
-          inp.style.removeProperty('text-decoration');
-          // BUG1 FIX: Do NOT restore cell-qb-linked — neutralized, no restore needed
-          inp.dataset.cfQbStripped = '';
+      tr.classList.remove('cf-row-highlighted');
+      tr.style.removeProperty('--cf-row-bg');
+      tr.style.removeProperty('--cf-row-accent');
+      var rowId = tr.dataset.rowId || '';
+      if (rowId) {
+        var prev = rows.find(function (r) { return r && r.id != null && String(r.id) === String(rowId); });
+        if (prev) {
+          delete prev.__cfRowBg;
         }
+      }
+      tr.querySelectorAll('td input.cell').forEach(function (inp) {
+        inp.style.removeProperty('color');
+        inp.style.removeProperty('font-weight');
+        inp.style.removeProperty('font-style');
+        inp.style.removeProperty('text-decoration');
+        inp.dataset.cfQbStripped = '';
       });
     });
 
@@ -365,6 +374,7 @@
       rows.forEach(function (row, rowPos) {
         if (!row || !row.data) return;
         var rowIdx = row.row_index != null ? row.row_index : rowPos;
+        var rowIdKey = row && row.id != null ? String(row.id) : ('idx:' + String(rowIdx));
         var cellValue = row.data[col.key] != null ? row.data[col.key] : '';
         var cellStr = String(cellValue).trim();
 
@@ -395,8 +405,9 @@
             if (matched) {
               if (rule.highlightRow) {
                 // Queue row-level highlight — applied after per-cell loop
-                if (!rowHighlights[rowIdx]) {
-                  rowHighlights[rowIdx] = {
+                if (!rowHighlights[rowIdKey]) {
+                  rowHighlights[rowIdKey] = {
+                    rowIndex: rowIdx,
                     bgColor: rule.bgColor || '',
                     textColor: rule.textColor || '',
                     bold: !!rule.bold,
@@ -471,16 +482,14 @@
     // ── Apply row-level highlights ──────────────────────────────────────────
     // Uses semi-transparent fill (enterprise look) + left accent bar on row-num
     // Grid lines are preserved via explicit box-shadow reinforcement
-    Object.keys(rowHighlights).forEach(function (rowIdxStr) {
-      var rowIdx = parseInt(rowIdxStr, 10);
-      var hl = rowHighlights[rowIdx];
-
-      // Find the <tr> that contains this row's cells
-      var anyCell = grid.querySelector('td input.cell[data-row="'+rowIdx+'"]');
-      if (!anyCell) return;
-      var tr = anyCell.closest('tr');
+    Object.keys(rowHighlights).forEach(function (rowKey) {
+      var hl = rowHighlights[rowKey];
+      var tr = grid.querySelector('tr[data-row-id="' + rowKey + '"]');
+      if (!tr && typeof hl.rowIndex !== 'undefined') {
+        tr = grid.querySelector('tr[data-row="' + hl.rowIndex + '"]');
+      }
       if (!tr) return;
-
+      tr.classList.add('cf-row-highlighted');
       tr.setAttribute('data-cf-row', '1');
 
       // ── Compute semi-transparent background (35% opacity) ─────────────────
@@ -490,57 +499,34 @@
       // ── Accent color for the left bar ─────────────────────────────────────
       var accentColor = hl.borderColor || hl.bgColor || '';
 
-      // Paint ALL td in this row
-      var tds = tr.querySelectorAll('td');
-      tds.forEach(function (td, tdIdx) {
-        if (td.classList.contains('row-num')) {
-          // Row number cell: solid left accent bar + subtle fill
-          // FIX-CF-ROW-HL: Use setProperty + 'important' so inline style wins
-          // over CSS specificity from .svc-grid tbody tr[data-cf-applied="true"]
-          // and other !important rules that could override the row highlight color.
-          if (accentColor) {
-            td.style.setProperty('box-shadow', 'inset 4px 0 0 ' + accentColor, 'important');
-          }
-          if (semiBg) {
-            td.style.setProperty('background', semiBg, 'important');
-          }
-          return;
-        }
+      // Persist row-level color metadata so services-grid render() can stamp it on the next tbody rebuild.
+      tr.style.setProperty('--cf-row-bg', semiBg || 'transparent');
+      var rowRef = rows.find(function (r) {
+        if (!r) return false;
+        if (r.id != null && String(r.id) === rowKey) return true;
+        return String('idx:' + String(r.row_index)) === rowKey;
+      });
+      if (rowRef) rowRef.__cfRowBg = semiBg || '';
+      if (accentColor) tr.style.setProperty('--cf-row-accent', accentColor);
 
-        // Data cells: semi-transparent fill + faint bottom/right borders preserved
-        td.setAttribute('data-cf-applied', '1');
-        if (semiBg) {
-          // FIX-CF-ROW-HL: Use setProperty + 'important' so user-defined row
-          // highlight color wins over any competing CSS !important rules.
-          td.style.setProperty('background', semiBg, 'important');
+      tr.querySelectorAll('td input.cell').forEach(function (inp) {
+        if (hl.textColor) {
+          inp.style.setProperty('color', hl.textColor, 'important');
+        } else if (hl.bgColor) {
+          var luminance = (function (hex) {
+            var c = hex.replace('#','');
+            if (c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+            var r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);
+            return (0.299*r+0.587*g+0.114*b)/255;
+          })(hl.bgColor);
+          inp.style.setProperty('color', luminance > 0.55 ? '#1e293b' : '#f1f5f9', 'important');
         }
-        // Reinforce grid lines so they stay visible over colored background
-        // Uses box-shadow instead of border overrides (non-destructive)
-        td.style.setProperty('box-shadow', [
-          'inset -1px 0 0 rgba(148,163,184,0.18)',   // right divider
-          'inset 0 -1px 0 rgba(148,163,184,0.18)'    // bottom divider
-        ].join(', '), 'important');
-
-        var inp = td.querySelector('input.cell');
-        if (inp) {
-          if (hl.textColor) {
-            inp.style.setProperty('color', hl.textColor, 'important');
-          } else if (hl.bgColor) {
-            var luminance = (function (hex) {
-              var c = hex.replace('#','');
-              if (c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
-              var r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);
-              return (0.299*r+0.587*g+0.114*b)/255;
-            })(hl.bgColor);
-            inp.style.setProperty('color', luminance > 0.55 ? '#1e293b' : '#f1f5f9', 'important');
-          }
-          inp.style.setProperty('font-weight', hl.bold   ? '700'    : 'normal',  'important');
-          inp.style.setProperty('font-style',  hl.italic ? 'italic' : 'normal',  'important');
-          var dec2 = [];
-          if (hl.strikethrough) dec2.push('line-through');
-          if (hl.underline)     dec2.push('underline');
-          inp.style.setProperty('text-decoration', dec2.join(' ') || 'none', 'important');
-        }
+        inp.style.setProperty('font-weight', hl.bold ? '700' : 'normal', 'important');
+        inp.style.setProperty('font-style', hl.italic ? 'italic' : 'normal', 'important');
+        var dec2 = [];
+        if (hl.strikethrough) dec2.push('line-through');
+        if (hl.underline) dec2.push('underline');
+        inp.style.setProperty('text-decoration', dec2.join(' ') || 'none', 'important');
       });
     });
   }
@@ -683,15 +669,16 @@
       mkEl('div', { className: 'cf-rule-cond', textContent: getRuleLabel(rule) }, meta);
       mkEl('div', { className: 'cf-rule-preview', textContent: getRulePreview(rule) }, meta);
 
-      // Order buttons
-      var orderWrap = mkEl('div', { className: 'cf-rule-order-btns' }, card);
+      // Rule actions (always visible for touch + dark theme accessibility)
+      var actionWrap = mkEl('div', { className: 'cf-rule-actions' }, card);
+      var orderWrap = mkEl('div', { className: 'cf-rule-order-btns' }, actionWrap);
       var upBtn = mkEl('button', { className: 'cf-rule-order-btn', textContent: '▲', title: 'Move up' }, orderWrap);
       var dnBtn = mkEl('button', { className: 'cf-rule-order-btn', textContent: '▼', title: 'Move down' }, orderWrap);
       upBtn.disabled = idx === 0;
       dnBtn.disabled = idx === _state.rules.length - 1;
 
       // Delete button
-      var delBtn = mkEl('button', { className: 'cf-rule-del-btn', textContent: '✕', title: 'Delete rule' }, card);
+      var delBtn = mkEl('button', { className: 'cf-rule-del-btn', textContent: '✕', title: 'Delete rule' }, actionWrap);
 
       // Events
       card.addEventListener('click', function (e) {
@@ -1194,7 +1181,7 @@
   function renderSwatches(container, palette, currentHex, onChange, allowNone) {
     if (allowNone) {
       var noneBtn = mkEl('div', {
-        className: 'svc-cf-swatch' + (!currentHex ? ' cf-swatch-active' : ''),
+        className: 'svc-cf-swatch cf-color-btn' + (!currentHex ? ' cf-swatch-active active' : ''),
         title: 'None',
         style: 'background:transparent;border:1.5px dashed rgba(148,163,184,0.3);position:relative;'
       }, container);
@@ -1203,7 +1190,7 @@
     }
     palette.forEach(function (hex) {
       var sw = mkEl('div', {
-        className: 'svc-cf-swatch' + (hex === currentHex ? ' cf-swatch-active' : ''),
+        className: 'svc-cf-swatch cf-color-btn' + (hex === currentHex ? ' cf-swatch-active active' : ''),
         style: 'background:' + hex + ';',
         title: hex
       }, container);
@@ -1433,27 +1420,8 @@
       setTimeout(hookGridRender, 200);
       return;
     }
-    // Guard: only hook once — prevents double-wrapping on hot reload
     if (window.servicesGrid._cfHooked) return;
     window.servicesGrid._cfHooked = true;
-
-    var origLoad = window.servicesGrid.load;
-    window.servicesGrid.load = async function (sheet) {
-      try { await origLoad.call(this, sheet); } catch (e) { throw e; }
-      setTimeout(paintGrid, 80); // allow DOM settle after async load
-    };
-
-    var origRender = window.servicesGrid.render;
-    window.servicesGrid.render = function () {
-      origRender.call(this);
-      // FIX-CF-ROW-HL: Use requestAnimationFrame instead of setTimeout(50).
-      // render() does grid.innerHTML='' (full DOM rebuild), wiping all inline CF
-      // styles. rAF fires on the very next browser paint frame (~16ms) instead of
-      // 50ms later, eliminating the "flash then disappear" visual artifact where
-      // row highlights briefly vanish after every render call (sort, filter, resize,
-      // realtime updates, etc.).
-      requestAnimationFrame(paintGrid);
-    };
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
@@ -1464,6 +1432,12 @@
     open: openModal,
     paint: paintGrid,
     close: closeModal
+  };
+
+  // Test hooks for node/jsdom harness (no impact on production runtime behavior).
+  window.__svcCfTest = {
+    evalRule: evalRule,
+    renderSwatches: renderSwatches
   };
 
   // Hook in after grid is ready

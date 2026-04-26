@@ -1,3 +1,11 @@
+/* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
+   Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
+   Database/API Adapters · Tab Isolation · Virtual Column State ·
+   QuickBase Settings Persistence · Auth Flow.
+   DO NOT modify any existing logic, layout, or structure in this file without
+   first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
+   Violations will cause regressions. When in doubt — STOP and REPORT. */
+
 /* ============ ROOT TOKENS ============ */
 :root {
   --svc-bg: #0B1220;
@@ -2618,38 +2626,48 @@ input.cell.cell-qb-not-found {
   text-overflow: ellipsis;
 }
 .cf-rule-del-btn {
-  background: none;
-  border: none;
-  color: #374151;
+  background: rgba(248,113,113,0.14);
+  border: 1px solid rgba(248,113,113,0.45);
+  color: #fca5a5;
   cursor: pointer;
   font-size: 13px;
-  padding: 3px 5px;
-  border-radius: 5px;
-  opacity: 0;
-  transition: all 0.15s;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  opacity: 1;
+  transition: transform 0.12s ease, background 0.12s ease;
   flex-shrink: 0;
 }
-.cf-rule-card:hover .cf-rule-del-btn { opacity: 1; }
-.cf-rule-del-btn:hover { background: rgba(248,113,113,0.2); color: #f87171; }
+.cf-rule-del-btn:hover { background: rgba(248,113,113,0.24); color: #fecaca; transform: scale(1.05); }
+.cf-rule-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .cf-rule-order-btns {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
 }
 .cf-rule-order-btn {
-  background: none;
-  border: none;
-  color: #374151;
+  background: rgba(34,211,238,0.12);
+  border: 1px solid rgba(34,211,238,0.3);
+  color: #67e8f9;
   cursor: pointer;
   font-size: 10px;
-  padding: 1px 4px;
-  border-radius: 3px;
+  width: 28px;
+  height: 13px;
+  border-radius: 4px;
   line-height: 1;
-  opacity: 0;
-  transition: all 0.15s;
+  opacity: 1;
+  transition: transform 0.12s ease, background 0.12s ease;
 }
-.cf-rule-card:hover .cf-rule-order-btn { opacity: 1; }
-.cf-rule-order-btn:hover { background: rgba(255,255,255,0.08); color: #94a3b8; }
+.cf-rule-order-btn:hover { background: rgba(34,211,238,0.2); color: #a5f3fc; transform: scale(1.06); }
+.cf-rule-order-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}
 
 /* Empty state */
 .svc-cf-rules-empty {
@@ -2804,6 +2822,11 @@ input.cell.cell-qb-not-found {
   border-color: #fff;
   box-shadow: 0 0 0 2px rgba(34,211,238,0.5);
   transform: scale(1.1);
+}
+.cf-color-btn.active {
+  outline: 2px solid var(--svc-accent, #22d3ee);
+  outline-offset: -2px;
+  box-shadow: 0 0 0 2px rgba(34,211,238,0.55), inset 0 0 0 1px rgba(255,255,255,0.85);
 }
 .svc-cf-custom-color {
   width: 28px; height: 28px;
@@ -3292,6 +3315,15 @@ input.cell.cell-qb-not-found {
   position: relative;
   font-weight: 700;
   color: #e2e8f0;
+}
+
+#svcGrid tbody tr.cf-row-highlighted td {
+  background-color: var(--cf-row-bg) !important;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+
+#svcGrid tbody tr.cf-row-highlighted td.row-num {
+  box-shadow: inset 4px 0 0 var(--cf-row-accent, rgba(34,211,238,0.9));
 }
 
 /* Data cells in highlighted rows: remove the default hover bg so CF bg wins */
