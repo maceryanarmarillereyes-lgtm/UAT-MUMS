@@ -46,3 +46,4 @@
 - **2026-04-20** — Initial core dashboard/operations blueprint created.
 - **2026-04-22** — Leave Monitor right-sidebar overflow handling updated: monitor body now scrolls independently while footer action buttons remain visible, with session scroll position persistence.
 - **2026-04-25** — Added My Notes Command Center Pro launch action in Commands page and global loader script (`/js/my-notes.js`) with local cache + Supabase sync fallback behavior.
+- **2026-04-26** — Restored Release Notes topbar icon and added a dedicated My Notes topbar action button (`myNotesTopBtn`) using `MY_NOTES.png` without changing release-notes behavior.
