@@ -1,4 +1,3 @@
-/* eslint-env node */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·
@@ -7,6 +6,7 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+/* eslint-env node */
 // server/routes/studio/qb_data.js
 // BATCH REFACTOR (MACE CLEARED 2026-04-19):
 //   ?recordId=X       — single-record fetch (unchanged)

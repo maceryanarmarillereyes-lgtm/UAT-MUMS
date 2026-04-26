@@ -1,3 +1,11 @@
+/* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
+   Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
+   Database/API Adapters · Tab Isolation · Virtual Column State ·
+   QuickBase Settings Persistence · Auth Flow.
+   DO NOT modify any existing logic, layout, or structure in this file without
+   first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
+   Violations will cause regressions. When in doubt — STOP and REPORT. */
+
 // server/routes/studio/ctl_lab_state.js
 // GET  /api/studio/ctl_lab_state  — load shared booking + queue state
 // POST /api/studio/ctl_lab_state  — patch booking/queue state for one controller

@@ -447,3 +447,6 @@ If step #3 is missing, task is incomplete.
   - **Patch — `functions/api/quickbase/bulk-lookup.js`:** Added QB object-value normalization (`name/email/display`) so User/List-User fields no longer surface as `[object Object]` in linked columns.
   - **Patch — `public/js/services-qb-lookup.js`:** Removed per-row `queuePersistRow()` calls during lookup paint and enforced one bulk `services_rows` upsert payload with `sheet_id`, `row_index`, `data`, and `updated_at`.
   - **Patch — `public/js/services-qb-lookup.js`:** UI paint now normalizes object values (`name/email`) before assigning `inp.value`, preventing `[object Object]` in grid cells.
+- **2026-04-26** — Applied `@AI_CRITICAL_GUARD v3.0` header normalization to guarded Services assets.
+  - **Edit — `public/css/services.css` + Services JS modules:** Ensured strict guard comment block is present at line 1 for critical Services workspace files to enforce MACE approval workflow before any future guarded modifications.
+  - **Touched:** `public/css/services.css`, `public/js/services.js`, `public/js/services-*.js` (backup/conditional-format/dashboard/grid/import/notify/qb-lookup/search/sheet-manager/supabase/treeview).
