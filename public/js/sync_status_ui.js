@@ -157,6 +157,7 @@
   }
 
   function scheduleMode(mode, detail){
+    if (window.__MUMS_PAUSED) return;
     mode = normalizeMode(mode);
     detail = String(detail || '');
     latestWanted = { mode: mode, detail: detail };

@@ -45,3 +45,16 @@ This layer is the platform backbone: session lifecycle, user hydration, local st
 
 ## Change log
 - **2026-04-20** — Initial auth/sync blueprint created.
+- **2026-04-25** — Added global Pause Session idle auto-pause framework across auth/sync stack.
+  - **New — `server/routes/settings/pause_session.js`:** Added authenticated GET + Super Admin POST endpoint for `pause_session` global setting (`enabled`, `timeout_minutes`) backed by `mums_global_settings`.
+  - **Edit — `api/handler.js` + `functions/api/[[path]].js`:** Registered dual-platform `/api/settings/pause-session` and `/api/settings/pause_session` router aliases.
+  - **Edit — `public/js/app.js` + `public/js/pause-session-manager.js`:** Boot now initializes `PauseSessionManager` for all authenticated users; manager enforces idle timer, kills realtime channels, stops polling/fetch activity, and shows a blocking resume overlay.
+  - **Edit — `public/js/realtime.js` + `public/js/presence_watchdog.js` + `public/js/sync_status_ui.js`:** Exposed realtime client/channel teardown hooks, added watchdog `stop()` API, and paused sync-status debounced transitions while session is paused.
+
+- **2026-04-25** — Pause Session timeout + cross-tab consistency hardening.
+  - **Edit — `server/routes/settings/pause_session.js`:** Extended allowed timeout values to include `1` minute for both normalization and validation error messaging.
+  - **Edit — `public/index.html`:** Added `1 minute` option in Pause Session timeout selector.
+  - **Edit — `public/js/pause-session-manager.js`:** Added cross-tab activity synchronization using `BroadcastChannel('mums_activity')` + `localStorage` activity key replication, shortened idle checker cadence to 15s, and broadcast pause/resume events across tabs while preserving existing pause teardown behavior.
+- **2026-04-25** — Pause Session save stability + cross-tab pause application fix.
+  - **Edit — `server/routes/settings/pause_session.js`:** Hardened request-body parsing for adapter-delivered object/byte payloads and normalized `enabled` boolean inputs (`true/false`, `1/0`, `on/off`) before validation to prevent false `400 invalid_enabled` rejects.
+  - **Edit — `public/js/pause-session-manager.js`:** Added safe `BroadcastChannel` initialization fallback, applied real pause state (`__MUMS_PAUSED`, fetch block, checker stop) when pause event is received from another tab, and surfaced API error message text in Save status for faster diagnostics.

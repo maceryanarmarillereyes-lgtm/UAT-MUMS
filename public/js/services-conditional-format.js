@@ -475,22 +475,18 @@
       var rowIdx = parseInt(rowIdxStr, 10);
       var hl = rowHighlights[rowIdx];
 
-      // FIX-6: Find <tr> by data-row-id (set in render() as tr.dataset.rowId = rowIndex).
-      // Previously used DOM querySelector('td input[data-row]') which is correct but
-      // we explicitly use tr[data-row-id] for clarity and to match the FIX-6 contract.
-      // This survives sort/filter because data-row-id is the stable DB row_index, not DOM position.
-      var tr = grid.querySelector('tbody tr[data-row="' + rowIdx + '"]');
-      if (!tr) {
-        // Fallback: try via cell data-row attribute (same result, belt+suspenders)
-        var anyCell = grid.querySelector('td input.cell[data-row="'+rowIdx+'"]');
-        if (anyCell) tr = anyCell.closest('tr');
-      }
+      // Find the <tr> that contains this row's cells
+      var anyCell = grid.querySelector('td input.cell[data-row="'+rowIdx+'"]');
+      if (!anyCell) return;
+      var tr = anyCell.closest('tr');
       if (!tr) return;
 
       tr.setAttribute('data-cf-row', '1');
 
-      // ── Compute semi-transparent background (13% opacity) ─────────────────
-      var semiBg = hl.bgColor ? hexToRgba(hl.bgColor, 0.13) : '';
+      // ── Compute semi-transparent background (35% opacity) ─────────────────
+      // FIX-CF-ROW-HL: Was 0.13 (13%) — nearly invisible on dark backgrounds.
+      // 0.35 (35%) is clearly visible while keeping the semi-transparent look.
+      var semiBg = hl.bgColor ? hexToRgba(hl.bgColor, 0.35) : '';
       // ── Accent color for the left bar ─────────────────────────────────────
       var accentColor = hl.borderColor || hl.bgColor || '';
 
@@ -499,11 +495,14 @@
       tds.forEach(function (td, tdIdx) {
         if (td.classList.contains('row-num')) {
           // Row number cell: solid left accent bar + subtle fill
+          // FIX-CF-ROW-HL: Use setProperty + 'important' so inline style wins
+          // over CSS specificity from .svc-grid tbody tr[data-cf-applied="true"]
+          // and other !important rules that could override the row highlight color.
           if (accentColor) {
-            td.style.boxShadow = 'inset 4px 0 0 ' + accentColor;
+            td.style.setProperty('box-shadow', 'inset 4px 0 0 ' + accentColor, 'important');
           }
           if (semiBg) {
-            td.style.background = semiBg;
+            td.style.setProperty('background', semiBg, 'important');
           }
           return;
         }
@@ -511,14 +510,16 @@
         // Data cells: semi-transparent fill + faint bottom/right borders preserved
         td.setAttribute('data-cf-applied', '1');
         if (semiBg) {
-          td.style.background = semiBg;
+          // FIX-CF-ROW-HL: Use setProperty + 'important' so user-defined row
+          // highlight color wins over any competing CSS !important rules.
+          td.style.setProperty('background', semiBg, 'important');
         }
         // Reinforce grid lines so they stay visible over colored background
         // Uses box-shadow instead of border overrides (non-destructive)
-        td.style.boxShadow = [
+        td.style.setProperty('box-shadow', [
           'inset -1px 0 0 rgba(148,163,184,0.18)',   // right divider
           'inset 0 -1px 0 rgba(148,163,184,0.18)'    // bottom divider
-        ].join(', ');
+        ].join(', '), 'important');
 
         var inp = td.querySelector('input.cell');
         if (inp) {
@@ -1191,17 +1192,6 @@
   }
 
   function renderSwatches(container, palette, currentHex, onChange, allowNone) {
-    // Track all swatch elements so we can update active state on click
-    // without calling renderEditor() (which would rebuild the whole panel).
-    var allSwatches = [];
-
-    function _updateActive(selectedHex) {
-      allSwatches.forEach(function (item) {
-        var isActive = item.hex === selectedHex || (!selectedHex && item.hex === '');
-        item.el.classList.toggle('cf-swatch-active', isActive);
-      });
-    }
-
     if (allowNone) {
       var noneBtn = mkEl('div', {
         className: 'svc-cf-swatch' + (!currentHex ? ' cf-swatch-active' : ''),
@@ -1209,30 +1199,15 @@
         style: 'background:transparent;border:1.5px dashed rgba(148,163,184,0.3);position:relative;'
       }, container);
       noneBtn.innerHTML = '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:10px;color:#475569;">∅</span>';
-      allSwatches.push({ el: noneBtn, hex: '' });
-      noneBtn.addEventListener('click', function () {
-        // FIX-1: Immediately update active class before calling onChange.
-        // onChange → syncDraftToRule → paintGrid (does NOT call renderEditor),
-        // so the palette DOM stays alive. Update active class in place.
-        _updateActive('');
-        onChange('');
-      });
+      noneBtn.addEventListener('click', function () { onChange(''); });
     }
-
     palette.forEach(function (hex) {
       var sw = mkEl('div', {
         className: 'svc-cf-swatch' + (hex === currentHex ? ' cf-swatch-active' : ''),
         style: 'background:' + hex + ';',
         title: hex
       }, container);
-      allSwatches.push({ el: sw, hex: hex });
-      sw.addEventListener('click', function () {
-        // FIX-1: Update active class in-place — no re-render needed.
-        // This fixes RC-1: selected swatch was never visually marked because
-        // the palette wasn't rebuilt after onClick (syncDraftToRule doesn't call renderEditor).
-        _updateActive(hex);
-        onChange(hex);
-      });
+      sw.addEventListener('click', function () { onChange(hex); });
     });
   }
 
@@ -1462,19 +1437,23 @@
     if (window.servicesGrid._cfHooked) return;
     window.servicesGrid._cfHooked = true;
 
-    // FIX-5: render() now directly calls svcConditionalFormat.paint() via rAF (in services-grid.js).
-    // We only need to hook load() here for the initial async sheet load paint.
-    // Wrapping render() here would cause double-paint (once from rAF in render(), once from here).
     var origLoad = window.servicesGrid.load;
     window.servicesGrid.load = async function (sheet) {
       try { await origLoad.call(this, sheet); } catch (e) { throw e; }
-      // Use rAF (not setTimeout) to be consistent with the render() hook pattern.
-      requestAnimationFrame(paintGrid);
+      setTimeout(paintGrid, 80); // allow DOM settle after async load
     };
 
-    // NOTE: render() hook removed — services-grid.js render() now calls
-    // requestAnimationFrame(svcConditionalFormat.paint) directly after innerHTML is set.
-    // This is more reliable than a patched wrapper and eliminates the 50ms race condition.
+    var origRender = window.servicesGrid.render;
+    window.servicesGrid.render = function () {
+      origRender.call(this);
+      // FIX-CF-ROW-HL: Use requestAnimationFrame instead of setTimeout(50).
+      // render() does grid.innerHTML='' (full DOM rebuild), wiping all inline CF
+      // styles. rAF fires on the very next browser paint frame (~16ms) instead of
+      // 50ms later, eliminating the "flash then disappear" visual artifact where
+      // row highlights briefly vanish after every render call (sort, filter, resize,
+      // realtime updates, etc.).
+      requestAnimationFrame(paintGrid);
+    };
   }
 
   /* ─────────────────────────────────────────────────────────────────────────

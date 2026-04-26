@@ -153,11 +153,17 @@
     return value || '';
   }
 
-  // FIX-4: evaluateConditionalFormat() REMOVED.
-  // All conditional formatting is exclusively handled by services-conditional-format.js
-  // paintGrid(). The old hardcoded function only checked for 'Waiting' status or
-  // 'Mace Ryan Reyes' tracking — it competed with dynamic rules and caused overwrites.
-  // See: RC-5 in analysis report.
+  function evaluateConditionalFormat(row, columns) {
+    var safeRow = row || {};
+    var data = safeRow.data || {};
+    var status = String(data.status || '');
+    var tracking = String(data.tracking_case_progress || '');
+
+    if (status.includes('Waiting') || tracking === 'Mace Ryan Reyes') {
+      return { match: true, ruleId: 'waiting', color: '#2d1b0e' };
+    }
+    return { match: false };
+  }
 
   function clear() {
     DuplicateDetector.clear();
@@ -258,8 +264,51 @@
     });
   }
 
+  // ★ BUG1 FIX: After ACK, removes ✓/✕ buttons and restores a plain read-only
+  // input showing the case number. Preserves all data-* attrs so cell lookups
+  // (applyRowToGrid, duplicate detector) continue to work correctly.
+  function _removeQbButtonsFromRow(tr, rowData) {
+    if (!tr) return;
+    var wrap = tr.querySelector('.svc-qb-case-cell-wrap');
+    if (!wrap) return;
+    var caseTd = wrap.parentNode;
+    if (!caseTd) return;
+    var existingInp = wrap.querySelector('input.cell');
+    // Prefer explicit _qb_case_num, fall back to whatever was in the input
+    var caseNum = ((rowData && rowData.data && rowData.data._qb_case_num)
+      ? String(rowData.data._qb_case_num)
+      : (existingInp ? existingInp.value : '')).trim();
+    var dataRow = existingInp ? existingInp.dataset.row  : '';
+    var dataKey = existingInp ? existingInp.dataset.key  : '';
+    var dataFmt = existingInp ? existingInp.dataset.format : 'auto';
+    var dataRaw = existingInp ? existingInp.dataset.raw   : caseNum;
+    // Swap wrapper out for a plain (read-only) input
+    caseTd.removeChild(wrap);
+    caseTd.classList.remove('svc-qb-case-col');
+    var plainInp = document.createElement('input');
+    plainInp.className    = 'cell';
+    plainInp.type         = 'text';
+    plainInp.value        = caseNum;
+    plainInp.readOnly     = true;
+    plainInp.dataset.row  = dataRow;
+    plainInp.dataset.key  = dataKey;
+    plainInp.dataset.format = dataFmt;
+    plainInp.dataset.raw  = dataRaw;
+    caseTd.appendChild(plainInp);
+  }
+
   function applyRowToGrid(row) {
     if (!current || !row) return;
+    // ★ BUG1 FIX: When a realtime UPDATE marks _qb_ack=true for a pending row,
+    // remove the action buttons and restore the plain cell immediately.
+    if (row.data && row.data._qb_ack === true) {
+      var ackTr = grid.querySelector('tbody tr[data-row="' + row.row_index + '"]');
+      if (ackTr && ackTr.classList.contains('svc-qb-row-pending')) {
+        ackTr.classList.remove('svc-qb-row-pending');
+        ackTr.classList.add('svc-qb-row-acked');
+        _removeQbButtonsFromRow(ackTr, row);
+      }
+    }
     (current.sheet.column_defs || []).forEach(function (c) {
       var inp = grid.querySelector('input.cell[data-row="' + row.row_index + '"][data-key="' + c.key + '"]');
       if (inp && document.activeElement !== inp) {
@@ -279,11 +328,6 @@
     if (tr) {
       tr.classList.add('qb-updated');
       setTimeout(function () { tr.classList.remove('qb-updated'); }, 650);
-    }
-    // FIX-5: Repaint CF after single-row update — realtime INSERT/UPDATE events
-    // call applyRowToGrid() instead of render(), so the rAF hook in render() never fires.
-    if (window.svcConditionalFormat && typeof window.svcConditionalFormat.paint === 'function') {
-      requestAnimationFrame(function () { window.svcConditionalFormat.paint(); });
     }
   }
 
@@ -755,24 +799,26 @@
       var rowData = (isFilteredView || isSorted)
         ? (viewRows[i] || { row_index: i, data: {} })
         : (current.rows.find(function (r) { return r.row_index === i; }) || { row_index: i, data: {} });
-      if (typeof rowData._cfMatch === 'undefined') {
-        // FIX-4+3: No more hardcoded evaluateConditionalFormat() call here.
-        // CF evaluation is exclusively done by services-conditional-format.js paintGrid().
-        // We only clear the stale _cfMatch cache so it doesn't block paintGrid().
-        rowData._cfMatch = false;
-        rowData._cfRuleId = '';
-        rowData._cfColor = '';
-      }
+      // FIX-CF-ROW-HL: Always re-evaluate on each render() — removed stale cache
+      // guard (typeof _cfMatch === 'undefined'). The old guard meant that once a
+      // row was evaluated it was never re-checked, so CF rule changes made after
+      // the first render would be ignored until a full page reload. Re-evaluating
+      // each render is safe and negligible perf impact (~519 simple fn calls).
+      var cf = evaluateConditionalFormat(rowData, current.sheet.column_defs || []);
+      rowData._cfMatch = !!cf.match;
+      rowData._cfRuleId = cf.ruleId || '';
+      rowData._cfColor = cf.color || '';
       var rowIndex = Number.isFinite(rowData.row_index) ? rowData.row_index : i;
       var tr = mkEl('tr', { className: 'grid-row' }, tbody);
-      // FIX-6: Set data-row-id so paintGrid() can look up by row_index (not DOM position).
-      // DOM position changes on sort/filter; row_index is stable and matches row.data.
       tr.dataset.row = String(rowIndex);
-      tr.dataset.rowId = String(rowIndex); // FIX-6: explicit rowId for CF module
-      // FIX-3: Do NOT set any inline CF styles here — paintGrid() owns that entirely.
-      // Clearing old attributes prevents stale hardcoded styles from blocking CF paint.
-      tr.removeAttribute('data-cf-applied');
-      tr.removeAttribute('data-cf-rule');
+      if (rowData._cfMatch) {
+        tr.setAttribute('data-cf-applied', 'true');
+        tr.setAttribute('data-cf-rule', rowData._cfRuleId);
+        tr.style.setProperty('--cf-bg', rowData._cfColor);
+      } else {
+        tr.removeAttribute('data-cf-applied');
+        tr.removeAttribute('data-cf-rule');
+      }
       var rowNumTd = mkEl('td', {
         className: 'row-num',
         // BUG1 FIX: Display sequential position (i+1) not row_index+1.
@@ -786,7 +832,69 @@
       rowNumTd.style.cssText = 'width:' + _rnWidth + 'px;min-width:' + _rnWidth + 'px;max-width:' + _rnWidth + 'px;';
       rowNumTd.dataset.rowIndex = rowIndex;
       rowNumTd.dataset.row = String(rowIndex);
-      cols.forEach(function (c) {
+
+      // ── QB-SENT ROW: blink + ACK/DELETE controls ─────────────────────────
+      // FIX: Buttons are created here but NOT appended to rowNumTd.
+      // They will be injected into the FIRST DATA COLUMN td (Case# column) below.
+      var _isQbSent = rowData.data && rowData.data._qb_sent === true;
+      var _isQbAck  = rowData.data && rowData.data._qb_ack  === true;
+      var _qbAckBtn = null, _qbDelBtn = null;
+      if (_isQbSent) {
+        // ★ BUG1 PERMANENT FIX: Only add pending class for unacknowledged rows.
+        // Acknowledged rows get the 'acked' class only — no buttons, no blink.
+        // Previously: buttons were ALWAYS created for _qb_sent rows, ACK btn just
+        // got disabled=true. On every refresh the buttons reappeared because the
+        // render loop always ran this block. Fix: skip button creation entirely
+        // when _isQbAck===true so acknowledged rows render as plain read-only cells.
+        tr.classList.add(_isQbAck ? 'svc-qb-row-acked' : 'svc-qb-row-pending');
+        tr.setAttribute('data-qb-sent-row', '1');
+
+        if (!_isQbAck) {
+          // ACK button (checkmark) — only for PENDING (not-yet-acknowledged) rows
+          _qbAckBtn = document.createElement('button');
+          _qbAckBtn.className = 'svc-qb-ack-btn';
+          _qbAckBtn.type = 'button';
+          _qbAckBtn.title = 'Acknowledge — clears highlight';
+          _qbAckBtn.innerHTML = '✓';
+          _qbAckBtn.addEventListener('click', async function(ev) {
+            ev.stopPropagation();
+            if (!window.servicesDB || !window.servicesDB.ackQbRow) return;
+            _qbAckBtn.disabled = true;
+            _qbAckBtn.textContent = '⏳';
+            try {
+              await window.servicesDB.ackQbRow(current.sheet.id, rowIndex);
+              tr.classList.remove('svc-qb-row-pending');
+              tr.classList.add('svc-qb-row-acked');
+              // Remove ✓/✕ buttons immediately — restores plain read-only cell
+              // Also update local row.data so next render() won't recreate buttons
+              var localRow = current.rows.find(function(r) { return r.row_index === rowIndex; });
+              if (localRow && localRow.data) localRow.data._qb_ack = true;
+              _removeQbButtonsFromRow(tr, rowData);
+            } catch (err) {
+              _qbAckBtn.textContent = '✓';
+              _qbAckBtn.disabled = false;
+              console.error('[services-grid] ackQbRow failed:', err);
+            }
+          });
+          // DELETE button (X) — only for PENDING rows
+          _qbDelBtn = document.createElement('button');
+          _qbDelBtn.className = 'svc-qb-del-btn';
+          _qbDelBtn.type = 'button';
+          _qbDelBtn.title = 'Remove this QB-sent case from the sheet';
+          _qbDelBtn.innerHTML = '✕';
+          _qbDelBtn.addEventListener('click', async function(ev) {
+            ev.stopPropagation();
+            if (!confirm('Remove Case# ' + (rowData.data._qb_case_num || '') + ' from this sheet?')) return;
+            if (!window.servicesDB || !window.servicesDB.deleteQbRow) return;
+            _qbDelBtn.disabled = true;
+            try {
+              await window.servicesDB.deleteQbRow(current.sheet.id, rowIndex);
+            } catch (_) { _qbDelBtn.disabled = false; }
+          });
+        }
+      }
+      // ── END QB-SENT ROW (buttons injected into first data col below) ───────
+      cols.forEach(function (c, _colIdx) {
         var td  = mkEl('td', null, tr);
         var savedWidth = Number(current.sheet.column_widths && current.sheet.column_widths[c.key]);
         if (savedWidth) {
@@ -884,6 +992,29 @@
           inp.style.color = '#64748b';
           inp.style.textAlign = 'center';
         }
+
+        // ── FIX: Inject ACK/DELETE buttons into FIRST DATA COLUMN (Case# col) ──
+        // Only for PENDING (unacknowledged) rows — _qbAckBtn/_qbDelBtn are null
+        // for acknowledged rows so this block is naturally skipped, but the
+        // !_isQbAck guard makes the intent explicit and prevents future regressions.
+        if (_isQbSent && !_isQbAck && _colIdx === 0 && _qbAckBtn && _qbDelBtn) {
+          // If the case number wasn't written to this column, show it via inp value
+          if (!inp.value && rowData.data._qb_case_num) {
+            inp.value = String(rowData.data._qb_case_num);
+            inp.dataset.raw = inp.value;
+          }
+          // Wrap input + buttons inside a flex container so they sit inline
+          var _qbCaseWrap = document.createElement('div');
+          _qbCaseWrap.className = 'svc-qb-case-cell-wrap';
+          // Move inp into wrapper (td → wrap → inp)
+          td.removeChild(inp);
+          _qbCaseWrap.appendChild(inp);
+          _qbCaseWrap.appendChild(_qbAckBtn);
+          _qbCaseWrap.appendChild(_qbDelBtn);
+          td.appendChild(_qbCaseWrap);
+          td.classList.add('svc-qb-case-col');
+        }
+        // ── END QB BUTTON INJECTION ─────────────────────────────────────────────
       });
     }
 
@@ -911,17 +1042,6 @@
     }
 
     refreshDuplicateIndicators();
-
-    // FIX-5: Always repaint conditional formatting after every render().
-    // render() rebuilds the entire tbody via appendChild — all inline styles are gone.
-    // Using requestAnimationFrame ensures the browser has committed the new DOM nodes
-    // before paintGrid() queries them. This replaces the fragile setTimeout(50) hook
-    // in services-conditional-format.js hookGridRender() which could miss fast renders.
-    if (window.svcConditionalFormat && typeof window.svcConditionalFormat.paint === 'function') {
-      requestAnimationFrame(function () {
-        window.svcConditionalFormat.paint();
-      });
-    }
 
     // ── Column resize ──────────────────────────────────────────────────────────
     // FIX-ALIGN: On filter switch the grid DOM is fully rebuilt (innerHTML replaced)

@@ -296,6 +296,10 @@
               <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
               <span class="ms-ni-text"><span class="ms-ni-name">Login Mode</span><span class="ms-ni-sub">Auth method control</span></span>
             </button>
+            <button class="ms-nav-item ms-admin-section" id="msNav_pausesession" data-panel="pausesession" type="button" style="display:none">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M10 9v6"/><path d="M14 9v6"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Pause Session</span><span class="ms-ni-sub">Idle auto-pause control</span></span>
+            </button>
             <button class="ms-nav-item ms-admin-section" id="msNav_mailboxstatus" data-panel="mailboxstatus" type="button" style="display:none">
               <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
               <span class="ms-ni-text"><span class="ms-ni-name">Mailbox Control</span><span class="ms-ni-sub">Enable / disable mailbox</span></span>
@@ -890,6 +894,50 @@
             </div>
           </div>
 
+          <!-- PANEL: Pause Session (Admin) -->
+          <div class="ms-panel ms-admin-section" id="msp_pausesession" data-panel="pausesession" style="display:none">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon ms-hero-icon--admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M10 9v6"/><path d="M14 9v6"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Pause Session</div><div class="ms-hero-desc">Automatically pause realtime and network activity after user idle timeout.</div></div>
+            </div>
+            <div class="ms-panel-body">
+              <div class="ms-ctrl-group">
+                <div class="ms-ctrl-group-label">Idle Auto-Pause</div>
+                <div class="ms-ctrl-row">
+                  <div class="ms-ctrl-label">
+                    <div class="ms-ctrl-name">Enable Pause Session</div>
+                    <div class="ms-ctrl-hint">When enabled, all Supabase realtime channels and network polling are stopped after inactivity.</div>
+                  </div>
+                  <div class="ms-ctrl-control">
+                    <label class="ms-toggle-wrap">
+                      <input type="checkbox" id="pause-enabled" class="ms-toggle-input" />
+                      <span class="ms-toggle-track"><span class="ms-toggle-thumb"></span></span>
+                    </label>
+                  </div>
+                </div>
+                <div class="ms-ctrl-row" style="margin-top:10px">
+                  <div class="ms-ctrl-label">
+                    <div class="ms-ctrl-name">Idle Timeout</div>
+                    <div class="ms-ctrl-hint">Pause trigger threshold in minutes.</div>
+                  </div>
+                  <div class="ms-ctrl-control">
+                    <select class="input" id="pause-timeout" style="min-width:130px">
+                      <option value="1">1 minute</option>
+                      <option value="5">5 minutes</option>
+                      <option value="10">10 minutes</option>
+                      <option value="30">30 minutes</option>
+                      <option value="60">60 minutes</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="ms-panel-actions">
+                <button class="btn primary" id="pause-save" type="button">Save</button>
+                <span id="pause-save-msg" class="small" style="opacity:0;transition:opacity .4s"></span>
+              </div>
+            </div>
+          </div>
+
           <!-- PANEL: Mailbox Control (Super Admin only) -->
           <div class="ms-panel ms-admin-section" id="msp_mailboxstatus" data-panel="mailboxstatus" style="display:none">
             <div class="ms-panel-hero">
@@ -1469,6 +1517,7 @@
   <script src="/js/auth.js?v=p1-664"></script>
   <script src="/js/realtime.js?v=p1-664"></script>
   <script src="/js/sync_status_ui.js?v=p1-664"></script>
+  <script src="/js/pause-session-manager.js?v=p1-664"></script>
 <script src="/js/ui.js?v=p1-664"></script>
   <script>try{ window.UI && UI.initAppCursor && UI.initAppCursor(); }catch(e){} </script>
 

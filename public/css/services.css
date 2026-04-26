@@ -2617,51 +2617,39 @@ input.cell.cell-qb-not-found {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* FIX-2: Rule card action buttons — always visible (was opacity:0 = hidden on non-hover,
-   breaking touch devices and making the UI non-discoverable). RC-2 in analysis report. */
 .cf-rule-del-btn {
-  background: rgba(248,113,113,0.1);
-  border: 1px solid rgba(248,113,113,0.2);
-  color: #f87171;
+  background: none;
+  border: none;
+  color: #374151;
   cursor: pointer;
-  font-size: 12px;
-  padding: 4px 7px;
-  border-radius: 6px;
-  opacity: 1;              /* FIX-2: always visible */
+  font-size: 13px;
+  padding: 3px 5px;
+  border-radius: 5px;
+  opacity: 0;
   transition: all 0.15s;
   flex-shrink: 0;
-  min-width: 28px;
-  min-height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
-.cf-rule-del-btn:hover { background: rgba(248,113,113,0.25); color: #fca5a5; transform: scale(1.1); }
+.cf-rule-card:hover .cf-rule-del-btn { opacity: 1; }
+.cf-rule-del-btn:hover { background: rgba(248,113,113,0.2); color: #f87171; }
 .cf-rule-order-btns {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 .cf-rule-order-btn {
-  background: rgba(148,163,184,0.08);
-  border: 1px solid rgba(148,163,184,0.15);
-  color: #64748b;
+  background: none;
+  border: none;
+  color: #374151;
   cursor: pointer;
-  font-size: 9px;
-  padding: 3px 5px;
-  border-radius: 4px;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
   line-height: 1;
-  opacity: 1;              /* FIX-2: always visible */
+  opacity: 0;
   transition: all 0.15s;
-  min-width: 24px;
-  min-height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
-.cf-rule-order-btn:hover { background: rgba(34,211,238,0.12); border-color: rgba(34,211,238,0.25); color: #22d3ee; }
-.cf-rule-order-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-.cf-rule-order-btn:disabled:hover { background: rgba(148,163,184,0.08); border-color: rgba(148,163,184,0.15); color: #64748b; }
+.cf-rule-card:hover .cf-rule-order-btn { opacity: 1; }
+.cf-rule-order-btn:hover { background: rgba(255,255,255,0.08); color: #94a3b8; }
 
 /* Empty state */
 .svc-cf-rules-empty {
@@ -2810,18 +2798,12 @@ input.cell.cell-qb-not-found {
   cursor: pointer;
   transition: all 0.15s;
   flex-shrink: 0;
-  position: relative;
 }
-.svc-cf-swatch:hover { transform: scale(1.18); z-index: 1; }
-/* FIX-1: Active swatch has a highly visible cyan outer ring + white inner border
-   so the selected color is unmistakable even on dark/similar backgrounds. RC-1. */
+.svc-cf-swatch:hover { transform: scale(1.15); }
 .svc-cf-swatch.cf-swatch-active {
   border-color: #fff;
-  outline: 2px solid #22d3ee;
-  outline-offset: 1px;
-  box-shadow: 0 0 0 3px rgba(34,211,238,0.35), 0 2px 8px rgba(0,0,0,0.4);
-  transform: scale(1.15);
-  z-index: 2;
+  box-shadow: 0 0 0 2px rgba(34,211,238,0.5);
+  transform: scale(1.1);
 }
 .svc-cf-custom-color {
   width: 28px; height: 28px;
