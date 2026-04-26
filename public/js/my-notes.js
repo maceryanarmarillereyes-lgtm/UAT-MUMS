@@ -1,6 +1,6 @@
 /* My Notes v2 - Cloudflare Pages + Supabase */
 (function(){
-  const ICON = '/public/Widget Images/MY_NOTES.png';
+  const ICON = '/Widget%20Images/MY_NOTES.png';
   const LS_CACHE = 'mums_notes_v2';
   const LS_WS = 'mums_notes_ws';
   const DEBOUNCE = 800;
