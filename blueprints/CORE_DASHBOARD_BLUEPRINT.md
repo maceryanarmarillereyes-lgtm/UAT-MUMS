@@ -8,6 +8,7 @@
 - `public/js/pages/system.js`
 - `public/js/pages/overall_stats.js`
 - `public/js/pages/gmt_overview.js`
+- `public/js/my-notes.js`
 
 ## Feature inventory
 1. **Dashboard** (`dashboard.js`)
@@ -25,6 +26,9 @@
    - Cross-member statistics with date presets, sorting, paging, and access gates.
 7. **GMT Overview** (`gmt_overview.js`)
    - Global timezone matrix and pinned world clock integration.
+8. **My Notes v2** (`my-notes.js`)
+   - Injects a dedicated My Notes icon button before `releaseNotesBtn` without mutating existing topbar controls.
+   - Provides local cache + Supabase-backed personal/team/projects note workspaces via modal UI.
 
 ## Data dependencies
 - Store docs: users, announcements, logs, reminders, schedule-derived aggregates.
@@ -45,3 +49,4 @@
 ## Change log
 - **2026-04-20** — Initial core dashboard/operations blueprint created.
 - **2026-04-22** — Leave Monitor right-sidebar overflow handling updated: monitor body now scrolls independently while footer action buttons remain visible, with session scroll position persistence.
+- **2026-04-26** — Added My Notes v2 widget integration scope (topbar pre-release-notes insertion + Supabase notes persistence contract).
