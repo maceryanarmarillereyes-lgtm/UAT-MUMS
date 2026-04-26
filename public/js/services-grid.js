@@ -161,16 +161,15 @@
     return value || '';
   }
 
-  function evaluateConditionalFormat(row, columns) {
-    var safeRow = row || {};
-    var data = safeRow.data || {};
-    var status = String(data.status || '');
-    var tracking = String(data.tracking_case_progress || '');
-
-    if (status.includes('Waiting') || tracking === 'Mace Ryan Reyes') {
-      return { match: true, ruleId: 'waiting', color: '#2d1b0e' };
-    }
-    return { match: false };
+  function scheduleConditionalPaint() {
+    if (!window.svcConditionalFormat || typeof window.svcConditionalFormat.paint !== 'function') return;
+    requestAnimationFrame(function () {
+      try {
+        window.svcConditionalFormat.paint();
+      } catch (err) {
+        console.warn('[services-grid] conditional paint failed:', err);
+      }
+    });
   }
 
   function clear() {
@@ -337,6 +336,8 @@
       tr.classList.add('qb-updated');
       setTimeout(function () { tr.classList.remove('qb-updated'); }, 650);
     }
+    // Keep conditional formatting deterministic on single-row realtime patches.
+    scheduleConditionalPaint();
   }
 
   function mkEl(tag, props, parent) {
@@ -807,25 +808,13 @@
       var rowData = (isFilteredView || isSorted)
         ? (viewRows[i] || { row_index: i, data: {} })
         : (current.rows.find(function (r) { return r.row_index === i; }) || { row_index: i, data: {} });
-      // FIX-CF-ROW-HL: Always re-evaluate on each render() — removed stale cache
-      // guard (typeof _cfMatch === 'undefined'). The old guard meant that once a
-      // row was evaluated it was never re-checked, so CF rule changes made after
-      // the first render would be ignored until a full page reload. Re-evaluating
-      // each render is safe and negligible perf impact (~519 simple fn calls).
-      var cf = evaluateConditionalFormat(rowData, current.sheet.column_defs || []);
-      rowData._cfMatch = !!cf.match;
-      rowData._cfRuleId = cf.ruleId || '';
-      rowData._cfColor = cf.color || '';
       var rowIndex = Number.isFinite(rowData.row_index) ? rowData.row_index : i;
       var tr = mkEl('tr', { className: 'grid-row' }, tbody);
       tr.dataset.row = String(rowIndex);
-      if (rowData._cfMatch) {
-        tr.setAttribute('data-cf-applied', 'true');
-        tr.setAttribute('data-cf-rule', rowData._cfRuleId);
-        tr.style.setProperty('--cf-bg', rowData._cfColor);
-      } else {
-        tr.removeAttribute('data-cf-applied');
-        tr.removeAttribute('data-cf-rule');
+      tr.dataset.rowId = rowData && rowData.id != null ? String(rowData.id) : ('idx:' + String(rowIndex));
+      if (rowData && rowData.__cfRowBg) {
+        tr.classList.add('cf-row-highlighted');
+        tr.style.setProperty('--cf-row-bg', String(rowData.__cfRowBg));
       }
       var rowNumTd = mkEl('td', {
         className: 'row-num',
@@ -1106,6 +1095,9 @@
       };
       wrap.addEventListener('scroll', wrap._qbScrollHandler, { passive: true });
     })();
+
+    // Re-apply CF after DOM rebuild so row-level/cell-level paint survives render().
+    scheduleConditionalPaint();
   }
 
   function attachCellHandlers() {

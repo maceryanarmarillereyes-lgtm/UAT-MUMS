@@ -191,6 +191,14 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-04-26 (Conditional formatting reliability + row highlight persistence):**
+  - **Edit — `public/js/services-grid.js`:** Removed legacy hardcoded conditional evaluator and added deterministic `requestAnimationFrame` repaint handoff to `window.svcConditionalFormat.paint()` after full renders and single-row realtime updates.
+  - **Edit — `public/js/services-grid.js`:** Grid row `<tr>` nodes now stamp stable `data-row-id` and preload persisted `--cf-row-bg` metadata (`cf-row-highlighted`) so highlight state can be rehydrated across tbody rebuilds.
+  - **Edit — `public/js/services-conditional-format.js`:** `paintGrid()` now maps rows via `data-row-id` (row id fallback to row_index key), persists row highlight metadata on row objects, and applies row-level styling through `cf-row-highlighted` + CSS custom properties instead of transient per-cell inline backgrounds.
+  - **Edit — `public/js/services-conditional-format.js`:** Color swatch renderer now emits explicit `cf-color-btn active` state classes to keep selected colors visibly locked after editor rerenders.
+  - **Edit — `public/css/services.css`:** Upgraded swatch active visuals (`.cf-color-btn.active`), made rule action controls always-visible/touch-sized on dark theme, and added resilient row-highlight CSS (`tr.cf-row-highlighted { background-color: var(--cf-row-bg) !important; }`).
+  - **Behavior contract update:** Services conditional formatting is now single-source (`services-conditional-format.js`) with stable repaint after every grid render/update and row highlights that survive sort/filter/realtime redraw cycles.
+
 - **2026-04-25 (Pause Session network suppression guard):**
   - **Edit — `public/js/services-sheet-manager.js`:** Added `window.__MUMS_PAUSED` guard at the start of sheet-list debounced realtime refresh so Services sidebar sync requests do not fire while idle pause is active.
   - **Behavior contract update:** Services sheet realtime refresh now hard-stops during global Pause Session mode and resumes only after full page reload.
