@@ -3544,6 +3544,32 @@
   <!-- support_studio_patches moved to end of body -->
 <script src="/js/support_studio/features/ctl_booking.js"></script>
 <script src="/js/pages/support_studio_patches.js"></script>
+
+<!-- ── MUMS Pause Session Manager — cross-page coverage ─────────────────── -->
+<script src="/js/pause-session-manager.js?v=p4-001"></script>
+<script>
+(function(){
+  'use strict';
+  // Init PSM after a 2-second grace period to allow auth (CloudAuth + supabase_loader) to settle.
+  // loadConfig() gracefully falls back to cached/default config if token is not yet available.
+  // BroadcastChannel cross-tab sync means this tab will also receive pause/resume from index.html.
+  function _initPSM(){
+    try {
+      if (!window.PauseSessionManager || window.pauseManager) return;
+      window.pauseManager = new window.PauseSessionManager();
+      window.pauseManager.init().then(function(){
+        // Re-fetch config after auth settles for accurate timeout setting
+        try { window.pauseManager.loadConfig(true); } catch(_){}
+      }).catch(function(){});
+    } catch(_){}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(_initPSM, 2000); });
+  } else {
+    setTimeout(_initPSM, 2000);
+  }
+})();
+</script>
 </body>
 
 </html>

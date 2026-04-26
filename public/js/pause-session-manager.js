@@ -6,32 +6,70 @@
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
+/* ============================================================
+   MUMS Pause Session Manager  — v4.0 (2026-04-26)
+   CHANGES vs v3.0:
+   [FIX-1] Alarm-Wake Scheduler — auto-resumes 15s before next alarm
+   [FIX-2] Extended _blockedIntervalKeys for support_studio + services
+   [FIX-3] window.__MUMS_PAUSE_MGR_READY signal post-init
+   [FIX-4] BroadcastChannel pause/resume triggers alarm wake in all tabs
+   [FIX-5] Overlay shows scheduled auto-resume time when alarm is pending
+   All existing auth, realtime, RLS, UI logic: UNCHANGED.
+   ============================================================ */
+
 (function(){
   'use strict';
 
-  const CONFIG_KEY = 'mums_pause_config';
-  const SESSION_KEY = 'mums_supabase_session';
+  const CONFIG_KEY     = 'mums_pause_config';
+  const SESSION_KEY    = 'mums_supabase_session';
   const DEFAULT_CONFIG = { enabled: true, timeout_minutes: 10 };
-  const ALLOWED_TIMEOUTS = new Set([1,5,10,30,60]); // ADDED 1
+  const ALLOWED_TIMEOUTS = new Set([1,5,10,30,60]);
+
+  // Mirrors Store.KEYS for both reminder stores
+  const REMINDER_KEYS = ['mums_my_reminders', 'mums_team_reminders'];
 
   class PauseSessionManager {
     constructor(){
-      this.config = this._loadCachedConfig();
-      this.lastActivityKey = 'mums_last_activity';
-      this.lastActivity = Number(localStorage.getItem(this.lastActivityKey) || Date.now());
-      this.checkerTimer = null;
-      this.activityHandler = this._onActivity.bind(this);
-      this._eventsBound = false;
-      this._saveBound = false;
-      this._paused = false;
-      this._origFetch = window.fetch;
-      this._blockedIntervalKeys = ['presenceInterval','syncInterval','__mumsPresenceTimer','__mumsOnlineBarTimer','__mumsClockTimer','__mumsGmtOverviewTimer','annTimer'];
-      this.userRole = this._getCurrentRole();
+      this.config           = this._loadCachedConfig();
+      this.lastActivityKey  = 'mums_last_activity';
+      this.lastActivity     = Number(localStorage.getItem(this.lastActivityKey) || Date.now());
+      this.checkerTimer     = null;
+      this.activityHandler  = this._onActivity.bind(this);
+      this._eventsBound     = false;
+      this._saveBound       = false;
+      this._paused          = false;
+      this._origFetch       = window.fetch;
+
+      // [FIX-2] Extended interval kill list
+      this._blockedIntervalKeys = [
+        'presenceInterval',
+        'syncInterval',
+        '__mumsPresenceTimer',
+        '__mumsOnlineBarTimer',
+        '__mumsClockTimer',
+        '__mumsGmtOverviewTimer',
+        'annTimer',
+        '_ctlQueueTimer',     // support_studio/core_ui.js
+        '_colStateDbTimer',   // services-grid.js
+        '_colStateQueueTimer' // services-grid.js
+      ];
+
+      this.userRole           = this._getCurrentRole();
       this._loadConfigPromise = null;
-      this.channel = null;
-      try { if (typeof BroadcastChannel!== 'undefined') { this.channel = new BroadcastChannel('mums_activity'); } } catch(_){}
+      this.channel            = null;
+
+      // [FIX-1] Alarm wake state
+      this._alarmWakeTimer  = null;
+      this._nextAlarmAt     = null;
+
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          this.channel = new BroadcastChannel('mums_activity');
+        }
+      } catch(_){}
     }
 
+    // ── PUBLIC: init ────────────────────────────────────────────────
     async init(){
       await this.loadConfig();
       this._bindSettingsPanel();
@@ -40,8 +78,11 @@
         this._bindActivityListeners();
         this._startChecker();
       }
+      // [FIX-3] Ready signal
+      try { window.__MUMS_PAUSE_MGR_READY = true; } catch(_){}
     }
 
+    // ── PUBLIC: loadConfig ──────────────────────────────────────────
     async loadConfig(force){
       if (this._loadConfigPromise && !force) return this._loadConfigPromise;
       this._loadConfigPromise = (async()=>{
@@ -49,10 +90,6 @@
           const token = this._getToken();
           const headers = token ? { Authorization: `Bearer ${token}` } : {};
           const res = await fetch('/api/settings/pause-session', { method:'GET', headers, cache:'no-store' });
-          // ★ FIX: Non-2xx responses (400 = migration pending, 401 = not yet authed)
-          // are expected during early boot. Fall back to DEFAULT_CONFIG silently —
-          // no console.error, no red network error spam. The manager stays functional
-          // with safe defaults until the settings are available.
           if (!res.ok) { return this.config; }
           const data = await res.json().catch(()=>({}));
           if (data && data.ok && data.settings) {
@@ -60,7 +97,7 @@
             this._saveCachedConfig(this.config);
             return this.config;
           }
-        } catch (_) {}
+        } catch(_){}
         return this.config;
       })();
       const out = await this._loadConfigPromise;
@@ -68,25 +105,23 @@
       return out;
     }
 
+    // ── PUBLIC: pause ───────────────────────────────────────────────
     pause(){
       if (this._paused) return;
       this._paused = true;
       window.__MUMS_PAUSED = true;
 
-      // Broadcast to other tabs
       try { this.channel && this.channel.postMessage({type:'pause'}); } catch(_){}
 
       this._unbindActivityListeners();
-      if (this.checkerTimer) {
-        clearInterval(this.checkerTimer);
-        this.checkerTimer = null;
-      }
+      if (this.checkerTimer) { clearInterval(this.checkerTimer); this.checkerTimer = null; }
 
+      // Tear down all known Supabase realtime clients
       try {
         if (window.__MUMS_SB_CLIENT && typeof window.__MUMS_SB_CLIENT.removeAllChannels === 'function') {
           window.__MUMS_SB_CLIENT.removeAllChannels();
         }
-      } catch (_) {}
+      } catch(_){}
 
       try {
         const rt = window.Realtime;
@@ -94,42 +129,38 @@
           const c = rt.getRealtimeClient();
           if (c && typeof c.removeAllChannels === 'function') c.removeAllChannels();
         }
-      } catch (_) {}
+      } catch(_){}
 
       try {
         const svcClient = window.servicesDB && window.servicesDB.client;
-        if (svcClient && typeof svcClient.removeAllChannels === 'function') {
-          svcClient.removeAllChannels();
-        }
-      } catch (_) {}
+        if (svcClient && typeof svcClient.removeAllChannels === 'function') svcClient.removeAllChannels();
+      } catch(_){}
 
       try {
         const odpClient = window.odpDB && window.odpDB.client;
-        if (odpClient && typeof odpClient.removeAllChannels === 'function') {
-          odpClient.removeAllChannels();
-        }
-      } catch (_) {}
+        if (odpClient && typeof odpClient.removeAllChannels === 'function') odpClient.removeAllChannels();
+      } catch(_){}
 
       this._blockedIntervalKeys.forEach((k)=>{
         try {
-          if (window[k]) {
-            clearInterval(window[k]);
-            clearTimeout(window[k]);
-            window[k] = null;
-          }
-        } catch (_) {}
+          if (window[k]) { clearInterval(window[k]); clearTimeout(window[k]); window[k] = null; }
+        } catch(_){}
       });
 
       try {
         if (window.presenceWatchdog && typeof window.presenceWatchdog.stop === 'function') {
           window.presenceWatchdog.stop();
         }
-      } catch (_) {}
+      } catch(_){}
 
       this._blockFetches();
+
+      // [FIX-1] Schedule auto-wake before showing overlay (so overlay can show alarm time)
+      this._scheduleAlarmWake();
       this._showOverlay();
     }
 
+    // ── INTERNAL: Config normalization ──────────────────────────────
     _normalizeConfig(raw){
       const src = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
       const enabled = src.enabled !== undefined ? src.enabled === true : DEFAULT_CONFIG.enabled;
@@ -146,16 +177,17 @@
         if (!raw) return { ...DEFAULT_CONFIG };
         const parsed = JSON.parse(raw);
         return this._normalizeConfig(parsed);
-      } catch (_) {
+      } catch(_) {
         return { ...DEFAULT_CONFIG };
       }
     }
 
     _saveCachedConfig(cfg){
-      try { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); } catch (_) {}
+      try { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); } catch(_){}
     }
 
-    _onActivity(){ 
+    // ── INTERNAL: Activity ──────────────────────────────────────────
+    _onActivity(){
       const now = Date.now();
       this.lastActivity = now;
       try { localStorage.setItem(this.lastActivityKey, String(now)); } catch(_){}
@@ -170,12 +202,8 @@
             this.lastActivity = Number(e.data.ts) || Date.now();
             try { localStorage.setItem(this.lastActivityKey, String(this.lastActivity)); } catch(_){}
           }
-          if (e.data.type === 'pause') {
-            this._applyPauseFromBroadcast();
-          }
-          if (e.data.type === 'resume') {
-            this._resumeFromBroadcast();
-          }
+          if (e.data.type === 'pause')  { this._applyPauseFromBroadcast(); }
+          if (e.data.type === 'resume') { this._resumeFromBroadcast(); }
         };
       }
       window.addEventListener('storage', (e) => {
@@ -208,23 +236,100 @@
         if (!this.config || !this.config.enabled || this._paused) return;
         const last = Number(localStorage.getItem(this.lastActivityKey) || this.lastActivity || Date.now());
         const timeoutMs = Number(this.config.timeout_minutes || 10) * 60000;
-        if ((Date.now() - last) > timeoutMs) {
-          this.pause();
-        }
+        if ((Date.now() - last) > timeoutMs) { this.pause(); }
       }, 15000);
     }
 
+    // ── [FIX-1] ALARM WAKE SCHEDULER ───────────────────────────────
+    // Reads both reminder stores from localStorage.
+    // Finds the soonest future alarmAt (or snoozeUntil if active).
+    // Sets a setTimeout to auto-resume 15 seconds before that alarm fires.
+    // This keeps the free-tier healthy AND ensures the user never misses an alarm.
+    _scheduleAlarmWake(){
+      this._cancelAlarmWake(); // clear any stale timer first
+
+      const now = Date.now();
+      let soonest = Infinity;
+
+      REMINDER_KEYS.forEach((key) => {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return;
+          const reminders = JSON.parse(raw);
+          if (!Array.isArray(reminders)) return;
+          reminders.forEach((r) => {
+            if (!r || r.closedAt) return; // skip closed
+            // Mirror logic from my_reminders.js: snoozeUntil takes priority
+            const at = Number(
+              (r.snoozeUntil && r.snoozeUntil > now) ? r.snoozeUntil : (r.alarmAt || 0)
+            );
+            if (at > now && at < soonest) soonest = at;
+          });
+        } catch(_){}
+      });
+
+      if (soonest === Infinity) return; // no pending alarms — stay paused
+
+      this._nextAlarmAt = soonest;
+
+      // Wake 15 seconds early so page reload can complete before alarm fires
+      const wakeInMs = Math.max(0, soonest - now - 15000);
+
+      this._alarmWakeTimer = setTimeout(() => {
+        if (!this._paused) return; // user already manually resumed
+        // Broadcast to all tabs so they all wake together [FIX-4]
+        try { this.channel && this.channel.postMessage({type:'resume'}); } catch(_){}
+        this._resumeFromBroadcast();
+      }, wakeInMs);
+    }
+
+    _cancelAlarmWake(){
+      if (this._alarmWakeTimer) {
+        clearTimeout(this._alarmWakeTimer);
+        this._alarmWakeTimer = null;
+      }
+      this._nextAlarmAt = null;
+    }
+
+    // ── INTERNAL: Pause overlay ─────────────────────────────────────
+    // [FIX-5] Shows auto-resume time when _nextAlarmAt is set
     _showOverlay(){
       if (document.getElementById('mums-pause-overlay')) return;
       const overlay = document.createElement('div');
       overlay.id = 'mums-pause-overlay';
-      overlay.setAttribute('style', 'position:fixed;inset:0;background:#0b1220f2;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;padding:24px;text-align:center;color:#e2e8f0;font-family:Inter,system-ui,sans-serif;');
-      overlay.innerHTML = '<div style="font-size:28px;font-weight:700;letter-spacing:.01em;">Session Paused</div>' +
-        '<div style="font-size:13px;opacity:.85;max-width:520px;line-height:1.6;">For system protection, all realtime and network requests were paused due to inactivity.</div>';
+      overlay.setAttribute('style',
+        'position:fixed;inset:0;background:#0b1220f2;z-index:99999;display:flex;' +
+        'align-items:center;justify-content:center;flex-direction:column;gap:14px;' +
+        'padding:24px;text-align:center;color:#e2e8f0;font-family:Inter,system-ui,sans-serif;'
+      );
+
+      let alarmBadge = '';
+      if (this._nextAlarmAt) {
+        try {
+          const d = new Date(this._nextAlarmAt);
+          const timeStr = d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+          const dateStr = d.toLocaleDateString([], { month:'short', day:'numeric' });
+          alarmBadge =
+            '<div style="font-size:12px;color:#38bdf8;border:1px solid rgba(56,189,248,.3);' +
+            'border-radius:8px;padding:8px 16px;max-width:420px;">' +
+            '\u23F0 Session will auto-resume at <strong>' + timeStr + ' (' + dateStr + ')</strong> for your alarm.' +
+            '</div>';
+        } catch(_){}
+      }
+
+      overlay.innerHTML =
+        '<div style="font-size:28px;font-weight:700;letter-spacing:.01em;">Session Paused</div>' +
+        '<div style="font-size:13px;opacity:.85;max-width:520px;line-height:1.6;">' +
+        'For system protection, all realtime and network requests were paused due to inactivity.</div>' +
+        alarmBadge;
+
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = 'Return to Session';
-      btn.setAttribute('style', 'height:42px;padding:0 22px;border-radius:10px;border:1px solid rgba(56,189,248,.45);background:linear-gradient(135deg,#0ea5e9,#22d3ee);color:#082f49;font-weight:800;cursor:pointer;');
+      btn.setAttribute('style',
+        'height:42px;padding:0 22px;border-radius:10px;border:1px solid rgba(56,189,248,.45);' +
+        'background:linear-gradient(135deg,#0ea5e9,#22d3ee);color:#082f49;font-weight:800;cursor:pointer;'
+      );
       btn.onclick = () => {
         try { this.channel && this.channel.postMessage({type:'resume'}); } catch(_){}
         this._resumeFromBroadcast();
@@ -233,23 +338,39 @@
       document.body.appendChild(overlay);
     }
 
+    // ── INTERNAL: Broadcast-received pause ──────────────────────────
     _applyPauseFromBroadcast(){
       if (this._paused) return;
       this._paused = true;
       window.__MUMS_PAUSED = true;
       this._unbindActivityListeners();
       if (this.checkerTimer) { clearInterval(this.checkerTimer); this.checkerTimer = null; }
+
       try { if (window.__MUMS_SB_CLIENT?.removeAllChannels) window.__MUMS_SB_CLIENT.removeAllChannels(); } catch(_){}
       try { const c = window.Realtime?.getRealtimeClient?.(); if (c?.removeAllChannels) c.removeAllChannels(); } catch(_){}
       try { if (window.servicesDB?.client?.removeAllChannels) window.servicesDB.client.removeAllChannels(); } catch(_){}
       try { if (window.odpDB?.client?.removeAllChannels) window.odpDB.client.removeAllChannels(); } catch(_){}
-      this._blockedIntervalKeys.forEach(k=>{ try { if(window[k]){ clearInterval(window[k]); clearTimeout(window[k]); window[k]=null; } }catch(_){} });
+
+      this._blockedIntervalKeys.forEach(k=>{
+        try {
+          if (window[k]) { clearInterval(window[k]); clearTimeout(window[k]); window[k]=null; }
+        } catch(_){}
+      });
+
       try { window.presenceWatchdog?.stop?.(); } catch(_){}
+
       this._blockFetches();
+
+      // [FIX-4] Schedule alarm wake on broadcast-received pause too
+      this._scheduleAlarmWake();
       this._showOverlay();
     }
 
+    // ── INTERNAL: Resume ────────────────────────────────────────────
     _resumeFromBroadcast(){
+      // [FIX-1] Always cancel alarm wake timer before reload
+      this._cancelAlarmWake();
+
       this._paused = false;
       window.__MUMS_PAUSED = false;
       document.getElementById('mums-pause-overlay')?.remove();
@@ -257,6 +378,7 @@
       location.reload();
     }
 
+    // ── INTERNAL: Fetch block ───────────────────────────────────────
     _blockFetches(){
       if (window.fetch !== this._origFetch) return;
       const orig = this._origFetch;
@@ -268,18 +390,19 @@
       };
     }
 
+    // ── INTERNAL: Token / Role helpers ──────────────────────────────
     _getToken(){
       try {
         if (window.CloudAuth && typeof CloudAuth.accessToken === 'function') {
           const t = String(CloudAuth.accessToken() || '').trim();
           if (t) return t;
         }
-      } catch (_) {}
+      } catch(_){}
       try {
         const raw = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
         const parsed = raw ? JSON.parse(raw) : null;
         return parsed && parsed.access_token ? String(parsed.access_token) : '';
-      } catch (_) {}
+      } catch(_){}
       return '';
     }
 
@@ -290,30 +413,31 @@
           const role = String((u && u.role) || '').trim().toUpperCase().replace(/\s+/g,'_');
           if (role) return role;
         }
-      } catch (_) {}
+      } catch(_){}
       try {
         const raw = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
         const s = raw ? JSON.parse(raw) : null;
         const role = String((s && (s.role || (s.user_metadata && s.user_metadata.role))) || '').trim().toUpperCase().replace(/\s+/g,'_');
         return role;
-      } catch (_) {}
+      } catch(_){}
       return '';
     }
 
+    // ── INTERNAL: Settings panel (Super Admin only) ─────────────────
     _bindSettingsPanel(){
       const enabledEl = document.getElementById('pause-enabled');
       const timeoutEl = document.getElementById('pause-timeout');
-      const saveBtn = document.getElementById('pause-save');
-      const statusEl = document.getElementById('pause-save-msg');
+      const saveBtn   = document.getElementById('pause-save');
+      const statusEl  = document.getElementById('pause-save-msg');
       if (!enabledEl || !timeoutEl || !saveBtn) return;
 
       enabledEl.checked = !!this.config.enabled;
-      timeoutEl.value = String(this.config.timeout_minutes || DEFAULT_CONFIG.timeout_minutes);
+      timeoutEl.value   = String(this.config.timeout_minutes || DEFAULT_CONFIG.timeout_minutes);
 
       const role = this.userRole || this._getCurrentRole();
       const isSuperAdmin = role === 'SUPER_ADMIN';
-      enabledEl.disabled = !isSuperAdmin;
-      timeoutEl.disabled = !isSuperAdmin;
+      enabledEl.disabled    = !isSuperAdmin;
+      timeoutEl.disabled    = !isSuperAdmin;
       saveBtn.style.display = isSuperAdmin ? '' : 'none';
 
       if (this._saveBound) return;
@@ -328,13 +452,13 @@
           if (statusEl) {
             statusEl.textContent = 'Invalid timeout option.';
             statusEl.style.opacity = '1';
-            statusEl.style.color = '#ef4444';
+            statusEl.style.color   = '#ef4444';
           }
           return;
         }
 
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Saving…';
+        saveBtn.disabled    = true;
+        saveBtn.textContent = 'Saving\u2026';
         try {
           const token = this._getToken();
           const res = await fetch('/api/settings/pause-session', {
@@ -351,25 +475,25 @@
             this._saveCachedConfig(this.config);
             this._onActivity();
             if (statusEl) {
-              statusEl.textContent = '✓ Pause session settings saved.';
+              statusEl.textContent = '\u2713 Pause session settings saved.';
               statusEl.style.opacity = '1';
-              statusEl.style.color = '#22c55e';
+              statusEl.style.color   = '#22c55e';
             }
           } else {
             if (statusEl) {
-              statusEl.textContent = `✗ ${data && (data.message || data.error) ? String(data.message || data.error) : 'Save failed.'}`;
+              statusEl.textContent = '\u2717 ' + (data && (data.message || data.error) ? String(data.message || data.error) : 'Save failed.');
               statusEl.style.opacity = '1';
-              statusEl.style.color = '#ef4444';
+              statusEl.style.color   = '#ef4444';
             }
           }
-        } catch (_) {
+        } catch(_) {
           if (statusEl) {
-            statusEl.textContent = '✗ Network error.';
+            statusEl.textContent = '\u2717 Network error.';
             statusEl.style.opacity = '1';
-            statusEl.style.color = '#ef4444';
+            statusEl.style.color   = '#ef4444';
           }
         } finally {
-          saveBtn.disabled = false;
+          saveBtn.disabled    = false;
           saveBtn.textContent = 'Save';
           if (statusEl) {
             setTimeout(()=>{ statusEl.style.opacity = '0'; }, 3500);

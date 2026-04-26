@@ -491,5 +491,29 @@
   </div>
   <!-- ── END SERVICES CASE DETAIL MODAL v2 ───────────────────────────────── -->
 
+<!-- ── MUMS Pause Session Manager — cross-page coverage ─────────────────── -->
+<script src="/js/pause-session-manager.js?v=p4-001"></script>
+<script>
+(function(){
+  'use strict';
+  // Services page loads supabase + servicesDB via chained loadScript() calls.
+  // PSM inits after 3s to let the full chain complete before PSM starts monitoring.
+  function _initPSM(){
+    try {
+      if (!window.PauseSessionManager || window.pauseManager) return;
+      window.pauseManager = new window.PauseSessionManager();
+      window.pauseManager.init().then(function(){
+        try { window.pauseManager.loadConfig(true); } catch(_){}
+      }).catch(function(){});
+    } catch(_){}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(_initPSM, 3000); });
+  } else {
+    setTimeout(_initPSM, 3000);
+  }
+})();
+</script>
+
 </body>
 </html>

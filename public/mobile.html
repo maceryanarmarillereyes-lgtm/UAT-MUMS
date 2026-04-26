@@ -1054,5 +1054,29 @@ document.addEventListener('DOMContentLoaded', function(){
 
 })();
 </script>
+
+<!-- ── MUMS Pause Session Manager — cross-page coverage ─────────────────── -->
+<script src="/js/pause-session-manager.js?v=p4-001"></script>
+<script>
+(function(){
+  'use strict';
+  // Mobile page: boot is async (tryAutoLogin). PSM inits after 2s so auth has settled.
+  // Realtime.init() is called inside tryAutoLogin — PSM will block fetch/intervals after that.
+  function _initPSM(){
+    try {
+      if (!window.PauseSessionManager || window.pauseManager) return;
+      window.pauseManager = new window.PauseSessionManager();
+      window.pauseManager.init().then(function(){
+        try { window.pauseManager.loadConfig(true); } catch(_){}
+      }).catch(function(){});
+    } catch(_){}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(_initPSM, 2000); });
+  } else {
+    setTimeout(_initPSM, 2000);
+  }
+})();
+</script>
 </body>
 </html>
