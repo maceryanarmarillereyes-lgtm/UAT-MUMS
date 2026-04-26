@@ -35,7 +35,7 @@
           <a class="card" href="${i.href}" data-action="${i.action||''}" style="text-decoration:none">
             <div class="row" style="justify-content:space-between;align-items:center">
               <div style="font-weight:900">${UI.esc(i.label)}</div>
-              <div style="font-size:18px">${i.icon}</div>
+              <div style="font-size:18px">${i.action==='my_notes' ? '<img src="public/Widget Images/MY_NOTES.png" alt="My Notes" style="width:18px;height:18px;object-fit:contain;border-radius:3px" />' : i.icon}</div>
             </div>
             <div class="small muted" style="margin-top:8px">${UI.esc(i.desc)}</div>
           </a>
