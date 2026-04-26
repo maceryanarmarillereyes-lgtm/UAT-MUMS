@@ -31,7 +31,19 @@
 
   /* ── Helpers ────────────────────────────────────────────────────────────── */
   const $ = s => document.querySelector(s);
-  const uidGen = () => 'n_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
+  // Generates a proper RFC-4122 v4 UUID required by Supabase uuid columns.
+  // Uses crypto.randomUUID() (Chrome 92+, Firefox 95+, Safari 15.4+) with a
+  // pure-JS fallback for older environments.
+  function uidGen() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    // Fallback: manual v4 UUID
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
   const wsKeyOf = name => 'cws_' + name.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Date.now();
   const sortAZ  = arr => arr.slice().sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
   const esc     = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -100,9 +112,23 @@
     if (activeId) { const n = notes.find(x => x.id === activeId); if (n && !editMode) showDetail(n); }
   }
 
+  // UUID v4 pattern (8-4-4-4-12 hex)
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
   async function pushNote(n) {
     const s = await getSb(); const u = await getUid();
     if (!s || !u) return false;
+    // Guard: if note has a legacy non-UUID id (from old uidGen), mint a proper one.
+    // This silently migrates any notes created before the uuid fix.
+    if (!UUID_RE.test(n.id)) {
+      const newId = uidGen();
+      // Remove old local-only record, adopt the new uuid
+      notes = notes.filter(x => x.id !== n.id);
+      n.id = newId;
+      notes.push(n);
+      saveLocal();
+      activeId = n.id;
+    }
     const { error } = await s.from('mums_notes').upsert(
       { id: n.id, user_id: u, workspace: n.workspace, title: n.title, content: n.content, updated_at: n.updated_at },
       { onConflict: 'id' }
@@ -115,10 +141,16 @@
   async function pullWorkspaces() {
     const s = await getSb(); const u = await getUid();
     if (!s || !u) return;
-    const { data } = await s.from('mums_notes_workspaces').select('*').eq('user_id', u).order('sort_order');
-    if (data) {
-      customWs = data.map(r => ({ id: r.id, key: 'cws_' + r.id.replace(/-/g,''), name: r.name, emoji: r.emoji || '📁' }));
-      saveCustomWsL();
+    try {
+      const { data, error } = await s.from('mums_notes_workspaces').select('*').eq('user_id', u).order('sort_order');
+      // Table may not exist yet if the migration hasn't been applied — fail silently
+      if (error) { console.info('[MyNotes] pullWorkspaces (migration pending):', error.message); return; }
+      if (data) {
+        customWs = data.map(r => ({ id: r.id, key: 'cws_' + r.id.replace(/-/g,''), name: r.name, emoji: r.emoji || '📁' }));
+        saveCustomWsL();
+      }
+    } catch (err) {
+      console.info('[MyNotes] pullWorkspaces skipped:', err && err.message);
     }
     renderWorkspaces();
   }
@@ -126,17 +158,27 @@
   async function remoteAddWorkspace(ws) {
     const s = await getSb(); const u = await getUid();
     if (!s || !u) return null;
-    const { data, error } = await s.from('mums_notes_workspaces')
-      .insert({ user_id: u, name: ws.name, emoji: ws.emoji, sort_order: customWs.length })
-      .select().single();
-    if (error) { console.warn('[MyNotes] addWorkspace:', error.message); return null; }
-    return data;
+    try {
+      const { data, error } = await s.from('mums_notes_workspaces')
+        .insert({ user_id: u, name: ws.name, emoji: ws.emoji, sort_order: customWs.length })
+        .select().single();
+      // Workspace table may not exist yet — workspace stays local-only until migration runs
+      if (error) { console.info('[MyNotes] addWorkspace (migration pending):', error.message); return null; }
+      return data;
+    } catch (err) {
+      console.info('[MyNotes] addWorkspace skipped:', err && err.message);
+      return null;
+    }
   }
 
   async function remoteDelWorkspace(id) {
     const s = await getSb(); const u = await getUid();
     if (!s || !u) return;
-    await s.from('mums_notes_workspaces').delete().eq('id', id).eq('user_id', u);
+    try {
+      await s.from('mums_notes_workspaces').delete().eq('id', id).eq('user_id', u);
+    } catch (err) {
+      console.info('[MyNotes] remoteDelWorkspace skipped:', err && err.message);
+    }
   }
 
   /* ── Modal HTML ─────────────────────────────────────────────────────────── */
