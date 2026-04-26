@@ -68,9 +68,33 @@
   }
 
   /* ── Supabase ───────────────────────────────────────────────────────────── */
+  // PERMANENT FIX: Reuse the app-wide shared client (window.__MUMS_SB_CLIENT)
+  // instead of spawning a second GoTrueClient. That client is already fully
+  // authenticated (access_token + refresh_token) by services-supabase.js.
+  // Creating a second client with an empty refresh_token caused the RLS
+  // "new row violates row-level security" 401 errors because auth.uid()
+  // returned null for every request.
+  const LS_SESSION = 'mums_supabase_session';
+
+  function readSession() {
+    const sources = [
+      () => localStorage.getItem(LS_SESSION),
+      () => sessionStorage.getItem(LS_SESSION),
+      () => { const m = document.cookie.match('(?:^|;)\\s*' + LS_SESSION + '=([^;]*)'); return m ? decodeURIComponent(m[1]) : null; }
+    ];
+    for (const src of sources) {
+      try { const r = src(); if (r) { const p = JSON.parse(r); if (p && p.access_token) return p; } } catch (_) {}
+    }
+    return null;
+  }
+
   async function getSb() {
+    // Prefer the already-authenticated shared client
+    if (window.__MUMS_SB_CLIENT) return window.__MUMS_SB_CLIENT;
+
+    // Fallback: build our own client (e.g. page loaded without services-supabase)
     if (sb) return sb;
-    const e = window.EnvRuntime?.env?.() || window.MUMS_ENV || {};
+    const e = window.MUMS_ENV || {};
     if (!e.SUPABASE_URL) return null;
     if (!window.supabase?.createClient) {
       await new Promise((res, rej) => {
@@ -81,14 +105,35 @@
       });
     }
     sb = window.supabase.createClient(e.SUPABASE_URL, e.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
-    const t = window.CloudAuth?.accessToken?.() || '';
-    if (t) sb.auth.setSession({ access_token: t, refresh_token: '' }).catch(() => {});
+    // Restore full session (both tokens) so auth.uid() works and RLS passes
+    const sess = readSession();
+    if (sess && sess.access_token && sess.refresh_token) {
+      await sb.auth.setSession({ access_token: sess.access_token, refresh_token: sess.refresh_token }).catch(() => {});
+    }
     return sb;
   }
+
   async function getUid() {
     if (uid) return uid;
-    uid = window.CloudAuth?.getUser?.()?.id || null;
-    return uid;
+    // Try the shared client first (most reliable)
+    if (window.__MUMS_SB_CLIENT) {
+      try {
+        const { data } = await window.__MUMS_SB_CLIENT.auth.getUser();
+        if (data?.user?.id) { uid = data.user.id; return uid; }
+      } catch (_) {}
+    }
+    // Fallback: read from cached session token
+    const sess = readSession();
+    if (sess && sess.user && sess.user.id) { uid = sess.user.id; return uid; }
+    // Last resort: decode sub from JWT without verifying (read-only, no crypto needed)
+    const token = sess && sess.access_token;
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+        if (payload.sub) { uid = payload.sub; return uid; }
+      } catch (_) {}
+    }
+    return null;
   }
 
   /* ── Local cache ────────────────────────────────────────────────────────── */
