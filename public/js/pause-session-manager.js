@@ -49,8 +49,13 @@
           const token = this._getToken();
           const headers = token ? { Authorization: `Bearer ${token}` } : {};
           const res = await fetch('/api/settings/pause-session', { method:'GET', headers, cache:'no-store' });
+          // ★ FIX: Non-2xx responses (400 = migration pending, 401 = not yet authed)
+          // are expected during early boot. Fall back to DEFAULT_CONFIG silently —
+          // no console.error, no red network error spam. The manager stays functional
+          // with safe defaults until the settings are available.
+          if (!res.ok) { return this.config; }
           const data = await res.json().catch(()=>({}));
-          if (res.ok && data && data.ok && data.settings) {
+          if (data && data.ok && data.settings) {
             this.config = this._normalizeConfig(data.settings);
             this._saveCachedConfig(this.config);
             return this.config;

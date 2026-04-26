@@ -313,6 +313,9 @@
       for (const k of keys) {
         const item = q[k];
         if (!item) continue;
+        // ★ FIX: Skip items still in their 429 back-off window
+        if (item._retryAfter && Date.now() < item._retryAfter) continue;
+        if (item._retryAfter) delete item._retryAfter; // window expired — clear flag
         if (!canPushKey(item.key || k)) {
           try{ if (window.Store && Store.addLog) Store.addLog({ action: 'SYNC_QUEUE_DROP_FORBIDDEN', detail: String(item.key||k) + ' reason=client_guard' }); }catch(_){}
           delete q[k];
@@ -351,6 +354,24 @@
             okCount++;
           } else {
             const st = out ? out.status : 0;
+            // ★ FIX: 429 Rate Limited — back off and stop flushing this cycle.
+            // Previously 429 was treated like any other error — item stayed in queue
+            // and next flushQueue fired immediately, re-triggering another 429.
+            // Fix: stamp all queued items with _retryAfter, break the loop immediately.
+            if (st === 429) {
+              const retryAfterSec = (out && out.retryAfter)
+                ? Number(out.retryAfter)
+                : 5;
+              const retryAt = Date.now() + (retryAfterSec * 1000);
+              for (const rk of Object.keys(q)) {
+                if (q[rk]) q[rk]._retryAfter = retryAt;
+              }
+              item.tries = Number(item.tries||0) + 1;
+              item.lastError = 'http_429';
+              q[k] = item;
+              try{ if(window.Store && Store.addLog) Store.addLog({ action:'SYNC_QUEUE_RATE_LIMITED', detail:'retry_after=' + retryAfterSec + 's key=' + String(item.key||k) }); }catch(_){}
+              break; // stop flush — wait for back-off window
+            }
             // Permanent failure hardening:
             // - 403 indicates the current role is not allowed to push this key.
             //   Keeping it in the queue causes repeated 403 spam on resume.

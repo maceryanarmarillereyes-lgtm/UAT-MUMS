@@ -243,7 +243,7 @@
     <span style="font-weight:900;color:#fff;font-size:15px">My Notes</span>
     <span style="font-size:11px;padding:2px 9px;background:rgba(245,158,11,.18);color:#fbbf24;border-radius:999px;font-weight:700">COMMAND CENTER</span>
    </div>
-   <button class="btn ghost" data-close="1" style="color:#94a3b8;font-size:18px;padding:4px 10px">✕</button>
+   <button id="myNotesCloseBtn" class="btn ghost" style="color:#94a3b8;font-size:18px;padding:4px 10px" title="Close My Notes" aria-label="Close My Notes">✕</button>
   </div>
 
   <!-- Body -->
@@ -349,7 +349,24 @@
 </div>`);
 
     /* ── Event bindings ── */
-    $('#myNotesModal').onclick = e => { if (e.target.dataset.close) closeModal(); };
+    // ★ BUG1 PERMANENT FIX: Do NOT use data-close="1" or onclick delegation on the modal
+    // wrapper for the X button. ui.js UI.bindDataClose() runs with capture:true +
+    // e.stopPropagation() — it intercepts ALL [data-close] buttons before any element
+    // onclick fires, then tries UI.closeModal("1") which silently fails. The event never
+    // reaches the modal wrapper. Fix: bind X button directly with addEventListener so it
+    // bypasses the capture-phase global handler entirely.
+    $('#myNotesCloseBtn').addEventListener('click', function(e) {
+      e.stopPropagation();
+      closeModal();
+    });
+    // Escape key to close (UX quality-of-life)
+    document.addEventListener('keydown', function _mnEsc(e) {
+      if (e.key !== 'Escape') return;
+      const modal = document.getElementById('myNotesModal');
+      if (!modal || modal.style.display === 'none') return;
+      e.stopPropagation();
+      closeModal();
+    });
     $('#mnNew').onclick        = createNote;
     $('#mnSearch').oninput     = render;
     $('#mnEditBtn').onclick    = enterEditMode;
@@ -620,8 +637,13 @@
     activeId = n.id;
     render();
     showDetail(n);
-    pushNote(n);                    // save empty note immediately
-    setTimeout(() => enterEditMode(), 30);  // auto-open edit mode
+    // ★ FIX: Defer Supabase write off the click handler stack.
+    // pushNote() starts a JWT decode + network round-trip. Calling it synchronously
+    // inside the click handler caused a [Violation] 'click' handler took 856ms warning.
+    // setTimeout(0) returns control to the browser immediately, then fires the async
+    // write in the next task — zero UX impact, violation eliminated.
+    setTimeout(() => { pushNote(n).catch(() => {}); }, 0);
+    setTimeout(() => enterEditMode(), 30);
   }
 
   function copyNote() {
