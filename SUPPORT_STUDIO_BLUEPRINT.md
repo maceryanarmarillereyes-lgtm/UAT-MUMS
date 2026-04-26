@@ -223,3 +223,6 @@ If step 3 is missing, task is incomplete.
 - **2026-04-20** — Initial Support Studio blueprint created with full feature inventory, module mapping, endpoint map, contracts, and mandatory update protocol.
 - **2026-04-22** — Updated QB Case Detail modal UX for Support Studio: added header quick action icons + footer edit/view/copy button set, and aligned QuickBase URLs to use Case # (`fields[3]`) as `rid` with safe `target="_blank"` + `rel="noopener noreferrer"`. Touched: `public/support_studio.html`, `public/js/pages/my_quickbase.js`, `public/css/support_studio/main_studio.css`.
 
+- **2026-04-26** — Applied `@AI_CRITICAL_GUARD v3.0` header normalization to Support Studio guarded modules.
+  - **Edit — Support Studio JS + studio QB routes:** Added/updated strict line-1 guard comment blocks to reinforce stop-and-report protocol before protected logic edits.
+  - **Touched:** `public/js/support_studio/features/ctl_booking.js`, `server/routes/studio/ctl_lab_config.js`, `server/routes/studio/ctl_lab_log.js`, `server/routes/studio/ctl_lab_state.js`, `server/routes/studio/qb_bulk.js`, `server/routes/studio/qb_data.js`, `server/routes/studio/qb_fields.js`.

@@ -58,3 +58,6 @@ This layer is the platform backbone: session lifecycle, user hydration, local st
 - **2026-04-25** — Pause Session save stability + cross-tab pause application fix.
   - **Edit — `server/routes/settings/pause_session.js`:** Hardened request-body parsing for adapter-delivered object/byte payloads and normalized `enabled` boolean inputs (`true/false`, `1/0`, `on/off`) before validation to prevent false `400 invalid_enabled` rejects.
   - **Edit — `public/js/pause-session-manager.js`:** Added safe `BroadcastChannel` initialization fallback, applied real pause state (`__MUMS_PAUSED`, fetch block, checker stop) when pause event is received from another tab, and surfaced API error message text in Save status for faster diagnostics.
+- **2026-04-26** — Applied `@AI_CRITICAL_GUARD v3.0` header normalization to auth/sync-adjacent guarded modules.
+  - **Edit — auth/session/settings utility files:** Added/updated strict line-1 guard comment blocks in protected auth/cache/rate-limit and pause-session route modules to require explicit MACE clearance before structural edits.
+  - **Touched:** `public/js/pages/system.js`, `public/js/pause-session-manager.js`, `server/lib/authCache.js`, `server/lib/rateLimit.js`, `server/lib/supabaseAdmin.js`, `server/routes/settings/pause_session.js`.
