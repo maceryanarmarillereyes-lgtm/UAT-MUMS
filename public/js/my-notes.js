@@ -345,11 +345,11 @@
 #mnContentView h1{font-size:1.75em;font-weight:900;color:#f1f5f9;margin:.5em 0 .25em;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:.2em}
 #mnContentView h2{font-size:1.35em;font-weight:800;color:#e2e8f0;margin:.45em 0 .2em}
 #mnContentView h3{font-size:1.1em;font-weight:700;color:#cbd5e1;margin:.4em 0 .15em}
-#mnContentView p{margin:.2em 0}
+#mnContentView p{margin:.35em 0;color:#f0f6ff;line-height:2}
 #mnContentView pre{background:rgba(0,0,0,.45);padding:10px 14px;border-radius:8px;font-family:monospace;font-size:12.5px;color:#7dd3fc;border:1px solid rgba(56,189,248,.2);overflow-x:auto;white-space:pre}
 #mnContentView blockquote{border-left:3px solid rgba(56,189,248,.5);padding:4px 0 4px 14px;color:#94a3b8;font-style:italic;margin:6px 0;background:rgba(56,189,248,.04);border-radius:0 6px 6px 0}
 #mnContentView ul,#mnContentView ol{padding-left:22px;margin:.3em 0}
-#mnContentView li{margin:.2em 0;line-height:1.65}
+#mnContentView li{margin:.3em 0;line-height:2;color:#f0f6ff}
 #mnContentView ul.mn-cl{list-style:none!important;padding-left:2px}
 #mnContentView ul.mn-cl li{display:flex;align-items:flex-start;gap:8px;padding:3px 0}
 #mnContentView ul.mn-cl li input{margin-top:2px;width:14px;height:14px;accent-color:#38bdf8;flex-shrink:0;cursor:pointer}
@@ -386,7 +386,7 @@
    <!-- ① WORKSPACE TREE SIDEBAR ─────────────────────────────────────── -->
    <div id="mnSidebar" style="width:225px;flex-shrink:0;border-right:1px solid rgba(56,189,248,.1);
      padding:12px 8px 12px;display:flex;flex-direction:column;background:rgba(0,0,0,.22);overflow-y:auto">
-    <div style="font-size:9.5px;letter-spacing:.14em;color:#334155;margin-bottom:8px;
+    <div style="font-size:9.5px;letter-spacing:.14em;color:#4e6a85;margin-bottom:8px;
       padding:0 6px;font-weight:800;text-transform:uppercase">WORKSPACES</div>
     <div id="mnWsTree" style="flex:1"></div>
     <div style="padding-top:10px;border-top:1px solid rgba(255,255,255,.05);margin-top:8px">
@@ -411,7 +411,7 @@
        font-weight:800;font-size:13px;white-space:nowrap">+ New</button>
     </div>
     <div id="mnList" style="flex:1;overflow-y:auto;padding:6px 8px"></div>
-    <div style="padding:7px 12px;font-size:10.5px;color:#334155;
+    <div style="padding:7px 12px;font-size:10.5px;color:#4e6a85;
       border-top:1px solid rgba(56,189,248,.07);letter-spacing:.04em">
      A-Z • <span id="mnCount">0</span> notes
     </div>
@@ -436,10 +436,10 @@
      </div>
      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-       <span style="font-size:11px;color:#334155">
-        Workspace: <b id="mnWsLabel" style="color:#38bdf8"></b>
+       <span style="font-size:11.5px;color:#6b8aa8">
+        Workspace: <b id="mnWsLabel" style="color:#38bdf8;font-weight:700"></b>
        </span>
-       <span id="mnUpdatedAt" style="font-size:11px;color:#334155"></span>
+       <span id="mnUpdatedAt" style="font-size:11.5px;color:#5a7a96;letter-spacing:.01em"></span>
        <span id="mnDirtyBadge" style="display:none;font-size:10px;padding:2px 8px;
          background:rgba(245,158,11,.22);color:#fbbf24;border-radius:999px;font-weight:700">● Unsaved</span>
       </div>
@@ -460,16 +460,16 @@
 
     <!-- CONTENT VIEW (linkified rich HTML) -->
     <div id="mnContentView" style="flex:1;overflow-y:auto;margin:12px 14px;
-      background:rgba(255,255,255,.025);border:1px solid rgba(56,189,248,.12);border-radius:14px;
-      color:#dce8f6;padding:18px 22px;font-size:14px;line-height:1.85;word-break:break-word;
-      box-shadow:inset 0 1px 0 rgba(255,255,255,.04)"></div>
+      background:rgba(10,18,35,.6);border:1px solid rgba(56,189,248,.18);border-radius:14px;
+      color:#f0f6ff;padding:22px 26px;font-size:15px;line-height:2;word-break:break-word;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.06),inset 0 0 0 1px rgba(56,189,248,.04)"></div>
 
     <!-- CONTENT EDITOR (contenteditable rich text) -->
     <div id="mnEditor" contenteditable="false" placeholder="Start writing…" style="
       display:none;flex:1;overflow-y:auto;margin:0 14px 12px;
       background:rgba(0,0,0,.28);border:1px solid rgba(56,189,248,.32);border-radius:14px;
-      color:#e2e8f0;padding:18px 22px;font-size:14px;line-height:1.85;
-      word-break:break-word;box-shadow:0 0 0 1px rgba(56,189,248,.05) inset"></div>
+      color:#f0f6ff;padding:22px 26px;font-size:15px;line-height:2;
+      word-break:break-word;box-shadow:0 0 0 1px rgba(56,189,248,.08) inset"></div>
    </div>
 
   </div><!-- /body -->
@@ -999,7 +999,7 @@
     el.innerHTML = '';
 
     if (!filtered.length) {
-      el.innerHTML = '<div style="padding:28px 12px;text-align:center;color:#334155;font-size:13px;line-height:1.8">' +
+      el.innerHTML = '<div style="padding:28px 12px;text-align:center;color:#4e6a85;font-size:13px;line-height:1.8">' +
         'No notes in this workspace.<br><b style="color:#38bdf8">+ New</b> to create one.</div>';
       return;
     }
@@ -1007,17 +1007,18 @@
     filtered.forEach(n => {
       const isActive = n.id === activeId;
       const d = document.createElement('div');
-      d.style.cssText = `padding:10px 12px;margin:2px 0;border-radius:10px;cursor:pointer;
-        background:${isActive ? 'rgba(56,189,248,.14)' : 'rgba(255,255,255,.03)'};
-        border:1px solid ${isActive ? 'rgba(56,189,248,.35)' : 'rgba(255,255,255,.05)'};
-        transition:all .1s;user-select:none`;
+      d.style.cssText = `padding:11px 13px;margin:3px 0;border-radius:11px;cursor:pointer;
+        background:${isActive ? 'rgba(56,189,248,.16)' : 'rgba(255,255,255,.04)'};
+        border:1px solid ${isActive ? 'rgba(56,189,248,.4)' : 'rgba(255,255,255,.07)'};
+        transition:all .12s;user-select:none;
+        box-shadow:${isActive ? '0 0 0 1px rgba(56,189,248,.12)' : 'none'}`;
       const preview = htmlToPreview(n.content);
       d.innerHTML = `
-        <div style="font-weight:700;color:#f1f5f9;font-size:13px;margin-bottom:3px;
+        <div style="font-weight:700;color:#ffffff;font-size:13.5px;margin-bottom:4px;
           white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(n.title || 'Untitled')}</div>
-        <div style="font-size:11px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4">
+        <div style="font-size:11px;color:#8fa3bb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.5">
           ${esc(preview) || '<em>Empty</em>'}</div>
-        <div style="font-size:10px;color:#2d3f52;margin-top:4px;letter-spacing:.01em">🕐 ${fmtDate(n.updated_at)}</div>`;
+        <div style="font-size:10px;color:#4e6a85;margin-top:5px;letter-spacing:.01em">🕐 ${fmtDate(n.updated_at)}</div>`;
       d.addEventListener('mouseenter', () => { if (!isActive) d.style.background = 'rgba(56,189,248,.06)'; });
       d.addEventListener('mouseleave', () => { if (n.id !== activeId) d.style.background = 'rgba(255,255,255,.03)'; });
       d.onclick = () => selectNote(n.id);
