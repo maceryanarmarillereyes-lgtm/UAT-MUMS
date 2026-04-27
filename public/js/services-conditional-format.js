@@ -7,27 +7,34 @@
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
 /**
- * services-conditional-format.js — v1.0
+ * services-conditional-format.js — v2.0
  * Conditional Formatting engine for Services Workspace (MUMS).
- * Google Sheets-accurate feature parity — enterprise UI/UX.
  *
- * UNTOUCHABLES:
- *  - No auth/session logic modified
- *  - No realtime channel/topic names changed
- *  - No QB lookup logic touched
- *  - No treeview logic modified
+ * v2.0 FIXES vs v1.0:
+ * ───────────────────────────────────────────────────────────────────────────
+ * [FIX-ROW-1] BUG: `if (!td) return` inside rows.forEach caused early-exit
+ *   before rowHighlights was populated. Hidden/scrolled-out columns killed
+ *   the entire row highlight for that row.
+ *   FIX: Split paintGrid into PASS 1 (pure data, zero DOM) and PASS 2 (DOM).
+ *   Row highlight collection now runs purely against row.data — no DOM needed.
  *
- * Storage: column_defs[colIdx].conditionalRules[] — persisted via servicesDB.updateColumns()
- * Render:  paint() re-applies styles to grid cells after every render()
+ * [FIX-ROW-2] BUG: Row highlight used CSS class + CSS variable approach:
+ *   `tr.cf-row-highlighted td { background-color: var(--cf-row-bg) !important }`
+ *   Per-cell rules used `td.style.setProperty('background', color, 'important')`.
+ *   Inline style !important ALWAYS beats CSS class !important in all browsers,
+ *   creating "holes" in the row highlight wherever a per-cell rule also fired.
+ *   FIX: Row highlight now applies bg directly via inline style.setProperty on
+ *   EVERY td in the row (Pass 2A). Per-cell styles applied in Pass 2B naturally
+ *   override specific cells (same inline specificity, applied later = wins).
+ *
+ * All other logic: constants, evalRule, modal, editor, save — UNCHANGED.
+ * ───────────────────────────────────────────────────────────────────────────
  */
 
 (function () {
   'use strict';
 
   // FIX-CF-SUSPEND: While QB bulk update is running, suspend paintGrid() calls
-  // triggered by the svc:qb-paint-done event — they would paint against incomplete
-  // row.data (cells are in the ⋯ pending state). One final paintGrid() fires when
-  // the update resolves via svc:qb-update-complete event.
   var _paintSuspended = false;
 
   /* ─────────────────────────────────────────────────────────────────────────
@@ -35,27 +42,16 @@
   ───────────────────────────────────────────────────────────────────────── */
 
   var BG_PALETTE = [
-    // Reds/Pinks
     '#fecaca','#fca5a5','#f87171','#ef4444','#dc2626',
-    // Oranges
     '#fed7aa','#fdba74','#fb923c','#f97316','#ea580c',
-    // Yellows
     '#fef08a','#fde047','#facc15','#eab308','#ca8a04',
-    // Greens
     '#bbf7d0','#86efac','#4ade80','#22c55e','#16a34a',
-    // Cyans
     '#a5f3fc','#67e8f9','#22d3ee','#06b6d4','#0891b2',
-    // Blues
     '#bfdbfe','#93c5fd','#60a5fa','#3b82f6','#2563eb',
-    // Purples
     '#e9d5ff','#c4b5fd','#a78bfa','#8b5cf6','#7c3aed',
-    // Pinks
     '#fbcfe8','#f9a8d4','#f472b6','#ec4899','#db2777',
-    // Grays
     '#f1f5f9','#e2e8f0','#cbd5e1','#94a3b8','#64748b',
-    // Darks
     '#1e293b','#0f172a','#020617','#1c1c1c','#000000',
-    // White
     '#ffffff'
   ];
 
@@ -79,25 +75,25 @@
     ],
     number: [
       { value: 'num_eq',        label: '= Equal to' },
-      { value: 'num_neq',       label: '≠ Not equal to' },
+      { value: 'num_neq',       label: '\u2260 Not equal to' },
       { value: 'num_gt',        label: '> Greater than' },
-      { value: 'num_gte',       label: '≥ Greater than or equal' },
+      { value: 'num_gte',       label: '\u2265 Greater than or equal' },
       { value: 'num_lt',        label: '< Less than' },
-      { value: 'num_lte',       label: '≤ Less than or equal' },
-      { value: 'between',       label: '↔ Between' },
-      { value: 'not_between',   label: '↮ Not between' },
+      { value: 'num_lte',       label: '\u2264 Less than or equal' },
+      { value: 'between',       label: '\u2194 Between' },
+      { value: 'not_between',   label: '\u21ae Not between' },
       { value: 'empty',         label: 'Is empty' },
       { value: 'not_empty',     label: 'Is not empty' }
     ],
     date: [
-      { value: 'date_today',    label: '📅 Is today' },
-      { value: 'date_tomorrow', label: '📅 Is tomorrow' },
-      { value: 'date_yesterday','label': '📅 Is yesterday' },
-      { value: 'date_past_week','label': '📅 In past week' },
-      { value: 'date_past_month','label':'📅 In past month' },
-      { value: 'date_before',   label: '📅 Date is before' },
-      { value: 'date_after',    label: '📅 Date is after' },
-      { value: 'date_eq',       label: '📅 Date is exactly' },
+      { value: 'date_today',    label: '\uD83D\uDCC5 Is today' },
+      { value: 'date_tomorrow', label: '\uD83D\uDCC5 Is tomorrow' },
+      { value: 'date_yesterday','label': '\uD83D\uDCC5 Is yesterday' },
+      { value: 'date_past_week','label': '\uD83D\uDCC5 In past week' },
+      { value: 'date_past_month','label':'\uD83D\uDCC5 In past month' },
+      { value: 'date_before',   label: '\uD83D\uDCC5 Date is before' },
+      { value: 'date_after',    label: '\uD83D\uDCC5 Date is after' },
+      { value: 'date_eq',       label: '\uD83D\uDCC5 Date is exactly' },
       { value: 'empty',         label: 'Is empty' },
       { value: 'not_empty',     label: 'Is not empty' }
     ],
@@ -108,20 +104,20 @@
   };
 
   var ICON_SETS = [
-    { id: 'traffic',   icons: ['🔴','🟡','🟢'],        name: 'Traffic Lights' },
-    { id: 'arrows',    icons: ['↑','→','↓'],            name: 'Arrows' },
-    { id: 'stars',     icons: ['⭐','⭐⭐','⭐⭐⭐'],  name: 'Stars' },
-    { id: 'check',     icons: ['❌','⚠️','✅'],          name: 'Check Marks' },
-    { id: 'flags',     icons: ['🚩','🏳️','🚀'],          name: 'Flags' },
-    { id: 'numbers',   icons: ['①','②','③'],           name: 'Numbers' }
+    { id: 'traffic',   icons: ['\uD83D\uDD34','\uD83D\uDFE1','\uD83D\uDFE2'],        name: 'Traffic Lights' },
+    { id: 'arrows',    icons: ['\u2191','\u2192','\u2193'],                            name: 'Arrows' },
+    { id: 'stars',     icons: ['\u2B50','\u2B50\u2B50','\u2B50\u2B50\u2B50'],         name: 'Stars' },
+    { id: 'check',     icons: ['\u274C','\u26A0\uFE0F','\u2705'],                      name: 'Check Marks' },
+    { id: 'flags',     icons: ['\uD83D\uDEA9','\uD83C\uDFF3\uFE0F','\uD83D\uDE80'],   name: 'Flags' },
+    { id: 'numbers',   icons: ['\u2460','\u2461','\u2462'],                            name: 'Numbers' }
   ];
 
   var FORMAT_TYPES = [
-    { id: 'single_color', label: '🎨 Single Color' },
-    { id: 'color_scale',  label: '🌈 Color Scale' },
-    { id: 'data_bar',     label: '📊 Data Bar' },
-    { id: 'icon_set',     label: '🏷 Icon Set' },
-    { id: 'formula',      label: 'ƒx Custom Formula' }
+    { id: 'single_color', label: '\uD83C\uDFA8 Single Color' },
+    { id: 'color_scale',  label: '\uD83C\uDF08 Color Scale' },
+    { id: 'data_bar',     label: '\uD83D\uDCCA Data Bar' },
+    { id: 'icon_set',     label: '\uD83C\uDFF7 Icon Set' },
+    { id: 'formula',      label: '\u0192x Custom Formula' }
   ];
 
   /* ─────────────────────────────────────────────────────────────────────────
@@ -133,9 +129,9 @@
     colIdx: -1,
     colKey: '',
     colLabel: '',
-    rules: [],           // current rules for the column being edited
-    activeRuleIdx: -1,   // which rule card is selected in editor
-    draft: null          // draft rule being edited
+    rules: [],
+    activeRuleIdx: -1,
+    draft: null
   };
 
   /* ─────────────────────────────────────────────────────────────────────────
@@ -169,7 +165,7 @@
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
-     EVALUATION ENGINE — matches Google Sheets operator semantics
+     EVALUATION ENGINE
   ───────────────────────────────────────────────────────────────────────── */
 
   function evalRule(rule, cellValue) {
@@ -179,7 +175,6 @@
     var p2 = String(rule.param2 != null ? rule.param2 : '');
 
     switch (op) {
-      /* TEXT */
       case 'contains':     return v.toLowerCase().indexOf(p1.toLowerCase()) !== -1;
       case 'not_contains': return v.toLowerCase().indexOf(p1.toLowerCase()) === -1;
       case 'starts_with':  return v.toLowerCase().indexOf(p1.toLowerCase()) === 0;
@@ -188,8 +183,6 @@
       case 'neq':          return v.toLowerCase() !== p1.toLowerCase();
       case 'empty':        return v === '';
       case 'not_empty':    return v !== '';
-
-      /* NUMBER */
       case 'num_eq':       return parseFloat(v) === parseFloat(p1);
       case 'num_neq':      return parseFloat(v) !== parseFloat(p1);
       case 'num_gt':       return parseFloat(v) >  parseFloat(p1);
@@ -198,8 +191,6 @@
       case 'num_lte':      return parseFloat(v) <= parseFloat(p1);
       case 'between':      return parseFloat(v) >= parseFloat(p1) && parseFloat(v) <= parseFloat(p2);
       case 'not_between':  return parseFloat(v) < parseFloat(p1) || parseFloat(v) > parseFloat(p2);
-
-      /* DATES */
       case 'date_today': {
         var today = new Date(); today.setHours(0,0,0,0);
         var d = new Date(v); d.setHours(0,0,0,0);
@@ -232,13 +223,9 @@
         var b = new Date(p1); b.setHours(0,0,0,0);
         return a.getTime() === b.getTime();
       }
-
-      /* DUPLICATE / UNIQUE — evaluated at paint time with full column context */
       case 'is_duplicate':
       case 'is_unique':
-        return false; // handled specially in paint()
-
-      /* FORMULA — supports VALUE, NUMVAL, ROW_DATA{}, COL('colName') */
+        return false;
       case 'formula':
         try {
           var formula = rule.formula || '';
@@ -259,12 +246,10 @@
           };
           return fn(isNaN(numValF) ? v : numValF, numValF, rowDataF, colFn);
         } catch (e) { return false; }
-
       default: return false;
     }
   }
 
-  /* Color scale interpolation */
   function interpolateHex(hex1, hex2, t) {
     var r1=parseInt(hex1.slice(1,3),16), g1=parseInt(hex1.slice(3,5),16), b1=parseInt(hex1.slice(5,7),16);
     var r2=parseInt(hex2.slice(1,3),16), g2=parseInt(hex2.slice(3,5),16), b2=parseInt(hex2.slice(5,7),16);
@@ -278,11 +263,21 @@
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
-     PAINT ENGINE — applies CF rules to the live grid DOM
-     Supports:
-       - Per-cell styling (single_color, color_scale, data_bar, icon_set)
-       - ROW-LEVEL highlight: rule.highlightRow=true paints ALL tds in the row
-       - Formula rules get full ROW_DATA + COL('colName') access
+     PAINT ENGINE v2.0 — 2-Pass Architecture
+     ─────────────────────────────────────────────────────────────────────────
+     PASS 1: Pure data evaluation against row.data — ZERO DOM ACCESS.
+             Collects: rowHighlights{}, cellStyles{}, colorScales[], dataBars[], iconSets[].
+             [FIX-ROW-1]: No more `if (!td) return` short-circuit killing rowHighlights.
+
+     PASS 2A: Apply row highlights — direct inline style.setProperty('background')
+              on EVERY td in the row via tr.querySelectorAll('td').
+              [FIX-ROW-2]: Inline !important beats CSS class !important — every cell
+              in the row gets the highlight without holes.
+
+     PASS 2B: Apply per-cell styles — these override specific cells because they
+              are applied AFTER Pass 2A (same inline specificity, later = wins).
+
+     PASS 2C/D/E: color_scale, data_bar, icon_set — unchanged logic, deferred to DOM.
   ───────────────────────────────────────────────────────────────────────── */
 
   function paintGrid() {
@@ -295,15 +290,13 @@
     var rows = state.rows || [];
     if (state.__treeFilteredRows) rows = state.__treeFilteredRows;
 
-    // Build a label→key map for COL() formula function
+    // Build label→key map for COL() formula function
     var colLabelMap = {};
     cols.forEach(function (c) {
       if (c && c.label && c.key) colLabelMap[c.label] = c.key;
     });
 
-    // Clear ALL previous CF styles (cells + row-level)
-    // FIX-CF: Also remove data-cf-qb-override flag so cell-qb-linked class
-    // is restored for inputs that had their QB class stripped by a previous CF paint.
+    // ── CLEAR: Remove all previous CF styles ─────────────────────────────
     grid.querySelectorAll('td[data-cf-applied]').forEach(function (td) {
       td.removeAttribute('data-cf-applied');
       td.style.removeProperty('background');
@@ -320,13 +313,12 @@
         inp.style.removeProperty('text-decoration');
         inp.style.removeProperty('font-family');
         inp.dataset.cfIcon = '';
-        // BUG1 FIX: Do NOT restore cell-qb-linked — class is neutralized, no cyan restore needed
         inp.dataset.cfQbStripped = '';
       }
       var badge = td.querySelector('.cf-icon-badge');
       if (badge) badge.remove();
     });
-    // Also clear row-level highlights set on <tr>
+    // Clear CSS-class row highlights
     grid.querySelectorAll('tr.cf-row-highlighted, tr[data-cf-row]').forEach(function (tr) {
       tr.removeAttribute('data-cf-row');
       tr.classList.remove('cf-row-highlighted');
@@ -335,9 +327,7 @@
       var rowId = tr.dataset.rowId || '';
       if (rowId) {
         var prev = rows.find(function (r) { return r && r.id != null && String(r.id) === String(rowId); });
-        if (prev) {
-          delete prev.__cfRowBg;
-        }
+        if (prev) delete prev.__cfRowBg;
       }
       tr.querySelectorAll('td input.cell').forEach(function (inp) {
         inp.style.removeProperty('color');
@@ -347,10 +337,22 @@
         inp.dataset.cfQbStripped = '';
       });
     });
+    // [FIX-ROW-2] Also clear direct inline row-bg applied in Pass 2A
+    grid.querySelectorAll('td[data-cf-row-bg]').forEach(function (td) {
+      td.removeAttribute('data-cf-row-bg');
+      td.style.removeProperty('background');
+    });
 
-    // ── Collect which rows need row-highlight so we can apply after per-cell pass
-    // Map: rowIdx → {bgColor, textColor, bold, italic, strikethrough, underline, borderColor}
-    var rowHighlights = {};
+    /* ═══════════════════════════════════════════════════════════════════════
+       PASS 1 — PURE DATA EVALUATION (zero DOM access)
+       [FIX-ROW-1] Collect all results from row.data — no td lookup here.
+    ═══════════════════════════════════════════════════════════════════════ */
+
+    var rowHighlights = {}; // rowKey → highlight info object
+    var cellStyles    = {}; // 'rowIdx:::colKey' → {rowIdx, colKey, rule}
+    var colorScales   = []; // [{rowIdx, colKey, color}]
+    var dataBars      = []; // [{rowIdx, colKey, pct, barColor}]
+    var iconSets      = []; // [{rowIdx, colKey, icon}]
 
     cols.forEach(function (col) {
       if (!col || !Array.isArray(col.conditionalRules) || !col.conditionalRules.length) return;
@@ -358,7 +360,7 @@
       var rules = col.conditionalRules.filter(function (r) { return r && !r.disabled; });
       if (!rules.length) return;
 
-      // Gather all values for this column (color scale / duplicate)
+      // Gather all values for this column (scale / duplicate evaluation)
       var colValues = rows.map(function (row) {
         return row && row.data ? (row.data[col.key] != null ? String(row.data[col.key]).trim() : '') : '';
       });
@@ -373,28 +375,24 @@
 
       rows.forEach(function (row, rowPos) {
         if (!row || !row.data) return;
-        var rowIdx = row.row_index != null ? row.row_index : rowPos;
-        var rowIdKey = row && row.id != null ? String(row.id) : ('idx:' + String(rowIdx));
+        var rowIdx   = row.row_index != null ? row.row_index : rowPos;
+        var rowIdKey = row.id != null ? String(row.id) : ('idx:' + String(rowIdx));
         var cellValue = row.data[col.key] != null ? row.data[col.key] : '';
-        var cellStr = String(cellValue).trim();
-
-        var td = grid.querySelector('td input.cell[data-row="'+rowIdx+'"][data-key="'+col.key+'"]');
-        if (td) td = td.parentElement;
-        if (!td) return;
+        var cellStr  = String(cellValue).trim();
 
         for (var ri = 0; ri < rules.length; ri++) {
           var rule = rules[ri];
           var matched = false;
 
           if (rule.type === 'single_color' || rule.type === 'formula') {
+
             if (rule.operator === 'is_duplicate') {
               matched = cellStr !== '' && (valueCounts[cellStr] || 0) > 1;
             } else if (rule.operator === 'is_unique') {
               matched = cellStr !== '' && (valueCounts[cellStr] || 0) === 1;
             } else if (rule.type === 'formula') {
-              // Inject full row context for COL() and ROW_DATA access
-              rule._evalRowData = row.data;
-              rule._evalColLabelMap = colLabelMap;
+              rule._evalRowData      = row.data;
+              rule._evalColLabelMap  = colLabelMap;
               matched = evalRule(rule, cellValue);
               delete rule._evalRowData;
               delete rule._evalColLabelMap;
@@ -404,39 +402,37 @@
 
             if (matched) {
               if (rule.highlightRow) {
-                // Queue row-level highlight — applied after per-cell loop
+                // [FIX-ROW-1] No DOM access — purely data-driven collection
                 if (!rowHighlights[rowIdKey]) {
                   rowHighlights[rowIdKey] = {
-                    rowIndex: rowIdx,
-                    bgColor: rule.bgColor || '',
-                    textColor: rule.textColor || '',
-                    bold: !!rule.bold,
-                    italic: !!rule.italic,
-                    strikethrough: !!rule.strikethrough,
-                    underline: !!rule.underline,
-                    borderColor: rule.rowBorderColor || ''
+                    rowIndex:     rowIdx,
+                    bgColor:      rule.bgColor      || '',
+                    textColor:    rule.textColor    || '',
+                    bold:         !!rule.bold,
+                    italic:       !!rule.italic,
+                    strikethrough:!!rule.strikethrough,
+                    underline:    !!rule.underline,
+                    borderColor:  rule.rowBorderColor || ''
                   };
                 }
               } else {
-                applyStyleToTd(td, rule);
+                // Queue per-cell — DOM lookup deferred to Pass 2B
+                var cellKey = rowIdx + ':::' + col.key;
+                if (!cellStyles[cellKey]) {
+                  cellStyles[cellKey] = { rowIdx: rowIdx, colKey: col.key, rule: rule };
+                }
               }
-              break; // first match wins
+              break; // first-match-wins
             }
 
           } else if (rule.type === 'color_scale') {
             var numV = parseFloat(cellStr);
             if (!isNaN(numV) && maxVal !== minVal) {
               var t = (numV - minVal) / (maxVal - minVal);
-              var minC = rule.scaleMin || '#f87171';
-              var midC = rule.scaleMid || '#fde047';
-              var maxC = rule.scaleMax || '#4ade80';
               var color = t <= 0.5
-                ? interpolateHex(minC, midC, t * 2)
-                : interpolateHex(midC, maxC, (t - 0.5) * 2);
-              td.style.background = color;
-              td.setAttribute('data-cf-applied', '1');
-              var inp2 = td.querySelector('input.cell');
-              if (inp2) inp2.style.color = contrastColor(color);
+                ? interpolateHex(rule.scaleMin || '#f87171', rule.scaleMid || '#fde047', t * 2)
+                : interpolateHex(rule.scaleMid || '#fde047', rule.scaleMax || '#4ade80', (t - 0.5) * 2);
+              colorScales.push({ rowIdx: rowIdx, colKey: col.key, color: color });
             }
 
           } else if (rule.type === 'data_bar') {
@@ -445,43 +441,29 @@
               var pct = maxVal !== minVal
                 ? Math.max(0, Math.min(100, ((numV2 - minVal) / (maxVal - minVal)) * 100))
                 : 50;
-              var barColor = rule.barColor || '#22d3ee';
-              td.style.background = 'linear-gradient(to right, ' + hexToRgba(barColor, 0.45) + ' ' + pct + '%, transparent ' + pct + '%)';
-              td.style.borderLeft = '3px solid ' + barColor;
-              td.setAttribute('data-cf-applied', '1');
+              dataBars.push({ rowIdx: rowIdx, colKey: col.key, pct: pct, barColor: rule.barColor || '#22d3ee' });
             }
 
           } else if (rule.type === 'icon_set') {
             var numV3 = parseFloat(cellStr);
             if (!isNaN(numV3)) {
               var iconSet = ICON_SETS.find(function (s) { return s.id === rule.iconSetId; }) || ICON_SETS[0];
-              var icons = iconSet.icons;
-              var t3 = maxVal !== minVal ? (numV3 - minVal) / (maxVal - minVal) : 0.5;
+              var icons   = iconSet.icons;
+              var t3      = maxVal !== minVal ? (numV3 - minVal) / (maxVal - minVal) : 0.5;
               var iconIdx = t3 < 0.33 ? 0 : t3 < 0.67 ? 1 : 2;
-              var icon = icons[Math.min(iconIdx, icons.length - 1)];
-              var inp3 = td.querySelector('input.cell');
-              if (inp3) {
-                inp3.dataset.cfIcon = icon;
-                var existing = td.querySelector('.cf-icon-badge');
-                if (existing) existing.remove();
-                var badge = document.createElement('span');
-                badge.className = 'cf-icon-badge';
-                badge.textContent = icon;
-                badge.style.cssText = 'position:absolute;left:4px;top:50%;transform:translateY(-50%);pointer-events:none;font-size:12px;z-index:2;';
-                td.style.position = 'relative';
-                td.style.paddingLeft = '24px';
-                td.appendChild(badge);
-                td.setAttribute('data-cf-applied', '1');
-              }
+              iconSets.push({ rowIdx: rowIdx, colKey: col.key, icon: icons[Math.min(iconIdx, icons.length - 1)] });
             }
           }
         }
       });
     });
 
-    // ── Apply row-level highlights ──────────────────────────────────────────
-    // Uses semi-transparent fill (enterprise look) + left accent bar on row-num
-    // Grid lines are preserved via explicit box-shadow reinforcement
+    /* ═══════════════════════════════════════════════════════════════════════
+       PASS 2A — ROW HIGHLIGHTS (DOM, applied FIRST)
+       [FIX-ROW-2] Direct inline style.setProperty on EVERY td in the row.
+       Eliminates "holes" caused by CSS class being beaten by inline !important.
+    ═══════════════════════════════════════════════════════════════════════ */
+
     Object.keys(rowHighlights).forEach(function (rowKey) {
       var hl = rowHighlights[rowKey];
       var tr = grid.querySelector('tr[data-row-id="' + rowKey + '"]');
@@ -489,47 +471,124 @@
         tr = grid.querySelector('tr[data-row="' + hl.rowIndex + '"]');
       }
       if (!tr) return;
+
       tr.classList.add('cf-row-highlighted');
       tr.setAttribute('data-cf-row', '1');
 
-      // ── Compute semi-transparent background (35% opacity) ─────────────────
-      // FIX-CF-ROW-HL: Was 0.13 (13%) — nearly invisible on dark backgrounds.
-      // 0.35 (35%) is clearly visible while keeping the semi-transparent look.
-      var semiBg = hl.bgColor ? hexToRgba(hl.bgColor, 0.35) : '';
-      // ── Accent color for the left bar ─────────────────────────────────────
+      var semiBg      = hl.bgColor ? hexToRgba(hl.bgColor, 0.35) : '';
       var accentColor = hl.borderColor || hl.bgColor || '';
 
-      // Persist row-level color metadata so services-grid render() can stamp it on the next tbody rebuild.
+      // Keep CSS var for any CSS that still references it (legacy compat)
       tr.style.setProperty('--cf-row-bg', semiBg || 'transparent');
+      if (accentColor) tr.style.setProperty('--cf-row-accent', accentColor);
+
+      // Persist row metadata so services-grid render() can re-stamp on tbody rebuild
       var rowRef = rows.find(function (r) {
         if (!r) return false;
         if (r.id != null && String(r.id) === rowKey) return true;
         return String('idx:' + String(r.row_index)) === rowKey;
       });
       if (rowRef) rowRef.__cfRowBg = semiBg || '';
-      if (accentColor) tr.style.setProperty('--cf-row-accent', accentColor);
 
+      // [FIX-ROW-2] Apply to EVERY td via inline !important — no "holes"
+      tr.querySelectorAll('td').forEach(function (td) {
+        if (semiBg) {
+          td.style.setProperty('background', semiBg, 'important');
+          td.setAttribute('data-cf-row-bg', '1');
+        }
+      });
+
+      // Text style on all inputs in the row
       tr.querySelectorAll('td input.cell').forEach(function (inp) {
         if (hl.textColor) {
           inp.style.setProperty('color', hl.textColor, 'important');
         } else if (hl.bgColor) {
-          var luminance = (function (hex) {
+          var lum = (function (hex) {
             var c = hex.replace('#','');
-            if (c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
-            var r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);
-            return (0.299*r+0.587*g+0.114*b)/255;
+            if (c.length === 3) c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+            var r = parseInt(c.substr(0,2),16), g = parseInt(c.substr(2,2),16), b = parseInt(c.substr(4,2),16);
+            return (0.299*r + 0.587*g + 0.114*b) / 255;
           })(hl.bgColor);
-          inp.style.setProperty('color', luminance > 0.55 ? '#1e293b' : '#f1f5f9', 'important');
+          inp.style.setProperty('color', lum > 0.55 ? '#1e293b' : '#f1f5f9', 'important');
         }
-        inp.style.setProperty('font-weight', hl.bold ? '700' : 'normal', 'important');
-        inp.style.setProperty('font-style', hl.italic ? 'italic' : 'normal', 'important');
+        inp.style.setProperty('font-weight',    hl.bold   ? '700'    : 'normal', 'important');
+        inp.style.setProperty('font-style',     hl.italic ? 'italic' : 'normal', 'important');
         var dec2 = [];
         if (hl.strikethrough) dec2.push('line-through');
-        if (hl.underline) dec2.push('underline');
+        if (hl.underline)     dec2.push('underline');
         inp.style.setProperty('text-decoration', dec2.join(' ') || 'none', 'important');
       });
     });
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       PASS 2B — PER-CELL STYLES (DOM, applied AFTER row highlights)
+       Applied second so they override specific cells where both a row-highlight
+       rule and a per-cell rule matched.  Same inline specificity, later wins.
+    ═══════════════════════════════════════════════════════════════════════ */
+
+    Object.keys(cellStyles).forEach(function (key) {
+      var cs  = cellStyles[key];
+      var inp = grid.querySelector('td input.cell[data-row="' + cs.rowIdx + '"][data-key="' + cs.colKey + '"]');
+      if (!inp) return;
+      var td = inp.parentElement;
+      if (!td) return;
+      applyStyleToTd(td, cs.rule);
+    });
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       PASS 2C — COLOR SCALES (DOM)
+    ═══════════════════════════════════════════════════════════════════════ */
+
+    colorScales.forEach(function (cs) {
+      var inp = grid.querySelector('td input.cell[data-row="' + cs.rowIdx + '"][data-key="' + cs.colKey + '"]');
+      if (!inp) return;
+      var td = inp.parentElement;
+      if (!td) return;
+      td.style.background = cs.color;
+      td.setAttribute('data-cf-applied', '1');
+      inp.style.color = contrastColor(cs.color);
+    });
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       PASS 2D — DATA BARS (DOM)
+    ═══════════════════════════════════════════════════════════════════════ */
+
+    dataBars.forEach(function (db) {
+      var inp = grid.querySelector('td input.cell[data-row="' + db.rowIdx + '"][data-key="' + db.colKey + '"]');
+      if (!inp) return;
+      var td = inp.parentElement;
+      if (!td) return;
+      td.style.background = 'linear-gradient(to right, ' + hexToRgba(db.barColor, 0.45) + ' ' + db.pct + '%, transparent ' + db.pct + '%)';
+      td.style.borderLeft = '3px solid ' + db.barColor;
+      td.setAttribute('data-cf-applied', '1');
+    });
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       PASS 2E — ICON SETS (DOM)
+    ═══════════════════════════════════════════════════════════════════════ */
+
+    iconSets.forEach(function (is) {
+      var inp = grid.querySelector('td input.cell[data-row="' + is.rowIdx + '"][data-key="' + is.colKey + '"]');
+      if (!inp) return;
+      var td = inp.parentElement;
+      if (!td) return;
+      inp.dataset.cfIcon = is.icon;
+      var existing = td.querySelector('.cf-icon-badge');
+      if (existing) existing.remove();
+      var badge = document.createElement('span');
+      badge.className = 'cf-icon-badge';
+      badge.textContent = is.icon;
+      badge.style.cssText = 'position:absolute;left:4px;top:50%;transform:translateY(-50%);pointer-events:none;font-size:12px;z-index:2;';
+      td.style.position   = 'relative';
+      td.style.paddingLeft = '24px';
+      td.appendChild(badge);
+      td.setAttribute('data-cf-applied', '1');
+    });
   }
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     applyStyleToTd — per-cell style writer (unchanged from v1.0)
+  ───────────────────────────────────────────────────────────────────────── */
 
   function applyStyleToTd(td, rule) {
     var bgColor   = rule.bgColor   || '';
@@ -539,8 +598,6 @@
     var strike    = !!rule.strikethrough;
     var underline = !!rule.underline;
 
-    // FIX-CF: Use setProperty with 'important' so CF wins over
-    // cell-qb-linked { color: #67e8f9 !important } CSS class.
     if (bgColor) {
       td.style.setProperty('background', bgColor, 'important');
       td.style.setProperty('box-shadow', [
@@ -574,53 +631,43 @@
     var panel   = mkEl('div', { className: 'svc-cf-panel' }, overlay);
     mkEl('div', { className: 'svc-cf-accent-bar' }, panel);
 
-    // Header
     var header = mkEl('div', { className: 'svc-cf-header' }, panel);
-    var icon   = mkEl('div', { className: 'svc-cf-header-icon', textContent: '🎨' }, header);
-    var htxt   = mkEl('div', { className: 'svc-cf-header-text' }, header);
+    mkEl('div', { className: 'svc-cf-header-icon', textContent: '\uD83C\uDFA8' }, header);
+    var htxt = mkEl('div', { className: 'svc-cf-header-text' }, header);
     mkEl('p', { className: 'svc-cf-header-title', textContent: 'Conditional Formatting' }, htxt);
-    mkEl('p', { className: 'svc-cf-header-sub',   textContent: 'Format cells that meet defined criteria — like Google Sheets.' }, htxt);
+    mkEl('p', { className: 'svc-cf-header-sub',   textContent: 'Format cells that meet defined criteria \u2014 like Google Sheets.' }, htxt);
     mkEl('span', { className: 'svc-cf-col-badge', id: 'cfColBadge', textContent: '' }, header);
-    var closeBtn = mkEl('button', { className: 'svc-cf-close-btn', id: 'cfCloseBtn', textContent: '✕', title: 'Close' }, header);
+    var closeBtn = mkEl('button', { className: 'svc-cf-close-btn', id: 'cfCloseBtn', textContent: '\u2715', title: 'Close' }, header);
 
-    // Body — 2 panes
     var body = mkEl('div', { className: 'svc-cf-body' }, panel);
 
-    // LEFT: rule list
     var listPane = mkEl('div', { className: 'svc-cf-list-pane' }, body);
     var listHdr  = mkEl('div', { className: 'svc-cf-list-header' }, listPane);
     mkEl('span', { className: 'svc-cf-list-label', textContent: 'Rules' }, listHdr);
-    var addBtn = mkEl('button', { className: 'svc-cf-add-btn', id: 'cfAddRuleBtn', textContent: '+ Add rule' }, listHdr);
-    var rulesList = mkEl('div', { className: 'svc-cf-rules-list', id: 'cfRulesList' }, listPane);
+    mkEl('button', { className: 'svc-cf-add-btn', id: 'cfAddRuleBtn', textContent: '+ Add rule' }, listHdr);
+    mkEl('div', { className: 'svc-cf-rules-list', id: 'cfRulesList' }, listPane);
 
-    // RIGHT: editor
-    var editorPane = mkEl('div', { className: 'svc-cf-editor-pane', id: 'cfEditorPane' }, body);
+    mkEl('div', { className: 'svc-cf-editor-pane', id: 'cfEditorPane' }, body);
 
-    // Footer
     var footer = mkEl('div', { className: 'svc-cf-footer' }, panel);
-    mkEl('button', { className: 'svc-cf-btn svc-cf-btn-ghost', id: 'cfClearAllBtn', textContent: '🗑 Clear All' }, footer);
-    var spacer = mkEl('span', { style: 'flex:1' }, footer);
+    mkEl('button', { className: 'svc-cf-btn svc-cf-btn-ghost', id: 'cfClearAllBtn', textContent: '\uD83D\uDDD1 Clear All' }, footer);
+    mkEl('span', { style: 'flex:1' }, footer);
     mkEl('button', { className: 'svc-cf-btn svc-cf-btn-ghost', id: 'cfCancelBtn', textContent: 'Cancel' }, footer);
-    mkEl('button', { className: 'svc-cf-btn svc-cf-btn-primary', id: 'cfSaveBtn', textContent: '✓ Done' }, footer);
+    mkEl('button', { className: 'svc-cf-btn svc-cf-btn-primary', id: 'cfSaveBtn', textContent: '\u2713 Done' }, footer);
 
     document.body.appendChild(overlay);
 
-    /* Events */
     closeBtn.addEventListener('click', closeModal);
     document.getElementById('cfCancelBtn').addEventListener('click', closeModal);
     document.getElementById('cfSaveBtn').addEventListener('click', saveRules);
     document.getElementById('cfClearAllBtn').addEventListener('click', clearAllRules);
     document.getElementById('cfAddRuleBtn').addEventListener('click', addNewRule);
-    overlay.addEventListener('click', function (e) {
-      if (e.target === overlay) closeModal();
-    });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && _state.open) closeModal();
-    });
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) closeModal(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && _state.open) closeModal(); });
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
-     RULES LIST RENDER
+     RULES LIST
   ───────────────────────────────────────────────────────────────────────── */
 
   function renderRulesList() {
@@ -630,7 +677,7 @@
 
     if (!_state.rules.length) {
       var empty = mkEl('div', { className: 'svc-cf-rules-empty' }, container);
-      mkEl('div', { className: 'svc-cf-rules-empty-icon', textContent: '🎨' }, empty);
+      mkEl('div', { className: 'svc-cf-rules-empty-icon', textContent: '\uD83C\uDFA8' }, empty);
       mkEl('div', { className: 'svc-cf-rules-empty-text', textContent: 'No rules yet. Click "+ Add rule" to start.' }, empty);
       renderEditor(null);
       return;
@@ -640,7 +687,6 @@
       var card = mkEl('div', { className: 'cf-rule-card' + (idx === _state.activeRuleIdx ? ' cf-rule-active' : '') }, container);
       card.dataset.idx = idx;
 
-      // Color swatch
       var swatch = mkEl('div', { className: 'cf-rule-swatch' }, card);
       var swatchInner = mkEl('div', { className: 'cf-rule-swatch-inner' }, swatch);
       if (rule.type === 'color_scale') {
@@ -649,7 +695,7 @@
       } else if (rule.type === 'data_bar') {
         swatch.style.background = rule.barColor ? hexToRgba(rule.barColor, 0.3) : 'rgba(34,211,238,0.2)';
         swatch.style.borderColor = rule.barColor || '#22d3ee';
-        swatchInner.textContent = '▬';
+        swatchInner.textContent = '\u25AC';
         swatchInner.style.color = rule.barColor || '#22d3ee';
       } else if (rule.type === 'icon_set') {
         var is = ICON_SETS.find(function (s) { return s.id === rule.iconSetId; }) || ICON_SETS[0];
@@ -664,23 +710,18 @@
         swatchInner.style.fontWeight = rule.bold ? '700' : '400';
       }
 
-      // Meta
       var meta = mkEl('div', { className: 'cf-rule-meta' }, card);
-      mkEl('div', { className: 'cf-rule-cond', textContent: getRuleLabel(rule) }, meta);
+      mkEl('div', { className: 'cf-rule-cond',    textContent: getRuleLabel(rule) }, meta);
       mkEl('div', { className: 'cf-rule-preview', textContent: getRulePreview(rule) }, meta);
 
-      // Rule actions (always visible for touch + dark theme accessibility)
       var actionWrap = mkEl('div', { className: 'cf-rule-actions' }, card);
-      var orderWrap = mkEl('div', { className: 'cf-rule-order-btns' }, actionWrap);
-      var upBtn = mkEl('button', { className: 'cf-rule-order-btn', textContent: '▲', title: 'Move up' }, orderWrap);
-      var dnBtn = mkEl('button', { className: 'cf-rule-order-btn', textContent: '▼', title: 'Move down' }, orderWrap);
+      var orderWrap  = mkEl('div', { className: 'cf-rule-order-btns' }, actionWrap);
+      var upBtn = mkEl('button', { className: 'cf-rule-order-btn', textContent: '\u25B2', title: 'Move up' }, orderWrap);
+      var dnBtn = mkEl('button', { className: 'cf-rule-order-btn', textContent: '\u25BC', title: 'Move down' }, orderWrap);
       upBtn.disabled = idx === 0;
       dnBtn.disabled = idx === _state.rules.length - 1;
+      var delBtn = mkEl('button', { className: 'cf-rule-del-btn', textContent: '\u2715', title: 'Delete rule' }, actionWrap);
 
-      // Delete button
-      var delBtn = mkEl('button', { className: 'cf-rule-del-btn', textContent: '✕', title: 'Delete rule' }, actionWrap);
-
-      // Events
       card.addEventListener('click', function (e) {
         if (e.target.closest('button')) return;
         _state.activeRuleIdx = idx;
@@ -722,7 +763,7 @@
   }
 
   function getRuleLabel(rule) {
-    if (!rule) return '—';
+    if (!rule) return '\u2014';
     var typeLabel = { single_color:'Single Color', color_scale:'Color Scale', data_bar:'Data Bar', icon_set:'Icon Set', formula:'Custom Formula' };
     var type = typeLabel[rule.type] || rule.type;
     if (rule.type === 'single_color' || rule.type === 'formula') {
@@ -737,14 +778,14 @@
     if (!rule) return '';
     if (rule.type === 'single_color' || rule.type === 'formula') {
       var parts = [];
-      if (rule.bgColor) parts.push('BG: ' + rule.bgColor);
-      if (rule.textColor) parts.push('Text: ' + rule.textColor);
-      if (rule.bold) parts.push('Bold');
-      if (rule.italic) parts.push('Italic');
-      return parts.join(' · ') || 'Style set';
+      if (rule.bgColor)    parts.push('BG: ' + rule.bgColor);
+      if (rule.textColor)  parts.push('Text: ' + rule.textColor);
+      if (rule.bold)       parts.push('Bold');
+      if (rule.italic)     parts.push('Italic');
+      return parts.join(' \u00B7 ') || 'Style set';
     }
-    if (rule.type === 'color_scale') return (rule.scaleMin||'#f87171') + ' → ' + (rule.scaleMax||'#4ade80');
-    if (rule.type === 'data_bar') return 'Bar: ' + (rule.barColor || '#22d3ee');
+    if (rule.type === 'color_scale') return (rule.scaleMin||'#f87171') + ' \u2192 ' + (rule.scaleMax||'#4ade80');
+    if (rule.type === 'data_bar')    return 'Bar: ' + (rule.barColor || '#22d3ee');
     if (rule.type === 'icon_set') {
       var is = ICON_SETS.find(function (s) { return s.id === rule.iconSetId; }) || ICON_SETS[0];
       return is.icons.join(' ');
@@ -753,7 +794,7 @@
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
-     EDITOR PANE RENDER
+     EDITOR PANE
   ───────────────────────────────────────────────────────────────────────── */
 
   function renderEditor(rule) {
@@ -763,14 +804,13 @@
 
     if (!rule) {
       var noRule = mkEl('div', { className: 'svc-cf-no-rule' }, pane);
-      mkEl('div', { className: 'svc-cf-no-rule-icon', textContent: '🎨' }, noRule);
+      mkEl('div', { className: 'svc-cf-no-rule-icon', textContent: '\uD83C\uDFA8' }, noRule);
       mkEl('div', { className: 'svc-cf-no-rule-text', textContent: 'Select a rule to edit, or add a new one.' }, noRule);
       return;
     }
 
     var editor = mkEl('div', { className: 'svc-cf-editor' }, pane);
 
-    /* ── FORMAT TYPE TABS ── */
     var typeSection = mkEl('div', { className: 'svc-cf-section' }, editor);
     mkEl('div', { className: 'svc-cf-section-title', textContent: 'Format Type' }, typeSection);
     var typeTabs = mkEl('div', { className: 'svc-cf-type-tabs' }, typeSection);
@@ -781,57 +821,39 @@
       }, typeTabs);
       tab.addEventListener('click', function () {
         _state.draft.type = ft.id;
-        // Reset operator to first option of relevant type
         if (ft.id === 'single_color') _state.draft.operator = _state.draft.operator || 'contains';
         syncDraftToRule();
         renderEditor(_state.draft);
       });
     });
 
-    /* ── SECTION: APPLY TO RANGE ── */
     var rangeSection = mkEl('div', { className: 'svc-cf-section' }, editor);
     mkEl('div', { className: 'svc-cf-section-title', textContent: 'Apply To Column' }, rangeSection);
     var rangeChips = mkEl('div', { className: 'svc-cf-range-chips' }, rangeSection);
-    var chip = mkEl('span', { className: 'svc-cf-range-chip', textContent: '📋 ' + _state.colLabel }, rangeChips);
+    mkEl('span', { className: 'svc-cf-range-chip', textContent: '\uD83D\uDCCB ' + _state.colLabel }, rangeChips);
 
-    /* ── SECTION: FORMAT RULES ── */
     var ruleSection = mkEl('div', { className: 'svc-cf-section' }, editor);
     mkEl('div', { className: 'svc-cf-section-title', textContent: 'Format Rules' }, ruleSection);
 
-    if (rule.type === 'single_color') {
-      renderSingleColorCondition(ruleSection, rule);
-    } else if (rule.type === 'color_scale') {
-      renderColorScale(ruleSection, rule);
-    } else if (rule.type === 'data_bar') {
-      renderDataBar(ruleSection, rule);
-    } else if (rule.type === 'icon_set') {
-      renderIconSet(ruleSection, rule);
-    } else if (rule.type === 'formula') {
-      renderFormula(ruleSection, rule);
-    }
+    if (rule.type === 'single_color')  renderSingleColorCondition(ruleSection, rule);
+    else if (rule.type === 'color_scale') renderColorScale(ruleSection, rule);
+    else if (rule.type === 'data_bar')    renderDataBar(ruleSection, rule);
+    else if (rule.type === 'icon_set')    renderIconSet(ruleSection, rule);
+    else if (rule.type === 'formula')     renderFormula(ruleSection, rule);
 
-    /* ── SECTION: FORMATTING STYLE (for single_color & formula) ── */
     if (rule.type === 'single_color' || rule.type === 'formula') {
       var styleSection = mkEl('div', { className: 'svc-cf-section' }, editor);
       mkEl('div', { className: 'svc-cf-section-title', textContent: 'Formatting Style' }, styleSection);
       renderStylePicker(styleSection, rule);
 
-      /* ── ROW HIGHLIGHT TOGGLE (single_color) ── */
       if (rule.type === 'single_color') {
         var rowHlSection = mkEl('div', { className: 'svc-cf-section' }, editor);
         mkEl('div', { className: 'svc-cf-section-title', textContent: 'Row Highlight' }, rowHlSection);
         var rowToggleWrapSC = mkEl('div', { className: 'svc-cf-row-toggle-wrap' }, rowHlSection);
         var rowToggleSC = mkEl('label', { className: 'svc-cf-row-toggle-label' }, rowToggleWrapSC);
-        var rowChkSC = mkEl('input', {
-          type: 'checkbox',
-          className: 'svc-cf-row-chk',
-          checked: !!rule.highlightRow
-        }, rowToggleSC);
+        var rowChkSC = mkEl('input', { type: 'checkbox', className: 'svc-cf-row-chk', checked: !!rule.highlightRow }, rowToggleSC);
         mkEl('span', { className: 'svc-cf-toggle-slider' }, rowToggleSC);
-        mkEl('span', {
-          className: 'svc-cf-toggle-text',
-          textContent: '🌈 Highlight the entire row when condition is met'
-        }, rowToggleSC);
+        mkEl('span', { className: 'svc-cf-toggle-text', textContent: '\uD83C\uDF08 Highlight the entire row when condition is met' }, rowToggleSC);
         rowChkSC.addEventListener('change', function () {
           _state.draft.highlightRow = rowChkSC.checked;
           syncDraftToRule();
@@ -839,24 +861,22 @@
       }
     }
 
-    /* ── PREVIEW ── */
     var previewSection = mkEl('div', { className: 'svc-cf-section' }, editor);
     mkEl('div', { className: 'svc-cf-section-title', textContent: 'Preview' }, previewSection);
     renderPreview(previewSection, rule);
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
-     SINGLE COLOR CONDITION BUILDER
+     SINGLE COLOR CONDITION
   ───────────────────────────────────────────────────────────────────────── */
 
   function renderSingleColorCondition(parent, rule) {
-    // Operator category tabs
     var catTabs = mkEl('div', { className: 'svc-cf-type-tabs', style: 'margin-bottom:10px;' }, parent);
     var categories = [
-      { id: 'text',      label: '🔤 Text' },
-      { id: 'number',    label: '🔢 Number' },
-      { id: 'date',      label: '📅 Date' },
-      { id: 'duplicate', label: '🔁 Duplicate' }
+      { id: 'text',      label: '\uD83D\uDD24 Text' },
+      { id: 'number',    label: '\uD83D\uDD22 Number' },
+      { id: 'date',      label: '\uD83D\uDCC5 Date' },
+      { id: 'duplicate', label: '\uD83D\uDD01 Duplicate' }
     ];
     var activeCat = rule._opCat || guessOpCat(rule.operator);
     if (!activeCat) activeCat = 'text';
@@ -868,19 +888,18 @@
         style: 'font-size:11px;padding:5px 10px;'
       }, catTabs);
       tab.addEventListener('click', function () {
-        _state.draft._opCat = cat.id;
+        _state.draft._opCat   = cat.id;
         _state.draft.operator = OPERATORS[cat.id][0].value;
-        _state.draft.param1 = '';
-        _state.draft.param2 = '';
+        _state.draft.param1   = '';
+        _state.draft.param2   = '';
         syncDraftToRule();
         renderEditor(_state.draft);
       });
     });
 
-    // Operator select
     var condRow = mkEl('div', { className: 'svc-cf-condition-row' }, parent);
-    var opSel = mkEl('select', { className: 'svc-cf-select svc-cf-operator-sel' }, condRow);
-    var opList = OPERATORS[activeCat] || OPERATORS.text;
+    var opSel   = mkEl('select', { className: 'svc-cf-select svc-cf-operator-sel' }, condRow);
+    var opList  = OPERATORS[activeCat] || OPERATORS.text;
     opList.forEach(function (op) {
       var o = mkEl('option', { value: op.value, textContent: op.label }, opSel);
       if (op.value === rule.operator) o.selected = true;
@@ -891,29 +910,17 @@
       renderEditor(_state.draft);
     });
 
-    // Value inputs
-    var op = rule.operator;
+    var op      = rule.operator;
     var noValue = ['empty','not_empty','date_today','date_tomorrow','date_yesterday','date_past_week','date_past_month','is_duplicate','is_unique'];
     var needsTwo = ['between','not_between'];
 
     if (noValue.indexOf(op) === -1) {
       var inputType = (activeCat === 'date' || op === 'date_before' || op === 'date_after' || op === 'date_eq') ? 'date' : 'text';
-      var v1 = mkEl('input', {
-        className: 'svc-cf-input svc-cf-value-input',
-        type: inputType,
-        placeholder: 'Value…',
-        value: rule.param1 || ''
-      }, condRow);
+      var v1 = mkEl('input', { className: 'svc-cf-input svc-cf-value-input', type: inputType, placeholder: 'Value\u2026', value: rule.param1 || '' }, condRow);
       v1.addEventListener('input', function () { _state.draft.param1 = v1.value; syncDraftToRule(); updatePreview(); });
-
       if (needsTwo.indexOf(op) !== -1) {
         mkEl('span', { className: 'svc-cf-between-sep', textContent: 'and' }, condRow);
-        var v2 = mkEl('input', {
-          className: 'svc-cf-input svc-cf-value-input2',
-          type: 'text',
-          placeholder: 'Value…',
-          value: rule.param2 || ''
-        }, condRow);
+        var v2 = mkEl('input', { className: 'svc-cf-input svc-cf-value-input2', type: 'text', placeholder: 'Value\u2026', value: rule.param2 || '' }, condRow);
         v2.addEventListener('input', function () { _state.draft.param2 = v2.value; syncDraftToRule(); updatePreview(); });
       }
     }
@@ -933,21 +940,15 @@
 
   function renderColorScale(parent, rule) {
     var row = mkEl('div', { className: 'svc-cf-scale-row' }, parent);
-
     [
-      { key: 'scaleMin', label: '▼ Minimum', def: '#f87171' },
-      { key: 'scaleMid', label: '— Midpoint', def: '#fde047' },
-      { key: 'scaleMax', label: '▲ Maximum', def: '#4ade80' }
+      { key: 'scaleMin', label: '\u25BC Minimum', def: '#f87171' },
+      { key: 'scaleMid', label: '\u2014 Midpoint', def: '#fde047' },
+      { key: 'scaleMax', label: '\u25B2 Maximum', def: '#4ade80' }
     ].forEach(function (stop) {
       var col = mkEl('div', { className: 'svc-cf-scale-stop' }, row);
       mkEl('div', { className: 'svc-cf-scale-stop-label', textContent: stop.label }, col);
       var sw = mkEl('div', { className: 'svc-cf-scale-swatch-wrap' }, col);
-      var picker = mkEl('input', {
-        type: 'color',
-        className: 'svc-cf-scale-swatch',
-        value: rule[stop.key] || stop.def,
-        title: stop.label
-      }, sw);
+      var picker = mkEl('input', { type: 'color', className: 'svc-cf-scale-swatch', value: rule[stop.key] || stop.def, title: stop.label }, sw);
       picker.addEventListener('input', function () {
         _state.draft[stop.key] = picker.value;
         syncDraftToRule();
@@ -955,9 +956,7 @@
         updatePreview();
       });
     });
-
-    // Gradient preview bar
-    var gradBar = mkEl('div', { className: 'svc-cf-scale-gradient', id: 'cfScaleGradBar' }, parent);
+    mkEl('div', { className: 'svc-cf-scale-gradient', id: 'cfScaleGradBar' }, parent);
     updateScaleGradient(parent, rule);
   }
 
@@ -980,11 +979,8 @@
       _state.draft.barColor = hex;
       syncDraftToRule();
       updatePreview();
-      // Refresh swatch active states
       renderDataBar(parent, _state.draft);
     });
-
-    // Data bar preview
     var prevWrap = mkEl('div', { className: 'svc-cf-databar-preview', style: 'margin-top:10px;' }, parent);
     var fill = mkEl('div', { className: 'svc-cf-databar-fill' }, prevWrap);
     fill.style.background = rule.barColor || '#22d3ee';
@@ -995,13 +991,13 @@
   ───────────────────────────────────────────────────────────────────────── */
 
   function renderIconSet(parent, rule) {
-    var grid = mkEl('div', { className: 'svc-cf-iconset-grid' }, parent);
+    var gridEl = mkEl('div', { className: 'svc-cf-iconset-grid' }, parent);
     ICON_SETS.forEach(function (is) {
       var opt = mkEl('div', {
         className: 'svc-cf-iconset-option' + (rule.iconSetId === is.id ? ' cf-iconset-active' : '')
-      }, grid);
+      }, gridEl);
       mkEl('div', { className: 'svc-cf-iconset-icons', textContent: is.icons.join(' ') }, opt);
-      mkEl('div', { className: 'svc-cf-iconset-name', textContent: is.name }, opt);
+      mkEl('div', { className: 'svc-cf-iconset-name',  textContent: is.name }, opt);
       opt.addEventListener('click', function () {
         _state.draft.iconSetId = is.id;
         syncDraftToRule();
@@ -1011,31 +1007,25 @@
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
-     FORMULA EDITOR — with ROW HIGHLIGHT toggle + column reference builder
+     FORMULA
   ───────────────────────────────────────────────────────────────────────── */
 
   function renderFormula(parent, rule) {
-    // ── Column reference quick-insert ──────────────────────────────────────
-    var state2 = window.servicesGrid ? window.servicesGrid.getState() : null;
+    var state2    = window.servicesGrid ? window.servicesGrid.getState() : null;
     var availCols = (state2 && state2.sheet && state2.sheet.column_defs) ? state2.sheet.column_defs : [];
 
     if (availCols.length) {
       var refSection = mkEl('div', { className: 'svc-cf-formula-ref-wrap' }, parent);
-      mkEl('div', { className: 'svc-cf-formula-ref-label', textContent: '📋 Quick-insert column reference:' }, refSection);
+      mkEl('div', { className: 'svc-cf-formula-ref-label', textContent: '\uD83D\uDCCB Quick-insert column reference:' }, refSection);
       var chips = mkEl('div', { className: 'svc-cf-formula-ref-chips' }, refSection);
       availCols.forEach(function (col) {
         if (!col || !col.label) return;
-        var chip = mkEl('button', {
-          className: 'svc-cf-formula-ref-chip',
-          textContent: col.label,
-          title: 'Insert COL("' + col.label + '")'
-        }, chips);
+        var chip = mkEl('button', { className: 'svc-cf-formula-ref-chip', textContent: col.label, title: 'Insert COL("' + col.label + '")' }, chips);
         chip.addEventListener('click', function () {
           var ta2 = parent.querySelector('.svc-cf-formula-input');
           if (!ta2) return;
           var ins = 'COL("' + col.label + '")';
-          var start = ta2.selectionStart || 0;
-          var end   = ta2.selectionEnd   || 0;
+          var start = ta2.selectionStart || 0, end = ta2.selectionEnd || 0;
           ta2.value = ta2.value.slice(0, start) + ins + ta2.value.slice(end);
           ta2.selectionStart = ta2.selectionEnd = start + ins.length;
           ta2.dispatchEvent(new Event('input'));
@@ -1044,7 +1034,6 @@
       });
     }
 
-    // ── Formula textarea ───────────────────────────────────────────────────
     var wrap = mkEl('div', { className: 'svc-cf-formula-wrap' }, parent);
     var ta = mkEl('textarea', {
       className: 'svc-cf-formula-input',
@@ -1063,113 +1052,72 @@
       value: rule.formula || ''
     }, wrap);
 
-    // ── Highlight entire row toggle ────────────────────────────────────────
     var rowToggleWrap = mkEl('div', { className: 'svc-cf-row-toggle-wrap' }, parent);
     var rowToggle = mkEl('label', { className: 'svc-cf-row-toggle-label' }, rowToggleWrap);
-    var rowChk = mkEl('input', {
-      type: 'checkbox',
-      className: 'svc-cf-row-chk',
-      checked: !!rule.highlightRow
-    }, rowToggle);
-    var toggleSlider = mkEl('span', { className: 'svc-cf-toggle-slider' }, rowToggle);
-    var toggleText = mkEl('span', {
-      className: 'svc-cf-toggle-text',
-      textContent: '🌈 Highlight Entire Row (like Google Sheets row highlight)'
-    }, rowToggle);
+    var rowChk = mkEl('input', { type: 'checkbox', className: 'svc-cf-row-chk', checked: !!rule.highlightRow }, rowToggle);
+    mkEl('span', { className: 'svc-cf-toggle-slider' }, rowToggle);
+    mkEl('span', { className: 'svc-cf-toggle-text', textContent: '\uD83C\uDF08 Highlight Entire Row (like Google Sheets row highlight)' }, rowToggle);
 
-    // ── Variables reference card ───────────────────────────────────────────
-    var varsCard = mkEl('div', { className: 'svc-cf-vars-card' }, parent);
-    mkEl('div', { className: 'svc-cf-vars-title', textContent: '📖 Available Variables' }, varsCard);
+    var varsCard  = mkEl('div', { className: 'svc-cf-vars-card' }, parent);
+    mkEl('div', { className: 'svc-cf-vars-title', textContent: '\uD83D\uDCD6 Available Variables' }, varsCard);
     var varsList = [
-      { name: 'VALUE',            desc: 'Cell value (string or number)',                 example: 'VALUE === "Active"' },
-      { name: 'NUMVAL',           desc: 'Cell value as number (NaN if not numeric)',      example: 'NUMVAL > 100' },
-      { name: 'COL("ColName")',   desc: 'Value of another column in the same row',        example: 'COL("STATUS") === "Submitted"' },
-      { name: 'ROW_DATA',         desc: 'Full row data object (access by column key)',    example: 'ROW_DATA["col_key"]' }
+      { name: 'VALUE',           desc: 'Cell value (string or number)',            example: 'VALUE === "Active"' },
+      { name: 'NUMVAL',          desc: 'Cell value as number (NaN if not numeric)', example: 'NUMVAL > 100' },
+      { name: 'COL("ColName")',  desc: 'Value of another column in the same row',  example: 'COL("STATUS") === "Submitted"' },
+      { name: 'ROW_DATA',        desc: 'Full row data object (access by key)',      example: 'ROW_DATA["col_key"]' }
     ];
     var varsTable = mkEl('div', { className: 'svc-cf-vars-table' }, varsCard);
     varsList.forEach(function (v) {
       var row2 = mkEl('div', { className: 'svc-cf-vars-row' }, varsTable);
-      mkEl('code', { className: 'svc-cf-vars-name', textContent: v.name }, row2);
-      mkEl('span', { className: 'svc-cf-vars-desc', textContent: v.desc }, row2);
+      mkEl('code', { className: 'svc-cf-vars-name',    textContent: v.name }, row2);
+      mkEl('span', { className: 'svc-cf-vars-desc',    textContent: v.desc }, row2);
       mkEl('code', { className: 'svc-cf-vars-example', textContent: v.example }, row2);
     });
+    mkEl('div', { className: 'svc-cf-formula-hint', textContent: 'JS expression \u2014 returns true/false. No semicolons needed. Use COL("Column Name") to reference other columns in the same row.' }, parent);
 
-    // ── Hint ──────────────────────────────────────────────────────────────
-    mkEl('div', {
-      className: 'svc-cf-formula-hint',
-      textContent: 'JS expression — returns true/false. No semicolons needed. Use COL("Column Name") to reference other columns in the same row.'
-    }, parent);
-
-    // ── Events ────────────────────────────────────────────────────────────
-    ta.addEventListener('input', function () {
-      _state.draft.formula = ta.value;
-      syncDraftToRule();
-      updatePreview();
-    });
-    rowChk.addEventListener('change', function () {
-      _state.draft.highlightRow = rowChk.checked;
-      syncDraftToRule();
-      updatePreview();
-    });
+    ta.addEventListener('input', function () { _state.draft.formula = ta.value; syncDraftToRule(); updatePreview(); });
+    rowChk.addEventListener('change', function () { _state.draft.highlightRow = rowChk.checked; syncDraftToRule(); updatePreview(); });
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
-     STYLE PICKER (for single_color + formula)
+     STYLE PICKER
   ───────────────────────────────────────────────────────────────────────── */
 
   function renderStylePicker(parent, rule) {
     var styleGrid = mkEl('div', { className: 'svc-cf-style-grid' }, parent);
 
-    // BG Color
     var bgRow = mkEl('div', { className: 'svc-cf-color-row' }, styleGrid);
-    mkEl('div', { className: 'svc-cf-color-label', textContent: '🟥 Background Color' }, bgRow);
+    mkEl('div', { className: 'svc-cf-color-label', textContent: '\uD83D\uDFE5 Background Color' }, bgRow);
     var bgPal = mkEl('div', { className: 'svc-cf-palette' }, bgRow);
     renderSwatches(bgPal, BG_PALETTE, rule.bgColor || '', function (hex) {
-      _state.draft.bgColor = hex;
-      syncDraftToRule();
-      updatePreview();
+      _state.draft.bgColor = hex; syncDraftToRule(); updatePreview();
     }, true);
-    // Custom color
     var bgCustom = mkEl('input', { type: 'color', className: 'svc-cf-custom-color', value: rule.bgColor || '#ffffff', title: 'Custom color' }, bgPal);
-    bgCustom.addEventListener('input', function () {
-      _state.draft.bgColor = bgCustom.value;
-      syncDraftToRule();
-      updatePreview();
-    });
+    bgCustom.addEventListener('input', function () { _state.draft.bgColor = bgCustom.value; syncDraftToRule(); updatePreview(); });
 
-    // Text Color
     var txRow = mkEl('div', { className: 'svc-cf-color-row' }, styleGrid);
-    mkEl('div', { className: 'svc-cf-color-label', textContent: '🔤 Text Color' }, txRow);
+    mkEl('div', { className: 'svc-cf-color-label', textContent: '\uD83D\uDD24 Text Color' }, txRow);
     var txPal = mkEl('div', { className: 'svc-cf-palette' }, txRow);
     renderSwatches(txPal, TEXT_PALETTE, rule.textColor || '', function (hex) {
-      _state.draft.textColor = hex;
-      syncDraftToRule();
-      updatePreview();
+      _state.draft.textColor = hex; syncDraftToRule(); updatePreview();
     }, true);
     var txCustom = mkEl('input', { type: 'color', className: 'svc-cf-custom-color', value: rule.textColor || '#ffffff', title: 'Custom text color' }, txPal);
-    txCustom.addEventListener('input', function () {
-      _state.draft.textColor = txCustom.value;
-      syncDraftToRule();
-      updatePreview();
-    });
+    txCustom.addEventListener('input', function () { _state.draft.textColor = txCustom.value; syncDraftToRule(); updatePreview(); });
 
-    // Font style
     var fontRow = mkEl('div', { className: 'svc-cf-font-row', style: 'grid-column:1/-1;' }, styleGrid);
     mkEl('div', { className: 'svc-cf-color-label', textContent: 'Font Style' }, fontRow);
     var fontToggles = mkEl('div', { className: 'svc-cf-font-toggles' }, fontRow);
-
-    var fontBtns = [
+    [
       { key: 'bold',          label: 'B', style: 'font-weight:700;',              title: 'Bold' },
       { key: 'italic',        label: 'I', style: 'font-style:italic;',            title: 'Italic' },
       { key: 'strikethrough', label: 'S', style: 'text-decoration:line-through;', title: 'Strikethrough' },
       { key: 'underline',     label: 'U', style: 'text-decoration:underline;',    title: 'Underline' }
-    ];
-    fontBtns.forEach(function (fb) {
+    ].forEach(function (fb) {
       var btn = mkEl('button', {
         className: 'svc-cf-font-btn' + (rule[fb.key] ? ' cf-font-active' : ''),
         title: fb.title
       }, fontToggles);
-      btn.innerHTML = '<span style="'+fb.style+'">'+fb.label+'</span>';
+      btn.innerHTML = '<span style="' + fb.style + '">' + fb.label + '</span>';
       btn.addEventListener('click', function () {
         _state.draft[fb.key] = !_state.draft[fb.key];
         syncDraftToRule();
@@ -1185,7 +1133,7 @@
         title: 'None',
         style: 'background:transparent;border:1.5px dashed rgba(148,163,184,0.3);position:relative;'
       }, container);
-      noneBtn.innerHTML = '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:10px;color:#475569;">∅</span>';
+      noneBtn.innerHTML = '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:10px;color:#475569;">\u2205</span>';
       noneBtn.addEventListener('click', function () { onChange(''); });
     }
     palette.forEach(function (hex) {
@@ -1207,15 +1155,13 @@
   function renderPreview(parent, rule) {
     var wrap = mkEl('div', { className: 'svc-cf-preview-wrap', id: 'cfPreviewWrap' }, parent);
     mkEl('div', { className: 'svc-cf-preview-label', textContent: 'PREVIEW' }, wrap);
-    var cell = mkEl('div', { className: 'svc-cf-preview-cell', id: 'cfPreviewCell', textContent: 'Sample Text' }, wrap);
+    mkEl('div', { className: 'svc-cf-preview-cell', id: 'cfPreviewCell', textContent: 'Sample Text' }, wrap);
     applyPreviewStyle(rule);
   }
 
   function updatePreview() {
     clearTimeout(_previewUpdateTimeout);
-    _previewUpdateTimeout = setTimeout(function () {
-      if (_state.draft) applyPreviewStyle(_state.draft);
-    }, 80);
+    _previewUpdateTimeout = setTimeout(function () { if (_state.draft) applyPreviewStyle(_state.draft); }, 80);
   }
 
   function applyPreviewStyle(rule) {
@@ -1228,17 +1174,14 @@
     cell.style.textDecoration = '';
 
     if (rule.type === 'single_color' || rule.type === 'formula') {
-      if (rule.bgColor) cell.style.background = rule.bgColor;
-      if (rule.textColor) {
-        cell.style.color = rule.textColor;
-      } else if (rule.bgColor) {
-        cell.style.color = contrastColor(rule.bgColor);
-      }
-      if (rule.bold) cell.style.fontWeight = '700';
+      if (rule.bgColor)   cell.style.background = rule.bgColor;
+      if (rule.textColor) { cell.style.color = rule.textColor; }
+      else if (rule.bgColor) { cell.style.color = contrastColor(rule.bgColor); }
+      if (rule.bold)   cell.style.fontWeight = '700';
       if (rule.italic) cell.style.fontStyle = 'italic';
       var dec = [];
       if (rule.strikethrough) dec.push('line-through');
-      if (rule.underline) dec.push('underline');
+      if (rule.underline)     dec.push('underline');
       cell.style.textDecoration = dec.join(' ');
     } else if (rule.type === 'color_scale') {
       var mid = rule.scaleMid || '#fde047';
@@ -1260,8 +1203,6 @@
      DRAFT SYNC
   ───────────────────────────────────────────────────────────────────────── */
 
-  /** Push _state.rules into state.sheet.column_defs so paintGrid() live-preview
-   *  reflects ALL rules in the current editing session (not just last-saved). */
   function syncToColumnDefs() {
     if (!window.servicesGrid) return;
     var st = window.servicesGrid.getState();
@@ -1275,7 +1216,7 @@
     if (_state.activeRuleIdx >= 0 && _state.draft) {
       _state.rules[_state.activeRuleIdx] = deepClone(_state.draft);
     }
-    syncToColumnDefs(); // ← KEY FIX: push ALL rules into live column_defs before paint
+    syncToColumnDefs();
     paintGrid();
   }
 
@@ -1285,7 +1226,6 @@
 
   function openModal(colIdx, colKey, colLabel, existingRules) {
     buildModal();
-
     _state.open = true;
     _state.colIdx = colIdx;
     _state.colKey = colKey;
@@ -1308,12 +1248,10 @@
     var overlay = document.getElementById('svcCfModal');
     if (overlay) overlay.classList.remove('cf-open');
     _state.open = false;
-    // Repaint with latest saved rules from column_defs
     paintGrid();
   }
 
   async function saveRules() {
-    // ── Guard: need grid + DB ──────────────────────────────────────────────
     if (!window.servicesGrid) {
       window.Notify && window.Notify.show('error', 'Save Failed', 'Grid not ready. Please refresh.');
       return;
@@ -1324,26 +1262,16 @@
     }
 
     var state = window.servicesGrid.getState();
-    if (!state || !state.sheet) {
-      window.Notify && window.Notify.show('error', 'Save Failed', 'No sheet loaded.');
-      closeModal();
-      return;
-    }
+    if (!state || !state.sheet) { window.Notify && window.Notify.show('error', 'Save Failed', 'No sheet loaded.'); closeModal(); return; }
 
     var cols = state.sheet.column_defs || [];
     var col  = cols[_state.colIdx];
-    if (!col) {
-      window.Notify && window.Notify.show('error', 'Save Failed', 'Column not found.');
-      closeModal();
-      return;
-    }
+    if (!col) { window.Notify && window.Notify.show('error', 'Save Failed', 'Column not found.'); closeModal(); return; }
 
-    // ── Commit current draft into _state.rules ─────────────────────────────
     if (_state.activeRuleIdx >= 0 && _state.draft) {
       _state.rules[_state.activeRuleIdx] = deepClone(_state.draft);
     }
 
-    // Strip internal-only keys before persisting
     var rulesForSave = deepClone(_state.rules).map(function (r) {
       delete r._opCat;
       delete r._evalRowData;
@@ -1351,13 +1279,11 @@
       return r;
     });
 
-    // ── Write into local column_defs ───────────────────────────────────────
     col.conditionalRules = rulesForSave;
 
-    // ── Persist to Supabase ────────────────────────────────────────────────
     try {
       await window.servicesDB.updateColumns(state.sheet.id, cols);
-      window.Notify && window.Notify.show('success', 'Conditional Formatting', 'Rules saved — ' + rulesForSave.length + ' rule(s) active.');
+      window.Notify && window.Notify.show('success', 'Conditional Formatting', 'Rules saved \u2014 ' + rulesForSave.length + ' rule(s) active.');
     } catch (err) {
       window.Notify && window.Notify.show('error', 'CF Save Failed', err && err.message ? err.message : 'Try again.');
     }
@@ -1371,18 +1297,15 @@
     _state.rules = [];
     _state.activeRuleIdx = -1;
     _state.draft = null;
-    syncToColumnDefs(); // clear from live column_defs too
+    syncToColumnDefs();
     renderRulesList();
     renderEditor(null);
-    // Force remove all CF attributes and re-render
     document.querySelectorAll('#svcGrid tr[data-cf-applied]').forEach(function(tr) {
       tr.removeAttribute('data-cf-applied');
       tr.removeAttribute('data-cf-rule');
       tr.style.removeProperty('--cf-bg');
     });
-    if (window.servicesGrid && window.servicesGrid.render) {
-      window.servicesGrid.render();
-    }
+    if (window.servicesGrid && window.servicesGrid.render) window.servicesGrid.render();
     paintGrid();
   }
 
@@ -1404,22 +1327,18 @@
     _state.rules.push(newRule);
     _state.activeRuleIdx = _state.rules.length - 1;
     _state.draft = deepClone(newRule);
-    syncToColumnDefs(); // ← push new rule into live column_defs immediately
+    syncToColumnDefs();
     paintGrid();
     renderRulesList();
     renderEditor(_state.draft);
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
-     HOOK INTO SERVICES-GRID RENDER
-     We patch render() to repaint CF after every grid rebuild.
+     HOOK INTO GRID RENDER
   ───────────────────────────────────────────────────────────────────────── */
 
   function hookGridRender() {
-    if (!window.servicesGrid) {
-      setTimeout(hookGridRender, 200);
-      return;
-    }
+    if (!window.servicesGrid) { setTimeout(hookGridRender, 200); return; }
     if (window.servicesGrid._cfHooked) return;
     window.servicesGrid._cfHooked = true;
   }
@@ -1429,35 +1348,30 @@
   ───────────────────────────────────────────────────────────────────────── */
 
   window.svcConditionalFormat = {
-    open: openModal,
+    open:  openModal,
     paint: paintGrid,
     close: closeModal
   };
 
-  // Test hooks for node/jsdom harness (no impact on production runtime behavior).
   window.__svcCfTest = {
-    evalRule: evalRule,
+    evalRule:       evalRule,
     renderSwatches: renderSwatches
   };
 
-  // Hook in after grid is ready
   hookGridRender();
 
-  // Repaint on QB autofill completion — but NOT during bulk Update (suspend)
   document.addEventListener('svc:qb-paint-done', function () {
     if (_paintSuspended) return;
     setTimeout(paintGrid, 60);
   });
 
-  // Suspend CF paint while bulk Update runs (prevents flicker + wrong colors)
   document.addEventListener('svc:qb-update-start', function () {
     _paintSuspended = true;
   });
 
-  // Resume and do one final repaint when Update completes
   document.addEventListener('svc:qb-update-complete', function () {
     _paintSuspended = false;
-    setTimeout(paintGrid, 120); // allow row.data to settle
+    setTimeout(paintGrid, 120);
   });
 
 })();
