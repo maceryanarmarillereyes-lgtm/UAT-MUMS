@@ -221,17 +221,48 @@
     const s = await getSb(); const u = await getUid();
     if (!s || !u) return;
     try {
-      const { data, error } = await s.from('mums_notes_workspaces').select('*').eq('user_id', u).order('sort_order');
-      if (error) { console.info('[MyNotes] pullWs:', error.message); return; }
-      if (data) {
-        customWs = data.map(r => ({
-          id: r.id, key: 'cws_' + r.id.replace(/-/g,''),
-          name: r.name, emoji: r.emoji || '📁',
-          parentKey: r.parent_key || null, locked: false
-        }));
-        saveCWs(); renderWsTree();
+      const { data, error } = await s.from('mums_notes_workspaces')
+        .select('*').eq('user_id', u).order('sort_order');
+
+      // Table missing or other DB error — keep local state untouched
+      if (error) { console.info('[MyNotes] pullWs (table may not exist yet):', error.message); return; }
+
+      // ── MERGE STRATEGY (permanent fix) ───────────────────────────────────
+      // NEVER blindly replace customWs with DB rows — that wipes locally-created
+      // folders that haven't been synced yet (empty array [] is truthy in JS).
+      //
+      // Instead:
+      //  1. Build DB map (id → row)
+      //  2. Keep any local workspace whose id is NOT in DB (newly created, not synced)
+      //  3. Merge DB rows (authoritative) + unsynced locals
+      //  4. Push unsynced locals to DB immediately so they persist next login
+
+      const dbRows = (data || []).map(r => ({
+        id       : r.id,
+        key      : 'cws_' + r.id.replace(/-/g,''),
+        name     : r.name,
+        emoji    : r.emoji || '📁',
+        parentKey: r.parent_key || null,
+        locked   : false
+      }));
+
+      const dbIds = new Set(dbRows.map(r => r.id));
+
+      // Unsynced locals: id is null, or a temp key that isn't in DB yet
+      const unsynced = customWs.filter(w => !w.id || !dbIds.has(w.id));
+
+      // Merged result: DB rows first (sorted by sort_order), then unsynced locals
+      customWs = [...dbRows, ...unsynced];
+      saveCWs();
+      renderWsTree();
+
+      // Push any unsynced locals to DB so they appear on other devices
+      if (unsynced.length > 0) {
+        syncWorkspacesToDB();
       }
-    } catch (err) { console.info('[MyNotes] pullWs skipped:', err?.message); }
+    } catch (err) {
+      console.info('[MyNotes] pullWs skipped:', err?.message);
+    }
   }
 
   // ── PERMANENT WORKSPACE SYNC FIX ──────────────────────────────────────────
@@ -240,71 +271,132 @@
   //   • Upserts every workspace with correct sort_order, parent_key, name, emoji
   //   • Deletes any DB rows whose IDs are no longer in the local array
   // Called after every add, rename, delete, or move. Cross-device safe.
-  let _syncWsPending = false;
+  let _syncWsPending   = false;
+  let _syncRetryTimer  = null;
+  // Tracks whether the live DB has parent_key column (detected at runtime).
+  // Starts as true (assume schema is up to date); set to false on first error.
+  let _dbHasParentKey  = true;
+
+  // Build a row payload, omitting parent_key if the column doesn't exist yet
+  function _wsRow(w, u, idx) {
+    const row = {
+      user_id    : u,
+      name       : w.name,
+      emoji      : w.emoji || '📁',
+      sort_order : idx,
+    };
+    if (_dbHasParentKey) row.parent_key = w.parentKey || null;
+    return row;
+  }
+
+  // Returns true if the error message indicates a missing column
+  function _isMissingCol(msg) {
+    return msg && (msg.includes('parent_key') || msg.includes('column') || msg.includes('schema cache'));
+  }
+
   async function syncWorkspacesToDB() {
-    if (_syncWsPending) return;          // dedupe concurrent calls
+    if (_syncWsPending) {
+      clearTimeout(_syncRetryTimer);
+      _syncRetryTimer = setTimeout(() => syncWorkspacesToDB(), 1200);
+      return;
+    }
     _syncWsPending = true;
     try {
       const s = await getSb(); const u = await getUid();
-      if (!s || !u) return;
+      if (!s || !u) { _showWsStatus('⚠️ Not authenticated', '#f59e0b'); return; }
 
-      // 1. Collect IDs of workspaces that already have a DB row
+      // ── 1. Upsert rows that already have a DB id ────────────────────────
       const withId    = customWs.filter(w => w.id);
       const withoutId = customWs.filter(w => !w.id);
 
-      // 2. Upsert existing rows (update name/emoji/parent_key/sort_order)
       if (withId.length) {
-        const rows = withId.map((w, i) => ({
-          id         : w.id,
-          user_id    : u,
-          name       : w.name,
-          emoji      : w.emoji || '📁',
-          parent_key : w.parentKey || null,
-          sort_order : customWs.indexOf(w),
-        }));
-        const { error } = await s.from('mums_notes_workspaces')
-          .upsert(rows, { onConflict: 'id' });
-        if (error) console.warn('[MyNotes] syncWs upsert:', error.message);
-      }
-
-      // 3. Insert brand-new workspaces (no id yet) and stamp their real UUID back
-      for (const w of withoutId) {
-        const { data, error } = await s.from('mums_notes_workspaces')
-          .insert({
-            user_id    : u,
-            name       : w.name,
-            emoji      : w.emoji || '📁',
-            parent_key : w.parentKey || null,
-            sort_order : customWs.indexOf(w),
-          })
-          .select().single();
-        if (!error && data) {
-          w.id  = data.id;
-          w.key = 'cws_' + data.id.replace(/-/g, '');
-        } else if (error) {
-          console.warn('[MyNotes] syncWs insert:', error.message);
+        const rows = withId.map((w, _) => ({ id: w.id, ..._wsRow(w, u, customWs.indexOf(w)) }));
+        const { error } = await s.from('mums_notes_workspaces').upsert(rows, { onConflict: 'id' });
+        if (error) {
+          if (_isMissingCol(error.message) && _dbHasParentKey) {
+            // Column missing — retry without parent_key
+            _dbHasParentKey = false;
+            const safeRows = withId.map((w, _) => ({ id: w.id, ..._wsRow(w, u, customWs.indexOf(w)) }));
+            const { error: e2 } = await s.from('mums_notes_workspaces').upsert(safeRows, { onConflict: 'id' });
+            if (e2) console.warn('[MyNotes] syncWs upsert (no parent_key):', e2.message);
+          } else {
+            console.warn('[MyNotes] syncWs upsert:', error.message);
+          }
         }
       }
 
-      // 4. Delete DB rows that were removed locally (ids present in DB but not in customWs)
-      const { data: dbRows } = await s.from('mums_notes_workspaces')
-        .select('id').eq('user_id', u);
+      // ── 2. Insert brand-new workspaces ─────────────────────────────────
+      for (const w of withoutId) {
+        const payload = _wsRow(w, u, customWs.indexOf(w));
+        const { data, error } = await s.from('mums_notes_workspaces')
+          .insert(payload).select().single();
+
+        if (!error && data) {
+          // Stamp real UUID back so the workspace survives next open
+          w.id  = data.id;
+          w.key = 'cws_' + data.id.replace(/-/g, '');
+        } else if (error) {
+          if (_isMissingCol(error.message) && _dbHasParentKey) {
+            // parent_key column not migrated yet — retry without it
+            _dbHasParentKey = false;
+            const safePayload = _wsRow(w, u, customWs.indexOf(w));
+            const { data: d2, error: e2 } = await s.from('mums_notes_workspaces')
+              .insert(safePayload).select().single();
+            if (!e2 && d2) {
+              w.id  = d2.id;
+              w.key = 'cws_' + d2.id.replace(/-/g, '');
+            } else if (e2) {
+              console.warn('[MyNotes] syncWs insert retry:', e2.message);
+            }
+          } else {
+            console.warn('[MyNotes] syncWs insert:', error.message);
+          }
+        }
+      }
+
+      // ── 3. Delete rows removed locally ────────────────────────────────
+      const { data: dbRows } = await s.from('mums_notes_workspaces').select('id').eq('user_id', u);
       if (dbRows && dbRows.length) {
         const localIds = new Set(customWs.filter(w => w.id).map(w => w.id));
         const toDelete = dbRows.map(r => r.id).filter(id => !localIds.has(id));
         if (toDelete.length) {
-          await s.from('mums_notes_workspaces')
-            .delete().in('id', toDelete).eq('user_id', u);
+          await s.from('mums_notes_workspaces').delete().in('id', toDelete).eq('user_id', u);
         }
       }
 
-      // 5. Save updated local cache (now all items have real UUIDs)
+      // ── 4. Persist and render ──────────────────────────────────────────
       saveCWs();
+      renderWsTree();
+      _showWsStatus('✅ Workspaces saved', '#22c55e');
     } catch (err) {
       console.warn('[MyNotes] syncWorkspacesToDB error:', err?.message);
+      _showWsStatus('⚠️ Sync failed — will retry', '#f59e0b');
+      clearTimeout(_syncRetryTimer);
+      _syncRetryTimer = setTimeout(() => { _syncWsPending = false; syncWorkspacesToDB(); }, 3000);
     } finally {
       _syncWsPending = false;
     }
+  }
+
+  // Status toast shown at the bottom of the workspace sidebar
+  function _showWsStatus(msg, color) {
+    try {
+      let el = document.getElementById('mnWsSyncStatus');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'mnWsSyncStatus';
+        el.style.cssText = 'position:absolute;bottom:60px;left:8px;right:8px;' +
+          'padding:5px 10px;border-radius:7px;font-size:11px;font-weight:700;' +
+          'text-align:center;pointer-events:none;transition:opacity .4s;z-index:10';
+        const sidebar = document.getElementById('mnSidebar');
+        if (sidebar) { sidebar.style.position = 'relative'; sidebar.appendChild(el); }
+      }
+      el.textContent = msg;
+      el.style.cssText += ';background:' + color + '22;color:' + color +
+        ';border:1px solid ' + color + '44;opacity:1';
+      clearTimeout(el._t);
+      el._t = setTimeout(() => { if (el) el.style.opacity = '0'; }, 2500);
+    } catch (_) {}
   }
 
   // Legacy shims — keep call-sites working without changing them
@@ -1320,7 +1412,10 @@
     loadLocal(); loadCWs(); loadExp();
     renderWsTree();
     setWs(localStorage.getItem(LS_WS) || activeWs);
-    pull(); pullWorkspaces();
+    // Warm up the Supabase client FIRST (waits for env + auth),
+    // then pull notes and workspaces in parallel. This prevents the race
+    // where pullWorkspaces() gets null client and skips DB entirely.
+    getSb().then(() => { pull(); pullWorkspaces(); }).catch(() => { pull(); pullWorkspaces(); });
   }
 
   function closeModal() {
