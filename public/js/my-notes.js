@@ -232,12 +232,14 @@
     document.body.insertAdjacentHTML('beforeend', `
 <div id="myNotesModal" class="modal" style="z-index:9999;display:none">
  <div class="panel" style="max-width:1400px;width:95vw;height:90vh;display:flex;flex-direction:column;
-   background:linear-gradient(145deg,rgba(15,23,42,.97),rgba(2,6,23,.99));
-   border:1px solid rgba(56,189,248,.25);border-radius:18px;overflow:hidden">
+   background:linear-gradient(145deg,#0d1829,#060e1a);
+   border:1px solid rgba(56,189,248,.40);border-radius:20px;overflow:hidden;
+   box-shadow:0 0 0 1px rgba(56,189,248,.08),0 32px 80px rgba(0,0,0,.75),0 0 60px rgba(56,189,248,.06)">
 
   <!-- Header -->
   <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;
-    border-bottom:1px solid rgba(255,255,255,.07);flex-shrink:0">
+    border-bottom:1px solid rgba(56,189,248,.15);flex-shrink:0;
+    background:linear-gradient(90deg,rgba(56,189,248,.05),transparent)">
    <div style="display:flex;align-items:center;gap:10px">
     <img src="${ICON}" style="width:24px;height:24px;border-radius:4px">
     <span style="font-weight:900;color:#fff;font-size:15px">My Notes</span>
@@ -250,29 +252,32 @@
   <div style="display:flex;flex:1;min-height:0">
 
    <!-- ① Workspace sidebar -->
-   <div id="mnWsSidebar" style="width:210px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.06);
-     padding:12px;display:flex;flex-direction:column;gap:2px;overflow-y:auto">
-    <div style="font-size:10px;letter-spacing:.1em;color:#475569;margin-bottom:8px;font-weight:700">WORKSPACES</div>
+   <div id="mnWsSidebar" style="width:210px;flex-shrink:0;border-right:1px solid rgba(56,189,248,.12);
+     padding:14px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;
+     background:rgba(0,0,0,.18)">
+    <div style="font-size:10px;letter-spacing:.12em;color:#64748b;margin-bottom:8px;font-weight:800;text-transform:uppercase">WORKSPACES</div>
     <div id="mnDefaultWsList"></div>
     <div id="mnCustomWsList" style="margin-top:4px"></div>
     <div style="margin-top:auto;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)">
-     <button id="mnAddWsBtn" style="width:100%;text-align:left;font-size:12px;color:#64748b;
-       padding:8px 10px;border-radius:8px;background:transparent;border:1px dashed rgba(255,255,255,.1);
-       cursor:pointer;display:flex;align-items:center;gap:6px;transition:border-color .15s">
+     <button id="mnAddWsBtn" style="width:100%;text-align:left;font-size:12px;color:#7dd3fc;
+       padding:8px 10px;border-radius:8px;background:rgba(56,189,248,.05);border:1px dashed rgba(56,189,248,.25);
+       cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s">
       <span style="font-size:15px;line-height:1">＋</span> Add Workspace
      </button>
     </div>
    </div>
 
    <!-- ② Notes list -->
-   <div style="width:300px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column">
+   <div style="width:300px;flex-shrink:0;border-right:1px solid rgba(56,189,248,.12);display:flex;flex-direction:column;
+    background:rgba(0,0,0,.12)">
     <div style="padding:10px;display:flex;gap:8px;flex-shrink:0">
-     <input id="mnSearch" placeholder="Search..." style="flex:1;background:rgba(0,0,0,.3);
-       border:1px solid rgba(255,255,255,.1);color:#fff;border-radius:8px;padding:8px 10px;font-size:13px">
+     <input id="mnSearch" placeholder="Search..." style="flex:1;background:rgba(0,0,0,.35);
+       border:1px solid rgba(56,189,248,.22);color:#f1f5f9;border-radius:9px;padding:8px 12px;font-size:13px;
+       outline:none">
      <button id="mnNew" class="btn primary" style="white-space:nowrap;padding:8px 14px;font-size:13px">+ New</button>
     </div>
     <div id="mnList" style="flex:1;overflow-y:auto;padding:0 8px 8px"></div>
-    <div style="padding:8px 12px;font-size:11px;color:#475569;border-top:1px solid rgba(255,255,255,.05)">
+    <div style="padding:8px 12px;font-size:11px;color:#64748b;border-top:1px solid rgba(56,189,248,.1);letter-spacing:.04em">
      A-Z • <span id="mnCount">0</span>
     </div>
    </div>
@@ -281,16 +286,18 @@
    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
 
     <!-- Detail header bar -->
-    <div style="padding:12px 14px 10px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0">
-     <div id="mnTitleView" style="font-size:20px;font-weight:800;color:#fff;margin-bottom:4px;word-break:break-word;min-height:28px"></div>
+    <div style="padding:14px 18px 12px;border-bottom:1px solid rgba(56,189,248,.14);flex-shrink:0;
+    background:linear-gradient(90deg,rgba(56,189,248,.04),transparent)">
+     <div id="mnTitleView" style="font-size:22px;font-weight:800;color:#f1f5f9;margin-bottom:4px;word-break:break-word;min-height:28px;
+      letter-spacing:-.01em;line-height:1.3"></div>
      <input id="mnTitleEdit" placeholder="Untitled" style="display:none;width:100%;background:transparent;
        border:0;border-bottom:1px solid rgba(56,189,248,.4);color:#fff;font-size:20px;font-weight:800;
        outline:none;padding-bottom:4px;margin-bottom:4px;box-sizing:border-box">
 
      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:6px">
       <div style="display:flex;align-items:center;gap:0;flex-wrap:wrap">
-       <span style="font-size:11px;color:#475569">Workspace: <b id="mnWsLabel" style="color:#64748b"></b></span>
-       <span id="mnUpdatedAt" style="font-size:11px;color:#475569;margin-left:14px"></span>
+       <span style="font-size:11px;color:#7dd3fc;opacity:.8">Workspace: <b id="mnWsLabel" style="color:#7dd3fc;font-weight:700"></b></span>
+       <span id="mnUpdatedAt" style="font-size:11px;color:#94a3b8;margin-left:14px;letter-spacing:.01em"></span>
        <span id="mnDirtyBadge" style="display:none;font-size:11px;padding:1px 7px;
          background:rgba(245,158,11,.2);color:#fbbf24;border-radius:999px;margin-left:10px;font-weight:700">● Unsaved</span>
       </div>
@@ -309,17 +316,18 @@
     </div>
 
     <!-- Content view (linkified) -->
-    <div id="mnContentView" style="flex:1;overflow-y:auto;margin:12px;
-      background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.08);border-radius:12px;
-      color:#e2e8f0;padding:16px;font-size:14px;line-height:1.7;
-      white-space:pre-wrap;word-break:break-word"></div>
+    <div id="mnContentView" style="flex:1;overflow-y:auto;margin:14px;
+      background:rgba(255,255,255,.04);border:1px solid rgba(56,189,248,.18);border-radius:14px;
+      color:#e8f0fe;padding:20px 22px;font-size:14.5px;line-height:1.85;
+      white-space:pre-wrap;word-break:break-word;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.05);font-family:inherit"></div>
 
     <!-- Content edit -->
     <textarea id="mnContentEdit" placeholder="Start writing your note here..." style="
-      display:none;flex:1;margin:12px;resize:none;
-      background:rgba(0,0,0,.22);border:1px solid rgba(56,189,248,.3);border-radius:12px;
-      color:#e2e8f0;padding:16px;font-size:14px;line-height:1.7;outline:none;
-      font-family:inherit"></textarea>
+      display:none;flex:1;margin:14px;resize:none;
+      background:rgba(0,0,0,.35);border:1px solid rgba(56,189,248,.4);border-radius:14px;
+      color:#e8f0fe;padding:20px 22px;font-size:14.5px;line-height:1.85;outline:none;
+      font-family:inherit;box-shadow:0 0 0 1px rgba(56,189,248,.08) inset"></textarea>
    </div>
   </div>
  </div>
@@ -328,11 +336,11 @@
 <!-- Add-workspace dialog -->
 <div id="mnWsDialog" style="display:none;position:fixed;inset:0;z-index:10001;
   background:rgba(0,0,0,.65);align-items:center;justify-content:center">
- <div style="background:linear-gradient(145deg,rgba(15,23,42,.99),rgba(2,6,23,1));
-   border:1px solid rgba(56,189,248,.3);border-radius:14px;padding:26px;
-   width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.5)">
-  <div style="font-weight:800;color:#fff;margin-bottom:6px;font-size:16px">New Workspace</div>
-  <div style="font-size:12px;color:#475569;margin-bottom:16px">Choose an emoji and give your workspace a name.</div>
+ <div style="background:linear-gradient(145deg,#0d1829,#060e1a);
+   border:1px solid rgba(56,189,248,.4);border-radius:16px;padding:28px;
+   width:360px;max-width:90vw;box-shadow:0 0 0 1px rgba(56,189,248,.08),0 24px 64px rgba(0,0,0,.7)">
+  <div style="font-weight:800;color:#f1f5f9;margin-bottom:6px;font-size:17px;letter-spacing:-.01em">New Workspace</div>
+  <div style="font-size:12px;color:#94a3b8;margin-bottom:16px;line-height:1.5">Choose an emoji and give your workspace a name.</div>
   <div style="display:flex;gap:10px;margin-bottom:16px">
    <input id="mnWsEmojiInput" value="📁" maxlength="4" style="width:56px;text-align:center;font-size:22px;
      background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);color:#fff;
@@ -410,8 +418,8 @@
       flex:1;text-align:left;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px;
       background:${active ? 'rgba(56,189,248,.18)' : 'rgba(255,255,255,.02)'};
       border:1px solid ${active ? 'rgba(56,189,248,.35)' : 'transparent'};
-      color:${active ? '#38bdf8' : '#cbd5e1'};
-      font-weight:${active ? '700' : '500'};transition:all .12s`;
+      color:${active ? '#38bdf8' : '#e2e8f0'};
+      font-weight:${active ? '700' : '500'};transition:all .12s;letter-spacing:.01em`;
     btn.textContent = ws.emoji + '  ' + ws.label;
     btn.onclick = () => setWs(ws.key);
     wrap.appendChild(btn);
@@ -419,11 +427,11 @@
     if (deletable && cwObj) {
       const x = document.createElement('button');
       x.title = 'Delete workspace';
-      x.style.cssText = 'background:transparent;border:none;color:#334155;cursor:pointer;' +
+      x.style.cssText = 'background:transparent;border:none;color:#475569;cursor:pointer;' +
         'font-size:16px;padding:3px 6px;border-radius:6px;flex-shrink:0;line-height:1;transition:color .1s';
       x.textContent = '×';
       x.onmouseenter = () => x.style.color = '#fca5a5';
-      x.onmouseleave = () => x.style.color = '#334155';
+      x.onmouseleave = () => x.style.color = '#475569';
       x.onclick = () => removeWorkspace(cwObj);
       wrap.appendChild(x);
     }
@@ -507,8 +515,8 @@
     el.innerHTML = '';
 
     if (!filtered.length) {
-      el.innerHTML = '<div style="padding:24px 12px;text-align:center;color:#475569;font-size:13px;line-height:1.6">' +
-        'No notes yet.<br><b style="color:#64748b">+ New</b> to create one.</div>';
+      el.innerHTML = '<div style="padding:24px 12px;text-align:center;color:#94a3b8;font-size:13px;line-height:1.6">' +
+        'No notes yet.<br><b style="color:#7dd3fc">+ New</b> to create one.</div>';
       return;
     }
 
@@ -517,15 +525,15 @@
       const d = document.createElement('div');
       d.style.cssText = `
         padding:10px 12px;margin:2px 0;border-radius:9px;cursor:pointer;
-        background:${active ? 'rgba(56,189,248,.13)' : 'rgba(255,255,255,.02)'};
-        border:1px solid ${active ? 'rgba(56,189,248,.28)' : 'transparent'};
+        background:${active ? 'rgba(56,189,248,.16)' : 'rgba(255,255,255,.04)'};
+        border:1px solid ${active ? 'rgba(56,189,248,.38)' : 'rgba(255,255,255,.05)'};
         transition:background .1s;user-select:none`;
       d.innerHTML = `
-        <div style="font-weight:700;color:#e2e8f0;font-size:13px;margin-bottom:3px;
-          white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(n.title||'Untitled')}</div>
-        <div style="font-size:11px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        <div style="font-weight:700;color:#f1f5f9;font-size:13px;margin-bottom:3px;
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.005em">${esc(n.title||'Untitled')}</div>
+        <div style="font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4">
           ${esc((n.content||'').slice(0,60))}</div>
-        <div style="font-size:10px;color:#334155;margin-top:5px">🕐 ${fmtDate(n.updated_at)}</div>`;
+        <div style="font-size:10px;color:#94a3b8;margin-top:5px;letter-spacing:.01em">🕐 ${fmtDate(n.updated_at)}</div>`;
       d.onclick = () => selectNote(n.id);
       el.appendChild(d);
     });
@@ -548,7 +556,7 @@
     if ($('#mnContentView'))  $('#mnContentView').innerHTML  = linkify(n.content);
     if ($('#mnTitleEdit'))    $('#mnTitleEdit').value        = n.title || '';
     if ($('#mnContentEdit'))  $('#mnContentEdit').value      = n.content || '';
-    if ($('#mnUpdatedAt'))    $('#mnUpdatedAt').textContent  = n.updated_at ? '🕐 Last updated: ' + fmtDate(n.updated_at) : '';
+    if ($('#mnUpdatedAt'))    $('#mnUpdatedAt').textContent  = n.updated_at ? '⏱ ' + fmtDate(n.updated_at) : '';
     if ($('#mnDirtyBadge'))   $('#mnDirtyBadge').style.display = 'none';
   }
 
