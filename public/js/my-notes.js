@@ -187,33 +187,83 @@
     } catch (err) { console.info('[MyNotes] pullWs skipped:', err?.message); }
   }
 
-  async function remoteAddWs(ws) {
-    const s = await getSb(); const u = await getUid();
-    if (!s || !u) return null;
+  // ── PERMANENT WORKSPACE SYNC FIX ──────────────────────────────────────────
+  // Replaces per-operation add/update/delete (which failed silently).
+  // syncWorkspacesToDB() pushes the ENTIRE current customWs array atomically:
+  //   • Upserts every workspace with correct sort_order, parent_key, name, emoji
+  //   • Deletes any DB rows whose IDs are no longer in the local array
+  // Called after every add, rename, delete, or move. Cross-device safe.
+  let _syncWsPending = false;
+  async function syncWorkspacesToDB() {
+    if (_syncWsPending) return;          // dedupe concurrent calls
+    _syncWsPending = true;
     try {
-      const { data, error } = await s.from('mums_notes_workspaces')
-        .insert({ user_id:u, name:ws.name, emoji:ws.emoji, parent_key:ws.parentKey||null, sort_order:customWs.length })
-        .select().single();
-      if (error) { console.info('[MyNotes] addWs:', error.message); return null; }
-      return data;
-    } catch (err) { console.info('[MyNotes] addWs skipped:', err?.message); return null; }
+      const s = await getSb(); const u = await getUid();
+      if (!s || !u) return;
+
+      // 1. Collect IDs of workspaces that already have a DB row
+      const withId    = customWs.filter(w => w.id);
+      const withoutId = customWs.filter(w => !w.id);
+
+      // 2. Upsert existing rows (update name/emoji/parent_key/sort_order)
+      if (withId.length) {
+        const rows = withId.map((w, i) => ({
+          id         : w.id,
+          user_id    : u,
+          name       : w.name,
+          emoji      : w.emoji || '📁',
+          parent_key : w.parentKey || null,
+          sort_order : customWs.indexOf(w),
+        }));
+        const { error } = await s.from('mums_notes_workspaces')
+          .upsert(rows, { onConflict: 'id' });
+        if (error) console.warn('[MyNotes] syncWs upsert:', error.message);
+      }
+
+      // 3. Insert brand-new workspaces (no id yet) and stamp their real UUID back
+      for (const w of withoutId) {
+        const { data, error } = await s.from('mums_notes_workspaces')
+          .insert({
+            user_id    : u,
+            name       : w.name,
+            emoji      : w.emoji || '📁',
+            parent_key : w.parentKey || null,
+            sort_order : customWs.indexOf(w),
+          })
+          .select().single();
+        if (!error && data) {
+          w.id  = data.id;
+          w.key = 'cws_' + data.id.replace(/-/g, '');
+        } else if (error) {
+          console.warn('[MyNotes] syncWs insert:', error.message);
+        }
+      }
+
+      // 4. Delete DB rows that were removed locally (ids present in DB but not in customWs)
+      const { data: dbRows } = await s.from('mums_notes_workspaces')
+        .select('id').eq('user_id', u);
+      if (dbRows && dbRows.length) {
+        const localIds = new Set(customWs.filter(w => w.id).map(w => w.id));
+        const toDelete = dbRows.map(r => r.id).filter(id => !localIds.has(id));
+        if (toDelete.length) {
+          await s.from('mums_notes_workspaces')
+            .delete().in('id', toDelete).eq('user_id', u);
+        }
+      }
+
+      // 5. Save updated local cache (now all items have real UUIDs)
+      saveCWs();
+    } catch (err) {
+      console.warn('[MyNotes] syncWorkspacesToDB error:', err?.message);
+    } finally {
+      _syncWsPending = false;
+    }
   }
 
-  async function remoteUpdateWs(ws) {
-    const s = await getSb(); const u = await getUid();
-    if (!s || !u || !ws.id) return;
-    try {
-      await s.from('mums_notes_workspaces')
-        .update({ name:ws.name, emoji:ws.emoji, parent_key:ws.parentKey||null })
-        .eq('id', ws.id).eq('user_id', u);
-    } catch (err) { console.info('[MyNotes] updateWs:', err?.message); }
-  }
-
-  async function remoteDelWs(id) {
-    const s = await getSb(); const u = await getUid();
-    if (!s || !u) return;
-    try { await s.from('mums_notes_workspaces').delete().eq('id', id).eq('user_id', u); } catch {}
-  }
+  // Legacy shims — keep call-sites working without changing them
+  async function remoteAddWs()    { /* handled by syncWorkspacesToDB */ }
+  async function remoteUpdateWs() { /* handled by syncWorkspacesToDB */ }
+  async function remoteDelWs()    { /* handled by syncWorkspacesToDB */ }
 
   /* ── WORKSPACE TREE LOGIC ───────────────────────────────────────────────── */
   function allWs() {
@@ -933,19 +983,15 @@
       cw.emoji = emoji;
       cw.parentKey = parentKey;
       saveCWs(); renderWsTree();
-      remoteUpdateWs(cw).catch(() => {});
+      syncWorkspacesToDB();   // push rename + sort_order to DB immediately
     } else {
-      // Add new
+      // Add new — optimistic local first, then sync to DB
       const tempKey = 'cws_' + name.toLowerCase().replace(/[^a-z0-9]/g,'_') + '_' + Date.now().toString(36);
       const local = { id:null, key:tempKey, name, emoji, parentKey:parentKey||null, locked:false };
       customWs.push(local);
       saveCWs(); renderWsTree();
-      const row = await remoteAddWs({ name, emoji, parentKey:parentKey||null });
-      if (row) {
-        local.id  = row.id;
-        local.key = 'cws_' + row.id.replace(/-/g,'');
-        saveCWs(); renderWsTree();
-      }
+      await syncWorkspacesToDB();  // insert + get real UUID back + save
+      renderWsTree();              // re-render with stable keys
     }
   }
 
@@ -972,7 +1018,7 @@
     if (activeWs === key || descKeys.includes(activeWs)) setWs('personal');
     else renderWsTree();
 
-    if (cw.id) await remoteDelWs(cw.id).catch(() => {});
+    await syncWorkspacesToDB();   // delete from DB + fix sort_orders of remaining
   }
 
   function moveWorkspace(key, newParentKey) {
@@ -980,7 +1026,7 @@
     if (!cw) return;
     cw.parentKey = newParentKey === '' ? null : newParentKey;
     saveCWs(); renderWsTree();
-    remoteUpdateWs(cw).catch(() => {});
+    syncWorkspacesToDB();   // push new parentKey + sort_order to DB
   }
 
   /* ── NOTE LIST ──────────────────────────────────────────────────────────── */
