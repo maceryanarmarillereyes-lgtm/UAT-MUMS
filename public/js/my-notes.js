@@ -93,11 +93,41 @@
     return null;
   }
 
+  // ── PERMANENT getSb() FIX ────────────────────────────────────────────────
+  // Root cause of all workspace/note save failures:
+  //   1. __MUMS_SB_CLIENT is only created on services.html, not index.html
+  //   2. MUMS_ENV is populated async (/api/env fetch) — old code read it sync → empty URL → null client
+  //   3. No wait for session to be ready before writing to DB
+  //
+  // This version:
+  //   • Waits for window.__MUMS_ENV_READY (guaranteed env populated)
+  //   • Polls for __MUMS_SB_CLIENT (in case services-supabase inits after us)
+  //   • Builds own authenticated client if none appears within 2 s
+  //   • Caches result permanently — subsequent calls are synchronous
   async function getSb() {
-    if (window.__MUMS_SB_CLIENT) return window.__MUMS_SB_CLIENT;
+    // Fast path: already have a working client
     if (_sb) return _sb;
+    if (window.__MUMS_SB_CLIENT) { _sb = window.__MUMS_SB_CLIENT; return _sb; }
+
+    // 1. Wait for MUMS_ENV to be populated by /api/env fetch (max 5 s)
+    if (window.__MUMS_ENV_READY) {
+      try { await Promise.race([window.__MUMS_ENV_READY, new Promise(r => setTimeout(r, 5000))]); } catch {}
+    }
+
+    // 2. Poll for __MUMS_SB_CLIENT (services-supabase may have just finished init)
+    for (let i = 0; i < 10; i++) {
+      if (window.__MUMS_SB_CLIENT) { _sb = window.__MUMS_SB_CLIENT; return _sb; }
+      await new Promise(r => setTimeout(r, 200));
+    }
+
+    // 3. Build own client with now-populated MUMS_ENV
     const e = window.MUMS_ENV || {};
-    if (!e.SUPABASE_URL) return null;
+    if (!e.SUPABASE_URL || !e.SUPABASE_ANON_KEY) {
+      console.warn('[MyNotes] getSb: SUPABASE_URL missing — workspaces cannot be saved.');
+      return null;
+    }
+
+    // Load supabase-js if not already on page
     if (!window.supabase?.createClient) {
       await new Promise((res, rej) => {
         const s = document.createElement('script');
@@ -105,19 +135,36 @@
         s.onload = res; s.onerror = rej; document.head.appendChild(s);
       });
     }
-    _sb = window.supabase.createClient(e.SUPABASE_URL, e.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+
+    // Create client with full session (both tokens) so RLS auth.uid() resolves
+    _sb = window.supabase.createClient(e.SUPABASE_URL, e.SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false }
+    });
     const sess = readSession();
     if (sess?.access_token && sess?.refresh_token) {
-      await _sb.auth.setSession({ access_token: sess.access_token, refresh_token: sess.refresh_token }).catch(() => {});
+      const { error } = await _sb.auth.setSession({ access_token: sess.access_token, refresh_token: sess.refresh_token });
+      if (error) {
+        // Try refresh token flow if setSession fails (token may be expired)
+        const { error: re } = await _sb.auth.refreshSession({ refresh_token: sess.refresh_token });
+        if (re) { console.warn('[MyNotes] getSb: session refresh failed —', re.message); }
+      }
+    } else {
+      console.warn('[MyNotes] getSb: no session found — writes will fail RLS.');
     }
+
+    // Share our client so other modules can use it
+    if (!window.__MUMS_SB_CLIENT) window.__MUMS_SB_CLIENT = _sb;
     return _sb;
   }
 
   async function getUid() {
     if (_uid) return _uid;
-    if (window.__MUMS_SB_CLIENT) {
-      try { const { data } = await window.__MUMS_SB_CLIENT.auth.getUser(); if (data?.user?.id) { _uid = data.user.id; return _uid; } } catch {}
+    // Ensure we have an authenticated client before asking for user
+    const s = await getSb();
+    if (s) {
+      try { const { data } = await s.auth.getUser(); if (data?.user?.id) { _uid = data.user.id; return _uid; } } catch {}
     }
+    // Fallback: decode from cached session
     const sess = readSession();
     if (sess?.user?.id) { _uid = sess.user.id; return _uid; }
     if (sess?.access_token) {
