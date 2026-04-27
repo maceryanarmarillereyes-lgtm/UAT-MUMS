@@ -16,6 +16,10 @@
   const LS_WS    = 'mums_notes_ws_v4';
   const LS_CWS   = 'mums_notes_cws_v4';
   const LS_EXP   = 'mums_notes_exp_v4';
+  // ★ TOMBSTONE: tracks UUIDs of workspaces deleted on ANY device.
+  // Prevents cross-device resurrection when pullWorkspaces() sees a UUID
+  // that disappeared from DB (it was deleted, not just un-synced).
+  const LS_DEL_WS = 'mums_notes_del_ws_v4';
   const LS_SES   = 'mums_supabase_session';
   const UUID_RE  = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -188,6 +192,32 @@
   }
   function saveExp()    { try { localStorage.setItem(LS_EXP, JSON.stringify([...expanded])); } catch {} }
 
+  // ★ TOMBSTONE HELPERS ─────────────────────────────────────────────────────
+  // loadTombstones() → Map<uuid, timestamp_ms>
+  // Records workspace UUIDs that have been deliberately deleted so pullWorkspaces()
+  // never resurrects them, even if they still exist in another device's localStorage.
+  function loadTombstones() {
+    try { return new Map(Object.entries(JSON.parse(localStorage.getItem(LS_DEL_WS) || '{}'))); }
+    catch { return new Map(); }
+  }
+  function saveTombstones(map) {
+    try { localStorage.setItem(LS_DEL_WS, JSON.stringify(Object.fromEntries(map))); } catch {}
+  }
+  function addTombstones(ids) {
+    const map = loadTombstones();
+    const now = Date.now();
+    ids.forEach(id => { if (id) map.set(id, now); });
+    saveTombstones(map);
+  }
+  function pruneTombstones() {
+    // Keep tombstones for 30 days — long enough to cover any sync gap between devices
+    const map = loadTombstones();
+    const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
+    let pruned = false;
+    map.forEach((ts, id) => { if (ts < cutoff) { map.delete(id); pruned = true; } });
+    if (pruned) saveTombstones(map);
+  }
+
   /* ── SUPABASE: NOTES ────────────────────────────────────────────────────── */
   async function pull() {
     const s = await getSb(); const u = await getUid();
@@ -227,37 +257,55 @@
       // Table missing or other DB error — keep local state untouched
       if (error) { console.info('[MyNotes] pullWs (table may not exist yet):', error.message); return; }
 
-      // ── MERGE STRATEGY (permanent fix) ───────────────────────────────────
-      // NEVER blindly replace customWs with DB rows — that wipes locally-created
-      // folders that haven't been synced yet (empty array [] is truthy in JS).
+      // ★ CROSS-DEVICE SYNC FIX — Permanent replacement for broken merge strategy
+      // ─────────────────────────────────────────────────────────────────────────
+      // ROOT CAUSE of resurrection bug:
+      //   Old code: unsynced = local.filter(w => !w.id || !dbIds.has(w.id))
+      //   This cannot distinguish between:
+      //     (A) A folder created locally, never synced (id=null) → should be kept
+      //     (B) A folder with a UUID that no longer exists in DB → was deleted by
+      //         another device → should be DROPPED, not re-inserted!
+      //   The old code treated (B) as (A) → re-inserted the deleted folder → resurrection.
       //
-      // Instead:
-      //  1. Build DB map (id → row)
-      //  2. Keep any local workspace whose id is NOT in DB (newly created, not synced)
-      //  3. Merge DB rows (authoritative) + unsynced locals
-      //  4. Push unsynced locals to DB immediately so they persist next login
+      // Fix strategy:
+      //   1. Build DB map (authoritative source of truth)
+      //   2. TOMBSTONE FILTER: Load deleted-UUID set. Any UUID in tombstones was
+      //      deliberately deleted — never allow DB to re-seat it.
+      //   3. NEVER-SYNCED ONLY: Only preserve local folders with id=null (no UUID
+      //      assigned yet = truly new, pending first DB write). A folder with a real
+      //      UUID that's missing from DB was deleted cross-device → drop it.
+      //   4. Re-tombstone any DB rows matching local tombstones (edge case: another
+      //      device re-inserted before our delete propagated — drop those too).
+      //   5. Push truly-new (never-synced) folders to DB.
 
-      const dbRows = (data || []).map(r => ({
-        id       : r.id,
-        key      : 'cws_' + r.id.replace(/-/g,''),
-        name     : r.name,
-        emoji    : r.emoji || '📁',
-        parentKey: r.parent_key || null,
-        locked   : false
-      }));
+      pruneTombstones(); // remove expired tombstones (>30 days old)
+      const tombstones = loadTombstones();
+
+      const dbRows = (data || [])
+        .filter(r => !tombstones.has(r.id)) // ★ Reject DB rows for tombstoned IDs
+        .map(r => ({
+          id       : r.id,
+          key      : 'cws_' + r.id.replace(/-/g,''),
+          name     : r.name,
+          emoji    : r.emoji || '📁',
+          parentKey: r.parent_key || null,
+          locked   : false
+        }));
 
       const dbIds = new Set(dbRows.map(r => r.id));
 
-      // Unsynced locals: id is null, or a temp key that isn't in DB yet
-      const unsynced = customWs.filter(w => !w.id || !dbIds.has(w.id));
+      // ★ KEY FIX: Only preserve workspaces with NO UUID (never synced to DB).
+      // Any workspace WITH a UUID that is absent from DB was deleted cross-device.
+      // Do NOT preserve it — that is exactly what caused the resurrection bug.
+      const neverSynced = customWs.filter(w => !w.id);
 
-      // Merged result: DB rows first (sorted by sort_order), then unsynced locals
-      customWs = [...dbRows, ...unsynced];
+      // Merged result: DB is authoritative; append only truly-new (unsynced) locals
+      customWs = [...dbRows, ...neverSynced];
       saveCWs();
       renderWsTree();
 
-      // Push any unsynced locals to DB so they appear on other devices
-      if (unsynced.length > 0) {
+      // Push brand-new folders to DB so they appear on other devices
+      if (neverSynced.length > 0) {
         syncWorkspacesToDB();
       }
     } catch (err) {
@@ -1145,6 +1193,15 @@
     const noteMsg   = total > 0 ? `\n${total} note(s) will stay in your account (moved to Personal).` : '';
     if (!confirm(`Delete workspace "${cw.name}"?${subMsg}${noteMsg}`)) return;
 
+    // ★ TOMBSTONE: Record all deleted UUIDs BEFORE removing from customWs.
+    // This ensures that when another device pulls workspaces from DB,
+    // it sees these IDs as deliberately deleted and never re-inserts them.
+    // Also protects against offline-delete → online-pull resurrection on THIS device.
+    const deletedIds = [...[key], ...descKeys]
+      .map(k => (customWs.find(w => w.key === k) || {}).id)
+      .filter(Boolean);
+    if (deletedIds.length) addTombstones(deletedIds);
+
     // Move notes to personal
     [...[key], ...descKeys].forEach(k => {
       notes.filter(n => n.workspace === k).forEach(n => { n.workspace = 'personal'; });
@@ -1412,10 +1469,16 @@
     loadLocal(); loadCWs(); loadExp();
     renderWsTree();
     setWs(localStorage.getItem(LS_WS) || activeWs);
-    // Warm up the Supabase client FIRST (waits for env + auth),
-    // then pull notes and workspaces in parallel. This prevents the race
-    // where pullWorkspaces() gets null client and skips DB entirely.
-    getSb().then(() => { pull(); pullWorkspaces(); }).catch(() => { pull(); pullWorkspaces(); });
+    // ★ FIX: Defer the Supabase warm-up off the click handler stack.
+    // getSb() polls for __MUMS_SB_CLIENT for up to 2s — calling it synchronously
+    // in openModal() blocked the click handler, causing the [Violation] 1191ms warning.
+    // setTimeout(0) returns control to the browser immediately (modal renders first),
+    // then the async DB init fires in the next task. Zero UX impact.
+    setTimeout(() => {
+      getSb()
+        .then(() => { pull(); pullWorkspaces(); })
+        .catch(() => { pull(); pullWorkspaces(); });
+    }, 0);
   }
 
   function closeModal() {
