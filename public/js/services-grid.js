@@ -812,9 +812,12 @@
       var tr = mkEl('tr', { className: 'grid-row' }, tbody);
       tr.dataset.row = String(rowIndex);
       tr.dataset.rowId = rowData && rowData.id != null ? String(rowData.id) : ('idx:' + String(rowIndex));
+      // [FIX-ROW-4] Re-stamp CF class when __cfRowBg is truthy — 'cf-row-hl' sentinel
+      // covers textColor-only rules that have no bgColor (semiBg='').
       if (rowData && rowData.__cfRowBg) {
         tr.classList.add('cf-row-highlighted');
-        tr.style.setProperty('--cf-row-bg', String(rowData.__cfRowBg));
+        var cfBgVal = rowData.__cfRowBg === 'cf-row-hl' ? '' : String(rowData.__cfRowBg);
+        tr.style.setProperty('--cf-row-bg', cfBgVal || 'transparent');
       }
       var rowNumTd = mkEl('td', {
         className: 'row-num',

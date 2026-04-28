@@ -263,22 +263,27 @@
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
-     PAINT ENGINE v2.0 — 2-Pass Architecture
+     PAINT ENGINE v3.0 — DOM-walk architecture
      ─────────────────────────────────────────────────────────────────────────
-     PASS 1: Pure data evaluation against row.data — ZERO DOM ACCESS.
-             Collects: rowHighlights{}, cellStyles{}, colorScales[], dataBars[], iconSets[].
-             [FIX-ROW-1]: No more `if (!td) return` short-circuit killing rowHighlights.
+     v3.0 FIXES vs v2.0:
+     [FIX-ROW-3] BUG: Pass 2A used querySelector('tr[data-row="X"]') to find rows.
+       Padding/empty rows in render() share the same row_index value as real rows
+       when viewRows is filtered/sorted (loop counter i collides with row.row_index).
+       querySelector returns the FIRST match — often the WRONG tr.
+       This caused "some rows highlight, others don't" — the exact symptom in screenshots.
+       FIX: Pre-build domRowMap by walking tbody ONCE. Each tr appears exactly once.
+       rowHighlights and cellStyles look up O(1) from the map. Zero collision.
 
-     PASS 2A: Apply row highlights — direct inline style.setProperty('background')
-              on EVERY td in the row via tr.querySelectorAll('td').
-              [FIX-ROW-2]: Inline !important beats CSS class !important — every cell
-              in the row gets the highlight without holes.
+     [FIX-ROW-4] BUG: Rules with no bgColor (only textColor) produced semiBg=''
+       → rowRef.__cfRowBg='' → falsy → render() re-stamp skipped cf-row-highlighted
+       → next render() lost the text color that paintGrid applied.
+       FIX: Store 'cf-row-hl' sentinel when bgColor is absent so re-stamp always fires.
 
-     PASS 2B: Apply per-cell styles — these override specific cells because they
-              are applied AFTER Pass 2A (same inline specificity, later = wins).
+     [FIX-ROW-5] BUG: Pass 2B per-cell also used querySelector — same collision risk.
+       FIX: Now uses domRowMap[rowIdxStr].inputs[colKey] — direct O(1) lookup.
 
-     PASS 2C/D/E: color_scale, data_bar, icon_set — unchanged logic, deferred to DOM.
-  ───────────────────────────────────────────────────────────────────────── */
+     All other logic: evalRule, modal, editor, save — UNCHANGED.
+  ─────────────────────────────────────────────────────────────────────────── */
 
   function paintGrid() {
     var grid = document.getElementById('svcGrid');
@@ -290,23 +295,60 @@
     var rows = state.rows || [];
     if (state.__treeFilteredRows) rows = state.__treeFilteredRows;
 
-    // Build label→key map for COL() formula function
+    // Build label->key map for COL() formula function
     var colLabelMap = {};
     cols.forEach(function (c) {
       if (c && c.label && c.key) colLabelMap[c.label] = c.key;
     });
 
-    // ── CLEAR: Remove all previous CF styles ─────────────────────────────
-    grid.querySelectorAll('td[data-cf-applied]').forEach(function (td) {
-      td.removeAttribute('data-cf-applied');
-      td.style.removeProperty('background');
-      td.style.removeProperty('border-left');
-      td.style.removeProperty('outline');
-      td.style.removeProperty('position');
-      td.style.removeProperty('padding-left');
-      td.style.removeProperty('box-shadow');
-      var inp = td.querySelector('input.cell');
-      if (inp) {
+    /* =========================================================================
+       PRE-BUILD DOM MAP — walk tbody once, build rowIndex(string)->DOM lookup
+       [FIX-ROW-3] Each DOM tr appears exactly once. No collision possible.
+       Map key = tr.dataset.row (= String(row.row_index) stamped in render()).
+    ========================================================================= */
+    var domRowMap = {}; // String(rowIndex) -> { tr, tds:[], inputs:{key->inp} }
+    var tbody = grid.querySelector('tbody');
+    if (tbody) {
+      tbody.querySelectorAll('tr').forEach(function (tr) {
+        var ri = tr.dataset.row;
+        if (ri == null || ri === '') return;
+        var entry = { tr: tr, tds: [], inputs: {} };
+        tr.querySelectorAll('td').forEach(function (td) {
+          entry.tds.push(td);
+          var inp = td.querySelector('input.cell');
+          if (inp && inp.dataset.key) entry.inputs[inp.dataset.key] = inp;
+        });
+        domRowMap[ri] = entry;
+      });
+    }
+
+    /* =========================================================================
+       CLEAR — Remove all previous CF inline styles via domRowMap
+    ========================================================================= */
+    Object.keys(domRowMap).forEach(function (ri) {
+      var entry = domRowMap[ri];
+      var tr = entry.tr;
+
+      tr.removeAttribute('data-cf-row');
+      tr.classList.remove('cf-row-highlighted');
+      tr.style.removeProperty('--cf-row-bg');
+      tr.style.removeProperty('--cf-row-accent');
+
+      entry.tds.forEach(function (td) {
+        td.removeAttribute('data-cf-applied');
+        td.removeAttribute('data-cf-row-bg');
+        td.style.removeProperty('background');
+        td.style.removeProperty('border-left');
+        td.style.removeProperty('outline');
+        td.style.removeProperty('position');
+        td.style.removeProperty('padding-left');
+        td.style.removeProperty('box-shadow');
+        var badge = td.querySelector('.cf-icon-badge');
+        if (badge) badge.remove();
+      });
+
+      Object.keys(entry.inputs).forEach(function (k) {
+        var inp = entry.inputs[k];
         inp.style.removeProperty('color');
         inp.style.removeProperty('font-weight');
         inp.style.removeProperty('font-style');
@@ -314,45 +356,20 @@
         inp.style.removeProperty('font-family');
         inp.dataset.cfIcon = '';
         inp.dataset.cfQbStripped = '';
-      }
-      var badge = td.querySelector('.cf-icon-badge');
-      if (badge) badge.remove();
-    });
-    // Clear CSS-class row highlights
-    grid.querySelectorAll('tr.cf-row-highlighted, tr[data-cf-row]').forEach(function (tr) {
-      tr.removeAttribute('data-cf-row');
-      tr.classList.remove('cf-row-highlighted');
-      tr.style.removeProperty('--cf-row-bg');
-      tr.style.removeProperty('--cf-row-accent');
-      var rowId = tr.dataset.rowId || '';
-      if (rowId) {
-        var prev = rows.find(function (r) { return r && r.id != null && String(r.id) === String(rowId); });
-        if (prev) delete prev.__cfRowBg;
-      }
-      tr.querySelectorAll('td input.cell').forEach(function (inp) {
-        inp.style.removeProperty('color');
-        inp.style.removeProperty('font-weight');
-        inp.style.removeProperty('font-style');
-        inp.style.removeProperty('text-decoration');
-        inp.dataset.cfQbStripped = '';
       });
     });
-    // [FIX-ROW-2] Also clear direct inline row-bg applied in Pass 2A
-    grid.querySelectorAll('td[data-cf-row-bg]').forEach(function (td) {
-      td.removeAttribute('data-cf-row-bg');
-      td.style.removeProperty('background');
-    });
 
-    /* ═══════════════════════════════════════════════════════════════════════
+    /* =========================================================================
        PASS 1 — PURE DATA EVALUATION (zero DOM access)
-       [FIX-ROW-1] Collect all results from row.data — no td lookup here.
-    ═══════════════════════════════════════════════════════════════════════ */
-
-    var rowHighlights = {}; // rowKey → highlight info object
-    var cellStyles    = {}; // 'rowIdx:::colKey' → {rowIdx, colKey, rule}
-    var colorScales   = []; // [{rowIdx, colKey, color}]
-    var dataBars      = []; // [{rowIdx, colKey, pct, barColor}]
-    var iconSets      = []; // [{rowIdx, colKey, icon}]
+       Collect: rowHighlights{}, cellStyles{}, colorScales[], dataBars[], iconSets[].
+       Key change from v2.0: rowHighlights keyed by String(row.row_index) = domRowMap key.
+       [FIX-ROW-3] Only evaluate rows that exist in domRowMap (visible in DOM).
+    ========================================================================= */
+    var rowHighlights = {}; // String(rowIdx) -> highlight info
+    var cellStyles    = {}; // 'rowIdxStr:::colKey' -> {rowIdxStr, colKey, rule}
+    var colorScales   = []; // [{rowIdxStr, colKey, color}]
+    var dataBars      = []; // [{rowIdxStr, colKey, pct, barColor}]
+    var iconSets      = []; // [{rowIdxStr, colKey, icon}]
 
     cols.forEach(function (col) {
       if (!col || !Array.isArray(col.conditionalRules) || !col.conditionalRules.length) return;
@@ -360,7 +377,6 @@
       var rules = col.conditionalRules.filter(function (r) { return r && !r.disabled; });
       if (!rules.length) return;
 
-      // Gather all values for this column (scale / duplicate evaluation)
       var colValues = rows.map(function (row) {
         return row && row.data ? (row.data[col.key] != null ? String(row.data[col.key]).trim() : '') : '';
       });
@@ -375,24 +391,27 @@
 
       rows.forEach(function (row, rowPos) {
         if (!row || !row.data) return;
-        var rowIdx   = row.row_index != null ? row.row_index : rowPos;
-        var rowIdKey = row.id != null ? String(row.id) : ('idx:' + String(rowIdx));
+        var rowIdx    = row.row_index != null ? row.row_index : rowPos;
+        var rowIdxStr = String(rowIdx);
+
+        // [FIX-ROW-3] Skip rows not in the current DOM render — prevents stale highlights
+        if (!domRowMap[rowIdxStr]) return;
+
         var cellValue = row.data[col.key] != null ? row.data[col.key] : '';
-        var cellStr  = String(cellValue).trim();
+        var cellStr   = String(cellValue).trim();
 
         for (var ri = 0; ri < rules.length; ri++) {
           var rule = rules[ri];
           var matched = false;
 
           if (rule.type === 'single_color' || rule.type === 'formula') {
-
             if (rule.operator === 'is_duplicate') {
               matched = cellStr !== '' && (valueCounts[cellStr] || 0) > 1;
             } else if (rule.operator === 'is_unique') {
               matched = cellStr !== '' && (valueCounts[cellStr] || 0) === 1;
             } else if (rule.type === 'formula') {
-              rule._evalRowData      = row.data;
-              rule._evalColLabelMap  = colLabelMap;
+              rule._evalRowData     = row.data;
+              rule._evalColLabelMap = colLabelMap;
               matched = evalRule(rule, cellValue);
               delete rule._evalRowData;
               delete rule._evalColLabelMap;
@@ -402,12 +421,11 @@
 
             if (matched) {
               if (rule.highlightRow) {
-                // [FIX-ROW-1] No DOM access — purely data-driven collection
-                if (!rowHighlights[rowIdKey]) {
-                  rowHighlights[rowIdKey] = {
-                    rowIndex:     rowIdx,
-                    bgColor:      rule.bgColor      || '',
-                    textColor:    rule.textColor    || '',
+                if (!rowHighlights[rowIdxStr]) {
+                  rowHighlights[rowIdxStr] = {
+                    rowIdx:       rowIdx,
+                    bgColor:      rule.bgColor       || '',
+                    textColor:    rule.textColor     || '',
                     bold:         !!rule.bold,
                     italic:       !!rule.italic,
                     strikethrough:!!rule.strikethrough,
@@ -416,10 +434,9 @@
                   };
                 }
               } else {
-                // Queue per-cell — DOM lookup deferred to Pass 2B
-                var cellKey = rowIdx + ':::' + col.key;
+                var cellKey = rowIdxStr + ':::' + col.key;
                 if (!cellStyles[cellKey]) {
-                  cellStyles[cellKey] = { rowIdx: rowIdx, colKey: col.key, rule: rule };
+                  cellStyles[cellKey] = { rowIdxStr: rowIdxStr, colKey: col.key, rule: rule };
                 }
               }
               break; // first-match-wins
@@ -432,18 +449,16 @@
               var color = t <= 0.5
                 ? interpolateHex(rule.scaleMin || '#f87171', rule.scaleMid || '#fde047', t * 2)
                 : interpolateHex(rule.scaleMid || '#fde047', rule.scaleMax || '#4ade80', (t - 0.5) * 2);
-              colorScales.push({ rowIdx: rowIdx, colKey: col.key, color: color });
+              colorScales.push({ rowIdxStr: rowIdxStr, colKey: col.key, color: color });
             }
-
           } else if (rule.type === 'data_bar') {
             var numV2 = parseFloat(cellStr);
             if (!isNaN(numV2)) {
               var pct = maxVal !== minVal
                 ? Math.max(0, Math.min(100, ((numV2 - minVal) / (maxVal - minVal)) * 100))
                 : 50;
-              dataBars.push({ rowIdx: rowIdx, colKey: col.key, pct: pct, barColor: rule.barColor || '#22d3ee' });
+              dataBars.push({ rowIdxStr: rowIdxStr, colKey: col.key, pct: pct, barColor: rule.barColor || '#22d3ee' });
             }
-
           } else if (rule.type === 'icon_set') {
             var numV3 = parseFloat(cellStr);
             if (!isNaN(numV3)) {
@@ -451,127 +466,123 @@
               var icons   = iconSet.icons;
               var t3      = maxVal !== minVal ? (numV3 - minVal) / (maxVal - minVal) : 0.5;
               var iconIdx = t3 < 0.33 ? 0 : t3 < 0.67 ? 1 : 2;
-              iconSets.push({ rowIdx: rowIdx, colKey: col.key, icon: icons[Math.min(iconIdx, icons.length - 1)] });
+              iconSets.push({ rowIdxStr: rowIdxStr, colKey: col.key, icon: icons[Math.min(iconIdx, icons.length - 1)] });
             }
           }
         }
       });
     });
 
-    /* ═══════════════════════════════════════════════════════════════════════
-       PASS 2A — ROW HIGHLIGHTS (DOM, applied FIRST)
-       [FIX-ROW-2] Direct inline style.setProperty on EVERY td in the row.
-       Eliminates "holes" caused by CSS class being beaten by inline !important.
-    ═══════════════════════════════════════════════════════════════════════ */
+    /* =========================================================================
+       PASS 2A — ROW HIGHLIGHTS (applied FIRST)
+       [FIX-ROW-3] domRowMap[rowIdxStr] — O(1), zero collision.
+       [FIX-ROW-2] Direct inline setProperty on EVERY td — no "holes".
+       [FIX-ROW-4] textColor-only rules also persist across re-renders.
+    ========================================================================= */
+    Object.keys(rowHighlights).forEach(function (rowIdxStr) {
+      var hl    = rowHighlights[rowIdxStr];
+      var entry = domRowMap[rowIdxStr];
+      if (!entry) return;
 
-    Object.keys(rowHighlights).forEach(function (rowKey) {
-      var hl = rowHighlights[rowKey];
-      var tr = grid.querySelector('tr[data-row-id="' + rowKey + '"]');
-      if (!tr && typeof hl.rowIndex !== 'undefined') {
-        tr = grid.querySelector('tr[data-row="' + hl.rowIndex + '"]');
-      }
-      if (!tr) return;
-
+      var tr = entry.tr;
       tr.classList.add('cf-row-highlighted');
       tr.setAttribute('data-cf-row', '1');
 
-      var semiBg      = hl.bgColor ? hexToRgba(hl.bgColor, 0.35) : '';
+      var semiBg      = hl.bgColor ? hexToRgba(hl.bgColor, 0.28) : '';
       var accentColor = hl.borderColor || hl.bgColor || '';
 
-      // Keep CSS var for any CSS that still references it (legacy compat)
       tr.style.setProperty('--cf-row-bg', semiBg || 'transparent');
       if (accentColor) tr.style.setProperty('--cf-row-accent', accentColor);
 
-      // Persist row metadata so services-grid render() can re-stamp on tbody rebuild
+      // [FIX-ROW-4] Persist on row.data so render() re-stamp is always truthy
       var rowRef = rows.find(function (r) {
-        if (!r) return false;
-        if (r.id != null && String(r.id) === rowKey) return true;
-        return String('idx:' + String(r.row_index)) === rowKey;
+        return r && r.row_index != null && String(r.row_index) === rowIdxStr;
       });
-      if (rowRef) rowRef.__cfRowBg = semiBg || '';
+      if (rowRef) {
+        rowRef.__cfRowBg     = semiBg || 'cf-row-hl'; // sentinel when no bgColor
+        rowRef.__cfTextColor = hl.textColor || '';
+      }
 
-      // [FIX-ROW-2] Apply to EVERY td via inline !important — no "holes"
-      tr.querySelectorAll('td').forEach(function (td) {
+      // Apply bg to EVERY td via domRowMap — [FIX-ROW-3] no rescan, no collision
+      entry.tds.forEach(function (td) {
         if (semiBg) {
           td.style.setProperty('background', semiBg, 'important');
           td.setAttribute('data-cf-row-bg', '1');
         }
+        td.setAttribute('data-cf-applied', '1');
       });
 
-      // Text style on all inputs in the row
-      tr.querySelectorAll('td input.cell').forEach(function (inp) {
+      // Text style on all inputs
+      var dec2 = [];
+      if (hl.strikethrough) dec2.push('line-through');
+      if (hl.underline)     dec2.push('underline');
+
+      Object.keys(entry.inputs).forEach(function (k) {
+        var inp = entry.inputs[k];
         if (hl.textColor) {
           inp.style.setProperty('color', hl.textColor, 'important');
         } else if (hl.bgColor) {
-          var lum = (function (hex) {
-            var c = hex.replace('#','');
-            if (c.length === 3) c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
-            var r = parseInt(c.substr(0,2),16), g = parseInt(c.substr(2,2),16), b = parseInt(c.substr(4,2),16);
-            return (0.299*r + 0.587*g + 0.114*b) / 255;
-          })(hl.bgColor);
+          var c2 = hl.bgColor.replace('#', '');
+          if (c2.length === 3) c2 = c2[0]+c2[0]+c2[1]+c2[1]+c2[2]+c2[2];
+          var rr = parseInt(c2.substr(0,2),16), gg = parseInt(c2.substr(2,2),16), bb = parseInt(c2.substr(4,2),16);
+          var lum = (0.299*rr + 0.587*gg + 0.114*bb) / 255;
           inp.style.setProperty('color', lum > 0.55 ? '#1e293b' : '#f1f5f9', 'important');
         }
-        inp.style.setProperty('font-weight',    hl.bold   ? '700'    : 'normal', 'important');
-        inp.style.setProperty('font-style',     hl.italic ? 'italic' : 'normal', 'important');
-        var dec2 = [];
-        if (hl.strikethrough) dec2.push('line-through');
-        if (hl.underline)     dec2.push('underline');
-        inp.style.setProperty('text-decoration', dec2.join(' ') || 'none', 'important');
+        inp.style.setProperty('font-weight',     hl.bold   ? '700'    : 'normal', 'important');
+        inp.style.setProperty('font-style',      hl.italic ? 'italic' : 'normal', 'important');
+        inp.style.setProperty('text-decoration', dec2.join(' ') || 'none',        'important');
       });
     });
 
-    /* ═══════════════════════════════════════════════════════════════════════
-       PASS 2B — PER-CELL STYLES (DOM, applied AFTER row highlights)
-       Applied second so they override specific cells where both a row-highlight
-       rule and a per-cell rule matched.  Same inline specificity, later wins.
-    ═══════════════════════════════════════════════════════════════════════ */
-
+    /* =========================================================================
+       PASS 2B — PER-CELL STYLES (applied AFTER row highlights)
+       [FIX-ROW-5] domRowMap lookup — no querySelector collision.
+    ========================================================================= */
     Object.keys(cellStyles).forEach(function (key) {
-      var cs  = cellStyles[key];
-      var inp = grid.querySelector('td input.cell[data-row="' + cs.rowIdx + '"][data-key="' + cs.colKey + '"]');
+      var cs    = cellStyles[key];
+      var entry = domRowMap[cs.rowIdxStr];
+      if (!entry) return;
+      var inp = entry.inputs[cs.colKey];
       if (!inp) return;
       var td = inp.parentElement;
       if (!td) return;
       applyStyleToTd(td, cs.rule);
     });
 
-    /* ═══════════════════════════════════════════════════════════════════════
-       PASS 2C — COLOR SCALES (DOM)
-    ═══════════════════════════════════════════════════════════════════════ */
-
+    /* =========================================================================
+       PASS 2C — COLOR SCALES
+    ========================================================================= */
     colorScales.forEach(function (cs) {
-      var inp = grid.querySelector('td input.cell[data-row="' + cs.rowIdx + '"][data-key="' + cs.colKey + '"]');
-      if (!inp) return;
-      var td = inp.parentElement;
-      if (!td) return;
+      var entry = domRowMap[cs.rowIdxStr];
+      if (!entry) return;
+      var inp = entry.inputs[cs.colKey]; if (!inp) return;
+      var td  = inp.parentElement;       if (!td)  return;
       td.style.background = cs.color;
       td.setAttribute('data-cf-applied', '1');
       inp.style.color = contrastColor(cs.color);
     });
 
-    /* ═══════════════════════════════════════════════════════════════════════
-       PASS 2D — DATA BARS (DOM)
-    ═══════════════════════════════════════════════════════════════════════ */
-
+    /* =========================================================================
+       PASS 2D — DATA BARS
+    ========================================================================= */
     dataBars.forEach(function (db) {
-      var inp = grid.querySelector('td input.cell[data-row="' + db.rowIdx + '"][data-key="' + db.colKey + '"]');
-      if (!inp) return;
-      var td = inp.parentElement;
-      if (!td) return;
+      var entry = domRowMap[db.rowIdxStr];
+      if (!entry) return;
+      var inp = entry.inputs[db.colKey]; if (!inp) return;
+      var td  = inp.parentElement;       if (!td)  return;
       td.style.background = 'linear-gradient(to right, ' + hexToRgba(db.barColor, 0.45) + ' ' + db.pct + '%, transparent ' + db.pct + '%)';
       td.style.borderLeft = '3px solid ' + db.barColor;
       td.setAttribute('data-cf-applied', '1');
     });
 
-    /* ═══════════════════════════════════════════════════════════════════════
-       PASS 2E — ICON SETS (DOM)
-    ═══════════════════════════════════════════════════════════════════════ */
-
+    /* =========================================================================
+       PASS 2E — ICON SETS
+    ========================================================================= */
     iconSets.forEach(function (is) {
-      var inp = grid.querySelector('td input.cell[data-row="' + is.rowIdx + '"][data-key="' + is.colKey + '"]');
-      if (!inp) return;
-      var td = inp.parentElement;
-      if (!td) return;
+      var entry = domRowMap[is.rowIdxStr];
+      if (!entry) return;
+      var inp = entry.inputs[is.colKey]; if (!inp) return;
+      var td  = inp.parentElement;       if (!td)  return;
       inp.dataset.cfIcon = is.icon;
       var existing = td.querySelector('.cf-icon-badge');
       if (existing) existing.remove();
@@ -579,16 +590,13 @@
       badge.className = 'cf-icon-badge';
       badge.textContent = is.icon;
       badge.style.cssText = 'position:absolute;left:4px;top:50%;transform:translateY(-50%);pointer-events:none;font-size:12px;z-index:2;';
-      td.style.position   = 'relative';
+      td.style.position    = 'relative';
       td.style.paddingLeft = '24px';
       td.appendChild(badge);
       td.setAttribute('data-cf-applied', '1');
     });
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
-     applyStyleToTd — per-cell style writer (unchanged from v1.0)
-  ───────────────────────────────────────────────────────────────────────── */
 
   function applyStyleToTd(td, rule) {
     var bgColor   = rule.bgColor   || '';
