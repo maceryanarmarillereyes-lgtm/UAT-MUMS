@@ -32,7 +32,16 @@
     constructor(){
       this.config           = this._loadCachedConfig();
       this.lastActivityKey  = 'mums_last_activity';
-      this.lastActivity     = Number(localStorage.getItem(this.lastActivityKey) || Date.now());
+      // FIX-PS-BOOT-1: Always reset lastActivity to NOW at construction time.
+      // If a previous session wrote a stale timestamp to localStorage (e.g. the user
+      // was idle before logout, or the session was auto-paused), the constructor would
+      // read that old value and the 15-second checker could fire immediately on the
+      // next login → pause() triggers before the page finishes loading → app stuck.
+      // Resetting to Date.now() here is safe: the user just authenticated and the page
+      // is actively loading — that IS activity. The checker will correctly start its
+      // timeout countdown from this fresh timestamp.
+      this.lastActivity     = Date.now();
+      try { localStorage.setItem('mums_last_activity', String(this.lastActivity)); } catch(_){}
       this.checkerTimer     = null;
       this.activityHandler  = this._onActivity.bind(this);
       this._eventsBound     = false;
