@@ -231,7 +231,11 @@
     }
 
     _startChecker(){
-      if (this.checkerTimer) clearInterval(this.checkerTimer);
+      // FIX-PS-8: Stop any existing checker first (prevents duplicate intervals)
+      if (this.checkerTimer) { clearInterval(this.checkerTimer); this.checkerTimer = null; }
+      // FIX-PS-8: Do NOT start checker if feature is disabled — prevents lingering
+      // timers from triggering pause even after user saves enabled=false.
+      if (!this.config || !this.config.enabled) return;
       this.checkerTimer = setInterval(()=>{
         if (!this.config || !this.config.enabled || this._paused) return;
         const last = Number(localStorage.getItem(this.lastActivityKey) || this.lastActivity || Date.now());
@@ -424,6 +428,11 @@
     }
 
     // ── INTERNAL: Settings panel (Super Admin only) ─────────────────
+    // FIX-PS-1: Always re-evaluate the role at bind time (not at constructor time).
+    //   Role from constructor (_getCurrentRole at new PauseSessionManager()) may be
+    //   stale if CloudAuth session hadn't settled yet.
+    // FIX-PS-2: When called again (panelInits resets _saveBound), fully re-syncs
+    //   UI values from latest config and re-registers the save click listener.
     _bindSettingsPanel(){
       const enabledEl = document.getElementById('pause-enabled');
       const timeoutEl = document.getElementById('pause-timeout');
@@ -431,26 +440,48 @@
       const statusEl  = document.getElementById('pause-save-msg');
       if (!enabledEl || !timeoutEl || !saveBtn) return;
 
+      // FIX-PS-1: Re-read role live — not from stale constructor cache.
+      // Auth.getUser() is available after the PIN gate resolves.
+      const role = this._getCurrentRole();
+      const isSA = role === 'SUPER_ADMIN';
+
+      // Always sync UI to latest config on every bind (covers re-open case)
       enabledEl.checked = !!this.config.enabled;
       timeoutEl.value   = String(this.config.timeout_minutes || DEFAULT_CONFIG.timeout_minutes);
 
-      const role = this.userRole || this._getCurrentRole();
-      const isSuperAdmin = role === 'SUPER_ADMIN';
-      enabledEl.disabled    = !isSuperAdmin;
-      timeoutEl.disabled    = !isSuperAdmin;
-      saveBtn.style.display = isSuperAdmin ? '' : 'none';
+      // FIX-PS-3: Correctly gate editing — Super Admin can change, others see read-only
+      enabledEl.disabled    = !isSA;
+      timeoutEl.disabled    = !isSA;
+      saveBtn.style.display = isSA ? '' : 'none';
 
+      // FIX-PS-2: _saveBound guard is reset by panelInits on each panel open
       if (this._saveBound) return;
       this._saveBound = true;
+
       saveBtn.addEventListener('click', async ()=>{
+        // FIX-PS-4: Re-read role at click time (double-guard against privilege escalation)
+        const clickRole = this._getCurrentRole();
+        if (clickRole !== 'SUPER_ADMIN') {
+          if (statusEl) {
+            statusEl.textContent = '✗ Insufficient permissions.';
+            statusEl.style.opacity = '1';
+            statusEl.style.color   = '#ef4444';
+            setTimeout(()=>{ if(statusEl) statusEl.style.opacity = '0'; }, 3000);
+          }
+          return;
+        }
+
+        const timeoutVal = Number(timeoutEl.value || DEFAULT_CONFIG.timeout_minutes);
         const payload = {
           enabled: !!enabledEl.checked,
-          timeout_minutes: Number(timeoutEl.value || DEFAULT_CONFIG.timeout_minutes)
+          timeout_minutes: ALLOWED_TIMEOUTS.has(timeoutVal)
+            ? timeoutVal
+            : DEFAULT_CONFIG.timeout_minutes
         };
 
         if (!ALLOWED_TIMEOUTS.has(payload.timeout_minutes)) {
           if (statusEl) {
-            statusEl.textContent = 'Invalid timeout option.';
+            statusEl.textContent = '✗ Invalid timeout option.';
             statusEl.style.opacity = '1';
             statusEl.style.color   = '#ef4444';
           }
@@ -459,9 +490,17 @@
 
         saveBtn.disabled    = true;
         saveBtn.textContent = 'Saving\u2026';
+
         try {
+          // FIX-PS-5: Ensure window.fetch is NOT the blocked version before saving.
+          // If a previous pause cycle installed _blockFetches(), the blocked fetch
+          // would reject here. Use _origFetch directly to guarantee the request lands.
+          const safeFetch = (this._origFetch && window.fetch !== this._origFetch)
+            ? this._origFetch
+            : window.fetch;
+
           const token = this._getToken();
-          const res = await fetch('/api/settings/pause-session', {
+          const res = await safeFetch.call(window, '/api/settings/pause-session', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -469,26 +508,46 @@
             },
             body: JSON.stringify(payload)
           });
-          const data = await res.json().catch(()=>({}));
+
+          let data = {};
+          try { data = await res.json(); } catch(_) {}
+
           if (res.ok && data && data.ok && data.settings) {
             this.config = this._normalizeConfig(data.settings);
             this._saveCachedConfig(this.config);
             this._onActivity();
+
+            // FIX-PS-6: Apply the new enabled state immediately — don't wait for reload.
+            // If user disabled pause session, stop the checker and unbind listeners.
+            // If user re-enabled, restart the checker.
+            if (!this.config.enabled) {
+              this._unbindActivityListeners();
+              if (this.checkerTimer) { clearInterval(this.checkerTimer); this.checkerTimer = null; }
+            } else {
+              if (!this._paused) {
+                this._bindActivityListeners();
+                this._startChecker();
+              }
+            }
+
             if (statusEl) {
               statusEl.textContent = '\u2713 Pause session settings saved.';
               statusEl.style.opacity = '1';
               statusEl.style.color   = '#22c55e';
             }
           } else {
+            const errMsg = (data && (data.message || data.error))
+              ? String(data.message || data.error)
+              : ('HTTP ' + res.status);
             if (statusEl) {
-              statusEl.textContent = '\u2717 ' + (data && (data.message || data.error) ? String(data.message || data.error) : 'Save failed.');
+              statusEl.textContent = '\u2717 ' + errMsg;
               statusEl.style.opacity = '1';
               statusEl.style.color   = '#ef4444';
             }
           }
-        } catch(_) {
+        } catch(err) {
           if (statusEl) {
-            statusEl.textContent = '\u2717 Network error.';
+            statusEl.textContent = '\u2717 Network error. ' + (err && err.message ? String(err.message) : '');
             statusEl.style.opacity = '1';
             statusEl.style.color   = '#ef4444';
           }
@@ -496,7 +555,7 @@
           saveBtn.disabled    = false;
           saveBtn.textContent = 'Save';
           if (statusEl) {
-            setTimeout(()=>{ statusEl.style.opacity = '0'; }, 3500);
+            setTimeout(()=>{ if(statusEl) statusEl.style.opacity = '0'; }, 3500);
           }
         }
       });

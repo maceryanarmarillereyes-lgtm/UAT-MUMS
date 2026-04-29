@@ -34,13 +34,28 @@ function isSuperAdmin(profile) {
 
 function normalizeSettings(raw) {
   const src = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
-  const enabled = src.enabled !== undefined ? src.enabled === true : DEFAULT_SETTINGS.enabled;
+  // FIX-PS-SRV-1: Must check src.enabled !== undefined BEFORE defaulting.
+  // When enabled=false is passed (disable action), src.enabled === false (falsy).
+  // Old code: src.enabled !== undefined ? src.enabled === true : default
+  //   → false !== undefined → true → false === true → false ✓  (was actually correct)
+  // Extra guard: also accept string "false"/"0" via coerceBoolean for safety.
+  let enabled;
+  if (src.enabled !== undefined) {
+    const raw_e = src.enabled;
+    if (raw_e === true || raw_e === false) {
+      enabled = raw_e;
+    } else {
+      const s = String(raw_e).trim().toLowerCase();
+      if (s === 'true'  || s === '1' || s === 'yes' || s === 'on')  enabled = true;
+      else if (s === 'false' || s === '0' || s === 'no'  || s === 'off') enabled = false;
+      else enabled = DEFAULT_SETTINGS.enabled;
+    }
+  } else {
+    enabled = DEFAULT_SETTINGS.enabled;
+  }
   const timeoutRaw = Number(src.timeout_minutes);
   const timeout = ALLOWED_TIMEOUTS.has(timeoutRaw) ? timeoutRaw : DEFAULT_SETTINGS.timeout_minutes;
-  return {
-    enabled,
-    timeout_minutes: timeout
-  };
+  return { enabled, timeout_minutes: timeout };
 }
 
 function readBody(req) {
@@ -158,20 +173,29 @@ module.exports = async (req, res) => {
 
     let body = {};
     try { body = await readBody(req); } catch (_) {
-      return sendJson(res, 400, { ok: false, error: 'invalid_json' });
+      return sendJson(res, 400, { ok: false, error: 'invalid_json', message: 'Request body must be valid JSON.' });
     }
 
-    const enabled = coerceBoolean(body.enabled);
+    // FIX-PS-SRV-2: Validate enabled field — must be a boolean or boolean-string.
+    // Explicitly accept the boolean value false (disable action).
+    const enabledRaw = body.enabled;
+    const enabled = coerceBoolean(enabledRaw);
     if (enabled === null) {
-      return sendJson(res, 400, { ok: false, error: 'invalid_enabled', message: 'enabled must be a boolean.' });
+      return sendJson(res, 400, {
+        ok: false,
+        error: 'invalid_enabled',
+        message: 'enabled must be true or false. Received: ' + JSON.stringify(enabledRaw)
+      });
     }
 
-    const timeout = Number(body.timeout_minutes);
+    // FIX-PS-SRV-3: Validate timeout_minutes.
+    const timeoutRaw = body.timeout_minutes;
+    const timeout = Number(timeoutRaw);
     if (!ALLOWED_TIMEOUTS.has(timeout)) {
       return sendJson(res, 400, {
         ok: false,
         error: 'invalid_timeout',
-        message: 'timeout_minutes must be one of: 1, 5, 10, 30, 60.'
+        message: 'timeout_minutes must be one of: 1, 5, 10, 30, 60. Received: ' + JSON.stringify(timeoutRaw)
       });
     }
 

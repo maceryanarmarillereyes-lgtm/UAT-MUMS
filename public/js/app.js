@@ -5436,6 +5436,31 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
                 }
               }catch(_){}
             },
+            // ── PAUSE SESSION (Super Admin) ──────────────────────────────────
+            // Re-binds the settings panel every time the user opens it.
+            // FIX-PS-1: At app boot, pauseManager.init() runs before CloudAuth
+            //   is fully settled, so _getCurrentRole() may return '' → isSuperAdmin
+            //   evaluates false → Save button hidden and no listener bound.
+            //   Re-calling _bindSettingsPanel() at panel-open time guarantees the
+            //   role is evaluated with a live Auth session, the correct toggle
+            //   state is applied from the latest loaded config, and the save
+            //   listener is registered with a fresh token getter reference.
+            // FIX-PS-2: _saveBound guard is reset here so re-entry always rebinds.
+            pausesession: function() {
+              try {
+                if (!window.pauseManager) return;
+                // Force a fresh config reload from server so UI reflects latest state
+                window.pauseManager.loadConfig(true).then(function() {
+                  // Reset the bound guard so _bindSettingsPanel fully re-executes
+                  window.pauseManager._saveBound = false;
+                  window.pauseManager._bindSettingsPanel();
+                }).catch(function() {
+                  // Fallback: re-bind with cached config even if server fetch fails
+                  window.pauseManager._saveBound = false;
+                  window.pauseManager._bindSettingsPanel();
+                });
+              } catch(_) {}
+            },
           };
           if (panelInits[panel]) {
             setTimeout(panelInits[panel], 60);
