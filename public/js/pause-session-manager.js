@@ -89,7 +89,17 @@
         try {
           const token = this._getToken();
           const headers = token ? { Authorization: `Bearer ${token}` } : {};
-          const res = await fetch('/api/settings/pause-session', { method:'GET', headers, cache:'no-store' });
+          // FIX-PS-LC-1: Always use _origFetch for config loads.
+          // If a previous pause cycle installed _blockFetches(), window.fetch is the
+          // blocked interceptor that immediately rejects all requests.
+          // The settings panel opens while the session is paused (user clicks Settings
+          // from the overlay or via keyboard) — using window.fetch here would cause
+          // loadConfig to silently fail and the panel would show stale cached values.
+          // Using _origFetch guarantees the GET reaches the server regardless of pause state.
+          const safeFetch = (this._origFetch && typeof this._origFetch === 'function')
+            ? this._origFetch
+            : window.fetch;
+          const res = await safeFetch.call(window, '/api/settings/pause-session', { method:'GET', headers, cache:'no-store' });
           if (!res.ok) { return this.config; }
           const data = await res.json().catch(()=>({}));
           if (data && data.ok && data.settings) {
@@ -163,7 +173,23 @@
     // ── INTERNAL: Config normalization ──────────────────────────────
     _normalizeConfig(raw){
       const src = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
-      const enabled = src.enabled !== undefined ? src.enabled === true : DEFAULT_CONFIG.enabled;
+
+      // FIX-PS-NC-1: Support all truthy/falsy representations.
+      // Supabase JSONB returns native booleans, but localStorage may return
+      // stringified JSON where the value was previously cached as a string.
+      // We must handle: true/false (boolean), "true"/"false" (string), 1/0 (number).
+      let enabled;
+      if (src.enabled === undefined) {
+        enabled = DEFAULT_CONFIG.enabled;
+      } else if (src.enabled === true || src.enabled === false) {
+        enabled = src.enabled;  // native boolean — most common from server
+      } else {
+        const s = String(src.enabled).trim().toLowerCase();
+        if      (s === 'true'  || s === '1' || s === 'yes' || s === 'on')  enabled = true;
+        else if (s === 'false' || s === '0' || s === 'no'  || s === 'off') enabled = false;
+        else enabled = DEFAULT_CONFIG.enabled;
+      }
+
       const timeout = Number(src.timeout_minutes);
       return {
         enabled,

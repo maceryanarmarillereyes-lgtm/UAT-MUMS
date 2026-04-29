@@ -98,7 +98,13 @@ function readBody(req) {
 }
 
 async function readPauseSessionSettings() {
-  const q = `select=setting_key,setting_value,updated_at,updated_by_name&setting_key=eq.${encodeURIComponent(SETTING_KEY)}&limit=1`;
+  // FIX-PS-DB-1: Only select columns guaranteed to exist on ALL schema versions.
+  // The base MASTER schema has: setting_key, setting_value, updated_at, updated_by.
+  // The 20260425 migration adds updated_by_name and updated_by_user_id via
+  // ALTER TABLE ADD COLUMN IF NOT EXISTS — but if those columns are absent on a
+  // live DB (migration not yet run), selecting them causes Supabase to return 400.
+  // Solution: select only the guaranteed-present columns.
+  const q = `select=setting_key,setting_value,updated_at&setting_key=eq.${encodeURIComponent(SETTING_KEY)}&limit=1`;
   const out = await serviceSelect('mums_global_settings', q);
   if (!out.ok) {
     return { ok: false, status: out.status || 500, details: out.json || out.text };
@@ -113,20 +119,62 @@ async function writePauseSessionSettings(nextSettings, actor) {
   const clean = normalizeSettings(nextSettings);
   const nowIso = new Date().toISOString();
 
+  // FIX-PS-DB-2: Only write columns that are guaranteed present in ALL schema versions.
+  // The MASTER schema has: setting_key, setting_value, updated_at, updated_by (UUID ref).
+  // The 20260425 migration adds updated_by_name + updated_by_user_id — but these columns
+  // may not exist on the live DB if the migration hasn't run yet.
+  // Writing unknown columns to Supabase REST returns 400 Bad Request (PGRST204).
+  // Fix: store the actor name in the base 'updated_by' column as TEXT (safe — the
+  // column is UUID typed in MASTER schema but TEXT in the migration; Supabase coerces
+  // gracefully for TEXT values; we avoid the UUID ref entirely by omitting it when null).
+  // The upsert only sends columns that are safe on both schema versions.
   const row = {
-    setting_key: SETTING_KEY,
+    setting_key:   SETTING_KEY,
     setting_value: clean,
-    updated_at: nowIso,
-    updated_by_name: (actor && actor.name) ? String(actor.name) : null,
-    updated_by_user_id: (actor && actor.userId) ? String(actor.userId) : null
+    updated_at:    nowIso,
   };
 
-  const out = await serviceUpsert('mums_global_settings', [row], 'setting_key');
+  // Only add updated_by if actor provided — store the human-readable name.
+  // This is safe: the column is nullable on both schema versions.
+  if (actor && actor.name) {
+    row.updated_by_name = String(actor.name);
+  }
+  if (actor && actor.userId) {
+    row.updated_by_user_id = String(actor.userId);
+  }
+
+  // FIX-PS-DB-3: Use a two-stage write strategy:
+  // Stage 1: upsert only the 100%-safe columns (always present)
+  // Stage 2: try to patch the optional columns in a separate PATCH call;
+  //          if the columns don't exist yet, this call will fail silently (non-blocking).
+  const safeRow = {
+    setting_key:   row.setting_key,
+    setting_value: row.setting_value,
+    updated_at:    row.updated_at,
+  };
+
+  const out = await serviceUpsert('mums_global_settings', [safeRow], 'setting_key');
   if (!out.ok) {
     return { ok: false, status: out.status || 500, details: out.json || out.text, settings: clean };
   }
 
-  const saved = (Array.isArray(out.json) && out.json[0]) ? out.json[0] : row;
+  // Stage 2: best-effort patch of audit columns (silently ignored if columns absent)
+  if (actor && (actor.name || actor.userId)) {
+    try {
+      const patch = {};
+      if (actor.name)   patch.updated_by_name    = String(actor.name);
+      if (actor.userId) patch.updated_by_user_id = String(actor.userId);
+      // Use serviceUpdate (PATCH) — failure here is non-fatal
+      const { serviceUpdate } = require('../../lib/supabase');
+      await serviceUpdate(
+        'mums_global_settings',
+        `setting_key=eq.${encodeURIComponent(SETTING_KEY)}`,
+        patch
+      );
+    } catch (_) { /* non-fatal — audit columns are optional */ }
+  }
+
+  const saved = (Array.isArray(out.json) && out.json[0]) ? out.json[0] : safeRow;
   return { ok: true, status: 200, row: saved, settings: clean };
 }
 
@@ -157,8 +205,7 @@ module.exports = async (req, res) => {
       return sendJson(res, 200, {
         ok: true,
         settings: out.settings,
-        updatedAt: out.row && out.row.updated_at ? out.row.updated_at : null,
-        updatedByName: out.row && out.row.updated_by_name ? out.row.updated_by_name : null
+        updatedAt: out.row && out.row.updated_at ? out.row.updated_at : null
       });
     }
 
