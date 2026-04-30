@@ -74,7 +74,7 @@
     }, 20000);
   }
   
-  // Wrap Realtime.onLocalWrite to add 800ms debounce and leader-only push
+  // Wrap Realtime.onLocalWrite to add adaptive debounce and leader-only push
   function wrapRealtime(){
     try {
       if (!window.Realtime || !Realtime.onLocalWrite) return;
@@ -82,12 +82,17 @@
       Realtime.onLocalWrite = function(key, value){
         // Only leader tab pushes to Supabase
         if (!isLeader) return;
-        // Extra 800ms debounce on top of existing 300ms
+        let delay = 800;
+        if (key && key.startsWith('mums_') && (key.includes('services') || key.includes('qb'))) {
+          // Bulk keys get 5 second debounce instead of 800ms
+          delay = 5000;
+        } else { delay = 800; }
+        // Extra debounce on top of existing 300ms
         if (extraDebounce.has(key)) clearTimeout(extraDebounce.get(key));
         extraDebounce.set(key, setTimeout(()=>{
           extraDebounce.delete(key);
           try { original(key, value); } catch(_){}
-        }, 800));
+        }, delay));
       };
     } catch(_){}
   }

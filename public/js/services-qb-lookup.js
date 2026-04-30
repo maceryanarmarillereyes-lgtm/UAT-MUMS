@@ -1117,6 +1117,10 @@
       }
     },
     refreshAllLinkedColumns: async function (current, gridEl) {
+      if (localStorage.getItem('mums_qb_autosync') !== '1') {
+        return 0;
+      }
+
       const sheet = current && current.sheet ? current.sheet : null;
       const rows = current && Array.isArray(current.rows) ? current.rows : [];
       if (!sheet || !rows.length) return 0;
