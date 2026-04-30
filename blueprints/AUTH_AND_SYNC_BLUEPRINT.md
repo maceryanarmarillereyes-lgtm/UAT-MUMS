@@ -61,3 +61,6 @@ This layer is the platform backbone: session lifecycle, user hydration, local st
 - **2026-04-26** — Applied `@AI_CRITICAL_GUARD v3.0` header normalization to auth/sync-adjacent guarded modules.
   - **Edit — auth/session/settings utility files:** Added/updated strict line-1 guard comment blocks in protected auth/cache/rate-limit and pause-session route modules to require explicit MACE clearance before structural edits.
   - **Touched:** `public/js/pages/system.js`, `public/js/pause-session-manager.js`, `server/lib/authCache.js`, `server/lib/rateLimit.js`, `server/lib/supabaseAdmin.js`, `server/routes/settings/pause_session.js`.
+- **2026-04-30** — Realtime local-write debounce tuning for Services/QuickBase high-volume keys.
+  - **Edit — `public/js/freemium_guard.js`:** `wrapRealtime()` now sets adaptive debounce delay before write push: default `800ms`, but `5000ms` for keys matching `mums_*` with `services` or `qb` segments to reduce burst pushes under bulk update flows.
+  - **Contract:** Realtime channel/topic names unchanged; only local write scheduling delay adjusted.
