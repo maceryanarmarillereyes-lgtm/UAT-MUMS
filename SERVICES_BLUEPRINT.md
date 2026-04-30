@@ -458,3 +458,7 @@ If step #3 is missing, task is incomplete.
 - **2026-04-26** — Applied `@AI_CRITICAL_GUARD v3.0` header normalization to guarded Services assets.
   - **Edit — `public/css/services.css` + Services JS modules:** Ensured strict guard comment block is present at line 1 for critical Services workspace files to enforce MACE approval workflow before any future guarded modifications.
   - **Touched:** `public/css/services.css`, `public/js/services.js`, `public/js/services-*.js` (backup/conditional-format/dashboard/grid/import/notify/qb-lookup/search/sheet-manager/supabase/treeview).
+- **2026-04-30 (QB autosync default-off hotfix):** MACE-cleared Services stability patch to stop automatic Quickbase sync flood on page load.
+  - **Update — `public/js/services-qb-lookup.js`:** `refreshAllLinkedColumns()` is now gated by `localStorage.getItem('mums_qb_autosync') === '1'`; when unset or not `1`, it exits early and skips sync.
+  - **Behavior contract:** Auto QB sync is now default-disabled unless explicitly enabled via localStorage flag.
+  - **Files changed:** `public/js/services-qb-lookup.js`, `SERVICES_BLUEPRINT.md`.
