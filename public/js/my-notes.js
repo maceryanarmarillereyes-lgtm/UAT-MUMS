@@ -103,14 +103,24 @@
   //   2. MUMS_ENV is populated async (/api/env fetch) — old code read it sync → empty URL → null client
   //   3. No wait for session to be ready before writing to DB
   //
-  // This version:
-  //   • Waits for window.__MUMS_ENV_READY (guaranteed env populated)
-  //   • Polls for __MUMS_SB_CLIENT (in case services-supabase inits after us)
-  //   • Builds own authenticated client if none appears within 2 s
-  //   • Caches result permanently — subsequent calls are synchronous
+  // FIX-MN-SB-1: NEVER create a new Supabase client from my-notes.js.
+  // Creating window.supabase.createClient() here produces a second GoTrueClient
+  // instance sharing the same localStorage session key as the app's primary client.
+  // This causes:
+  //   • "Multiple GoTrueClient instances detected" console warning
+  //   • Both clients try to subscribe to Supabase Realtime → race condition
+  //   • "WebSocket closed before connection is established" spam in console
+  //   • The app's primary realtime sync (presence, live updates) becomes unreliable
+  //
+  // Correct strategy: always reuse the app's shared client (__MUMS_SB_CLIENT).
+  // If it isn't ready yet, wait up to 6s for it. If it never appears (e.g. on a
+  // page that doesn't boot the full app), return null and let the caller degrade
+  // gracefully (localStorage-only mode) — never spin up a competing client.
   async function getSb() {
-    // Fast path: already have a working client
+    // Fast path: already resolved a client this session
     if (_sb) return _sb;
+
+    // Reuse the app's shared client immediately if available
     if (window.__MUMS_SB_CLIENT) { _sb = window.__MUMS_SB_CLIENT; return _sb; }
 
     // 1. Wait for MUMS_ENV to be populated by /api/env fetch (max 5 s)
@@ -118,47 +128,18 @@
       try { await Promise.race([window.__MUMS_ENV_READY, new Promise(r => setTimeout(r, 5000))]); } catch {}
     }
 
-    // 2. Poll for __MUMS_SB_CLIENT (services-supabase may have just finished init)
-    for (let i = 0; i < 10; i++) {
+    // 2. Poll for __MUMS_SB_CLIENT — the app's boot sequence creates it asynchronously.
+    //    We wait up to 6 s (30 × 200 ms) before giving up.
+    for (let i = 0; i < 30; i++) {
       if (window.__MUMS_SB_CLIENT) { _sb = window.__MUMS_SB_CLIENT; return _sb; }
       await new Promise(r => setTimeout(r, 200));
     }
 
-    // 3. Build own client with now-populated MUMS_ENV
-    const e = window.MUMS_ENV || {};
-    if (!e.SUPABASE_URL || !e.SUPABASE_ANON_KEY) {
-      console.warn('[MyNotes] getSb: SUPABASE_URL missing — workspaces cannot be saved.');
-      return null;
-    }
-
-    // Load supabase-js if not already on page
-    if (!window.supabase?.createClient) {
-      await new Promise((res, rej) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
-        s.onload = res; s.onerror = rej; document.head.appendChild(s);
-      });
-    }
-
-    // Create client with full session (both tokens) so RLS auth.uid() resolves
-    _sb = window.supabase.createClient(e.SUPABASE_URL, e.SUPABASE_ANON_KEY, {
-      auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false }
-    });
-    const sess = readSession();
-    if (sess?.access_token && sess?.refresh_token) {
-      const { error } = await _sb.auth.setSession({ access_token: sess.access_token, refresh_token: sess.refresh_token });
-      if (error) {
-        // Try refresh token flow if setSession fails (token may be expired)
-        const { error: re } = await _sb.auth.refreshSession({ refresh_token: sess.refresh_token });
-        if (re) { console.warn('[MyNotes] getSb: session refresh failed —', re.message); }
-      }
-    } else {
-      console.warn('[MyNotes] getSb: no session found — writes will fail RLS.');
-    }
-
-    // Share our client so other modules can use it
-    if (!window.__MUMS_SB_CLIENT) window.__MUMS_SB_CLIENT = _sb;
-    return _sb;
+    // 3. Client never appeared (standalone page without full app boot).
+    //    Return null — caller falls back to localStorage-only mode.
+    //    DO NOT create a competing client here.
+    console.info('[MyNotes] getSb: __MUMS_SB_CLIENT not available — running in local-only mode.');
+    return null;
   }
 
   async function getUid() {

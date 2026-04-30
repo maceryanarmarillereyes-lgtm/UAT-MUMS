@@ -241,15 +241,6 @@
       updateStatus('Finalizing...');
       await new Promise((r) => setTimeout(r, 250));
 
-      const lastSheetId = localStorage.getItem('svc_lastSheetId');
-      const targetSheet = sheets.find((sheet) => sheet.id === lastSheetId) || sheets[0];
-      if (targetSheet) await window.servicesSheetManager.openSheet(targetSheet);
-
-      setSyncState('synced');
-      updateStatus('Ready!');
-
-      updateStatus('Verifying data freshness...');
-
       // Verify the update actually happened
       const verifyTime = localStorage.getItem('svc_lastFullUpdate');
       const safeVerifyTime = Number.parseInt(verifyTime || '', 10);
@@ -265,8 +256,21 @@
 
       await new Promise((r) => setTimeout(r, 350));
 
+      // FIX-SVC-RENDER-1: Hide the loader screen BEFORE calling openSheet().
+      // Previously loader.classList.add('hidden') was called AFTER openSheet(),
+      // which meant svcLoadingScreen was still visible when render() ran inside
+      // openSheet() → render() saw the loader as active → bailed with
+      // "[GRID] Render blocked - loader active" → grid never painted.
+      // Fix: hide the loader first, make the app visible, THEN open the sheet.
       if (loader) loader.classList.add('hidden');
       if (appEl) appEl.style.visibility = 'visible';
+
+      setSyncState('synced');
+      updateStatus('Ready!');
+
+      const lastSheetId = localStorage.getItem('svc_lastSheetId');
+      const targetSheet = sheets.find((sheet) => sheet.id === lastSheetId) || sheets[0];
+      if (targetSheet) await window.servicesSheetManager.openSheet(targetSheet);
 
       setTimeout(async () => {
         for (const sheet of sheets) {

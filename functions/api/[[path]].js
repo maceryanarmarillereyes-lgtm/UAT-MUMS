@@ -135,6 +135,12 @@ async function getRoutes(env) {
     'studio/yct_data':           unwrapCjs(await import('../../server/routes/studio/yct_data.js')),
     // Back-compat alias for legacy clients still calling /api/home_apps
     'home_apps':                 unwrapCjs(await import('../../server/routes/studio/home_apps.js')),
+    // FIX-CF-ROUTES-1: studio/home_apps and studio/call_notes were registered in
+    // api/handler.js (Vercel/Node) but MISSING from this Cloudflare Pages Functions
+    // router → every Support Studio page load fired 404 errors for both endpoints.
+    // The route files exist at server/routes/studio/ — they just needed registration here.
+    'studio/home_apps':          unwrapCjs(await import('../../server/routes/studio/home_apps.js')),
+    'studio/call_notes':         unwrapCjs(await import('../../server/routes/studio/call_notes.js')),
     'studio/qb_settings_global': unwrapCjs(await import('../../server/routes/studio/qb_settings_global.js')),
     'studio/qb_monitoring':      unwrapCjs(await import('../../server/routes/studio/qb_monitoring.js')),
     'studio/qb_search':          unwrapCjs(await import('../../server/routes/studio/qb_search.js')),
