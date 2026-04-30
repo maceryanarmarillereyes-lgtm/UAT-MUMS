@@ -54,6 +54,8 @@ const ROUTES = {
   'theme_access/set': require('../server/routes/theme_access/set'),
   'settings/global_theme': require('../server/routes/settings/global_theme'),
   'settings/global-theme': require('../server/routes/settings/global_theme'),
+  'settings/global_dashboard_counters': require('../server/routes/settings/global_dashboard_counters'),
+  'settings/global-dashboard-counters': require('../server/routes/settings/global_dashboard_counters'),
   'settings/global_calendar': require('../server/routes/settings/global_calendar'),
   'calendar/records': require('../server/routes/calendar/records'),
   'catalog/items': require('../server/routes/catalog/items'),

@@ -280,6 +280,10 @@
               <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
               <span class="ms-ni-text"><span class="ms-ni-name">Global Quickbase</span><span class="ms-ni-sub">Shared QB config</span></span>
             </button>
+            <button class="ms-nav-item ms-admin-section" id="msNav_globaldashboard" data-panel="globaldashboard" type="button" style="display:none">
+              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="2" y="2" width="9" height="9" rx="2"/><rect x="13" y="2" width="9" height="9" rx="2"/><rect x="2" y="13" width="9" height="9" rx="2"/><circle cx="17.5" cy="17.5" r="3.5"/></svg></span>
+              <span class="ms-ni-text"><span class="ms-ni-name">Dashboard Counters</span><span class="ms-ni-sub">Live QB counter config</span></span>
+            </button>
             <button class="ms-nav-item ms-admin-section" id="msNav_releasenotes" data-panel="releasenotes" type="button" style="display:none">
               <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
               <span class="ms-ni-text"><span class="ms-ni-name">Release Notes</span><span class="ms-ni-sub">Publish build updates</span></span>
@@ -775,6 +779,49 @@
             </div>
           </div>
 
+
+          <!-- PANEL: Global Dashboard Counters (Super Admin only) -->
+          <div class="ms-panel ms-admin-section" id="msp_globaldashboard" data-panel="globaldashboard" style="display:none">
+            <div class="ms-panel-hero">
+              <div class="ms-hero-icon ms-hero-icon--admin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="9" height="9" rx="2"/><rect x="13" y="2" width="9" height="9" rx="2"/><rect x="2" y="13" width="9" height="9" rx="2"/><circle cx="17.5" cy="17.5" r="4.5"/></svg></div>
+              <div class="ms-hero-text"><div class="ms-hero-title">Global Dashboard Counters</div><div class="ms-hero-desc">Configure the live counters shown on every user's dashboard. Uses Global QB Settings as data source.</div></div>
+            </div>
+            <div class="ms-panel-body">
+
+              <!-- Hero counter config -->
+              <div style="margin-bottom:24px;padding:16px;background:rgba(245,215,110,.04);border:1px solid rgba(245,215,110,.18);border-radius:12px">
+                <div class="small" style="font-weight:700;color:#f5d76e;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/></svg>
+                  Hero Counter (Centre Circle — filtered to each user's QB Name)
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                  <label class="small" style="flex:1;min-width:180px">Label<input class="input" id="gdcHeroLabel" type="text" placeholder="My Active Cases" style="margin-top:4px" /></label>
+                  <label class="small" style="flex:1;min-width:180px">Sublabel (optional)<input class="input" id="gdcHeroSublabel" type="text" placeholder="Personal workload" style="margin-top:4px" /></label>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+                  <label class="small" style="flex:1;min-width:180px">Field ID (Assigned-To field #)<input class="input" id="gdcHeroFieldId" type="text" placeholder="e.g. 8" style="margin-top:4px" /></label>
+                  <label class="small" style="flex:1;min-width:120px">Operator<select class="input" id="gdcHeroOperator" style="margin-top:4px">
+                    <option value="EX">Is (Exact)</option><option value="XEX">Is Not</option>
+                    <option value="CT">Contains</option><option value="SW">Starts With</option>
+                  </select></label>
+                </div>
+                <div class="small muted" style="margin-top:8px">⚡ The user's QB Name (set in User Management) is automatically injected as the filter value.</div>
+              </div>
+
+              <!-- Side counter list -->
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <div class="small" style="font-weight:700;color:rgba(255,255,255,.7)">Side Counters <span class="muted">(up to 6, shown as glass pills around the hero)</span></div>
+                <button class="btn" id="gdcAddCounter" type="button" style="font-size:12px;padding:6px 14px">+ Add Counter</button>
+              </div>
+              <div id="gdcCounterList" style="display:flex;flex-direction:column;gap:10px;max-height:340px;overflow-y:auto;padding-right:4px"></div>
+
+              <!-- save -->
+              <div class="ms-panel-actions" style="margin-top:20px">
+                <span id="gdcSaveMsg" class="small muted" style="opacity:0;transition:opacity .4s"></span>
+                <button class="btn primary" id="gdcSaveBtn" type="button">Save Dashboard Counters</button>
+              </div>
+            </div>
+          </div>
 
           <!-- PANEL: Release Notes Manager (SA only) -->
           <div class="ms-panel ms-admin-section" id="msp_releasenotes" data-panel="releasenotes" style="display:none">
@@ -1533,7 +1580,7 @@
 
   <!-- Pages — PERF-FIX-05: defer added; page modules register into Pages.* namespace.
        App.boot() only fires after DOMContentLoaded so all defer scripts already ran. -->
-  <script src="/js/pages/dashboard.js?v=p1-664" defer></script>
+  <script src="/js/pages/dashboard.js?v=p2" defer></script>
   <script src="/js/pages/overall_stats.js?v=p1-664" defer></script>
   <script src="/js/pages/members.js?v=p1-664" defer></script>
   <script src="/js/pages/master_schedule.js?v=p1-664" defer></script>

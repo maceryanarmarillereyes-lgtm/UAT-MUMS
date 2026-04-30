@@ -6975,6 +6975,116 @@ async function boot(){
       }
     } catch (_) {}
 
+    // ── Global Dashboard Counters Settings (Super Admin only) ───────────────
+    try {
+      if (isSA) {
+        const gdcNavBtn = document.getElementById('msNav_globaldashboard');
+        const gdcPanel  = document.getElementById('msp_globaldashboard');
+        if (gdcNavBtn) { gdcNavBtn.style.display = ''; _revealAdminSection(); }
+
+        const GDC_OPERATORS = [
+          { v:'EX', l:'Is (Exact)' }, { v:'XEX', l:'Is Not' },
+          { v:'CT', l:'Contains'   }, { v:'XCT', l:'Does Not Contain' },
+          { v:'SW', l:'Starts With'}, { v:'AF', l:'After' }, { v:'BF', l:'Before' }
+        ];
+        const GDC_COLORS = ['gold','cyan','rose','emerald','violet','amber'];
+
+        let gdcState = {
+          hero: { label:'My Active Cases', sublabel:'', heroFieldId:'', heroOperator:'EX' },
+          counters: []
+        };
+
+        function gdcEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+        function gdcOpOpts(sel) { return GDC_OPERATORS.map(o => `<option value="${o.v}"${sel===o.v?' selected':''}>${o.l}</option>`).join(''); }
+        function gdcColBg(c) { return c==='cyan'?'rgba(34,211,238,.15)':c==='rose'?'rgba(251,113,133,.15)':c==='emerald'?'rgba(52,211,153,.15)':c==='violet'?'rgba(167,139,250,.15)':c==='amber'?'rgba(251,191,36,.15)':'rgba(245,215,110,.15)'; }
+
+        function renderGdcCounters() {
+          const list = document.getElementById('gdcCounterList');
+          if (!list) return;
+          if (!gdcState.counters.length) {
+            list.innerHTML = '<div class="small muted" style="padding:16px;text-align:center">No counters yet. Click + Add Counter.</div>'; return;
+          }
+          list.innerHTML = gdcState.counters.map((c, i) => `
+            <div data-gdc-row="${i}" style="background:${gdcColBg(c.color)};border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <span class="small" style="font-weight:700;color:rgba(255,255,255,.6)">Counter ${i+1}</span>
+                <button class="btn ghost" data-gdc-del="${i}" type="button" style="font-size:11px;padding:3px 8px;color:rgba(251,113,133,.8)">Remove</button>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <label class="small" style="flex:2;min-width:140px">Label<input class="input" data-gdc-f="label" value="${gdcEsc(c.label)}" placeholder="e.g. Escalated" style="margin-top:4px"></label>
+                <label class="small" style="flex:2;min-width:140px">Sublabel<input class="input" data-gdc-f="sublabel" value="${gdcEsc(c.sublabel)}" placeholder="e.g. Critical" style="margin-top:4px"></label>
+                <label class="small" style="flex:1;min-width:90px">Color<select class="input" data-gdc-f="color" style="margin-top:4px">${GDC_COLORS.map(cl=>`<option value="${cl}"${c.color===cl?' selected':''}>${cl.charAt(0).toUpperCase()+cl.slice(1)}</option>`).join('')}</select></label>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+                <label class="small" style="flex:1;min-width:110px">Field ID<input class="input" data-gdc-f="fieldId" value="${gdcEsc(c.fieldId)}" placeholder="e.g. 129" style="margin-top:4px"></label>
+                <label class="small" style="flex:1;min-width:120px">Operator<select class="input" data-gdc-f="operator" style="margin-top:4px">${gdcOpOpts(c.operator||'EX')}</select></label>
+                <label class="small" style="flex:2;min-width:150px">Value<input class="input" data-gdc-f="value" value="${gdcEsc(c.value)}" placeholder="e.g. Customer Support" style="margin-top:4px"></label>
+              </div>
+            </div>`).join('');
+
+          list.querySelectorAll('[data-gdc-row]').forEach(row => {
+            const idx2 = Number(row.getAttribute('data-gdc-row'));
+            row.querySelectorAll('[data-gdc-f]').forEach(inp => {
+              const key = inp.getAttribute('data-gdc-f');
+              inp.addEventListener(inp.tagName==='SELECT'?'change':'input', () => {
+                if (gdcState.counters[idx2]) gdcState.counters[idx2][key] = String(inp.value||'').trim();
+                if (key==='color') row.style.background = gdcColBg(inp.value);
+              });
+            });
+            const del = row.querySelector('[data-gdc-del]');
+            if (del) del.onclick = () => { gdcState.counters.splice(Number(del.getAttribute('data-gdc-del')),1); renderGdcCounters(); };
+          });
+        }
+
+        async function loadGdcSettings() {
+          try {
+            const tok = getBearerToken();
+            const r = await fetch('/api/settings/global_dashboard_counters', { headers:{'Authorization':'Bearer '+tok} });
+            const d = await r.json();
+            if (d.ok && d.config) {
+              gdcState = { hero:{...gdcState.hero,...(d.config.hero||{})}, counters: Array.isArray(d.config.counters)?d.config.counters:[] };
+              const fill = (id,val) => { const el=document.getElementById(id); if(el) el.value=val||''; };
+              fill('gdcHeroLabel', gdcState.hero.label);
+              fill('gdcHeroSublabel', gdcState.hero.sublabel);
+              fill('gdcHeroFieldId', gdcState.hero.heroFieldId);
+              fill('gdcHeroOperator', gdcState.hero.heroOperator||'EX');
+              renderGdcCounters();
+            }
+          } catch(_) {}
+        }
+
+        ['gdcHeroLabel','gdcHeroSublabel','gdcHeroFieldId','gdcHeroOperator'].forEach(id => {
+          const el = document.getElementById(id); if (!el) return;
+          const key = {gdcHeroLabel:'label',gdcHeroSublabel:'sublabel',gdcHeroFieldId:'heroFieldId',gdcHeroOperator:'heroOperator'}[id];
+          el.addEventListener(el.tagName==='SELECT'?'change':'input', () => { gdcState.hero[key]=String(el.value||'').trim(); });
+        });
+
+        const addCtrBtn = document.getElementById('gdcAddCounter');
+        if (addCtrBtn) addCtrBtn.onclick = () => {
+          if (gdcState.counters.length >= 6) { alert('Maximum 6 side counters.'); return; }
+          gdcState.counters.push({id:'ctr_'+Date.now(),label:'',sublabel:'',fieldId:'',operator:'EX',value:'',color:'gold'});
+          renderGdcCounters();
+        };
+
+        const gdcSaveBtn = document.getElementById('gdcSaveBtn');
+        const gdcSaveMsg = document.getElementById('gdcSaveMsg');
+        if (gdcSaveBtn) gdcSaveBtn.onclick = async () => {
+          gdcSaveBtn.disabled = true;
+          try {
+            const tok = getBearerToken();
+            const r = await fetch('/api/settings/global_dashboard_counters',{method:'POST',headers:{'Authorization':'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify(gdcState)});
+            const d = await r.json();
+            if (gdcSaveMsg) { gdcSaveMsg.textContent = d.ok ? '✅ Saved!' : '❌ '+(d.error||'Error'); gdcSaveMsg.style.opacity='1'; setTimeout(()=>{gdcSaveMsg.style.opacity='0';},3000); }
+          } catch(e) {
+            if (gdcSaveMsg) { gdcSaveMsg.textContent='❌ Network error'; gdcSaveMsg.style.opacity='1'; setTimeout(()=>{gdcSaveMsg.style.opacity='0';},3000); }
+          } finally { gdcSaveBtn.disabled = false; }
+        };
+
+        if (gdcNavBtn) gdcNavBtn.addEventListener('click', () => { loadGdcSettings(); });
+        window.__mumsLoadGdcSettings = loadGdcSettings;
+      }
+    } catch(_) {}
+
     // ── Manila Calendar Settings (Super Admin only) ──────────────────────────
     try {
       if (isSA) {

@@ -73,6 +73,8 @@ async function getRoutes(env) {
     'settings/pause-session': unwrapCjs(await import('../../server/routes/settings/pause_session.js')),
     'settings/pause_session': unwrapCjs(await import('../../server/routes/settings/pause_session.js')),
     'settings/global_quickbase': unwrapCjs(await import('../../server/routes/settings/global_quickbase.js')),
+    'settings/global_dashboard_counters': unwrapCjs(await import('../../server/routes/settings/global_dashboard_counters.js')),
+    'settings/global-dashboard-counters': unwrapCjs(await import('../../server/routes/settings/global_dashboard_counters.js')),
     'settings/global_calendar': unwrapCjs(await import('../../server/routes/settings/global_calendar.js')),
     'calendar/records': unwrapCjs(await import('../../server/routes/calendar/records.js')),
     'catalog/items': unwrapCjs(await import('../../server/routes/catalog/items.js')),
