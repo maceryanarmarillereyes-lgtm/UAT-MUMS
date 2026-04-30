@@ -1,18 +1,19 @@
-/* MUMS Freemium Guard v1.0
- * Implements multi-tab leader election + visibility pause for presence & realtime
+/* MUMS Freemium Guard v1.1
+ * Implements multi-tab leader election + visibility pause + 800ms debounce
  * Safe to add â€” does NOT modify UNTOUCHABLE files
  */
 (function(){
   'use strict';
   const LEADER_KEY = 'mums_presence_leader';
   const HEARTBEAT_KEY = 'mums_leader_heartbeat';
-  const LEADER_TTL = 60000; // 60s leader lease
+  const LEADER_TTL = 60000;
   const BC_NAME = 'mums_presence_bc';
   
   let isLeader = false;
   let bc = null;
   let leaderTimer = null;
   let visibilityPaused = false;
+  const extraDebounce = new Map();
   
   function now(){ return Date.now(); }
   
@@ -45,27 +46,13 @@
   function pauseNonEssential(){
     if (visibilityPaused) return;
     visibilityPaused = true;
-    // Pause watchdog backup poll
     try { if (window.presenceWatchdog && presenceWatchdog.stop) presenceWatchdog.stop(); } catch(_){}
-    // Pause realtime - keep connection but stop listening
-    try { 
-      if (window.Realtime && Realtime.getRealtimeClient) {
-        const client = Realtime.getRealtimeClient();
-        if (client && client.realtime) {
-          // Don't disconnect, just pause channel subscription to save egress
-          broadcast('tab-hidden', true);
-        }
-      }
-    } catch(_){}
   }
   
   function resumeNonEssential(){
     if (!visibilityPaused) return;
     visibilityPaused = false;
-    // Resume only if leader
-    if (isLeader) {
-      try { location.reload(); } catch(_){} // simplest: reload to restart watchdog
-    }
+    if (isLeader) { try { location.reload(); } catch(_){} }
     broadcast('tab-visible', true);
   }
   
@@ -74,33 +61,42 @@
       bc = new BroadcastChannel(BC_NAME);
       bc.onmessage = (ev) => {
         const msg = ev.data || {};
-        if (msg.type === 'leader-elected') {
-          isLeader = false;
-        }
+        if (msg.type === 'leader-elected') { isLeader = false; }
       };
     } catch(_){}
   }
   
-  // Leader election loop
   function startLeaderLoop(){
     tryBecomeLeader();
     leaderTimer = setInterval(()=>{
       if (isLeader) renewLeader();
       else tryBecomeLeader();
-    }, 20000); // check every 20s
+    }, 20000);
   }
   
-  // Visibility handling
+  // Wrap Realtime.onLocalWrite to add 800ms debounce and leader-only push
+  function wrapRealtime(){
+    try {
+      if (!window.Realtime || !Realtime.onLocalWrite) return;
+      const original = Realtime.onLocalWrite.bind(Realtime);
+      Realtime.onLocalWrite = function(key, value){
+        // Only leader tab pushes to Supabase
+        if (!isLeader) return;
+        // Extra 800ms debounce on top of existing 300ms
+        if (extraDebounce.has(key)) clearTimeout(extraDebounce.get(key));
+        extraDebounce.set(key, setTimeout(()=>{
+          extraDebounce.delete(key);
+          try { original(key, value); } catch(_){}
+        }, 800));
+      };
+    } catch(_){}
+  }
+  
   document.addEventListener('visibilitychange', ()=>{
-    if (document.hidden) {
-      pauseNonEssential();
-    } else {
-      // Wait 1s for tab to stabilize
-      setTimeout(resumeNonEssential, 1000);
-    }
+    if (document.hidden) { pauseNonEssential(); } 
+    else { setTimeout(resumeNonEssential, 1000); }
   });
   
-  // Pause during resize/filter storms
   let resizeTimer = null;
   window.addEventListener('resize', ()=>{
     pauseNonEssential();
@@ -108,18 +104,22 @@
     resizeTimer = setTimeout(resumeNonEssential, 2000);
   }, {passive:true});
   
-  // Init
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', ()=>{
-      initBroadcast();
-      startLeaderLoop();
-    });
-  } else {
+  function init(){
     initBroadcast();
     startLeaderLoop();
+    // Wait for Realtime to be available
+    const wait = setInterval(()=>{
+      if (window.Realtime && Realtime.onLocalWrite) {
+        clearInterval(wait);
+        wrapRealtime();
+      }
+    }, 200);
   }
   
-  // Expose for debugging
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else { init(); }
+  
   window.__mumsFreemiumGuard = {
     isLeader: ()=>isLeader,
     pause: pauseNonEssential,
