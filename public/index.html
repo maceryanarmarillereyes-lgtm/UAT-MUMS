@@ -799,7 +799,16 @@
                   <label class="small" style="flex:1;min-width:180px">Sublabel (optional)<input class="input" id="gdcHeroSublabel" type="text" placeholder="Personal workload" style="margin-top:4px" /></label>
                 </div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-                  <label class="small" style="flex:1;min-width:180px">Field ID (Assigned-To field #)<input class="input" id="gdcHeroFieldId" type="text" placeholder="e.g. 8" style="margin-top:4px" /></label>
+                  <label class="small" style="flex:2;min-width:200px">
+                    Assigned-To Field
+                    <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
+                      <select class="input" id="gdcHeroFieldId" style="flex:1">
+                        <option value="">⏳ Loading fields…</option>
+                      </select>
+                      <button type="button" id="gdcRefreshFields" title="Reload field list from Quickbase" style="flex-shrink:0;height:34px;padding:0 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer" onclick="window.__mumsGdcRefreshFields && window.__mumsGdcRefreshFields()">↺</button>
+                    </div>
+                    <div id="gdcFieldsStatus" class="small muted" style="margin-top:4px;font-size:10px;min-height:14px"></div>
+                  </label>
                   <label class="small" style="flex:1;min-width:120px">Operator<select class="input" id="gdcHeroOperator" style="margin-top:4px">
                     <option value="EX">Is (Exact)</option><option value="XEX">Is Not</option>
                     <option value="CT">Contains</option><option value="SW">Starts With</option>

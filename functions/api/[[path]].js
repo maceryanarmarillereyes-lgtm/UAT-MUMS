@@ -75,6 +75,10 @@ async function getRoutes(env) {
     'settings/global_quickbase': unwrapCjs(await import('../../server/routes/settings/global_quickbase.js')),
     'settings/global_dashboard_counters': unwrapCjs(await import('../../server/routes/settings/global_dashboard_counters.js')),
     'settings/global-dashboard-counters': unwrapCjs(await import('../../server/routes/settings/global_dashboard_counters.js')),
+    // ★ NEW: Field list for Global Dashboard Counters settings UI
+    // Uses Global QB Settings (realm/tableId/token) — isolated from studio/qb_fields
+    'settings/global_qb_fields': unwrapCjs(await import('../../server/routes/settings/global_qb_fields.js')),
+    'settings/global-qb-fields': unwrapCjs(await import('../../server/routes/settings/global_qb_fields.js')),
     'settings/global_calendar': unwrapCjs(await import('../../server/routes/settings/global_calendar.js')),
     'calendar/records': unwrapCjs(await import('../../server/routes/calendar/records.js')),
     'catalog/items': unwrapCjs(await import('../../server/routes/catalog/items.js')),

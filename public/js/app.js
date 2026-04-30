@@ -6976,10 +6976,13 @@ async function boot(){
     } catch (_) {}
 
     // ── Global Dashboard Counters Settings (Super Admin only) ───────────────
+    // ★ REBUILT: Field pickers are now dynamic <select> dropdowns loaded from
+    //   Global QB Settings — same UX as My Quickbase → Dashboard Counters tab.
+    //   Uses /api/settings/global_qb_fields (isolated, uses Global QB credentials).
+    //   Zero impact on any other feature, route, or realtime logic.
     try {
       if (isSA) {
         const gdcNavBtn = document.getElementById('msNav_globaldashboard');
-        const gdcPanel  = document.getElementById('msp_globaldashboard');
         if (gdcNavBtn) { gdcNavBtn.style.display = ''; _revealAdminSection(); }
 
         const GDC_OPERATORS = [
@@ -6989,26 +6992,90 @@ async function boot(){
         ];
         const GDC_COLORS = ['gold','cyan','rose','emerald','violet','amber'];
 
+        // ── state ────────────────────────────────────────────────────────────
         let gdcState = {
           hero: { label:'My Active Cases', sublabel:'', heroFieldId:'', heroOperator:'EX' },
           counters: []
         };
+        // Live field list from Global QB — {id:number, label:string, type:string}[]
+        let gdcFields = [];
 
+        // ── helpers ──────────────────────────────────────────────────────────
         function gdcEsc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
         function gdcOpOpts(sel) { return GDC_OPERATORS.map(o => `<option value="${o.v}"${sel===o.v?' selected':''}>${o.l}</option>`).join(''); }
         function gdcColBg(c) { return c==='cyan'?'rgba(34,211,238,.15)':c==='rose'?'rgba(251,113,133,.15)':c==='emerald'?'rgba(52,211,153,.15)':c==='violet'?'rgba(167,139,250,.15)':c==='amber'?'rgba(251,191,36,.15)':'rgba(245,215,110,.15)'; }
 
+        // Build <option> list from gdcFields for a given currently-selected value
+        function gdcFieldOpts(selectedId) {
+          const sel = String(selectedId || '');
+          if (!gdcFields.length) {
+            return `<option value="${gdcEsc(sel)}">${sel ? '#'+gdcEsc(sel)+' (saved)' : '— No fields loaded —'}</option>`;
+          }
+          const opts = gdcFields.map(f =>
+            `<option value="${f.id}"${String(f.id)===sel?' selected':''}>${gdcEsc(f.label)} (#${f.id})</option>`
+          ).join('');
+          return `<option value="">Select field…</option>` + opts;
+        }
+
+        // Populate the Hero field select with current gdcFields
+        function syncHeroFieldSelect() {
+          const sel = document.getElementById('gdcHeroFieldId');
+          if (!sel) return;
+          const cur = String(gdcState.hero.heroFieldId || '');
+          sel.innerHTML = gdcFieldOpts(cur);
+          sel.value = cur || '';
+        }
+
+        // ── Fetch field list from Global QB Settings ──────────────────────────
+        // ★ KEY FIX: Uses /api/settings/global_qb_fields which reads Global QB
+        //   credentials (realm/tableId/token) — NOT the Studio QB settings.
+        async function gdcLoadFields(forceRefresh) {
+          const statusEl = document.getElementById('gdcFieldsStatus');
+          const heroSel  = document.getElementById('gdcHeroFieldId');
+          try {
+            if (statusEl) statusEl.textContent = '⏳ Loading fields from Quickbase…';
+            if (heroSel)  heroSel.innerHTML = '<option value="">⏳ Loading…</option>';
+            const tok = getBearerToken();
+            const qs  = forceRefresh ? '?forceRefresh=1' : '';
+            const r   = await fetch('/api/settings/global_qb_fields' + qs, {
+              headers: { 'Authorization': 'Bearer ' + tok }
+            });
+            const d = await r.json();
+            if (!d.ok) throw new Error(d.message || d.error || 'Failed to load fields');
+            gdcFields = Array.isArray(d.fields) ? d.fields : [];
+            if (statusEl) {
+              statusEl.textContent = gdcFields.length
+                ? `✓ ${gdcFields.length} fields loaded`
+                : (d.warning === 'global_qb_not_configured'
+                    ? '⚠ Global QB not configured — set up in Settings → Global Quickbase first'
+                    : '⚠ No fields returned from Quickbase');
+            }
+          } catch (err) {
+            gdcFields = [];
+            if (statusEl) statusEl.textContent = '❌ ' + String(err && err.message || 'Error loading fields');
+          }
+          // Refresh all dropdowns now that field list is loaded
+          syncHeroFieldSelect();
+          renderGdcCounters();
+        }
+
+        // Expose for the ↺ button in index.html
+        window.__mumsGdcRefreshFields = () => gdcLoadFields(true);
+
+        // ── Render side counter cards ─────────────────────────────────────────
         function renderGdcCounters() {
           const list = document.getElementById('gdcCounterList');
           if (!list) return;
           if (!gdcState.counters.length) {
-            list.innerHTML = '<div class="small muted" style="padding:16px;text-align:center">No counters yet. Click + Add Counter.</div>'; return;
+            list.innerHTML = '<div class="small muted" style="padding:16px;text-align:center">No counters yet. Click + Add Counter.</div>';
+            return;
           }
+
           list.innerHTML = gdcState.counters.map((c, i) => `
             <div data-gdc-row="${i}" style="background:${gdcColBg(c.color)};border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 14px">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
                 <span class="small" style="font-weight:700;color:rgba(255,255,255,.6)">Counter ${i+1}</span>
-                <button class="btn ghost" data-gdc-del="${i}" type="button" style="font-size:11px;padding:3px 8px;color:rgba(251,113,133,.8)">Remove</button>
+                <button class="btn ghost" data-gdc-del="${i}" type="button" style="font-size:11px;padding:3px 8px;color:rgba(251,113,133,.8)">✕ Remove</button>
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <label class="small" style="flex:2;min-width:140px">Label<input class="input" data-gdc-f="label" value="${gdcEsc(c.label)}" placeholder="e.g. Escalated" style="margin-top:4px"></label>
@@ -7016,9 +7083,17 @@ async function boot(){
                 <label class="small" style="flex:1;min-width:90px">Color<select class="input" data-gdc-f="color" style="margin-top:4px">${GDC_COLORS.map(cl=>`<option value="${cl}"${c.color===cl?' selected':''}>${cl.charAt(0).toUpperCase()+cl.slice(1)}</option>`).join('')}</select></label>
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-                <label class="small" style="flex:1;min-width:110px">Field ID<input class="input" data-gdc-f="fieldId" value="${gdcEsc(c.fieldId)}" placeholder="e.g. 129" style="margin-top:4px"></label>
+                <!-- ★ Field picker: dynamic <select> from Global QB Settings field list -->
+                <label class="small" style="flex:2;min-width:180px">Target Field
+                  <select class="input" data-gdc-f="fieldId" style="margin-top:4px">
+                    ${gdcFieldOpts(c.fieldId)}
+                  </select>
+                </label>
                 <label class="small" style="flex:1;min-width:120px">Operator<select class="input" data-gdc-f="operator" style="margin-top:4px">${gdcOpOpts(c.operator||'EX')}</select></label>
-                <label class="small" style="flex:2;min-width:150px">Value<input class="input" data-gdc-f="value" value="${gdcEsc(c.value)}" placeholder="e.g. Customer Support" style="margin-top:4px"></label>
+                <label class="small" style="flex:2;min-width:150px">Value
+                  <input class="input" data-gdc-f="value" value="${gdcEsc(c.value)}" placeholder="e.g. A3 READY" style="margin-top:4px">
+                  <span class="small muted" style="font-size:10px">Exact text to match in the selected field</span>
+                </label>
               </div>
             </div>`).join('');
 
@@ -7026,60 +7101,95 @@ async function boot(){
             const idx2 = Number(row.getAttribute('data-gdc-row'));
             row.querySelectorAll('[data-gdc-f]').forEach(inp => {
               const key = inp.getAttribute('data-gdc-f');
-              inp.addEventListener(inp.tagName==='SELECT'?'change':'input', () => {
-                if (gdcState.counters[idx2]) gdcState.counters[idx2][key] = String(inp.value||'').trim();
-                if (key==='color') row.style.background = gdcColBg(inp.value);
+              inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', () => {
+                if (gdcState.counters[idx2]) gdcState.counters[idx2][key] = String(inp.value || '').trim();
+                if (key === 'color') row.style.background = gdcColBg(inp.value);
               });
             });
             const del = row.querySelector('[data-gdc-del]');
-            if (del) del.onclick = () => { gdcState.counters.splice(Number(del.getAttribute('data-gdc-del')),1); renderGdcCounters(); };
+            if (del) del.onclick = () => {
+              gdcState.counters.splice(Number(del.getAttribute('data-gdc-del')), 1);
+              renderGdcCounters();
+            };
           });
         }
 
+        // ── Load saved counter config from DB ─────────────────────────────────
         async function loadGdcSettings() {
           try {
             const tok = getBearerToken();
             const r = await fetch('/api/settings/global_dashboard_counters', { headers:{'Authorization':'Bearer '+tok} });
             const d = await r.json();
             if (d.ok && d.config) {
-              gdcState = { hero:{...gdcState.hero,...(d.config.hero||{})}, counters: Array.isArray(d.config.counters)?d.config.counters:[] };
-              const fill = (id,val) => { const el=document.getElementById(id); if(el) el.value=val||''; };
-              fill('gdcHeroLabel', gdcState.hero.label);
+              gdcState = {
+                hero: { ...gdcState.hero, ...(d.config.hero || {}) },
+                counters: Array.isArray(d.config.counters) ? d.config.counters : []
+              };
+              // Fill simple text fields
+              const fill = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+              fill('gdcHeroLabel',    gdcState.hero.label);
               fill('gdcHeroSublabel', gdcState.hero.sublabel);
-              fill('gdcHeroFieldId', gdcState.hero.heroFieldId);
-              fill('gdcHeroOperator', gdcState.hero.heroOperator||'EX');
-              renderGdcCounters();
+              fill('gdcHeroOperator', gdcState.hero.heroOperator || 'EX');
+              // Field select is populated after gdcLoadFields() completes
             }
-          } catch(_) {}
+          } catch (_) {}
+
+          // Load field list from Global QB — then refresh all selects
+          await gdcLoadFields(false);
         }
 
-        ['gdcHeroLabel','gdcHeroSublabel','gdcHeroFieldId','gdcHeroOperator'].forEach(id => {
+        // ── Hero field bindings ───────────────────────────────────────────────
+        ['gdcHeroLabel','gdcHeroSublabel','gdcHeroOperator'].forEach(id => {
           const el = document.getElementById(id); if (!el) return;
-          const key = {gdcHeroLabel:'label',gdcHeroSublabel:'sublabel',gdcHeroFieldId:'heroFieldId',gdcHeroOperator:'heroOperator'}[id];
-          el.addEventListener(el.tagName==='SELECT'?'change':'input', () => { gdcState.hero[key]=String(el.value||'').trim(); });
+          const key = { gdcHeroLabel:'label', gdcHeroSublabel:'sublabel', gdcHeroOperator:'heroOperator' }[id];
+          el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => {
+            gdcState.hero[key] = String(el.value || '').trim();
+          });
         });
+        // Hero field select — change event
+        const heroFieldSel = document.getElementById('gdcHeroFieldId');
+        if (heroFieldSel) {
+          heroFieldSel.addEventListener('change', () => {
+            gdcState.hero.heroFieldId = String(heroFieldSel.value || '').trim();
+          });
+        }
 
+        // ── + Add Counter ─────────────────────────────────────────────────────
         const addCtrBtn = document.getElementById('gdcAddCounter');
         if (addCtrBtn) addCtrBtn.onclick = () => {
           if (gdcState.counters.length >= 6) { alert('Maximum 6 side counters.'); return; }
-          gdcState.counters.push({id:'ctr_'+Date.now(),label:'',sublabel:'',fieldId:'',operator:'EX',value:'',color:'gold'});
+          gdcState.counters.push({ id:'ctr_'+Date.now(), label:'', sublabel:'', fieldId:'', operator:'EX', value:'', color:'gold' });
           renderGdcCounters();
         };
 
+        // ── Save ──────────────────────────────────────────────────────────────
         const gdcSaveBtn = document.getElementById('gdcSaveBtn');
         const gdcSaveMsg = document.getElementById('gdcSaveMsg');
         if (gdcSaveBtn) gdcSaveBtn.onclick = async () => {
           gdcSaveBtn.disabled = true;
           try {
             const tok = getBearerToken();
-            const r = await fetch('/api/settings/global_dashboard_counters',{method:'POST',headers:{'Authorization':'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify(gdcState)});
+            const r = await fetch('/api/settings/global_dashboard_counters', {
+              method: 'POST',
+              headers: { 'Authorization':'Bearer '+tok, 'Content-Type':'application/json' },
+              body: JSON.stringify(gdcState)
+            });
             const d = await r.json();
-            if (gdcSaveMsg) { gdcSaveMsg.textContent = d.ok ? '✅ Saved!' : '❌ '+(d.error||'Error'); gdcSaveMsg.style.opacity='1'; setTimeout(()=>{gdcSaveMsg.style.opacity='0';},3000); }
-          } catch(e) {
-            if (gdcSaveMsg) { gdcSaveMsg.textContent='❌ Network error'; gdcSaveMsg.style.opacity='1'; setTimeout(()=>{gdcSaveMsg.style.opacity='0';},3000); }
+            if (gdcSaveMsg) {
+              gdcSaveMsg.textContent = d.ok ? '✅ Saved!' : '❌ '+(d.error||'Error');
+              gdcSaveMsg.style.opacity = '1';
+              setTimeout(() => { gdcSaveMsg.style.opacity = '0'; }, 3000);
+            }
+          } catch (e) {
+            if (gdcSaveMsg) {
+              gdcSaveMsg.textContent = '❌ Network error';
+              gdcSaveMsg.style.opacity = '1';
+              setTimeout(() => { gdcSaveMsg.style.opacity = '0'; }, 3000);
+            }
           } finally { gdcSaveBtn.disabled = false; }
         };
 
+        // Load on nav click
         if (gdcNavBtn) gdcNavBtn.addEventListener('click', () => { loadGdcSettings(); });
         window.__mumsLoadGdcSettings = loadGdcSettings;
       }
