@@ -410,17 +410,28 @@
     console.log('[dashboard] ⚡ fetchCounts via QB API (fallback) — hero:', heroCount);
   }
 
-  // ── render ────────────────────────────────────────────────────────────────
+  // ── render ─────────────────────────────────────────────────────────────────
+  // [FIX-ZERO-HIDE] Only render side counters with count > 0.
+  // Zero counts are hidden — they convey no useful info and clutter the dashboard.
+  // [FREE-TIER-LAYOUT] Balanced column split auto-adjusts to however many visible
+  // counters remain, so the layout never has empty column slots.
   function renderDashboard() {
     const layout = root.querySelector('#epLayout');
     if (!layout) return;
     layout.innerHTML = '';
 
-    const allCounters = ctrConfig.counters;
-    // Split into left (up to 2), hero, right (up to 2), remainder rendered below
-    const left  = allCounters.slice(0, 2);
-    const right  = allCounters.slice(2, 4);
-    const extra  = allCounters.slice(4);
+    // Filter: only counters with a positive count (> 0) are rendered.
+    // null (loading) and 0 are both hidden — enterprise standard: show signal, not noise.
+    const visibleCounters = ctrConfig.counters.filter(c => {
+      const n = counts[c.id];
+      return typeof n === 'number' && n > 0;
+    });
+
+    // Balanced split: left = floor(n/2), right = ceil(n/2), overflow = extras beyond 4
+    const splitAt = Math.min(Math.ceil(visibleCounters.length / 2), 2);
+    const left    = visibleCounters.slice(0, splitAt);
+    const right   = visibleCounters.slice(splitAt, splitAt + 2);
+    const extra   = visibleCounters.slice(splitAt + 2);
 
     // Left pills column
     if (left.length) {
@@ -429,7 +440,7 @@
       layout.appendChild(col);
     }
 
-    // Hero circle
+    // Hero circle — always rendered regardless of heroCount value
     layout.appendChild(makeHero());
 
     // Right pills column
@@ -439,7 +450,7 @@
       layout.appendChild(col);
     }
 
-    // Extra pills (5th, 6th) in a bottom row
+    // Extra pills (5th+) in a centred bottom row
     if (extra.length) {
       const row = div('', 'width:100%;display:flex;justify-content:center;gap:14px;margin-top:14px;flex-wrap:wrap');
       extra.forEach(c => row.appendChild(makePill(c)));
@@ -517,15 +528,36 @@
   function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   // ── auto-refresh every 60 s ───────────────────────────────────────────────
-  _refreshTimer = setInterval(() => {
-    if (root.isConnected) {
-      fetchCounts().then(() => {
-        renderDashboard();
-        updateMeta();
-      });
-    }
-  }, 60 * 1000);
+  // ── Auto-refresh — free-tier aligned ────────────────────────────────────────
+  // [FREE-TIER] 120 s interval (2 min) halves API call frequency vs 60 s.
+  // [FREE-TIER] Page Visibility API: pause all refreshes when browser tab is
+  //   hidden — zero wasted API calls when user switches away. Resume on return.
+  // With 30 daily users, this caps Cloudflare/QB calls at ~450/day (vs 900/day).
+  let _pageHidden = false;
 
-  // ── kick off ──────────────────────────────────────────────────────────────
+  const _onVisibilityChange = () => {
+    _pageHidden = document.hidden;
+    // Immediately refresh on tab return after being away > 60 s
+    if (!_pageHidden && root.isConnected && lastSync && (Date.now() - lastSync.getTime()) > 60000) {
+      fetchCounts().then(() => { renderDashboard(); updateMeta(); });
+    }
+  };
+  document.addEventListener('visibilitychange', _onVisibilityChange);
+
+  // Clean up visibility listener when page component is torn down
+  const _prevCleanup2 = root._cleanup;
+  root._cleanup = () => {
+    try { if (_prevCleanup2) _prevCleanup2(); } catch (_) {}
+    document.removeEventListener('visibilitychange', _onVisibilityChange);
+    clearInterval(_refreshTimer);
+  };
+
+  _refreshTimer = setInterval(() => {
+    if (!root.isConnected) { clearInterval(_refreshTimer); return; }
+    if (_pageHidden) return;  // Tab hidden — skip this tick entirely
+    fetchCounts().then(() => { renderDashboard(); updateMeta(); });
+  }, 120 * 1000); // 2 minutes — free-tier optimised
+
+  // ── kick off ───────────────────────────────────────────────────────────────
   loadAll(false);
 });
