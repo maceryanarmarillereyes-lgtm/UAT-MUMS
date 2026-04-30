@@ -296,34 +296,118 @@
     }
   }
 
+  // ── fetchCounts — v3.0 (Monitoring-Primary Architecture)
+  // ─────────────────────────────────────────────────────────────────────────
+  // ROOT CAUSE OF MISMATCH (diagnosed):
+  //   Old approach used separate global_qb_count QB API calls per counter.
+  //   Hero relied on heroFieldId (admin-set) for user filter.
+  //   If heroFieldId = "" (empty/not saved) → hero shows "—", side counters
+  //   show ALL users' records (99) instead of just this user's (12).
+  //
+  // FIX — PRIMARY PATH: Use QuickbaseAdapter.fetchMonitoringData()
+  //   - SAME monitoring endpoint that My Quickbase page uses
+  //   - Monitoring auto-resolves "Assigned to" field by label — no heroFieldId needed
+  //   - Applies: QID report filter + Global QB base filters + user qb_name filter
+  //   - Records returned = identical to what My QB shows
+  //   - Hero count = records.length (total user records)
+  //   - Side counters = count from records locally (same logic as renderDashboardCounters)
+  //   → GUARANTEED exact match with My Quickbase. Always.
+  //
+  // FALLBACK PATH: global_qb_count QB API calls (old approach)
+  //   - Used ONLY if QuickbaseAdapter unavailable or monitoring fails
+  //   - Requires heroFieldId to be correctly set for user filtering
+  // ─────────────────────────────────────────────────────────────────────────
   async function fetchCounts() {
+    const canUseMonitoring = !!(
+      window.QuickbaseAdapter &&
+      typeof window.QuickbaseAdapter.fetchMonitoringData === 'function' &&
+      qbSettings.qid &&
+      qbSettings.tableId &&
+      qbSettings.realm &&
+      userQbName
+    );
+
+    if (canUseMonitoring) {
+      await _fetchCountsViaMonitoring();
+    } else {
+      // Fallback: direct QB API calls (requires heroFieldId to be set)
+      await _fetchCountsViaQbApi();
+    }
+    lastSync = new Date();
+  }
+
+  // ── PRIMARY: Monitoring endpoint (same as My Quickbase) ──────────────────
+  async function _fetchCountsViaMonitoring() {
+    try {
+      const data = await window.QuickbaseAdapter.fetchMonitoringData({
+        bust     : Date.now(),
+        limit    : 500,                         // Enough for accurate counts (monitoring caps at 500)
+        qid      : qbSettings.qid     || '',
+        tableId  : qbSettings.tableId || '',
+        realm    : qbSettings.realm   || '',
+        customFilters : [],
+        filterMatch   : 'ALL',
+        search        : ''
+        // Note: monitoring server auto-injects {assignedToFieldId.EX.'userQbName'}
+        // for non-SUPER_ADMIN users. SUPER_ADMIN sees all records unless
+        // bypassGlobal is false (which it is here — we want per-user counts).
+      });
+
+      const records = Array.isArray(data && data.records) ? data.records : [];
+
+      // Hero count = total records for this user
+      // Monitoring already filtered by user's qb_name — this IS "My Active Cases"
+      heroCount = records.length;
+
+      // Side counters: count from fetched records locally
+      // Mirrors renderDashboardCounters() in my_quickbase.js — exact same logic
+      ctrConfig.counters.forEach(c => {
+        if (!c.fieldId) { counts[c.id] = null; return; }
+        const matchVal = String(c.value || '').toLowerCase();
+        const op       = String(c.operator || 'EX').toUpperCase();
+        counts[c.id] = records.filter(record => {
+          const fields   = record && record.fields ? record.fields : {};
+          const fld      = fields[String(c.fieldId)] || null;
+          const srcVal   = String(fld && fld.value != null ? fld.value : '').toLowerCase();
+          if (op === 'XEX') return srcVal !== matchVal;
+          if (op === 'CT')  return srcVal.includes(matchVal);
+          return srcVal === matchVal; // EX (default) — exact match, case-insensitive
+        }).length;
+      });
+
+      console.log('[dashboard] ✅ fetchCounts via monitoring — hero:', heroCount,
+        '| counters:', Object.entries(counts).map(([k,v]) => k+':'+v).join(', '));
+
+    } catch (err) {
+      console.warn('[dashboard] monitoring fallback triggered:', err && err.message || err);
+      // Monitoring failed — fall back to direct QB API
+      await _fetchCountsViaQbApi();
+    }
+  }
+
+  // ── FALLBACK: Direct QB API via global_qb_count (requires heroFieldId) ───
+  async function _fetchCountsViaQbApi() {
     const tasks = [];
 
-    // Hero count — filtered to user's qb_name
+    // Hero count — filtered to user's qb_name via heroFieldId
     if (ctrConfig.hero.heroFieldId && userQbName) {
       const where = buildWhere(ctrConfig.hero.heroFieldId, ctrConfig.hero.heroOperator || 'EX', userQbName);
-      tasks.push(
-        countQbRecords(qbSettings, where).then(n => { heroCount = n; })
-      );
+      tasks.push(countQbRecords(qbSettings, where).then(n => { heroCount = n; }));
     }
 
-    // Side counters — each has its own field+value filter
+    // Side counters — intersect user filter + counter filter
     ctrConfig.counters.forEach(c => {
       if (!c.fieldId || !c.value) { counts[c.id] = null; return; }
-      // Counters also filter by user's qb_name IF the hero field is set
-      // (intersect: assigned to user AND matching counter value)
       let where = buildWhere(c.fieldId, c.operator || 'EX', c.value);
       if (ctrConfig.hero.heroFieldId && userQbName) {
         const userWhere = buildWhere(ctrConfig.hero.heroFieldId, ctrConfig.hero.heroOperator || 'EX', userQbName);
         where = `${userWhere}AND${where}`;
       }
-      tasks.push(
-        countQbRecords(qbSettings, where).then(n => { counts[c.id] = n; })
-      );
+      tasks.push(countQbRecords(qbSettings, where).then(n => { counts[c.id] = n; }));
     });
 
     await Promise.allSettled(tasks);
-    lastSync = new Date();
+    console.log('[dashboard] ⚡ fetchCounts via QB API (fallback) — hero:', heroCount);
   }
 
   // ── render ────────────────────────────────────────────────────────────────

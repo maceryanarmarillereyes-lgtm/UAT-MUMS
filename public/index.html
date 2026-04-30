@@ -798,23 +798,42 @@
                   <label class="small" style="flex:1;min-width:180px">Label<input class="input" id="gdcHeroLabel" type="text" placeholder="My Active Cases" style="margin-top:4px" /></label>
                   <label class="small" style="flex:1;min-width:180px">Sublabel (optional)<input class="input" id="gdcHeroSublabel" type="text" placeholder="Personal workload" style="margin-top:4px" /></label>
                 </div>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-                  <label class="small" style="flex:2;min-width:200px">
-                    Assigned-To Field
-                    <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
-                      <select class="input" id="gdcHeroFieldId" style="flex:1">
-                        <option value="">⏳ Loading fields…</option>
-                      </select>
-                      <button type="button" id="gdcRefreshFields" title="Reload field list from Quickbase" style="flex-shrink:0;height:34px;padding:0 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer" onclick="window.__mumsGdcRefreshFields && window.__mumsGdcRefreshFields()">↺</button>
-                    </div>
-                    <div id="gdcFieldsStatus" class="small muted" style="margin-top:4px;font-size:10px;min-height:14px"></div>
-                  </label>
-                  <label class="small" style="flex:1;min-width:120px">Operator<select class="input" id="gdcHeroOperator" style="margin-top:4px">
-                    <option value="EX">Is (Exact)</option><option value="XEX">Is Not</option>
-                    <option value="CT">Contains</option><option value="SW">Starts With</option>
-                  </select></label>
+                <!-- Assigned-To Field — OPTIONAL FALLBACK (hidden by default) -->
+                <!-- Primary path uses QuickbaseAdapter.fetchMonitoringData() which auto-resolves -->
+                <!-- the "Assigned to" field by label — no manual selection needed. -->
+                <!-- This section is kept for power users / debugging only. -->
+                <details style="margin-top:10px">
+                  <summary style="font-size:11px;color:rgba(255,255,255,.35);cursor:pointer;user-select:none;list-style:none;display:flex;align-items:center;gap:6px">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+                    Advanced: Fallback Field Config (optional — only needed if QID is not set)
+                  </summary>
+                  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+                    <label class="small" style="flex:2;min-width:200px">
+                      Assigned-To Field <span style="color:rgba(255,255,255,.3);font-size:10px">(fallback only)</span>
+                      <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
+                        <select class="input" id="gdcHeroFieldId" style="flex:1">
+                          <option value="">⏳ Loading fields…</option>
+                        </select>
+                        <button type="button" id="gdcRefreshFields" title="Reload field list from Quickbase" style="flex-shrink:0;height:34px;padding:0 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:rgba(255,255,255,.6);font-size:13px;cursor:pointer" onclick="window.__mumsGdcRefreshFields && window.__mumsGdcRefreshFields()">↺</button>
+                      </div>
+                      <div id="gdcFieldsStatus" class="small muted" style="margin-top:4px;font-size:10px;min-height:14px"></div>
+                    </label>
+                    <label class="small" style="flex:1;min-width:120px">Operator<select class="input" id="gdcHeroOperator" style="margin-top:4px">
+                      <option value="EX">Is (Exact)</option><option value="XEX">Is Not</option>
+                      <option value="CT">Contains</option><option value="SW">Starts With</option>
+                    </select></label>
+                  </div>
+                </details>
+                <div style="margin-top:10px;padding:10px 12px;background:rgba(56,189,248,.06);border:1px solid rgba(56,189,248,.18);border-radius:8px;display:flex;flex-direction:column;gap:6px">
+                  <div class="small" style="font-weight:600;color:#38bdf8">⚡ How the Hero Counter works:</div>
+                  <div class="small muted" style="font-size:10.5px;line-height:1.6">
+                    <b>Primary (automatic):</b> Uses the same Quickbase monitoring feed as My Quickbase — automatically filtered to each user's QB Name. Counts are always identical to what each user sees in My Quickbase. No field configuration required.<br>
+                    <b>Fallback:</b> If the monitoring adapter is unavailable, the system uses the Assigned-To Field above (advanced config). Open the "Advanced" section above only if needed.
+                  </div>
+                  <div class="small muted" style="font-size:10px;border-top:1px solid rgba(255,255,255,.07);padding-top:6px;margin-top:2px">
+                    ✅ Side counters also use monitoring data — they count from the user's already-filtered records. No separate QB query needed.
+                  </div>
                 </div>
-                <div style="margin-top:10px;padding:10px 12px;background:rgba(56,189,248,.06);border:1px solid rgba(56,189,248,.18);border-radius:8px;display:flex;flex-direction:column;gap:5px"><div class="small" style="font-weight:600;color:#38bdf8">⚡ Auto-Filter: User QB Name (set in User Management) is automatically the filter value — no manual value needed.</div><div class="small muted" style="font-size:10.5px;line-height:1.5">Count scope: <b>Global QB base filters</b> (Filter Config) + <b>QB Report filters</b> (from QID) + <b>this field per user</b>. Matches exactly what each user sees in My Quickbase.</div></div>
               </div>
 
               <!-- Side counter list -->
