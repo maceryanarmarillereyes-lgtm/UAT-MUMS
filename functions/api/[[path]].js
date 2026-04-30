@@ -79,6 +79,10 @@ async function getRoutes(env) {
     // Uses Global QB Settings (realm/tableId/token) — isolated from studio/qb_fields
     'settings/global_qb_fields': unwrapCjs(await import('../../server/routes/settings/global_qb_fields.js')),
     'settings/global-qb-fields': unwrapCjs(await import('../../server/routes/settings/global_qb_fields.js')),
+    // ★ NEW: Count QB records for Dashboard page counters using Global QB token
+    // Isolated from monitoring — no privacy filter injected, pure WHERE-based count
+    'settings/global_qb_count': unwrapCjs(await import('../../server/routes/settings/global_qb_count.js')),
+    'settings/global-qb-count': unwrapCjs(await import('../../server/routes/settings/global_qb_count.js')),
     'settings/global_calendar': unwrapCjs(await import('../../server/routes/settings/global_calendar.js')),
     'calendar/records': unwrapCjs(await import('../../server/routes/calendar/records.js')),
     'catalog/items': unwrapCjs(await import('../../server/routes/catalog/items.js')),

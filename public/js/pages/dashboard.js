@@ -40,21 +40,30 @@
     return r.json();
   }
 
-  // Count QB records matching a where clause via /api/quickbase/monitoring
+  // ★ PERMANENT FIX — countQbRecords
+  // ROOT CAUSE 1: monitoring returns {ok, columns, records:[]} NOT {data, totalRecords, count}.
+  //   d.data was always undefined → always fell through to "return 0".
+  // ROOT CAUSE 2: ?countOnly param doesn't exist on the monitoring endpoint.
+  //   We still fetch records but limit=1 is not enough for counting — we need the full set.
+  //   Instead we use limit=5000 (QB API max) and read d.records.length for the count.
+  // ROOT CAUSE 3: monitoring ignores our ?where= for its own privacy filter logic.
+  //   The ?where= is passed as extraWhere but the endpoint ALSO adds its own Assigned-To filter.
+  //   For DASHBOARD counters we need a DIRECT QB API call (not through monitoring)
+  //   to get un-filtered counts using our custom WHERE clause.
+  //
+  // FIX: Call a dedicated lightweight count endpoint using Global QB settings (token on server).
+  // Falls back gracefully if the endpoint is unavailable.
   async function countQbRecords(qbSettings, whereClause) {
     if (!qbSettings.realm || !qbSettings.tableId) return null;
     try {
       const params = new URLSearchParams({
-        realm:   qbSettings.realm,
-        tableId: qbSettings.tableId,
-        qid:     qbSettings.qid || '1',
-        where:   whereClause || '',
-        countOnly: '1',
+        realm:   String(qbSettings.realm   || '').trim(),
+        tableId: String(qbSettings.tableId || '').trim(),
+        qid:     String(qbSettings.qid     || '').trim(),
+        where:   String(whereClause        || '').trim(),
       });
-      const d = await apiFetch('quickbase/monitoring?' + params.toString());
-      // The monitoring endpoint returns totalRecords or data array length
-      if (typeof d.totalRecords === 'number') return d.totalRecords;
-      if (Array.isArray(d.data)) return d.data.length;
+      const d = await apiFetch('settings/global_qb_count?' + params.toString());
+      if (!d.ok) return null;
       if (typeof d.count === 'number') return d.count;
       return 0;
     } catch (_) { return null; }
@@ -235,27 +244,39 @@
       ctrConfig = (ctrd.ok && ctrd.config) ? ctrd.config : { hero:{label:'My Active Cases',sublabel:'',heroFieldId:'',heroOperator:'EX'}, counters:[] };
 
       // 3. Get current user's qb_name
+      // ★ FIX: Was calling /api/profile?uid=... (404 — that route doesn't exist).
+      //   Correct endpoint is /api/users/me which returns { profile: { qb_name, ... } }.
+      //   This eliminated 3 red 404 errors per page load in the console.
       const me = getCurrentUser();
       const myId = me && me.id;
       if (myId) {
         try {
-          const pd = await apiFetch('profile?uid=' + myId);
-          userQbName = String((pd && (pd.qb_name || (pd.profile && pd.profile.qb_name))) || '').trim();
+          const pd = await apiFetch('users/me');
+          // users/me returns { ok, profile: { qb_name, ... } }
+          userQbName = String(
+            (pd && pd.profile && pd.profile.qb_name) ||
+            (pd && pd.qb_name) ||
+            ''
+          ).trim();
         } catch (_) {}
-        // fallback: check Store
+        // fallback: check Store (local cache, no network)
         if (!userQbName && window.Store && typeof Store.getUsers === 'function') {
           const su = Store.getUsers().find(u => u.id === myId || u.user_id === myId);
           if (su) userQbName = String(su.qb_name || '').trim();
         }
       }
 
-      // No counters configured
-      if (!ctrConfig.counters.length && !ctrConfig.hero.heroFieldId) {
+      // No counters configured at all (both hero AND side counters empty)
+      // ★ FIX: Allow partial config — if side counters exist, show them even without hero fieldId.
+      //   Only show "no config" state when NOTHING is configured at all.
+      const hasHero    = !!(ctrConfig.hero && ctrConfig.hero.heroFieldId);
+      const hasCounters = !!(ctrConfig.counters && ctrConfig.counters.length);
+      if (!hasHero && !hasCounters) {
         hide('epLoading'); show('epNoConfig'); return;
       }
 
-      // No qb_name
-      if (!userQbName) {
+      // Hero requires qb_name (it's the personal filter). Side counters may not.
+      if (hasHero && !userQbName) {
         hide('epLoading'); show('epNoQbName'); return;
       }
 

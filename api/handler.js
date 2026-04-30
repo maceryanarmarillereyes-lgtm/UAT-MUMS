@@ -59,6 +59,8 @@ const ROUTES = {
   // ★ NEW: Field list for Global Dashboard Counters settings — uses Global QB credentials
   'settings/global_qb_fields': require('../server/routes/settings/global_qb_fields'),
   'settings/global-qb-fields': require('../server/routes/settings/global_qb_fields'),
+  'settings/global_qb_count': require('../server/routes/settings/global_qb_count'),
+  'settings/global-qb-count': require('../server/routes/settings/global_qb_count'),
   'settings/global_calendar': require('../server/routes/settings/global_calendar'),
   'calendar/records': require('../server/routes/calendar/records'),
   'catalog/items': require('../server/routes/catalog/items'),
