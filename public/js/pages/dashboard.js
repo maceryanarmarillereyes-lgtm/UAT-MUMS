@@ -416,7 +416,7 @@
     const fm = root.querySelector('#epFilterMeta');
     const sm = root.querySelector('#epSyncMeta');
     if (fm) fm.innerHTML = userQbName
-      ? `Filtered by Quickbase Name: <b style="color:rgba(255,255,255,.5)">${esc(userQbName)}</b> &nbsp;•&nbsp; Source: Global Quickbase Settings`
+      ? `Filter: QB Name = <b style="color:rgba(255,255,255,.5)">${esc(userQbName)}</b> &nbsp;&bull;&nbsp; Scope: Global QB base filters + Report (QID) filters — same as My Quickbase`
       : '';
     if (sm && lastSync) sm.textContent = '⬤ SYNCHRONIZED  ' + lastSync.toLocaleTimeString();
   }
