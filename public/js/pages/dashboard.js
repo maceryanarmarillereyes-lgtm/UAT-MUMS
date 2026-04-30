@@ -359,6 +359,12 @@
       // Monitoring already filtered by user's qb_name — this IS "My Active Cases"
       heroCount = records.length;
 
+
+      // DASHBOARD DRILL-DOWN CACHE: store fetched records for counter click drill-down
+      window.__mums_dash_records = records.slice();
+      window.__mums_dash_columns = Array.isArray(data && data.columns) ? data.columns.slice()
+        : (Array.isArray(data && data.allAvailableFields) ? data.allAvailableFields.slice() : []);
+
       // Side counters: count from fetched records locally
       // Mirrors renderDashboardCounters() in my_quickbase.js — exact same logic
       ctrConfig.counters.forEach(c => {
@@ -381,6 +387,9 @@
     } catch (err) {
       console.warn('[dashboard] monitoring fallback triggered:', err && err.message || err);
       // Monitoring failed — fall back to direct QB API
+      // Note: columns not available in fallback path — drill-down shows raw data
+      window.__mums_dash_records = [];
+      window.__mums_dash_columns = [];
       await _fetchCountsViaQbApi();
     }
   }
@@ -557,6 +566,372 @@
     if (_pageHidden) return;  // Tab hidden — skip this tick entirely
     fetchCounts().then(() => { renderDashboard(); updateMeta(); });
   }, 120 * 1000); // 2 minutes — free-tier optimised
+
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DASHBOARD DRILL-DOWN: Counter click → filtered records table
+  // + Row click → Case Detail View (same format as My Quickbase)
+  //
+  // Architecture:
+  //   1. makePill/makeHero get click handlers injected (clickable pill/hero)
+  //   2. Click fires openDrillDown(filterId, label) — fetches records via
+  //      QuickbaseAdapter.fetchMonitoringData (same engine as My QB)
+  //   3. Records rendered as premium table with exact required columns
+  //   4. Row-num click → builds snap → opens qbcd modal via window.dispatchEvent
+  //      mums:open_qbcd — a new lightweight event the modal listens for
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ── _fetchDrillRecords: get full records set for a counter filter ──────────
+  async function _fetchDrillRecords(counterId) {
+    const records = window.__mums_dash_records || [];
+    if (!records.length) return [];
+    if (counterId === '__hero__') return records;
+    const c = (ctrConfig.counters || []).find(function(x) { return x.id === counterId; });
+    if (!c || !c.fieldId) return records;
+    const matchVal = String(c.value || '').toLowerCase();
+    const op       = String(c.operator || 'EX').toUpperCase();
+    return records.filter(function(record) {
+      const fields = record && record.fields ? record.fields : {};
+      const fld    = fields[String(c.fieldId)] || null;
+      const srcVal = String(fld && fld.value != null ? fld.value : '').toLowerCase();
+      if (op === 'XEX') return srcVal !== matchVal;
+      if (op === 'CT')  return srcVal.includes(matchVal);
+      return srcVal === matchVal;
+    });
+  }
+
+  // ── Column label resolver using column keyword matching ───────────────────
+  function _resolveColumns(columns) {
+    // Returns an array of { id, label } for the REQUIRED table headers
+    // in display order. Falls back to raw label if no match.
+    const REQUIRED = [
+      { key: 'case_num',     labels: ['case #','case#','case number','record id','rid'] },
+      { key: 'description',  labels: ['short description','concern','description','subject'] },
+      { key: 'case_notes',   labels: ['case notes','notes detail','case note'] },
+      { key: 'assigned_to',  labels: ['assigned to','assignee'] },
+      { key: 'contact_name', labels: ['contact','full name','contact – full name','contact - full name'] },
+      { key: 'case_status',  labels: ['case status','status'] },
+      { key: 'age',          labels: ['\bage\b','open duration','age (days)'] },
+      { key: 'end_user',     labels: ['end user','client account','end user / client'] },
+      { key: 'type',         labels: ['\btype\b','case type','case category'] },
+      { key: 'last_update',  labels: ['last update','last updated','days since update','update days'] },
+    ];
+    const DISPLAY_LABELS = {
+      case_num:     'CASE #',
+      description:  'SHORT DESCRIPTION',
+      case_notes:   'CASE NOTES',
+      assigned_to:  'ASSIGNED TO',
+      contact_name: 'CONTACT – FULL NAME',
+      case_status:  'CASE STATUS',
+      age:          'AGE',
+      end_user:     'END USER',
+      type:         'TYPE',
+      last_update:  'LAST UPDATE DAYS',
+    };
+    const resolved = {};
+    REQUIRED.forEach(function(req) {
+      const match = (columns || []).find(function(col) {
+        const lbl = String(col.label || '').toLowerCase();
+        return req.labels.some(function(k) { return lbl.includes(k.replace(/\\b/g, '')); });
+      });
+      resolved[req.key] = match ? { id: String(match.id), label: DISPLAY_LABELS[req.key] } : null;
+    });
+    return resolved;
+  }
+
+  // ── _esc helper ───────────────────────────────────────────────────────────
+  function _esc2(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function _cellVal(record, colId) {
+    if (!colId) return '';
+    const f = record && record.fields && record.fields[colId];
+    return f && f.value != null ? String(f.value) : '';
+  }
+
+  function _fmtAge(val) {
+    const n = Number(val);
+    if (!isFinite(n) || n < 0) return val || '';
+    const d = Math.round(n / 86400000);
+    if (d < 1) return '< 1 day';
+    return d + (d === 1 ? ' day' : ' days');
+  }
+
+  function _statusBadge(val) {
+    const v = String(val || '').toLowerCase();
+    let color = '#94a3b8';
+    if (v.includes('investigating')) color = '#22d3ee';
+    else if (v.includes('waiting'))  color = '#f59e0b';
+    else if (v.includes('initial'))  color = '#a78bfa';
+    else if (v.includes('escalat'))  color = '#f87171';
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:.04em;background:${color}22;color:${color};border:1px solid ${color}55">${_esc2(val)}</span>`;
+  }
+
+  // ── Open drill-down panel ─────────────────────────────────────────────────
+  let _ddPanel = null;
+  let _ddCleanup = null;
+
+  async function openDrillDown(counterId, label) {
+    // Remove existing panel
+    if (_ddPanel) { try { _ddPanel.remove(); } catch(_) {} _ddPanel = null; }
+    if (_ddCleanup) { try { _ddCleanup(); } catch(_) {} _ddCleanup = null; }
+
+    // Build panel
+    const panel = document.createElement('div');
+    panel.id = '__epDrillPanel';
+    panel.style.cssText = [
+      'position:fixed;inset:0;z-index:9000;',
+      'background:rgba(2,6,23,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);',
+      'display:flex;flex-direction:column;overflow:hidden;',
+      'animation:__epDdIn .22s cubic-bezier(.32,1.12,.64,1)',
+    ].join('');
+    document.body.appendChild(panel);
+    _ddPanel = panel;
+
+    panel.innerHTML = `
+    <style>
+      @keyframes __epDdIn { from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none} }
+      @keyframes __epDdSpin { to{transform:rotate(360deg)} }
+      .__ep-tbl { width:100%;border-collapse:collapse;font-size:12px; }
+      .__ep-tbl thead th {
+        position:sticky;top:0;z-index:2;
+        background:#0a1628;color:rgba(255,255,255,.38);
+        font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+        padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left;
+        white-space:nowrap;
+      }
+      .__ep-tbl tbody tr {
+        border-bottom:1px solid rgba(255,255,255,.05);
+        transition:background .1s;cursor:default;
+      }
+      .__ep-tbl tbody tr:hover { background:rgba(255,255,255,.04); }
+      .__ep-tbl tbody td {
+        padding:9px 14px;color:#cbd5e1;vertical-align:top;
+        font-size:12px;line-height:1.45;
+      }
+      .__ep-rn {
+        width:36px;min-width:36px;background:rgba(0,0,0,.2);
+        border-right:1px solid rgba(255,255,255,.06);text-align:center;
+      }
+      .__ep-rn-btn {
+        display:inline-flex;align-items:center;justify-content:center;
+        width:26px;height:26px;border-radius:8px;
+        background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.25);
+        color:#22d3ee;font-size:11px;font-weight:700;cursor:pointer;
+        transition:all .15s;
+      }
+      .__ep-rn-btn:hover { background:rgba(34,211,238,.28);transform:scale(1.08); }
+      .__ep-cn-cell { max-width:260px; }
+      .__ep-desc-cell { max-width:200px; }
+      .__ep-notes-cell { max-width:300px;font-size:11.5px;color:rgba(200,220,255,.7); }
+      .__ep-overflow { white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:inherit; }
+    </style>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;
+      padding:14px 24px;border-bottom:1px solid rgba(255,255,255,.07);flex-shrink:0;
+      background:linear-gradient(90deg,rgba(34,211,238,.05),transparent)">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:3px;height:28px;border-radius:3px;background:linear-gradient(180deg,#22d3ee,#a78bfa)"></div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#f1f5f9;letter-spacing:.02em">${_esc2(label)}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:2px" id="__epDdCount">Loading…</div>
+        </div>
+      </div>
+      <button id="__epDdClose" style="
+        display:flex;align-items:center;gap:6px;height:32px;padding:0 14px;
+        border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+        color:rgba(255,255,255,.5);font-size:12px;font-weight:500;cursor:pointer;
+        transition:all .15s" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">
+        ✕ &nbsp;Close
+      </button>
+    </div>
+
+    <div id="__epDdBody" style="flex:1;overflow-y:auto;padding:0 24px 24px">
+      <div style="display:flex;align-items:center;justify-content:center;height:120px;gap:10px;color:rgba(255,255,255,.3)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(34,211,238,.5)" stroke-width="2" stroke-linecap="round" style="animation:__epDdSpin 1s linear infinite"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+        Loading records…
+      </div>
+    </div>`;
+
+    // Close handlers
+    const closeBtn = panel.querySelector('#__epDdClose');
+    if (closeBtn) closeBtn.onclick = _closeDrillDown;
+    function _onEscDd(e) { if (e.key === 'Escape') _closeDrillDown(); }
+    document.addEventListener('keydown', _onEscDd);
+    _ddCleanup = function() { document.removeEventListener('keydown', _onEscDd); };
+
+    // Fetch + render
+    let records = [];
+    let columns = [];
+    try {
+      // Use cached records from last monitoring fetch if available
+      records = await _fetchDrillRecords(counterId);
+      columns = window.__mums_dash_columns || [];
+    } catch(e) {
+      records = [];
+    }
+
+    const body = panel.querySelector('#__epDdBody');
+    const countEl = panel.querySelector('#__epDdCount');
+    if (countEl) countEl.textContent = records.length + ' record' + (records.length !== 1 ? 's' : '');
+
+    if (!records.length) {
+      if (body) body.innerHTML = '<div style="text-align:center;padding:48px;color:rgba(255,255,255,.25);font-size:13px">No records found for this filter.</div>';
+      return;
+    }
+
+    const colMap = _resolveColumns(columns);
+
+    // Build table
+    const tbl = document.createElement('table');
+    tbl.className = '__ep-tbl';
+
+    // Header
+    const thead = document.createElement('thead');
+    thead.innerHTML = `<tr>
+      <th class="__ep-rn" style="text-align:center">#</th>
+      <th>${colMap.case_num ? _esc2(colMap.case_num.label) : 'CASE #'}</th>
+      <th class="__ep-desc-cell">${colMap.description ? _esc2(colMap.description.label) : 'SHORT DESCRIPTION'}</th>
+      <th class="__ep-notes-cell">${colMap.case_notes ? _esc2(colMap.case_notes.label) : 'CASE NOTES'}</th>
+      <th>${colMap.assigned_to ? _esc2(colMap.assigned_to.label) : 'ASSIGNED TO'}</th>
+      <th>${colMap.contact_name ? _esc2(colMap.contact_name.label) : 'CONTACT – FULL NAME'}</th>
+      <th>${colMap.case_status ? _esc2(colMap.case_status.label) : 'CASE STATUS'}</th>
+      <th>${colMap.age ? _esc2(colMap.age.label) : 'AGE'}</th>
+      <th>${colMap.end_user ? _esc2(colMap.end_user.label) : 'END USER'}</th>
+      <th>${colMap.type ? _esc2(colMap.type.label) : 'TYPE'}</th>
+      <th>${colMap.last_update ? _esc2(colMap.last_update.label) : 'LAST UPDATE DAYS'}</th>
+    </tr>`;
+    tbl.appendChild(thead);
+
+    // Body
+    const tbody = document.createElement('tbody');
+    const snaps = []; // Parallel snap array for QBCD modal
+
+    records.forEach(function(record, idx) {
+      const recordId = record && (record.rid || record.recordId ||
+        (record.fields && Object.values(record.fields)[0] && Object.values(record.fields)[0].value));
+      const caseNum = colMap.case_num ? _cellVal(record, colMap.case_num.id) : String(recordId || '');
+
+      // Build snap for QBCD modal (same structure as my_quickbase snaps)
+      const snap = {
+        recordId: String(caseNum || recordId || idx + 1),
+        fields:   record && record.fields ? record.fields : {},
+        columnMap: (columns || []).reduce(function(acc, c) {
+          acc[String(c.id)] = String(c.label || c.id || '');
+          return acc;
+        }, {}),
+      };
+      snaps.push(snap);
+
+      const notes = colMap.case_notes ? _cellVal(record, colMap.case_notes.id) : '';
+      const notesTrunc = notes.length > 120 ? notes.slice(0, 120) + '…' : notes;
+
+      const tr = document.createElement('tr');
+      tr.dataset.snapIdx = String(idx);
+      tr.innerHTML = `
+        <td class="__ep-rn">
+          <button class="__ep-rn-btn" data-snap-idx="${idx}" title="View case details — Case# ${_esc2(caseNum)}">${idx + 1}</button>
+        </td>
+        <td style="font-weight:700;color:#22d3ee;letter-spacing:.03em;font-family:'JetBrains Mono',monospace">${_esc2(caseNum)}</td>
+        <td class="__ep-desc-cell"><span class="__ep-overflow">${_esc2(colMap.description ? _cellVal(record, colMap.description.id) : '')}</span></td>
+        <td class="__ep-notes-cell"><span style="display:block;max-height:52px;overflow:hidden;font-size:11px;line-height:1.45">${_esc2(notesTrunc)}</span></td>
+        <td>${_esc2(colMap.assigned_to ? _cellVal(record, colMap.assigned_to.id) : '')}</td>
+        <td>${_esc2(colMap.contact_name ? _cellVal(record, colMap.contact_name.id) : '')}</td>
+        <td>${_statusBadge(colMap.case_status ? _cellVal(record, colMap.case_status.id) : '')}</td>
+        <td style="white-space:nowrap">${_esc2(_fmtAge(colMap.age ? _cellVal(record, colMap.age.id) : ''))}</td>
+        <td>${_esc2(colMap.end_user ? _cellVal(record, colMap.end_user.id) : '')}</td>
+        <td>${_esc2(colMap.type ? _cellVal(record, colMap.type.id) : '')}</td>
+        <td style="white-space:nowrap">${_esc2(colMap.last_update ? _cellVal(record, colMap.last_update.id) : '')}</td>`;
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+
+    if (body) {
+      body.innerHTML = '';
+      body.appendChild(tbl);
+    }
+
+    // ── Row-num button click → Case Detail Modal ──────────────────────────
+    tbl.addEventListener('click', function(e) {
+      const btn = e.target.closest('.__ep-rn-btn');
+      if (!btn) return;
+      const idx2 = parseInt(btn.getAttribute('data-snap-idx'), 10);
+      if (isNaN(idx2) || !snaps[idx2]) return;
+      _openQbcdFromDash(snaps[idx2], snaps, idx2);
+    });
+  }
+
+  function _closeDrillDown() {
+    if (_ddPanel) {
+      _ddPanel.style.opacity = '0';
+      _ddPanel.style.transform = 'translateY(10px)';
+      _ddPanel.style.transition = 'opacity .15s,transform .15s';
+      setTimeout(function() { try { _ddPanel && _ddPanel.remove(); _ddPanel = null; } catch(_) {} }, 180);
+    }
+    if (_ddCleanup) { try { _ddCleanup(); } catch(_) {} _ddCleanup = null; }
+  }
+
+  // ── Open QBCD Modal from Dashboard (reuse my_quickbase modal via navigation) ─
+  function _openQbcdFromDash(snap, allSnaps, idx) {
+    // Store snap data for the modal to pick up
+    window.__mums_dash_pending_qbcd = { snap: snap, snaps: allSnaps, idx: idx };
+
+    // Strategy: if My QB page is loaded, use its _qbcdOpen directly
+    var mainEl = document.getElementById('main');
+    if (mainEl && typeof mainEl._qbcdOpen === 'function') {
+      // Build temp snap storage so prev/next works
+      var host = mainEl.querySelector('#qbDataBody');
+      if (host) host._qbRowSnaps = allSnaps;
+      mainEl._qbcdOpen(snap, allSnaps);
+      return;
+    }
+
+    // Navigate to my_quickbase then open
+    if (window.App && typeof App.navigate === 'function') {
+      App.navigate('my_quickbase');
+    }
+    var _tryOpen = function() {
+      var m = document.getElementById('main');
+      if (m && typeof m._qbcdOpen === 'function') {
+        var h = m.querySelector('#qbDataBody');
+        if (h) h._qbRowSnaps = allSnaps;
+        m._qbcdOpen(snap, allSnaps);
+        return true;
+      }
+      return false;
+    };
+    var retries = 0;
+    var retryInterval = setInterval(function() {
+      if (_tryOpen() || ++retries >= 10) clearInterval(retryInterval);
+    }, 300);
+  }
+
+  // ── Patch makePill to be clickable ────────────────────────────────────────
+  var _origMakePill = makePill;
+  makePill = function(c) {
+    var el = _origMakePill(c);
+    el.style.cursor = 'pointer';
+    el.title = 'Click to view records: ' + (c.label || '');
+    el.addEventListener('click', function() {
+      openDrillDown(c.id, c.label || 'Records');
+    });
+    return el;
+  };
+
+  // ── Patch makeHero to be clickable ────────────────────────────────────────
+  var _origMakeHero = makeHero;
+  makeHero = function() {
+    var el = _origMakeHero();
+    el.style.cursor = 'pointer';
+    el.title = 'Click to view all your active cases';
+    el.addEventListener('click', function() {
+      openDrillDown('__hero__', ctrConfig.hero.label || 'My Active Cases');
+    });
+    return el;
+  };
+
 
   // ── kick off ───────────────────────────────────────────────────────────────
   loadAll(false);
