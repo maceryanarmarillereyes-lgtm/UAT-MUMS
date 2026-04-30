@@ -51,7 +51,7 @@
   // Gap threshold matches 2× new HB interval (240s) → 300s.
   // Activity debounce: 180s (was 90s) — prevents mouse-move storms.
   // With 30 users: watchdog HB = 30 × (3600/150) = 720 req/hr (was 2,400/hr).
-  var WATCHDOG_POLL_MS     = 150000; // 150s backup poll (was 45s — 3.3× reduction)
+  var WATCHDOG_POLL_MS     = 300000; // 150s backup poll (was 45s — 3.3× reduction)
   var WATCHDOG_GAP_MS      = 300000; // Fire if >300s since last beat (2× 150s interval)
   var ACTIVITY_DEBOUNCE_MS = 180000; // Activity-triggered HB max 1 per 180s (was 90s)
   var STORAGE_KEY          = 'mums_watchdog_last_hb';
@@ -141,6 +141,7 @@
   // ── CORE HEARTBEAT ──────────────────────────────────────────────────────────
   async function fireHeartbeat(reason) {
     if (stopped) return;
+    if (window.__mumsFreemiumGuard && !window.__mumsFreemiumGuard.isLeader()) return;
     if (authBackoffUntil && now() < authBackoffUntil) return;
     if (hbInFlight) return;
     hbInFlight = true;
@@ -316,6 +317,7 @@
   function backupPoll() {
     if (stopped) return;
     if (document.hidden) return; // Don't poll when tab is hidden — save resources
+    if (window.__mumsFreemiumGuard && !window.__mumsFreemiumGuard.isLeader()) return;
     var stale = (now() - (readLastBeat() || lastBeatAt)) > WATCHDOG_GAP_MS;
     if (stale) {
       fireHeartbeat('backup-poll');
