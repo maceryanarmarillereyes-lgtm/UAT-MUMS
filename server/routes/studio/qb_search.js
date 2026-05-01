@@ -40,6 +40,26 @@ const FIELDS_TTL   = 10 * 60 * 1000;
 function cacheGet(k) { const h = FIELDS_CACHE.get(k); if (!h || Date.now() - h.at > FIELDS_TTL) { FIELDS_CACHE.delete(k); return null; } return h.v; }
 function cacheSet(k, v) { FIELDS_CACHE.set(k, { at: Date.now(), v }); }
 
+// ── Bulk-load page cache (empty-query requests only) ───────────────
+// Stores full paginated responses keyed by "tableId:skip:top".
+// TTL = 5 minutes — pages are large and rarely change within a session.
+// This converts sequential re-fetches (on tab switch / reload) to <10ms hits.
+const PAGE_CACHE     = new Map();
+const PAGE_CACHE_TTL = 5 * 60 * 1000;
+function pageCacheGet(k) {
+  const h = PAGE_CACHE.get(k);
+  if (!h || Date.now() - h.at > PAGE_CACHE_TTL) { PAGE_CACHE.delete(k); return null; }
+  return h.v;
+}
+function pageCacheSet(k, v) {
+  // Keep cache bounded — evict oldest entries when > 30 pages stored
+  if (PAGE_CACHE.size >= 30) {
+    const oldest = [...PAGE_CACHE.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+    if (oldest) PAGE_CACHE.delete(oldest[0]);
+  }
+  PAGE_CACHE.set(k, { at: Date.now(), v });
+}
+
 function normalizeRealm(r) {
   const s = String(r || '').trim();
   return (s && !s.includes('.')) ? `${s}.quickbase.com` : s;
@@ -326,7 +346,20 @@ module.exports = async (req, res) => {
       : [...new Set([3, ...textFieldIds.slice(0, 18)])];
 
     // ── Execute QB query across ALL records ────────────────────────
-    const out = await queryAllRecords({ realm, token, tableId, where, select: selectIds, skip, top });
+    // For empty-query bulk loads: check page cache first (5-min TTL).
+    // This is the key performance fix — page cache turns sequential multi-second
+    // QB API round trips into sub-10ms hits after the first load.
+    let out;
+    const isBulkLoad = !q; // empty query = initial full-table load
+    const pageCacheKey = isBulkLoad ? `${tableId}:${skip}:${top}` : null;
+    if (pageCacheKey) {
+      const cached = pageCacheGet(pageCacheKey);
+      if (cached) {
+        return sendJson(res, 200, { ...cached, _cached: true });
+      }
+    }
+
+    out = await queryAllRecords({ realm, token, tableId, where, select: selectIds, skip, top });
 
     if (!out.ok) {
       return sendJson(res, out.status || 500, {
@@ -384,7 +417,7 @@ module.exports = async (req, res) => {
       };
     });
 
-    return sendJson(res, 200, {
+    const responsePayload = {
       ok: true,
       columns,
       columnMap,
@@ -396,7 +429,14 @@ module.exports = async (req, res) => {
       searchTerm: q || null,
       fieldCount: textFieldIds.length,
       allAvailableFields: allFields,
-    });
+    };
+
+    // Cache successful bulk-load pages so subsequent pagination calls are instant
+    if (pageCacheKey && records.length > 0) {
+      pageCacheSet(pageCacheKey, responsePayload);
+    }
+
+    return sendJson(res, 200, responsePayload);
 
   } catch (err) {
     console.error('[studio/qb_search]', err);

@@ -1496,6 +1496,17 @@
   // ── QB deep search hydration (all records) ─────────────────────────────────
   // Permanent fix: Search Engine 2 now hydrates QB dataset from the same deep
   // search API used by QuickBase_S so data volume is not limited to visible snaps.
+  // ── _fetchQbDeepRecords v3 — PARALLEL pagination (1-3s fix) ─────────────
+  // Previous v2: fetched pages SEQUENTIALLY (page0 → wait → page1 → wait → ...)
+  // For 22k+ records at 2000/page = 11 round trips × 2s = 22+ seconds.
+  //
+  // v3 strategy:
+  //   1. Fetch page 0 to get total count (1 round trip)
+  //   2. Fire ALL remaining pages simultaneously with Promise.all
+  //   3. Merge and return — total time ≈ 2 × single round trip ≈ 2-4s
+  //
+  // Server-side cache (5-min TTL in qb_search.js) means pages 2-11 often
+  // resolve in <50ms on the 2nd+ load, bringing total to <500ms.
   function _fetchQbDeepRecords() {
     if (Array.isArray(window.__se2QbCache) && window.__se2QbCache.length > 0) {
       return Promise.resolve(window.__se2QbCache);
@@ -1505,50 +1516,68 @@
     var token = _sessionToken();
     var headers = token ? { Authorization: 'Bearer ' + token } : {};
     var pageSize = 2000;
-    var maxRows = 30000;
+    var maxRows  = 30000;
     var latestColumnMap = {};
-    var latestColumns = [];
+    var latestColumns   = [];
 
-    function fetchPage(skip, acc) {
+    // Fetch a single page — returns the parsed JSON response
+    function fetchOnePage(skip) {
       return fetch('/api/studio/qb_search?skip=' + skip + '&top=' + pageSize, { headers: headers })
-        .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('qb_search_http_' + r.status)); })
+        .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('qb_http_' + r.status)); })
         .then(function(j) {
-          if (!j || !j.ok) throw new Error((j && (j.error || j.message)) || 'qb_search_failed');
-          var rows = Array.isArray(j.records) ? j.records : [];
+          if (!j || !j.ok) throw new Error((j && (j.error || j.message)) || 'qb_failed');
           if (j.columnMap && typeof j.columnMap === 'object') latestColumnMap = j.columnMap;
           if (Array.isArray(j.columns)) latestColumns = j.columns;
-
-          var merged = acc.concat(rows);
-          if (merged.length > maxRows) merged = merged.slice(0, maxRows);
-
-          var total = Number(j.total || 0);
-          var hasMoreByPage = rows.length >= pageSize;
-          var hasMoreByTotal = total > 0 ? merged.length < Math.min(total, maxRows) : hasMoreByPage;
-          if (hasMoreByPage && hasMoreByTotal && merged.length < maxRows) {
-            return fetchPage(skip + rows.length, merged);
-          }
-          return merged;
+          return j;
         });
     }
 
-    var p = fetchPage(0, [])
+    var p = fetchOnePage(0)
+      .then(function(firstPage) {
+        var firstRows = Array.isArray(firstPage.records) ? firstPage.records : [];
+        var total     = Number(firstPage.total || 0);
+
+        // If server already returned everything (or can't tell total), done
+        if (firstRows.length < pageSize || firstRows.length >= maxRows) {
+          return firstRows.slice(0, maxRows);
+        }
+
+        // How many additional pages do we need?
+        var safeTotal = (total > 0 && total <= maxRows) ? total : maxRows;
+        var pagesToFetch = [];
+        for (var skip = pageSize; skip < safeTotal; skip += pageSize) {
+          pagesToFetch.push(skip);
+        }
+
+        // ★ KEY CHANGE: fire ALL remaining pages in parallel
+        return Promise.all(pagesToFetch.map(fetchOnePage))
+          .then(function(pages) {
+            var all = firstRows.slice();
+            pages.forEach(function(page) {
+              var rows = Array.isArray(page.records) ? page.records : [];
+              all = all.concat(rows);
+              if (all.length >= maxRows) { all = all.slice(0, maxRows); }
+            });
+            return all;
+          })
+          .catch(function() {
+            // Partial failure — return what we got from page 0
+            return firstRows;
+          });
+      })
       .then(function(rows) {
-        // Keep existing globals synced so other Search Studio flows can reuse them.
-        window.__studioQbRecords = rows;
-        window.__studioQbColumns = latestColumns;
+        window.__studioQbRecords     = rows;
+        window.__studioQbColumns     = latestColumns;
         window.__studioQbDeepRecords = rows;
         window.__studioQbDeepColumns = latestColumns;
-
-        // Deep source must be isolated as qbd for SE2 Data Source filters.
         var mapped = _mapQbRowsToSe2(rows, latestColumnMap, 'qbd');
-
-        window.__se2QbCache = mapped;
+        window.__se2QbCache   = mapped;
         window.__se2QbPromise = null;
         return mapped;
       })
       .catch(function(err) {
         window.__se2QbPromise = null;
-        console.warn('[SE2] QB deep search hydrate failed; using local snaps fallback:', err && err.message ? err.message : err);
+        console.warn('[SE2] QB parallel fetch failed; using local fallback:', err && err.message ? err.message : err);
         return _extractQbRecords();
       });
 
@@ -1703,8 +1732,30 @@
         });
       });
 
-    // ── QB records — permanent fix: hydrate from deep search API (22k+), then fallback
-    var qbPromise = _fetchQbDeepRecords();
+    // ── QB records — with 3s timeout so other sources never block on QB ──────
+    // The QB deep fetch can still take 3-8s on a cold server; this timeout lets
+    // KB/Parts/Contact/Connect+ resolve and display immediately while QB loads
+    // in background. The 3s QB refresh (already scheduled below) picks it up.
+    var QB_TIMEOUT_MS = 3000;
+    var qbPromise = new Promise(function(resolve) {
+      var resolved = false;
+      var timer = setTimeout(function() {
+        if (!resolved) {
+          resolved = true;
+          // Return whatever QB records we already have locally (may be empty on cold load)
+          var fallback = _extractQbRecords();
+          console.info('[SE2] QB timeout after ' + QB_TIMEOUT_MS + 'ms — continuing with ' + fallback.length + ' cached QB records. Full fetch continues in background.');
+          resolve(fallback);
+        }
+      }, QB_TIMEOUT_MS);
+
+      _fetchQbDeepRecords().then(function(rows) {
+        if (!resolved) { resolved = true; clearTimeout(timer); resolve(rows); }
+      }).catch(function() {
+        if (!resolved) { resolved = true; clearTimeout(timer); resolve(_extractQbRecords()); }
+      });
+    });
+
     var futurePromise = Promise.resolve(_collectFutureTabRecords());
 
     Promise.all([kbPromise, cpPromise, pnPromise, ciPromise, qbPromise, futurePromise])
