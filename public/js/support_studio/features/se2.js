@@ -534,6 +534,49 @@
     return s;
   }
 
+  /**
+   * FIX-SE2-SNIPPET-1: Context snippet extractor.
+   * Instead of always showing the first N chars (which may not contain the match),
+   * find the FIRST term match in the text and return surrounding context.
+   * Returns { snippet: string (escaped+highlighted), found: bool }
+   */
+  function _extractContextSnippet(rawText, terms, ctxChars) {
+    var text = String(rawText || '');
+    if (!text.trim()) return { snippet: '', found: false };
+    var C = ctxChars || 200;
+
+    if (!terms || !terms.length) {
+      return { snippet: hl(text.slice(0, C), []), found: false };
+    }
+
+    var textLow = text.toLowerCase();
+    var bestPos = -1;
+    var bestTerm = '';
+
+    // Find the earliest occurrence of any term
+    terms.forEach(function(t) {
+      if (!t || t.length < 2) return;
+      var pos = textLow.indexOf(t.toLowerCase());
+      if (pos >= 0 && (bestPos === -1 || pos < bestPos)) {
+        bestPos = pos;
+        bestTerm = t;
+      }
+    });
+
+    if (bestPos === -1) {
+      return { snippet: hl(text.slice(0, C), terms), found: false };
+    }
+
+    // Extract window around the match
+    var start = Math.max(0, bestPos - 85);
+    var end   = Math.min(text.length, bestPos + bestTerm.length + (C - 85));
+    var chunk = text.slice(start, end);
+    var prefix = start > 0 ? '<span class="se2-snippet-ctx">…</span>' : '';
+    var suffix = end < text.length ? '<span class="se2-snippet-ctx">…</span>' : '';
+
+    return { snippet: prefix + hl(chunk, terms) + suffix, found: true };
+  }
+
   // ── Source helpers ─────────────────────────────────────────────────────────
   function _getSource(record) {
     if (record && record._src && SOURCES[record._src]) return record._src;
@@ -829,11 +872,17 @@
     }
     if (r.__se2idx) return r.__se2idx;
     var titleHay = String(r.title || '').toLowerCase();
+    // FIX-SE2-NOTES-1: Include dedicated caseNotes field in haystack.
+    // Previously only r.res (truncated to 1200 chars) and r.searchBlob were indexed.
+    // Case notes can be thousands of chars — storing them in r.caseNotes (untruncated)
+    // and indexing here ensures a match anywhere in the note history is found.
+    var caseNotesHay = String(r.caseNotes || '').toLowerCase();
     var haystack = [
       r.title || '', r.res || '', r.cat || '',
       r.case || '', r.eu || '', r.id || '',
       r.site || '', r.directory || '', r.endUser || '', r.assignedTo || '',
-      r.searchBlob || '', r.partNo || '', r.desc || '', r.brand || ''
+      r.searchBlob || '', r.partNo || '', r.desc || '', r.brand || '',
+      r.caseNotes || ''   // FIX-SE2-NOTES-1: full case notes, untruncated
     ].join(' ').toLowerCase();
     var newestRank = new Date((r && r.date) || 0).getTime() || 0;
     if (!newestRank) newestRank = Number((r && (r.case || r.id || (r._snap && r._snap.recordId))) || 0) || 0;
@@ -842,6 +891,7 @@
       normTitle: _normLoose(titleHay),
       haystack: haystack,
       normHaystack: _normLoose(haystack),
+      caseNotesHay: caseNotesHay,   // FIX-SE2-NOTES-1: dedicated notes index
       phoneDigitHay: String([r.phone || '', r.title || '', r.res || '', r.searchBlob || ''].join(' ')).replace(/\D+/g, ''),
       emailHay: String([r.email || '', r.title || '', r.res || '', r.searchBlob || ''].join(' ')).toLowerCase().replace(/[^a-z0-9]+/g, ''),
       newestRank: newestRank
@@ -910,6 +960,16 @@
     else if (haystack.includes(original)) score += 200;
     else if (normOriginal && (normTitle.includes(normOriginal) || normHaystack.includes(normOriginal))) score += 220;
 
+    // FIX-SE2-NOTES-2: Dedicated case-notes scoring.
+    // Hits in case notes get a meaningful score (higher than generic haystack hit)
+    // so QB records with matching notes surface above generic text matches.
+    // We also tag the record so _renderResults can show a "Found in case notes" snippet.
+    var caseNotesHay = idx.caseNotesHay || '';
+    if (caseNotesHay && (caseNotesHay.includes(original) || _normLoose(caseNotesHay).includes(normOriginal))) {
+      score += 160;
+      r._matchInNotes = true;
+    }
+
     tokens.forEach(function(t) {
       if (t.length < 2) return;
       // BUG FIX: Noise tokens get minimal weight
@@ -918,6 +978,11 @@
       if (titleHay.includes(t) || (normT && normTitle.includes(normT))) score += 80 * noiseW;
       else if (haystack.includes(t) || (normT && normHaystack.includes(normT))) score += 20 * noiseW;
       if (titleHay.startsWith(t) || (normT && normTitle.startsWith(normT))) score += 40 * noiseW;
+      // FIX-SE2-NOTES-2: Extra score when token found in case notes
+      if (caseNotesHay && (caseNotesHay.includes(t) || (normT && _normLoose(caseNotesHay).includes(normT)))) {
+        score += 35 * noiseW;
+        r._matchInNotes = true;
+      }
     });
 
     return score;
@@ -1122,13 +1187,43 @@
         // BUG FIX: For parts records, show brand + type in meta; use desc as body
         var isParts = String(r._src || '') === 'parts' || String(r._id || r.id || '').startsWith('parts_');
         var titleHl = hl(r.title || r.site || r.partNo || '(no title)', tokens);
-        var bodyText = isParts
-          ? ([r.brand, r.cat, r.desc].filter(Boolean).join(' · ') || r.res || '').slice(0, 200)
-          : (r.res || r.desc || r.notes || r.directory || '').slice(0, 280);
-        var bodyHl = hl(bodyText, tokens);
+        var isParts = String(r._src || '') === 'parts' || String(r._id || r.id || '').startsWith('parts_');
+        var isQb    = String(r._src || '') === 'qb' || String(r._src || '') === 'qbd';
+        var titleHl = hl(r.title || r.site || r.partNo || '(no title)', tokens);
         var caseNum = r.case || r.caseNum || '';
         var endUser = r.eu || r.endUser || r.directory || '';
-        var age = r.age || '';
+        var age     = r.age || '';
+
+        // FIX-SE2-SNIPPET-2: Use context snippet extractor instead of blind slice.
+        var bodyHtml = '';
+        var notesMatchHtml = '';
+
+        if (isParts) {
+          var partsText = [r.brand, r.cat, r.desc].filter(Boolean).join(' · ') || r.res || '';
+          var partsSnip = _extractContextSnippet(partsText, tokens, 200);
+          if (partsText) bodyHtml = '<div class="se2-card-body">' + partsSnip.snippet + '</div>';
+        } else if (isQb && r.caseNotes) {
+          var notesSnip = _extractContextSnippet(r.caseNotes, tokens, 240);
+          if (notesSnip.found) {
+            notesMatchHtml =
+              '<div class="se2-notes-match">' +
+                '<div class="se2-notes-match-label">' +
+                  '<i class="fas fa-comment-alt" style="font-size:8px;"></i>' +
+                  'Found in Case Notes' +
+                '</div>' +
+                notesSnip.snippet +
+              '</div>';
+          } else {
+            var resText = (r.res || r.desc || '').slice(0, 280);
+            var resSnip = _extractContextSnippet(resText, tokens, 200);
+            if (resText) bodyHtml = '<div class="se2-card-body">' + resSnip.snippet + '</div>';
+          }
+        } else {
+          var stdText = (r.res || r.desc || r.notes || r.directory || '').slice(0, 400);
+          var stdSnip = _extractContextSnippet(stdText, tokens, 220);
+          if (stdText) bodyHtml = '<div class="se2-card-body">' + stdSnip.snippet + '</div>';
+        }
+
         var brandChip = (isParts && r.brand) ? '<span class="se2-eu-chip" style="color:#f59e0b;background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.2);"><i class="fas fa-tag" style="font-size:8px;margin-right:3px;"></i>' + esc(r.brand) + '</span>' : '';
         html += '<div class="se2-card" data-se2-idx="' + gi + '" style="animation:se2CardIn .22s ease both;animation-delay:' + Math.min(gi*12,350) + 'ms;">' +
           '<div class="se2-card-meta">' +
@@ -1140,7 +1235,8 @@
             (age ? '<span class="se2-age-chip" style="margin-left:auto;">' + esc(age) + '</span>' : '') +
           '</div>' +
           '<div class="se2-card-title">' + titleHl + '</div>' +
-          (bodyText ? '<div class="se2-card-body">' + bodyHl + '</div>' : '') +
+          bodyHtml +
+          notesMatchHtml +
           '<button class="se2-view-btn" data-se2-view="' + gi + '">View Details &rarr;</button></div>';
       });
     });
@@ -1333,7 +1429,11 @@
         title: title || ('QB Case #' + caseNum),
         eu: endUser,
         assignedTo: assignedTo,
+        // FIX-SE2-NOTES-3: Store truncated res for display, but keep full caseNotes
+        // for deep search indexing. Previously only the first 1200 chars were stored,
+        // causing matches deep in a long note history to be missed.
         res: (notes || allFieldText).slice(0, 1200),
+        caseNotes: notes || '',       // full, untruncated — used for snippet extraction + haystack
         searchBlob: allFieldText,
         date: parsedDate,
         cat: type || 'QB Case',
@@ -1380,7 +1480,9 @@
         title: title || ('QB Case #' + caseNum),
         eu: endUser,
         assignedTo: assignedTo,
+        // FIX-SE2-NOTES-3: Same fix as in _extractQbRecords — keep full case notes
         res: (notes || allFieldText).slice(0, 1200),
+        caseNotes: notes || '',       // full, untruncated for search + snippet extraction
         searchBlob: allFieldText,
         date: parsedDate,
         cat: type || 'QB Case',
@@ -1742,11 +1844,32 @@
     if (!bodyEl) return;
 
     var html = '';
+    var detailTokens = _normaliseQuery(_state.query || '').tokens;
 
-    // Resolution / notes
+    // FIX-SE2-NOTES-4: Render full case notes with highlighting in detail drawer.
+    if (r.caseNotes && r.caseNotes !== r.res) {
+      html += '<div class="se2-sec-title" style="color:#34d399;">' +
+        '<i class="fas fa-comment-alt" style="margin-right:6px;color:#34d399;"></i>Case Notes' +
+        '<span style="font-size:9px;font-weight:500;color:#6b7280;margin-left:8px;">Full history</span>' +
+      '</div>';
+      var noteLines = r.caseNotes.split(/\n{2,}|[-]{4,}/);
+      var notesHtml = noteLines.map(function(line) {
+        var trimmed = line.trim();
+        if (!trimmed) return '';
+        return '<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);line-height:1.65;">' +
+          hl(trimmed, detailTokens) +
+        '</div>';
+      }).filter(Boolean).join('');
+      if (!notesHtml) notesHtml = hl(r.caseNotes, detailTokens);
+      html += '<div class="se2-notes-box" style="max-height:340px;overflow-y:auto;">' + notesHtml + '</div>';
+    }
+
+    // Short description / resolution
     if (r.res || r.notes) {
-      html += '<div class="se2-sec-title" style="color:#58a6ff;"><i class="fas fa-comment-alt" style="margin-right:6px;"></i>Resolution / Notes</div>';
-      html += '<div class="se2-notes-box">' + esc(r.res || r.notes || '') + '</div>';
+      html += '<div class="se2-sec-title" style="color:#58a6ff;margin-top:12px;">' +
+        '<i class="fas fa-clipboard" style="margin-right:6px;"></i>Short Description / Resolution' +
+      '</div>';
+      html += '<div class="se2-notes-box">' + hl(r.res || r.notes || '', detailTokens) + '</div>';
     }
 
     // Key-value grid
