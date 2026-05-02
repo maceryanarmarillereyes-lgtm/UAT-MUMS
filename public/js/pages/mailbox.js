@@ -435,8 +435,18 @@ function _mbxGetBlockTiming(userId, nowParts){
 
 function _mbxActorIdFromUser(user){
   if(!user || typeof user !== 'object') return '';
-  const raw = user.id || user.userId || user.user_id || user.uid || user.sub || '';
-  return String(raw || '').trim();
+  const raw = String(user.id || user.userId || user.user_id || user.uid || user.sub || '').trim();
+  if(!raw) return '';
+
+  // HARDENING: Some sessions can carry a contaminated id token fragment
+  // (e.g. uid accidentally appended with query pieces like ",liveTeamId-...").
+  // This produced malformed /api/member/:uid/schedule URLs, spamming 404/failed
+  // fetches and overloading client/Supabase sync loops. Keep only a valid UUID id.
+  const clean = raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i);
+  if(clean && clean[0]) return clean[0].toLowerCase();
+
+  // Fallback for non-UUID legacy ids: drop URL/query separators to avoid path pollution.
+  return raw.split(/[?,&#\s]+/)[0].trim();
 }
 
 function _mbxReadJwt(){

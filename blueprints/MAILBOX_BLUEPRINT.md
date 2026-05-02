@@ -34,3 +34,7 @@
   - Kept previous `_scheduleReady` state during soft resync (`_mbxForceResync`) to prevent transient empty-state flicker.
   - Added `_scheduleRefreshing` in-flight marker so UI can show syncing state without dropping already-cached members.
   - Updated table sync-status gating to prefer cached roster visibility over temporary "no active roster members" fallback.
+- **2026-05-02** — Hardened mailbox roster sync actor-id parsing:
+  - Sanitized actor id extraction to keep valid UUID only (or safe token fallback) before calling `/api/member/:uid/schedule`.
+  - Prevented malformed schedule endpoint URLs that triggered repeated failed fetch loops and client-side resource overload.
+
