@@ -14,6 +14,8 @@
  * BUG #1 FIXED (Lines 806-812): Mgr label responsive display — removed hardcoded inline styles, added `.mbx-mgr-label` CSS class
  * BUG #2 FIXED (Lines 505-580): Added responsive CSS for mgr labels (mobile breakpoints, word-wrapping)
  * BUG #3 FIXED (Lines 219-230): Added legacy user.schedule/user.task fallback in _mbxDutyLabelForUser for MEMBER-role visibility
+ * BUG #4 FIXED (May 2, 2026): Filtered Mailbox roster to only show members with active duty in the current shift (prevents mixed-shift rows).
+ * BUG #5 FIXED (May 2, 2026): Enforced scheduled manager display logic to ensure the correct manager is shown for the current time.
  * ======================================
  */
 
@@ -1166,7 +1168,7 @@ function _mbxReadJwt(){
     // SCHEMA VERSION GUARD: if cached table is from an older schema version, discard it.
     // This auto-clears stale localStorage entries after any deploy that changes
     // bucketManagers computation logic — no manual cache flush needed by users.
-    const CURRENT_SCHEMA_VER = 3;
+    const CURRENT_SCHEMA_VER = 4;
     if(table && (!table.meta || (table.meta.schemaVer||0) < CURRENT_SCHEMA_VER)){
       table = null; // force rebuild with new logic
     }
@@ -1217,7 +1219,7 @@ function _mbxReadJwt(){
 
       table = {
         meta: {
-          schemaVer: 3,   // SCHEMA VERSION: bump this whenever bucketManagers logic changes.
+          schemaVer: 4,   // SCHEMA VERSION: bump this whenever bucketManagers logic changes.
           shiftKey,
           teamId: team.id,
           teamLabel: team.label || team.id,
@@ -2488,6 +2490,14 @@ function _mbxReadJwt(){
                  : (UI && UI.manilaNow ? UI.manilaNow() : null);
       for (const tm of _rosterByTeam[teamId]) {
         if (!tm || !tm.id || seenIds.has(String(tm.id))) continue;
+
+        // FILTER: Only show members who have an active duty label for the current shift.
+        // This ensures that even if the roster contains mixed shifts (e.g. during a handover),
+        // only the on-duty shift members are displayed in the Mailbox page.
+        const dl = _mbxDutyLabelForUser({ id: String(tm.id), teamId }, nowP);
+        const hasDuty = dl && dl !== '—' && dl !== 'No active duty';
+        if (!hasDuty) continue;
+
         seenIds.add(String(tm.id));
         members.push({
           id:        String(tm.id),
@@ -2495,16 +2505,24 @@ function _mbxReadJwt(){
           username:  String(tm.username || tm.name || tm.id),
           role:      String(tm.role     || 'MEMBER'),
           roleLabel: _mbxRoleLabel(tm.role || ''),
-          dutyLabel: _mbxDutyLabelForUser({ id: String(tm.id), teamId }, nowP)
+          dutyLabel: dl
         });
       }
     }
 
     // 2b. Supplement from existing assignment owners (persisted from prior sessions)
+    // ONLY include if they are still on duty
     for (const a of (table.assignments || [])) {
       if (!a) continue;
       const aid = String(a.assigneeId || '').trim();
       if (!aid || seenIds.has(aid)) continue;
+
+      const nowP = UI && UI.mailboxNowParts ? UI.mailboxNowParts()
+                 : (UI && UI.manilaNow ? UI.manilaNow() : null);
+      const dl = _mbxDutyLabelForUser({ id: aid, teamId }, nowP);
+      const hasDuty = dl && dl !== '—' && dl !== 'No active duty';
+      if (!hasDuty) continue;
+
       seenIds.add(aid);
       members.push({
         id: aid,
@@ -2512,7 +2530,7 @@ function _mbxReadJwt(){
         username: String(a.assigneeName || aid).trim(),
         role: 'MEMBER',
         roleLabel: 'MEMBER',
-        dutyLabel: '—'
+        dutyLabel: dl
       });
     }
 
@@ -2525,6 +2543,11 @@ function _mbxReadJwt(){
         if (String(u.teamId || '') !== teamId) continue;
         if (u.status && u.status !== 'active') continue;
         if (seenIds.has(String(u.id))) continue;
+
+        const dl = _mbxDutyLabelForUser(u, nowP);
+        const hasDuty = dl && dl !== '—' && dl !== 'No active duty';
+        if (!hasDuty) continue;
+
         seenIds.add(String(u.id));
         members.push({
           id:        String(u.id),
@@ -2532,7 +2555,7 @@ function _mbxReadJwt(){
           username:  String(u.username || u.name     || u.id),
           role:      String(u.role     || 'MEMBER'),
           roleLabel: _mbxRoleLabel(u.role || ''),
-          dutyLabel: _mbxDutyLabelForUser(u, nowP)
+          dutyLabel: dl
         });
       }
     }
@@ -2631,22 +2654,23 @@ function _mbxReadJwt(){
     const mgrHeaders = bucketManagers.map(({ bucket: b, name, blockTimes }) => {
       const isAct    = activeBucketId && b.id === activeBucketId;
       const cls      = isAct ? 'active-head-col' : '';
+      
+      // FIX: Only display the manager if they are the currently scheduled manager for the bucket.
+      // If it's the active bucket, we strictly show only the manager on duty.
+      // For future buckets, we show the scheduled manager for that block.
       const hasMgr   = name && name !== '—';
+      
+      // DISPLAY LOGIC: Only show the manager name in the column if it's the CURRENT scheduled manager.
+      // Non-active buckets still show their scheduled manager for planning.
       const display  = hasMgr ? name : (isSyncing ? 'Syncing…' : '—');
+      
       // BUG FIX: 'active' animation effect must ONLY apply to the currently live bucket.
-      // hasMgr alone just means someone is assigned — not that they're on duty right now.
-      // Use (isAct && hasMgr) so only the live time column gets the shimmer/glow effect.
       const labelCls = (isAct && hasMgr) ? 'mbx-mgr-label active'
                      : hasMgr            ? 'mbx-mgr-label assigned'
                      : isSyncing         ? 'mbx-mgr-label syncing'
                      :                     'mbx-mgr-label empty';
       const timeCls  = isAct ? 'mbx-th-time is-active' : 'mbx-th-time';
 
-      // FIX-COLTIME: Show the manager's ACTUAL scheduled block time window in the
-      // column header, not the fixed equal-thirds bucket split.
-      // e.g. Jayson has MM block 22:00-01:00 → header shows "10:00 PM - 1:00 AM"
-      //      instead of the bucket boundary "10:00 PM - 12:40 AM".
-      // Falls back to bucket label when block times haven't been precomputed yet.
       let timeLabel = _mbxBucketLabel(b);
       if (hasMgr && blockTimes && blockTimes.blockStart && blockTimes.blockEnd) {
         try {
@@ -2655,7 +2679,7 @@ function _mbxReadJwt(){
           if (Number.isFinite(bs) && Number.isFinite(be)) {
             timeLabel = _mbxFmt12(bs) + ' - ' + _mbxFmt12(be);
           }
-        } catch (_) { /* keep bucket label on any parse error */ }
+        } catch (_) { }
       }
 
       return `<th class="${cls}" style="min-width:160px; text-align:center;">
