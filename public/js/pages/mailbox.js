@@ -14,8 +14,6 @@
  * BUG #1 FIXED (Lines 806-812): Mgr label responsive display — removed hardcoded inline styles, added `.mbx-mgr-label` CSS class
  * BUG #2 FIXED (Lines 505-580): Added responsive CSS for mgr labels (mobile breakpoints, word-wrapping)
  * BUG #3 FIXED (Lines 219-230): Added legacy user.schedule/user.task fallback in _mbxDutyLabelForUser for MEMBER-role visibility
- * BUG #4 FIXED (May 2, 2026): Filtered Mailbox roster to only show members with active duty in the current shift (prevents mixed-shift rows).
- * BUG #5 FIXED (May 2, 2026): Enforced scheduled manager display logic to ensure the correct manager is shown for the current time.
  * ======================================
  */
 
@@ -977,20 +975,71 @@ function _mbxReadJwt(){
           // Case-insensitive compare — ensures 'Morning' === 'morning' never silently skips
           if (!t || String(t.meta && t.meta.teamId || '').toLowerCase() !== String(targetTid).toLowerCase()) return;
 
-          // Build comprehensive nameMap for precompute
+          // FIX-MB-2: Build nameMap using ONLY this team's roster.
+          // Old code merged ALL _rosterByTeam entries into the nameMap, which
+          // caused managers from OTHER teams (e.g. Night Shift) to be resolved as
+          // Block Managers for the current shift's table.
+          // Fix: restrict nameMap to the target team's roster only.
           const nm = new Map();
           for (const u of (roster || [])) { if (u && u.id) nm.set(String(u.id), u); }
-          for (const [, list] of Object.entries(_rosterByTeam)) {
-            for (const u of (list || [])) { if (u && u.id && !nm.has(u.id)) nm.set(u.id, u); }
-          }
+          // Also include any additional users for the specific targetTid from _rosterByTeam
+          // (in case the roster param doesn't cover all members yet) — but ONLY for targetTid.
+          const targetRoster = _rosterByTeam[targetTid] || _rosterByTeam[String(targetTid).toLowerCase()] || [];
+          for (const u of targetRoster) { if (u && u.id && !nm.has(String(u.id))) nm.set(String(u.id), u); }
 
           _mbxPrecomputeBucketManagers(t, schedBlocks, nm);
 
-          // Also patch table.members with full roster
+          // Also patch table.members with full roster — same shift-window filter as renderTable
+          // FIX-MB-2: Apply the same isScheduledForShift logic here so members added during
+          // sync also respect the shift window. Use a simplified overlap check against
+          // the table's own dutyStart/dutyEnd to stay consistent.
           const nowP = window.UI && UI.mailboxNowParts ? UI.mailboxNowParts() : null;
           const existIds = new Set((t.members || []).map(m => m && String(m.id)));
+          const tDutyStart = _mbxParseHM(t.meta && t.meta.dutyStart || '00:00');
+          const tDutyEnd   = _mbxParseHM(t.meta && t.meta.dutyEnd   || '00:00');
+          const tOvernight = tDutyEnd <= tDutyStart;
+          // Compute shiftDow for this table
+          const tShiftKey   = String(t.meta && t.meta.shiftKey || '');
+          const tShiftDate  = (tShiftKey.split('|')[1] || '').split('T')[0];
+          let   tShiftDow   = -1;
+          try {
+            const [ty, tmo, td] = tShiftDate.split('-').map(Number);
+            const utc = Date.UTC(ty, tmo - 1, td, 0, 0, 0) - 8 * 3600 * 1000;
+            tShiftDow = new Date(utc + 8 * 3600 * 1000).getUTCDay();
+          } catch (_) { tShiftDow = new Date().getDay(); }
+
+          // Helper: check if a user has any block in this table's shift window
+          const hasBlockInShift = (uid) => {
+            if (!window.Store || !Store.getUserDayBlocks) return true;
+            const daysToCheck = tOvernight ? [tShiftDow] : [tShiftDow, (tShiftDow + 1) % 7];
+            let winS = tDutyStart;
+            let winE = tOvernight ? tDutyStart + ((1440 - tDutyStart) + tDutyEnd) : tDutyEnd;
+            if (winE <= winS) winE += 1440;
+            for (const di of daysToCheck) {
+              const blocks = Store.getUserDayBlocks(uid, di) || [];
+              for (const b of blocks) {
+                let bs = _mbxParseHM(b.start);
+                let be = _mbxParseHM(b.end);
+                if (!Number.isFinite(bs) || !Number.isFinite(be)) continue;
+                if (be <= bs) be += 1440;
+                const offsets = tOvernight ? [0, 1440] : [0];
+                for (const off of offsets) {
+                  const s = bs + off, e = be + off;
+                  if (!tOvernight && di === (tShiftDow + 1) % 7) {
+                    if (s < (winE + 1440) && e > (winS + 1440)) return true;
+                  } else {
+                    if (s < winE && e > winS) return true;
+                  }
+                }
+              }
+            }
+            return false;
+          };
+
           for (const tm of (roster || [])) {
             if (!tm || !tm.id || existIds.has(String(tm.id))) continue;
+            // FIX-MB-2: Only add member if they have blocks in this shift window
+            if (!hasBlockInShift(String(tm.id))) continue;
             t.members = t.members || [];
             t.members.push({
               id: String(tm.id), name: String(tm.name || tm.id),
@@ -1168,7 +1217,7 @@ function _mbxReadJwt(){
     // SCHEMA VERSION GUARD: if cached table is from an older schema version, discard it.
     // This auto-clears stale localStorage entries after any deploy that changes
     // bucketManagers computation logic — no manual cache flush needed by users.
-    const CURRENT_SCHEMA_VER = 4;
+    const CURRENT_SCHEMA_VER = 3;
     if(table && (!table.meta || (table.meta.schemaVer||0) < CURRENT_SCHEMA_VER)){
       table = null; // force rebuild with new logic
     }
@@ -1211,6 +1260,48 @@ function _mbxReadJwt(){
       for(const u of fromStore)  if(u.id) memberMap.set(u.id, u);
 
       const members = [...memberMap.values()]
+        .filter(u => {
+          // FIX-MB-1: Apply shift-window filter at table-creation time.
+          // Only include members who have at least one schedule block in this
+          // shift's duty window. If schedule data isn't ready yet, include all
+          // (safe fallback — renderTable re-filters once data arrives).
+          const _schedReady = !!(team.id && _scheduleReady && _scheduleReady[team.id]);
+          if (!_schedReady) return true; // schedule data not loaded — keep all for now
+          const Store2 = window.Store;
+          if (!Store2 || !Store2.getUserDayBlocks) return true;
+
+          const newDutyStart   = _mbxParseHM(team.dutyStart || '00:00');
+          const newDutyEnd     = _mbxParseHM(team.dutyEnd   || '00:00');
+          const newIsOvernight = newDutyEnd <= newDutyStart;
+          let   newShiftDow    = -1;
+          try {
+            const [nsy, nsmo, nsd] = (shiftKey.split('|')[1] || '').split('T')[0].split('-').map(Number);
+            const utc = Date.UTC(nsy, nsmo - 1, nsd, 0, 0, 0) - 8 * 3600 * 1000;
+            newShiftDow = new Date(utc + 8 * 3600 * 1000).getUTCDay();
+          } catch (_) { newShiftDow = new Date().getDay(); }
+
+          const newWinS = newDutyStart;
+          const newWinE = newIsOvernight
+            ? newDutyStart + ((1440 - newDutyStart) + newDutyEnd)
+            : newDutyEnd;
+          const daysToCheck = newIsOvernight ? [newShiftDow] : [newShiftDow, (newShiftDow + 1) % 7];
+
+          for (const di of daysToCheck) {
+            const blocks = Store2.getUserDayBlocks(u.id, di) || [];
+            for (const b of blocks) {
+              let bs = _mbxParseHM(b.start);
+              let be = _mbxParseHM(b.end);
+              if (!Number.isFinite(bs) || !Number.isFinite(be)) continue;
+              if (be <= bs) be += 1440;
+              const offsets = newIsOvernight ? [0, 1440] : [0];
+              for (const off of offsets) {
+                const s = bs + off, e = be + off;
+                if (s < newWinE && e > newWinS) return true;
+              }
+            }
+          }
+          return false;
+        })
         .sort((a,b)=>{
           const ak=_mbxMemberSortKey(a), bk=_mbxMemberSortKey(b);
           if(ak.w!==bk.w) return ak.w-bk.w;
@@ -1219,7 +1310,7 @@ function _mbxReadJwt(){
 
       table = {
         meta: {
-          schemaVer: 4,   // SCHEMA VERSION: bump this whenever bucketManagers logic changes.
+          schemaVer: 3,   // SCHEMA VERSION: bump this whenever bucketManagers logic changes.
           shiftKey,
           teamId: team.id,
           teamLabel: team.label || team.id,
@@ -2477,52 +2568,143 @@ function _mbxReadJwt(){
     const seenIds = new Set();
     const members = [];
 
-    // 1. Start with what's already in the table
+    // ─────────────────────────────────────────────────────────────────────────
+    // FIX-MB-1: SHIFT-ONLY MEMBER FILTER
+    // Previously: ALL members of the team were shown regardless of whether they
+    // were scheduled for the active shift window. This caused mixed shifts
+    // (e.g. Mid Shift members appearing in the Morning Shift table).
+    //
+    // Fix: A member is eligible for THIS table only if:
+    //   (a) They have at least one schedule block that overlaps the shift's
+    //       duty window [dutyStart, dutyEnd] on the shift's calendar day (shiftDow),
+    //       OR they have any assignment in this shift's table (persisted cases),
+    //       OR they are the viewing user (always show self).
+    //   (b) If schedule data hasn't loaded yet (_scheduleReady is false), show
+    //       ALL team members as a safe fallback (same as before) to avoid
+    //       an empty table during the first load.
+    // ─────────────────────────────────────────────────────────────────────────
+    const shiftKey    = String(table.meta && table.meta.shiftKey || '');
+    const dutyStart   = String(table.meta && table.meta.dutyStart || '00:00');
+    const dutyEnd     = String(table.meta && table.meta.dutyEnd   || '00:00');
+    const shiftDateP  = (shiftKey.split('|')[1] || '').split('T')[0];
+    let   shiftDow    = -1;
+    try {
+      const [sy, smo, sd] = shiftDateP.split('-').map(Number);
+      const utcTs = Date.UTC(sy, smo - 1, sd, 0, 0, 0) - 8 * 3600 * 1000;
+      shiftDow = new Date(utcTs + 8 * 3600 * 1000).getUTCDay();
+    } catch (_) {
+      shiftDow = (UI && UI.manilaNowDate ? new Date(UI.manilaNowDate()).getDay() : new Date().getDay());
+    }
+
+    const shiftStartMin  = _mbxParseHM(dutyStart);
+    const shiftEndMin    = _mbxParseHM(dutyEnd);
+    const isOvernightShift = shiftEndMin <= shiftStartMin;
+    // Schedule data is ready when _scheduleReady[teamId] is truthy
+    const schedReady = !!(teamId && _scheduleReady && _scheduleReady[teamId]);
+
+    // Build set of assignee IDs present in THIS table's assignments (always included)
+    const assigneeIds = new Set(
+      (table.assignments || []).map(a => a && String(a.assigneeId || '').trim()).filter(Boolean)
+    );
+    // Current viewer's ID (always included)
+    const viewerId = String((window.Auth && window.Auth.getUser ? window.Auth.getUser() : {}).id || '').trim();
+
+    /**
+     * isScheduledForShift(uid) — returns true if the user has at least one
+     * schedule block that falls within (overlaps) the current shift's duty window.
+     *
+     * For a normal day shift (e.g. 06:00–14:00, shiftDow=1):
+     *   Block must be on dayIndex=1 and overlap [360, 840].
+     *
+     * For an overnight shift (e.g. 22:00–06:00, shiftDow=1 = shift started Mon):
+     *   Pre-midnight blocks on dayIndex=1 that overlap [1320, 1440),
+     *   or post-midnight blocks on dayIndex=1 that overlap [0, 360) (stored with
+     *   raw times like "02:00-06:00" on the same Monday tab).
+     *
+     * Returns true if ANY block overlaps the shift window.
+     * If schedule data is not ready yet, returns true (safe fallback = show all).
+     */
+    function isScheduledForShift(uid) {
+      if (!schedReady) return true;          // data not loaded → show all (safe fallback)
+      if (!uid) return false;
+
+      const Store = window.Store;
+      if (!Store || !Store.getUserDayBlocks) return true;  // can't check → show
+
+      // Collect blocks for this user on the shift's calendar day.
+      // For overnight shifts we read the same shiftDow (both pre and post-midnight
+      // blocks are stored on the shift-start day tab).
+      const daysToCheck = isOvernightShift
+        ? [shiftDow]                               // all overnight blocks on shift-start day
+        : [shiftDow, (shiftDow + 1) % 7];         // day shift: also check next-day for blocks past midnight
+
+      for (const di of daysToCheck) {
+        const blocks = Store.getUserDayBlocks(uid, di) || [];
+        for (const b of blocks) {
+          let bs = _mbxParseHM(b.start);
+          let be = _mbxParseHM(b.end);
+          if (!Number.isFinite(bs) || !Number.isFinite(be)) continue;
+          if (be <= bs) be += 1440; // normalize wrapping blocks
+
+          // For overnight shift, apply offset logic to match _mbxPrecomputeBucketManagers:
+          // offset=0    → pre-midnight portion  (e.g. 22:00 = 1320 min)
+          // offset=1440 → post-midnight portion  (e.g. 02:00 → 1440+120 = 1560 min)
+          const offsets = isOvernightShift ? [0, 1440] : [0];
+          for (const off of offsets) {
+            const s = bs + off;
+            const e = be + off;
+            // Build shift window bounds (normalized to >= shiftStartMin)
+            let winS = shiftStartMin;
+            let winE = isOvernightShift ? shiftStartMin + ((1440 - shiftStartMin) + shiftEndMin) : shiftEndMin;
+            if (winE <= winS) winE += 1440;
+            // If this day is the "next-day" slot for a non-overnight shift, shift the window
+            if (!isOvernightShift && di === (shiftDow + 1) % 7) { winS += 1440; winE += 1440; }
+            // Overlap check: [s,e) overlaps [winS,winE) if s < winE && e > winS
+            if (s < winE && e > winS) return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    // 1. Start with what's already in the table — filter to shift-scheduled members only
     for (const m of (table.members || [])) {
       if (!m || !m.id || seenIds.has(String(m.id))) continue;
-      seenIds.add(String(m.id));
+      const uid = String(m.id);
+      // Always keep: members who have assignments in this table or are the current viewer
+      const alwaysKeep = assigneeIds.has(uid) || uid === viewerId;
+      if (!alwaysKeep && !isScheduledForShift(uid)) continue;
+      seenIds.add(uid);
       members.push(m);
     }
 
-    // 2. Supplement from server-synced roster cache
+    // 2. Supplement from server-synced roster cache — filter to shift-scheduled members
     if (teamId && _rosterByTeam && _rosterByTeam[teamId]) {
       const nowP = UI && UI.mailboxNowParts ? UI.mailboxNowParts()
                  : (UI && UI.manilaNow ? UI.manilaNow() : null);
       for (const tm of _rosterByTeam[teamId]) {
         if (!tm || !tm.id || seenIds.has(String(tm.id))) continue;
-
-        // FILTER: Only show members who have an active duty label for the current shift.
-        // This ensures that even if the roster contains mixed shifts (e.g. during a handover),
-        // only the on-duty shift members are displayed in the Mailbox page.
-        const dl = _mbxDutyLabelForUser({ id: String(tm.id), teamId }, nowP);
-        const hasDuty = dl && dl !== '—' && dl !== 'No active duty';
-        if (!hasDuty) continue;
-
-        seenIds.add(String(tm.id));
+        const uid = String(tm.id);
+        const alwaysKeep = assigneeIds.has(uid) || uid === viewerId;
+        if (!alwaysKeep && !isScheduledForShift(uid)) continue;
+        seenIds.add(uid);
         members.push({
-          id:        String(tm.id),
+          id:        uid,
           name:      String(tm.name     || tm.id),
           username:  String(tm.username || tm.name || tm.id),
           role:      String(tm.role     || 'MEMBER'),
           roleLabel: _mbxRoleLabel(tm.role || ''),
-          dutyLabel: dl
+          dutyLabel: _mbxDutyLabelForUser({ id: uid, teamId }, nowP)
         });
       }
     }
 
     // 2b. Supplement from existing assignment owners (persisted from prior sessions)
-    // ONLY include if they are still on duty
+    // These are always included regardless of schedule since they have active cases.
     for (const a of (table.assignments || [])) {
       if (!a) continue;
       const aid = String(a.assigneeId || '').trim();
       if (!aid || seenIds.has(aid)) continue;
-
-      const nowP = UI && UI.mailboxNowParts ? UI.mailboxNowParts()
-                 : (UI && UI.manilaNow ? UI.manilaNow() : null);
-      const dl = _mbxDutyLabelForUser({ id: aid, teamId }, nowP);
-      const hasDuty = dl && dl !== '—' && dl !== 'No active duty';
-      if (!hasDuty) continue;
-
       seenIds.add(aid);
       members.push({
         id: aid,
@@ -2530,11 +2712,12 @@ function _mbxReadJwt(){
         username: String(a.assigneeName || aid).trim(),
         role: 'MEMBER',
         roleLabel: 'MEMBER',
-        dutyLabel: dl
+        dutyLabel: '—'
       });
     }
 
     // 3. Also supplement from Store.getUsers() for privileged users who have full roster
+    // — filtered to members scheduled for this shift
     if (teamId && window.Store && Store.getUsers) {
       const nowP = UI && UI.mailboxNowParts ? UI.mailboxNowParts()
                  : (UI && UI.manilaNow ? UI.manilaNow() : null);
@@ -2543,19 +2726,17 @@ function _mbxReadJwt(){
         if (String(u.teamId || '') !== teamId) continue;
         if (u.status && u.status !== 'active') continue;
         if (seenIds.has(String(u.id))) continue;
-
-        const dl = _mbxDutyLabelForUser(u, nowP);
-        const hasDuty = dl && dl !== '—' && dl !== 'No active duty';
-        if (!hasDuty) continue;
-
-        seenIds.add(String(u.id));
+        const uid = String(u.id);
+        const alwaysKeep = assigneeIds.has(uid) || uid === viewerId;
+        if (!alwaysKeep && !isScheduledForShift(uid)) continue;
+        seenIds.add(uid);
         members.push({
-          id:        String(u.id),
+          id:        uid,
           name:      String(u.name     || u.username || u.id),
           username:  String(u.username || u.name     || u.id),
           role:      String(u.role     || 'MEMBER'),
           roleLabel: _mbxRoleLabel(u.role || ''),
-          dutyLabel: dl
+          dutyLabel: _mbxDutyLabelForUser(u, nowP)
         });
       }
     }
@@ -2654,23 +2835,22 @@ function _mbxReadJwt(){
     const mgrHeaders = bucketManagers.map(({ bucket: b, name, blockTimes }) => {
       const isAct    = activeBucketId && b.id === activeBucketId;
       const cls      = isAct ? 'active-head-col' : '';
-      
-      // FIX: Only display the manager if they are the currently scheduled manager for the bucket.
-      // If it's the active bucket, we strictly show only the manager on duty.
-      // For future buckets, we show the scheduled manager for that block.
       const hasMgr   = name && name !== '—';
-      
-      // DISPLAY LOGIC: Only show the manager name in the column if it's the CURRENT scheduled manager.
-      // Non-active buckets still show their scheduled manager for planning.
       const display  = hasMgr ? name : (isSyncing ? 'Syncing…' : '—');
-      
       // BUG FIX: 'active' animation effect must ONLY apply to the currently live bucket.
+      // hasMgr alone just means someone is assigned — not that they're on duty right now.
+      // Use (isAct && hasMgr) so only the live time column gets the shimmer/glow effect.
       const labelCls = (isAct && hasMgr) ? 'mbx-mgr-label active'
                      : hasMgr            ? 'mbx-mgr-label assigned'
                      : isSyncing         ? 'mbx-mgr-label syncing'
                      :                     'mbx-mgr-label empty';
       const timeCls  = isAct ? 'mbx-th-time is-active' : 'mbx-th-time';
 
+      // FIX-COLTIME: Show the manager's ACTUAL scheduled block time window in the
+      // column header, not the fixed equal-thirds bucket split.
+      // e.g. Jayson has MM block 22:00-01:00 → header shows "10:00 PM - 1:00 AM"
+      //      instead of the bucket boundary "10:00 PM - 12:40 AM".
+      // Falls back to bucket label when block times haven't been precomputed yet.
       let timeLabel = _mbxBucketLabel(b);
       if (hasMgr && blockTimes && blockTimes.blockStart && blockTimes.blockEnd) {
         try {
@@ -2679,7 +2859,7 @@ function _mbxReadJwt(){
           if (Number.isFinite(bs) && Number.isFinite(be)) {
             timeLabel = _mbxFmt12(bs) + ' - ' + _mbxFmt12(be);
           }
-        } catch (_) { }
+        } catch (_) { /* keep bucket label on any parse error */ }
       }
 
       return `<th class="${cls}" style="min-width:160px; text-align:center;">
