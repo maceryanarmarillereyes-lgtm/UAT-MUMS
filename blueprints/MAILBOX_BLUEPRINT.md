@@ -30,3 +30,7 @@
 
 ## Change log
 - **2026-04-20** — Initial mailbox blueprint created.
+- **2026-05-02** — Stabilized roster rendering during realtime/periodic resync:
+  - Kept previous `_scheduleReady` state during soft resync (`_mbxForceResync`) to prevent transient empty-state flicker.
+  - Added `_scheduleRefreshing` in-flight marker so UI can show syncing state without dropping already-cached members.
+  - Updated table sync-status gating to prefer cached roster visibility over temporary "no active roster members" fallback.
