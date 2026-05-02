@@ -249,6 +249,11 @@
   const QUEUE_KEY = 'mums_sync_queue_v1';
   let queueCache = null;
   let flushing = false;
+  // [FIX-429] Global push-block timestamp — set when any push gets 429.
+  // Both cloudFetch (pre-check) and cloudPush (guard) respect this flag.
+  // Prevents ALL outbound push calls until the Retry-After window expires.
+  // Reset automatically when the timestamp passes (checked in cloudFetch guard).
+  let _pushBlockedUntil = 0;
 
   function loadQueue(){
     try {
@@ -501,6 +506,12 @@ function applyRemoteKey(key, value){
   // Cloud sync (Supabase)
   // ----------------------
   async function cloudFetch(url, opts){
+    // [FIX-429-1] Respect global push block BEFORE making the request.
+    // If a previous push got 429, all cloudFetch calls for push endpoints are
+    // suppressed until the Retry-After window expires.
+    if (_pushBlockedUntil && Date.now() < _pushBlockedUntil && opts && opts.method === 'POST' && String(url||'').includes('/push')) {
+      return { ok: false, status: 429, json: null, text: '', retryAfter: Math.ceil((_pushBlockedUntil - Date.now()) / 1000) };
+    }
     const headers = Object.assign({}, (opts && opts.headers) || {});
     const token = window.CloudAuth && CloudAuth.accessToken ? CloudAuth.accessToken() : '';
     if (token) headers['Authorization'] = 'Bearer ' + token;
@@ -509,7 +520,19 @@ function applyRemoteKey(key, value){
     const text = await res.text();
     let json = null;
     try { json = text ? JSON.parse(text) : null; } catch (_) {}
-    return { ok: res.ok, status: res.status, json, text };
+    // [FIX-429-2] Read Retry-After header from actual HTTP response.
+    // Previously this was never read — out.retryAfter was always undefined
+    // so flushQueue always fell back to hardcoded 5s minimum.
+    let retryAfter = 0;
+    if (res.status === 429) {
+      const rawRA = res.headers.get('Retry-After') || res.headers.get('retry-after') || '';
+      retryAfter = rawRA ? Math.max(5, Math.min(300, Number(rawRA) || 30)) : 30;
+      // [FIX-429-3] Set global push block — prevents ALL schedulePush/cloudPush calls
+      // until the window expires, not just queued items.
+      _pushBlockedUntil = Date.now() + (retryAfter * 1000);
+      try { console.warn('[MUMS Sync] 429 rate limited — push blocked for ' + retryAfter + 's until ' + new Date(_pushBlockedUntil).toLocaleTimeString()); } catch(_) {}
+    }
+    return { ok: res.ok, status: res.status, json, text, retryAfter };
   }
 
   async function pullOnce(){
@@ -885,11 +908,24 @@ function applyRemoteKey(key, value){
   async function cloudPush(key, value, removedIds, op){
     try {
       if(!canPushKey(key)) return;
+      // [FIX-429-4] Respect global push block before firing.
+      if (_pushBlockedUntil && Date.now() < _pushBlockedUntil) {
+        try { enqueue(key, value, removedIds, op, 'rate_limited_deferred', 'push_blocked'); } catch(_){}
+        return;
+      }
       const body = { key, value, removedIds: removedIds || [], op: op || 'set', clientId, ts: Date.now() };
       const out = await cloudFetch('/api/sync/push', {
         method: 'POST',
         body: JSON.stringify(body)
       });
+
+      // [FIX-429-5] 429 Rate Limited — enqueue for retry, stop pushing immediately.
+      // Previously there was NO 429 handling in cloudPush — request storm continued.
+      if (!out.ok && out.status === 429) {
+        try { enqueue(key, value, removedIds, op, 'push_429', 'http_429'); } catch(_){}
+        // _pushBlockedUntil already set by cloudFetch above
+        return;
+      }
 
       // RBAC mismatch hardening:
       // If the server forbids this key, permanently suppress further attempts
