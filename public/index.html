@@ -1,31 +1,26 @@
 <!doctype html>
 <html lang="en">
 <head>
-<script>
-/* MUMS Prism Loader — Anti-bleed guard
- * Must be the FIRST script in <head> — blocks render before any paint.
- * Redirects to loader-prism.html if boot sequence wasn't completed.
- * 5-minute session window allows normal refresh without re-loading.
- */
-!function(){
-  var boot  = sessionStorage.getItem('mums_boot_complete') === '1';
-  var pin   = sessionStorage.getItem('mums_pin_ok')       === '1';
-  var ts    = Number(sessionStorage.getItem('mums_boot_ts') || '0');
-  var fresh = (Date.now() - ts) < 300000; // 5 minutes
-  if (!boot || !pin || !fresh) {
-    // Hide page immediately — prevent FOUC on Cloudflare edge cache
-    document.documentElement.style.visibility = 'hidden';
-    // Stash intended destination so loader can pass it through if needed
+  <!-- ★ PRISM GUARD: FIRST tag in <head> — runs before ALL assets.
+       Dashboard is NEVER accessible without completing Login → PIN → Loader flow.
+       location.replace() prevents back-button bypass. -->
+  <script>
+  (function prismDashboardGuard(){
     try {
-      var dest = String(window.location.href || '');
-      if (!dest.includes('loader-prism') && !dest.includes('login')) {
-        sessionStorage.setItem('mums_redirect_after_login', dest);
+      var pin   = sessionStorage.getItem('mums_pin_ok') === '1';
+      var boot  = sessionStorage.getItem('mums_boot_complete') === '1';
+      var bootTs = Number(sessionStorage.getItem('mums_boot_ts') || '0');
+      var fresh = (Date.now() - bootTs) < 600000; // 10 min session
+      if (!pin || !boot || !fresh) {
+        document.documentElement.style.display = 'none';
+        location.replace('./login.html');
       }
-    } catch(_) {}
-    location.replace('/loader-prism.html');
-  }
-}();
-</script>
+    } catch(e) {
+      document.documentElement.style.display = 'none';
+      location.replace('./login.html');
+    }
+  })();
+  </script>
   <!-- PERF-FIX-03a: Preconnect (once each, no duplicates) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

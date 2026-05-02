@@ -7,12 +7,13 @@
   <link rel="stylesheet" href="./css/styles.css?v=p1-516" />
   <link rel="stylesheet" href="./css/enterprise_ux.css?v=p1-516" />
 
-  <link rel="prefetch" href="/loader-prism.html" as="document">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://supabase.co">
   <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-  <link rel="prefetch" href="./index.html">
+  <!-- ★ PRISM LOADER: Prefetch next pages in flow for zero-latency transitions -->
+  <link rel="prefetch" href="./pin.html">
+  <link rel="prefetch" href="./loader-prism.html">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -572,40 +573,17 @@
       }
 
       try{ _persistSavedDetails(); }catch(e){}
-      try{
-        // PRISM LOADER: Clear stale boot flags, route through loader
-        try { sessionStorage.removeItem('mums_boot_complete'); } catch(_) {}
-        try { sessionStorage.removeItem('mums_boot_ts'); } catch(_) {}
-        try { sessionStorage.removeItem('mums_pin_ok'); } catch(_) {}
-        if(String(window.location.protocol||'') === 'file:'){
-          (function(){
-            try {
-              var dest = sessionStorage.getItem('mums_redirect_after_login');
-              if (dest && dest.length > 1 && !dest.includes('login') && !dest.includes('loader-prism')) {
-                sessionStorage.removeItem('mums_redirect_after_login');
-                window.location.replace(dest);
-                return;
-              }
-            } catch(_) {}
-          })();
-          window.location.replace("./loader-prism.html");
-        }else{
-          (function(){
-            try {
-              var dest = sessionStorage.getItem('mums_redirect_after_login');
-              if (dest && dest.length > 1 && !dest.includes('login') && !dest.includes('loader-prism')) {
-                sessionStorage.removeItem('mums_redirect_after_login');
-                window.location.replace(dest);
-                return;
-              }
-            } catch(_) {}
-          })();
-          window.location.replace("/loader-prism.html");
-        }
-      }catch(_){
-        try { sessionStorage.removeItem('mums_boot_complete'); } catch(_) {}
-        window.location.replace("/loader-prism.html");
-      }
+      // ★ PRISM LOADER: Wipe any stale boot/pin session flags from previous sessions.
+      // This prevents a prior user's completed boot from carrying over to the new login.
+      try {
+        sessionStorage.removeItem('mums_pin_ok');
+        sessionStorage.removeItem('mums_pin_ts');
+        sessionStorage.removeItem('mums_boot_complete');
+        sessionStorage.removeItem('mums_boot_ts');
+        localStorage.removeItem('mums_boot_temp');
+      } catch(_) {}
+      // ★ PRISM LOADER FLOW: Login → PIN (never directly to dashboard or loader)
+      window.location.replace('./pin.html');
     }
 
     async function doMicrosoftLogin(){
