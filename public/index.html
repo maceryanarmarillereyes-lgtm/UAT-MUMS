@@ -1,26 +1,6 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <!-- ★ PRISM GUARD: FIRST tag in <head> — runs before ALL assets.
-       Dashboard is NEVER accessible without completing Login → PIN → Loader flow.
-       location.replace() prevents back-button bypass. -->
-  <script>
-  (function prismDashboardGuard(){
-    try {
-      var pin   = sessionStorage.getItem('mums_pin_ok') === '1';
-      var boot  = sessionStorage.getItem('mums_boot_complete') === '1';
-      var bootTs = Number(sessionStorage.getItem('mums_boot_ts') || '0');
-      var fresh = (Date.now() - bootTs) < 600000; // 10 min session
-      if (!pin || !boot || !fresh) {
-        document.documentElement.style.display = 'none';
-        location.replace('./login.html');
-      }
-    } catch(e) {
-      document.documentElement.style.display = 'none';
-      location.replace('./login.html');
-    }
-  })();
-  </script>
   <!-- PERF-FIX-03a: Preconnect (once each, no duplicates) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -48,7 +28,12 @@
       } catch (_) {}
     })();
   </script>
-  <title>MUMS | MUMS User Management System</title><link rel="stylesheet" href="/css/styles.css?v=p1-664" />
+  <title>MUMS | MUMS User Management System</title>
+  <!-- ── MUMS Boot Loader: hides .app shell until session_hydrated + sync:connected ──
+       Must load SYNCHRONOUSLY before app.js so .app is veiled before first paint.
+       Safe fallback: 14s hard timeout auto-dismisses if any signal never fires. -->
+  <script src="/js/mums-boot-loader.js?v=p1-001"></script>
+  <link rel="stylesheet" href="/css/styles.css?v=p1-664" />
   <link rel="stylesheet" href="/css/mailbox.css?v=p1-664" />
   <link rel="stylesheet" href="/css/enterprise_ux.css?v=p1-664" />
   <link rel="stylesheet" href="/css/widget_enhancements.css?v=p1-664" />

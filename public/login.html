@@ -11,9 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://supabase.co">
   <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-  <!-- ★ PRISM LOADER: Prefetch next pages in flow for zero-latency transitions -->
-  <link rel="prefetch" href="./pin.html">
-  <link rel="prefetch" href="./loader-prism.html">
+  <link rel="prefetch" href="./index.html">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -573,17 +571,45 @@
       }
 
       try{ _persistSavedDetails(); }catch(e){}
-      // ★ PRISM LOADER: Wipe any stale boot/pin session flags from previous sessions.
-      // This prevents a prior user's completed boot from carrying over to the new login.
-      try {
-        sessionStorage.removeItem('mums_pin_ok');
-        sessionStorage.removeItem('mums_pin_ts');
-        sessionStorage.removeItem('mums_boot_complete');
-        sessionStorage.removeItem('mums_boot_ts');
-        localStorage.removeItem('mums_boot_temp');
-      } catch(_) {}
-      // ★ PRISM LOADER FLOW: Login → PIN (never directly to dashboard or loader)
-      window.location.replace('./pin.html');
+      try{
+        if(String(window.location.protocol||'') === 'file:'){
+          (function(){
+            try {
+              var dest = sessionStorage.getItem('mums_redirect_after_login');
+              if (dest && dest.length > 1 && !dest.includes('login')) {
+                sessionStorage.removeItem('mums_redirect_after_login');
+                window.location.replace(dest);
+                return;
+              }
+            } catch(_) {}
+          })();
+          window.location.replace("./index.html#dashboard");
+        }else{
+          (function(){
+            try {
+              var dest = sessionStorage.getItem('mums_redirect_after_login');
+              if (dest && dest.length > 1 && !dest.includes('login')) {
+                sessionStorage.removeItem('mums_redirect_after_login');
+                window.location.replace(dest);
+                return;
+              }
+            } catch(_) {}
+          })();
+          window.location.replace("./dashboard");
+        }
+      }catch(_){
+        (function(){
+            try {
+              var dest = sessionStorage.getItem('mums_redirect_after_login');
+              if (dest && dest.length > 1 && !dest.includes('login')) {
+                sessionStorage.removeItem('mums_redirect_after_login');
+                window.location.replace(dest);
+                return;
+              }
+            } catch(_) {}
+          })();
+          window.location.replace("./index.html#dashboard");
+      }
     }
 
     async function doMicrosoftLogin(){
