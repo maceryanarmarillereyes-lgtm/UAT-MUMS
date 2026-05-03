@@ -1736,6 +1736,10 @@
         }
         return `<span class="mbx-assign-by-name">${esc(name)}</span>`;
       };
+      const isMailboxActionNotif = (n)=>{
+        const t = String((n && n.type) || '').trim();
+        return t === 'MAILBOX_ASSIGN' || t === 'MAILBOX_REASSIGN';
+      };
       const mailboxAssignmentIdFromNotif = (n)=>{
         try{
           const explicit = String((n && n.assignmentId) || '').trim();
@@ -1747,7 +1751,7 @@
       };
       const confirmMailboxAssignmentFromNotif = async (n)=>{
         try{
-          if(!n || String(n.type||'') !== 'MAILBOX_ASSIGN') return { ok:true, skipped:true };
+          if(!n || !isMailboxActionNotif(n)) return { ok:true, skipped:true };
           let shiftKey = String((n && n.shiftKey) || '').trim();
           const assignmentId = mailboxAssignmentIdFromNotif(n);
           // Fallback: resolve shiftKey from Store when notification predates shiftKey field
@@ -1872,7 +1876,7 @@
       let lastBeepedId = null;
       const pendingKeyFor = (n)=>{
         if(!n) return '';
-        if(String(n.type||'') === 'MAILBOX_ASSIGN') return `id:${String(n.id||'')}`;
+        if(isMailboxActionNotif(n)) return `id:${String(n.id||'')}`;
         if(n.snapshotDigest) return `digest:${String(n.snapshotDigest)}`;
         return `id:${String(n.id||'')}`;
       };
@@ -1891,11 +1895,11 @@
         if(!list.length){
           return '<div class="muted">No pending cases.</div>';
         }
-        const allMailbox = list.every(n=>String(n && n.type || '') === 'MAILBOX_ASSIGN');
+        const allMailbox = list.every(n=>isMailboxActionNotif(n));
         if(allMailbox) return renderMailboxAssignTable(list);
         return list.map(n=>{
           try{
-            if(String(n.type||'') === 'MAILBOX_ASSIGN'){
+            if(isMailboxActionNotif(n)){
               return `
                 <div class="notif-item mailbox-assign">
                   <div class="notif-item-head">
@@ -1931,7 +1935,7 @@
               ? `From: ${n.fromName||'Team Lead'} • ${new Date(n.ts||Date.now()).toLocaleString()} • Tasks`
               : isOvertimeAlert
                 ? `From: Attendance System • ${new Date(n.ts||Date.now()).toLocaleString()} • Overtime`
-              : (String(n.type||'')==='MAILBOX_ASSIGN')
+              : (isMailboxActionNotif(n))
                 ? `From: ${n.fromName||'Mailbox Manager'} • ${new Date(n.ts||Date.now()).toLocaleString()} • Mailbox`
                 : `From: ${n.fromName||'Team Lead'} • Week of ${n.weekStartISO||'—'}`;
             return `
@@ -1999,7 +2003,7 @@
           UI.playNotifSound(user.id);
         }
 
-        const allMailbox = deduped.length && deduped.every(n=>String(n.type||'')==='MAILBOX_ASSIGN');
+        const allMailbox = deduped.length && deduped.every(n=>isMailboxActionNotif(n));
         const compactMailboxMode = false;
         const mailboxTableMode = !!allMailbox;
         const headerLabel = allMailbox
@@ -2161,7 +2165,7 @@
         }
 
         // ── Lock / Unlock modal for unacknowledged case assignments ────────────
-        const hasPendingMailbox = deduped.some(n => String(n.type||'') === 'MAILBOX_ASSIGN');
+        const hasPendingMailbox = deduped.some(n => isMailboxActionNotif(n));
         window._schedNotifLocked = hasPendingMailbox;
 
         // Update close button visibility

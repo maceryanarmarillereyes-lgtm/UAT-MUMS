@@ -57,3 +57,6 @@
 - **2026-05-03** — Normalized assignment shiftKey resolution for cross-client consistency:
   - `/api/mailbox/assign` now resolves incoming `shiftKey` to an existing canonical key in `mums_mailbox_tables` using case-insensitive match before write.
   - Prevents split-key writes (`night|...` vs `NIGHT|...`) that caused assigned-user notification/case visibility desync.
+- **2026-05-03** — Extended mailbox notification acknowledgment parity for reassignment:
+  - Notification modal now treats `MAILBOX_REASSIGN` as actionable mailbox assignment (same accept/ack flow as `MAILBOX_ASSIGN`).
+  - Reassigned target users now receive alert + acknowledge action path consistent with normal assignment notifications.
