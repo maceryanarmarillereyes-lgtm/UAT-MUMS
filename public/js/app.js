@@ -5896,7 +5896,6 @@ async function boot(){
     try{ bindNavKeyboard(); }catch(e){}
 
     try{
-      }
       const densSel = document.getElementById('densitySelect');
       if(densSel){
         densSel.value = (localStorage.getItem('mums_density')||'normal');
@@ -6182,7 +6181,6 @@ async function boot(){
     const openThemeBtn = document.getElementById('openThemeBtn');
     if(openThemeBtn){
       openThemeBtn.onclick = ()=>{ try{ __themeEditMode = false; renderThemeGrid(); }catch(_){} };
-    }
     }
 
     const openSidebarBtn = document.getElementById('openSidebarBtn');
