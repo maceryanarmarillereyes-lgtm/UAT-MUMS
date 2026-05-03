@@ -249,6 +249,20 @@ function updateCasesForReassign(list, payload){
   return [nextEntry, ...cleaned];
 }
 
+
+function rebuildCountsFromAssignments(assignments){
+  const out = {};
+  for(const a of (Array.isArray(assignments) ? assignments : [])){
+    if(!a || typeof a !== 'object') continue;
+    const aid = safeString(a.assigneeId, 80);
+    const bid = safeString(a.bucketId, 80);
+    if(!aid || !bid) continue;
+    out[aid] = (out[aid] && typeof out[aid] === 'object') ? out[aid] : {};
+    out[aid][bid] = (Number(out[aid][bid]) || 0) + 1;
+  }
+  return out;
+}
+
 function removeCaseEntry(list, payload){
   const { assigneeId, shiftKey, caseNo } = payload;
   const key = normalizeCaseNo(caseNo);
@@ -413,6 +427,17 @@ module.exports = async (req, res) => {
           next.counts[prevAssigneeId][bucketId] = Math.max(0, oldCount - 1);
           next.counts[newAssigneeId][bucketId] = (Number(next.counts[newAssigneeId][bucketId]) || 0) + 1;
         }
+
+        // Deduplicate stale rows for the same case after reassignment.
+        // Keep the current assignment ID as canonical owner entry.
+        const canonicalCaseKey = normalizeCaseNo(current.caseNo);
+        next.assignments = (Array.isArray(next.assignments) ? next.assignments : []).filter((x)=>{
+          if(!x || typeof x !== 'object') return false;
+          const sameCase = normalizeCaseNo(x.caseNo) === canonicalCaseKey;
+          if(!sameCase) return true;
+          return String(x.id || '') === String(current.id || '');
+        });
+        next.counts = rebuildCountsFromAssignments(next.assignments);
 
         operationMeta = {
           action,

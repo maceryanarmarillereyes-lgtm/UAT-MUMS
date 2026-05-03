@@ -48,3 +48,6 @@
 - **2026-05-03** — Fixed reassigned-case stale ownership record cleanup:
   - Reassign now rewrites `ums_cases` for the case+shift into a single canonical entry owned by the new assignee.
   - Prevents old owner from retaining acknowledged/reassigned case rows in Mailbox matrix-linked My Case record lists.
+- **2026-05-03** — Hardened mailbox table reassignment dedupe at source:
+  - Reassign action now keeps exactly one canonical assignment row per case number in `table.assignments` (canonical = current assignment id).
+  - Rebuilds `table.counts` from canonical assignments to prevent matrix ghost counts/cells after reassignment + acknowledgment.
