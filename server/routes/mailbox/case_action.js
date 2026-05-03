@@ -217,18 +217,50 @@ function normalizeCaseNo(v){
 function updateCasesForReassign(list, payload){
   const { oldAssigneeId, newAssigneeId, newAssigneeName, shiftKey, caseNo } = payload;
   const key = normalizeCaseNo(caseNo);
-  return (Array.isArray(list) ? list : []).map((c)=>{
-    if(!c || typeof c !== 'object') return c;
-    const sameAssignee = String(c.assigneeId || '') === String(oldAssigneeId || '');
+  const source = Array.isArray(list) ? list : [];
+
+  let canonical = null;
+  for(const c of source){
+    if(!c || typeof c !== 'object') continue;
     const sameShift = String(c.shiftKey || '') === String(shiftKey || '');
     const sameCaseNo = normalizeCaseNo(c.caseNo || c.title || '') === key;
-    if(!sameAssignee || !sameShift || !sameCaseNo) return c;
-    return Object.assign({}, c, {
-      assigneeId: newAssigneeId,
-      assigneeName: newAssigneeName,
-      status: 'Assigned'
-    });
+    if(!sameShift || !sameCaseNo) continue;
+    const cAssignee = String(c.assigneeId || '');
+    if(cAssignee === String(oldAssigneeId || '') || cAssignee === String(newAssigneeId || '')){
+      canonical = Object.assign({}, c, canonical || {});
+    }
+  }
+
+  const cleaned = source.filter((c)=>{
+    if(!c || typeof c !== 'object') return false;
+    const sameShift = String(c.shiftKey || '') === String(shiftKey || '');
+    const sameCaseNo = normalizeCaseNo(c.caseNo || c.title || '') === key;
+    return !(sameShift && sameCaseNo);
   });
+
+  const nextEntry = Object.assign({}, canonical || {}, {
+    caseNo: safeString(caseNo, 120),
+    shiftKey: safeString(shiftKey, 120),
+    assigneeId: newAssigneeId,
+    assigneeName: newAssigneeName,
+    status: 'Assigned'
+  });
+
+  return [nextEntry, ...cleaned];
+}
+
+
+function rebuildCountsFromAssignments(assignments){
+  const out = {};
+  for(const a of (Array.isArray(assignments) ? assignments : [])){
+    if(!a || typeof a !== 'object') continue;
+    const aid = safeString(a.assigneeId, 80);
+    const bid = safeString(a.bucketId, 80);
+    if(!aid || !bid) continue;
+    out[aid] = (out[aid] && typeof out[aid] === 'object') ? out[aid] : {};
+    out[aid][bid] = (Number(out[aid][bid]) || 0) + 1;
+  }
+  return out;
 }
 
 function removeCaseEntry(list, payload){
@@ -395,6 +427,17 @@ module.exports = async (req, res) => {
           next.counts[prevAssigneeId][bucketId] = Math.max(0, oldCount - 1);
           next.counts[newAssigneeId][bucketId] = (Number(next.counts[newAssigneeId][bucketId]) || 0) + 1;
         }
+
+        // Deduplicate stale rows for the same case after reassignment.
+        // Keep the current assignment ID as canonical owner entry.
+        const canonicalCaseKey = normalizeCaseNo(current.caseNo);
+        next.assignments = (Array.isArray(next.assignments) ? next.assignments : []).filter((x)=>{
+          if(!x || typeof x !== 'object') return false;
+          const sameCase = normalizeCaseNo(x.caseNo) === canonicalCaseKey;
+          if(!sameCase) return true;
+          return String(x.id || '') === String(current.id || '');
+        });
+        next.counts = rebuildCountsFromAssignments(next.assignments);
 
         operationMeta = {
           action,
