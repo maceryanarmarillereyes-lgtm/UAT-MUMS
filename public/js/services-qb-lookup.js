@@ -1123,9 +1123,9 @@
       }
     },
     refreshAllLinkedColumns: async function (current, gridEl) {
-      if (localStorage.getItem('mums_qb_autosync') !== '1') {
-        return 0;
-      }
+      // NOTE: mums_qb_autosync guard REMOVED — this function is called exclusively
+      // from the explicit Update button (qbUpdateBtn). It must never be gated by
+      // an auto-sync flag. Auto-sync scheduling lives in autofillLinkedColumns only.
 
       const sheet = current && current.sheet ? current.sheet : null;
       const rows = current && Array.isArray(current.rows) ? current.rows : [];
@@ -1148,6 +1148,19 @@
           rowsWithCase.map(r => String(r.data[caseCol.key] || '').trim()).filter(Boolean)
         )];
         if (!caseNumbers.length) return 0;
+
+        // BUG1-FIX: Clear stale _cache for all case numbers being refreshed.
+        // Without this, autofillLinkedColumns (called during render() after Update)
+        // could repaint cells with old cached QB data instead of the fresh values
+        // written by this function into row.data.
+        caseNumbers.forEach(function(cn) {
+          var nk = normalizeCaseKey(cn);
+          if (nk) { delete _cache[nk]; delete _notFound[nk]; }
+        });
+        // Clear per-row paint state so autofillLinkedColumns treats all rows as unseen
+        // and will re-read from row.data (which we update below) rather than _cache.
+        _rowCaseSeen = {};
+        _reportIdx   = null;
 
         const fieldIds = [3];
         linkedCols.forEach(col => {

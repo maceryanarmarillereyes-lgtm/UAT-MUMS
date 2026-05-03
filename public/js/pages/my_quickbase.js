@@ -4382,6 +4382,15 @@
       // freshMap from scratch so deletions are reflected immediately.
       var _dbTagRefreshPending = false;
       async function _refreshServicesTagsFromDB() {
+        // BUG2-FIX: Wait for MUMS_ENV to be populated before attempting DB access.
+        // _initEnv() reads window.MUMS_ENV (set by /api/env fetch in env_runtime.js).
+        // If this function runs before that fetch completes (e.g. on initial stamp
+        // before QB table renders), _initEnv() returns false and exits early — badges
+        // never appear until the next DOM mutation triggers a retry. Awaiting
+        // __MUMS_ENV_READY ensures _sbUrl/_sbKey are available on the first run.
+        if (window.__MUMS_ENV_READY) {
+          try { await window.__MUMS_ENV_READY; } catch(_) {}
+        }
         if (!_initEnv()) return;
         if (_dbTagRefreshPending) return;
         _dbTagRefreshPending = true;
