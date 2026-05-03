@@ -64,3 +64,7 @@ This layer is the platform backbone: session lifecycle, user hydration, local st
 - **2026-04-30** — Realtime local-write debounce tuning for Services/QuickBase high-volume keys.
   - **Edit — `public/js/freemium_guard.js`:** `wrapRealtime()` now sets adaptive debounce delay before write push: default `800ms`, but `5000ms` for keys matching `mums_*` with `services` or `qb` segments to reduce burst pushes under bulk update flows.
   - **Contract:** Realtime channel/topic names unchanged; only local write scheduling delay adjusted.
+- **2026-05-03** — Boot loader realtime gate hardening for landing-page release.
+  - **Edit — `public/js/mums-boot-loader.js`:** Changed readiness contract from `session + (realtime|polling)` to `session + realtime only`, so UAT loader stays active until true realtime connection state is `Connected`.
+  - **Behavior detail:** Polling mode now shows explicit waiting state (`Waiting Realtime`) and no longer unlocks step-4 completion or loader dismissal.
+  - **Safety detail:** Previous hard auto-dismiss timeout was converted to watchdog logging/status refresh only; it no longer bypasses the realtime gate.
