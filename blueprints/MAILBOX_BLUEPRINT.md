@@ -42,3 +42,6 @@
   - Added per-team forced-resync throttle window to collapse rapid repeated triggers.
   - Preserved server backoff cooldown during forced resync instead of clearing it.
   - Ensured in-flight sync requests are never re-triggered by realtime/state event bursts.
+- **2026-05-03** — Enabled on-duty Mailbox Manager self-assignment parity in Case Action reassignment:
+  - Reassignment target list now merges table members + team roster cache and includes current actor as fallback candidate.
+  - Preserved owner exclusion while allowing manager to reassign an existing case to themselves when on-duty.
