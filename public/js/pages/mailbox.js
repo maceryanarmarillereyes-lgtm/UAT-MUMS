@@ -2299,6 +2299,126 @@ function _mbxReadJwt(){
       .mbx-count-badge.cf-blue   { background: rgba(0,115,234,.15)  !important; color: #60a5fa !important; border: 1px solid rgba(0,115,234,.32) !important; }
       .mbx-count-badge.cf-red    { background: rgba(239,68,68,.15)  !important; color: #f87171 !important; border: 1px solid rgba(239,68,68,.32) !important; }
 
+
+      /* ── NOTIFICATION BELL ─────────────────────────────────────────────────── */
+      .mbx-bell-wrap { position:relative; display:inline-flex; align-items:center; }
+      .mbx-bell-btn {
+        background: rgba(255,255,255,.05);
+        border: 1px solid rgba(255,255,255,.10);
+        border-radius: 8px;
+        color: #94a3b8;
+        padding: 7px 11px;
+        font-size: 16px;
+        cursor: pointer;
+        display: inline-flex; align-items: center; gap: 5px;
+        transition: all .18s; font-family: inherit;
+        position: relative;
+      }
+      .mbx-bell-btn:hover { background:rgba(255,255,255,.10); color:#f8fafc; }
+      .mbx-bell-btn.has-notifs { border-color:rgba(56,189,248,.35); color:#38bdf8; }
+      .mbx-bell-badge {
+        position:absolute; top:-5px; right:-5px;
+        min-width:17px; height:17px;
+        background:linear-gradient(135deg,#ef4444,#dc2626);
+        color:#fff; font-size:9px; font-weight:900;
+        border-radius:999px; display:flex; align-items:center; justify-content:center;
+        padding:0 4px; line-height:1;
+        box-shadow:0 0 0 2px rgba(10,21,32,1);
+        pointer-events:none;
+      }
+      .mbx-bell-badge.hidden { display:none; }
+
+      .mbx-notif-panel {
+        position:fixed; top:0; right:0; bottom:0;
+        width:360px; max-width:95vw;
+        background:linear-gradient(180deg,rgba(10,21,32,.99),rgba(5,12,24,.99));
+        border-left:1px solid rgba(56,189,248,.18);
+        z-index:9100;
+        display:flex; flex-direction:column;
+        box-shadow:-8px 0 32px rgba(0,0,0,.5);
+        transform:translateX(100%);
+        transition:transform .28s cubic-bezier(.22,.8,.32,1);
+      }
+      .mbx-notif-panel.open { transform:translateX(0); }
+      .mbx-notif-panel-head {
+        padding:20px 20px 14px;
+        border-bottom:1px solid rgba(255,255,255,.06);
+        display:flex; align-items:center; justify-content:space-between;
+        flex-shrink:0;
+      }
+      .mbx-notif-panel-title {
+        font-size:14px; font-weight:800; color:#f1f5f9;
+        letter-spacing:.01em; display:flex; align-items:center; gap:8px;
+      }
+      .mbx-notif-panel-close {
+        background:none; border:1px solid rgba(255,255,255,.10); border-radius:6px;
+        color:#94a3b8; padding:4px 8px; cursor:pointer; font-size:12px;
+        transition:all .15s; font-family:inherit;
+      }
+      .mbx-notif-panel-close:hover { background:rgba(255,255,255,.08); color:#f1f5f9; }
+      .mbx-notif-list {
+        flex:1; overflow-y:auto; padding:12px;
+        display:flex; flex-direction:column; gap:8px;
+      }
+      .mbx-notif-list::-webkit-scrollbar { width:4px; }
+      .mbx-notif-list::-webkit-scrollbar-thumb { background:rgba(255,255,255,.12); border-radius:2px; }
+      .mbx-notif-empty {
+        padding:40px 20px; text-align:center;
+        color:rgba(148,163,184,.5); font-size:13px; font-style:italic;
+      }
+      .mbx-notif-item {
+        background:rgba(15,28,45,.6);
+        border:1px solid rgba(255,255,255,.06);
+        border-radius:10px; padding:12px 14px;
+        display:flex; gap:10px; align-items:flex-start;
+        transition:background .14s;
+        position:relative;
+      }
+      .mbx-notif-item.is-new { border-color:rgba(56,189,248,.28); }
+      .mbx-notif-item:hover { background:rgba(0,115,234,.07); }
+      .mbx-notif-dot {
+        width:8px; height:8px; border-radius:50%;
+        background:#38bdf8; flex-shrink:0; margin-top:4px;
+        box-shadow:0 0 6px rgba(56,189,248,.6);
+      }
+      .mbx-notif-dot.read { background:rgba(100,116,139,.35); box-shadow:none; }
+      .mbx-notif-body { flex:1; min-width:0; }
+      .mbx-notif-case {
+        font-size:13px; font-weight:800; color:#e2e8f0;
+        letter-spacing:.01em; margin-bottom:3px;
+      }
+      .mbx-notif-meta {
+        font-size:11px; color:#64748b; line-height:1.5;
+      }
+      .mbx-notif-time {
+        font-size:10px; color:rgba(100,116,139,.7);
+        margin-top:4px; font-variant-numeric:tabular-nums;
+      }
+      .mbx-notif-dismiss {
+        background:none; border:none; color:rgba(100,116,139,.5);
+        font-size:14px; cursor:pointer; padding:0; line-height:1;
+        flex-shrink:0; transition:color .14s;
+      }
+      .mbx-notif-dismiss:hover { color:#94a3b8; }
+      .mbx-notif-panel-footer {
+        padding:12px 20px;
+        border-top:1px solid rgba(255,255,255,.05);
+        flex-shrink:0;
+      }
+      .mbx-notif-clear-all {
+        width:100%; padding:8px; border-radius:7px;
+        background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
+        color:#64748b; font-size:11px; font-weight:700; cursor:pointer;
+        letter-spacing:.06em; text-transform:uppercase; font-family:inherit;
+        transition:all .15s;
+      }
+      .mbx-notif-clear-all:hover { background:rgba(255,255,255,.08); color:#94a3b8; }
+      .mbx-notif-overlay {
+        position:fixed; inset:0; z-index:9099;
+        background:rgba(0,0,0,.45); display:none;
+      }
+      .mbx-notif-overlay.open { display:block; }
+      @media (max-width:480px){ .mbx-notif-panel{ width:100%; } }
       /* Modals */
       .mbx-custom-backdrop { position:fixed; inset:0; background:rgba(2,6,23,0.85); backdrop-filter:blur(10px); z-index:99999; display:none; align-items:center; justify-content:center; padding:20px; opacity:0; pointer-events:none; transition:opacity 0.3s; }
       .mbx-custom-backdrop.is-open { display:flex !important; opacity:1; pointer-events:auto; }
@@ -4078,6 +4198,12 @@ function _mbxReadJwt(){
                 </svg>
                 ${isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
               </button>
+              <div class="mbx-bell-wrap">
+                <button class="mbx-bell-btn${_mbxGetMyPendingNotifs().length > 0 ? ' has-notifs' : ''}" id="mbx-bell-btn" data-toggle-notifs title="Case Notifications">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                </button>
+                <span class="mbx-bell-badge${_mbxGetMyPendingNotifs().length === 0 ? ' hidden' : ''}" id="mbx-bell-badge">${_mbxGetMyPendingNotifs().length > 99 ? '99+' : _mbxGetMyPendingNotifs().length}</span>
+              </div>
               <div style="position:relative;">
                 <button class="mbx-gear-btn" data-toggle-settings title="Mailbox Settings">
                   <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -4170,6 +4296,22 @@ function _mbxReadJwt(){
         </div>
       `;
 
+      // OVERRIDE CLOCK SYNC: Immediately set the clock after every render so
+      // there's no 0-1s blank/stale window between innerHTML rebuild and next tick.
+      // The _timerInterval handles subsequent per-second updates — this handles t=0.
+      (function _mbxSyncOverrideClockNow() {
+        try {
+          const _oi = (window.UI && window.UI.mailboxTimeInfo) ? window.UI.mailboxTimeInfo() : null;
+          if (!_oi || !_oi.overrideEnabled) return;
+          root.querySelectorAll('[data-override-clock="1"]').forEach(node => {
+            try {
+              const p = window.UI.manilaParts(new Date(_oi.effectiveMs));
+              node.textContent = `${String(p.hh).padStart(2,'0')}:${String(p.mm).padStart(2,'0')}:${String(p.ss).padStart(2,'0')}`;
+            } catch(_) {}
+          });
+        } catch(_) {}
+      })();
+
       attachAssignmentListeners(root);
 
       root.querySelectorAll('[data-toggle-analytics]').forEach(btn=>{
@@ -4227,6 +4369,17 @@ function _mbxReadJwt(){
         cfToggle.addEventListener('change', () => {
           window.__mbxUiState.condFormatEnabled = cfToggle.checked;
           scheduleRender('cf-toggle');
+        });
+      }
+
+      // ── Bell notification toggle ────────────────────────────────────────────
+      // Re-grab every render since bell button is inside root.innerHTML.
+      // The panel/overlay are body-appended singletons — they survive re-renders.
+      const bellBtn = root.querySelector('#mbx-bell-btn');
+      if (bellBtn) {
+        bellBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          if (_notifPanelOpen) { _mbxCloseNotifPanel(); } else { _mbxOpenNotifPanel(); }
         });
       }
 
@@ -4325,6 +4478,16 @@ function _mbxReadJwt(){
           const dur = (UI && UI.formatDuration) ? UI.formatDuration(sec) : `${sec}s`;
           node.title = `Pending Acknowledgment (${dur})`;
         });
+
+        // NOTIF BADGE TICK: Update bell badge count every second without full re-render.
+        // Covers cases where notifs arrive via Realtime between render cycles.
+        _mbxUpdateBellBadge();
+        // Also refresh panel age labels if panel is open
+        if (_notifPanelOpen) {
+          const lbl = document.getElementById('mbx-notif-count-lbl');
+          const cnt = _mbxGetMyPendingNotifs().length;
+          if (lbl) lbl.textContent = cnt ? `${cnt} pending` : '';
+        }
       }catch(_){}
     }, 1000);
 
@@ -4377,6 +4540,194 @@ function _mbxReadJwt(){
   // _mbxStatusListenerBound guards against duplicate listeners if mount() is
   // ever called more than once on the same page instance.
   let _mbxStatusListenerBound = false;
+
+  // ── NOTIFICATION BELL STATE ──────────────────────────────────────────────────
+  // Dismissed notif IDs are stored in localStorage so they survive page refresh.
+  // We do NOT write back to mums_schedule_notifs for dismiss — that doc is shared
+  // across all users and we only want local-user dismiss state.
+  const _NOTIF_DISMISS_KEY = 'mums_mbx_dismissed_notifs';
+  let _notifPanelOpen = false;
+
+  function _mbxGetDismissed() {
+    try {
+      const raw = localStorage.getItem(_NOTIF_DISMISS_KEY);
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch(_) { return new Set(); }
+  }
+
+  function _mbxSaveDismissed(set) {
+    try {
+      // Keep max 500 dismissed IDs to avoid unbounded localStorage growth
+      const arr = [...set].slice(-500);
+      localStorage.setItem(_NOTIF_DISMISS_KEY, JSON.stringify(arr));
+    } catch(_) {}
+  }
+
+  function _mbxDismissNotif(notifId) {
+    const dismissed = _mbxGetDismissed();
+    dismissed.add(String(notifId));
+    _mbxSaveDismissed(dismissed);
+    _mbxUpdateBellBadge();
+    _mbxRefreshNotifList();
+  }
+
+  function _mbxDismissAll() {
+    const Store = window.Store;
+    const me2 = (window.Auth && window.Auth.getUser) ? (window.Auth.getUser() || {}) : {};
+    const uid = String(me2.id || '').trim();
+    const allNotifs = (Store && Store.getNotifs ? Store.getNotifs() : []) || [];
+    const myNotifs = allNotifs.filter(n => n && Array.isArray(n.recipients) && n.recipients.includes(uid) && n.type === 'MAILBOX_ASSIGN');
+    const dismissed = _mbxGetDismissed();
+    myNotifs.forEach(n => dismissed.add(String(n.id || '')));
+    _mbxSaveDismissed(dismissed);
+    _mbxUpdateBellBadge();
+    _mbxRefreshNotifList();
+  }
+
+  // Returns pending MAILBOX_ASSIGN notifs for the current user, excluding dismissed.
+  function _mbxGetMyPendingNotifs() {
+    try {
+      const Store = window.Store;
+      const me2 = (window.Auth && window.Auth.getUser) ? (window.Auth.getUser() || {}) : {};
+      const uid = String(me2.id || '').trim();
+      if (!uid) return [];
+      const allNotifs = (Store && Store.getNotifs ? Store.getNotifs() : []) || [];
+      const dismissed = _mbxGetDismissed();
+      return allNotifs.filter(n =>
+        n &&
+        n.id &&
+        !dismissed.has(String(n.id)) &&
+        n.type === 'MAILBOX_ASSIGN' &&
+        Array.isArray(n.recipients) &&
+        n.recipients.includes(uid)
+      ).sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+    } catch(_) { return []; }
+  }
+
+  // Updates only the bell badge count — no full re-render needed.
+  function _mbxUpdateBellBadge() {
+    try {
+      const count = _mbxGetMyPendingNotifs().length;
+      const badge = document.getElementById('mbx-bell-badge');
+      const btn = document.getElementById('mbx-bell-btn');
+      if (badge) {
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.classList.toggle('hidden', count === 0);
+      }
+      if (btn) btn.classList.toggle('has-notifs', count > 0);
+    } catch(_) {}
+  }
+
+  function _mbxFmtNotifAge(ts) {
+    try {
+      const diff = Math.max(0, Date.now() - Number(ts || 0));
+      const s = Math.floor(diff / 1000);
+      if (s < 60) return 'just now';
+      const m = Math.floor(s / 60);
+      if (m < 60) return `${m}m ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h}h ago`;
+      return `${Math.floor(h / 24)}d ago`;
+    } catch(_) { return ''; }
+  }
+
+  // Refreshes the notif list inside the panel without re-mounting the panel.
+  function _mbxRefreshNotifList() {
+    try {
+      const listEl = document.getElementById('mbx-notif-list');
+      if (!listEl) return;
+      const pending = _mbxGetMyPendingNotifs();
+      if (!pending.length) {
+        listEl.innerHTML = `<div class="mbx-notif-empty">No pending case assignments.</div>`;
+        return;
+      }
+      const UI = window.UI;
+      const esc = (UI && UI.esc) ? UI.esc : (s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+      listEl.innerHTML = pending.map(n => {
+        const caseNo = esc(String(n.caseNo || '—'));
+        const from = esc(String(n.fromName || 'Manager'));
+        const timeblock = esc(String((n.timeblock && n.timeblock.label) || n.bucketId || ''));
+        const age = esc(_mbxFmtNotifAge(n.ts));
+        const nid = esc(String(n.id || ''));
+        const desc = n.desc ? esc(String(n.desc).slice(0, 120)) : '';
+        return `
+          <div class="mbx-notif-item is-new" data-notif-id="${nid}">
+            <div class="mbx-notif-dot"></div>
+            <div class="mbx-notif-body">
+              <div class="mbx-notif-case">📋 Case ${caseNo}</div>
+              <div class="mbx-notif-meta">Assigned by <strong>${from}</strong>${timeblock ? ' · ' + timeblock : ''}</div>
+              ${desc ? `<div class="mbx-notif-meta" style="margin-top:3px;color:rgba(148,163,184,.6);">${desc}</div>` : ''}
+              <div class="mbx-notif-time">${age}</div>
+            </div>
+            <button class="mbx-notif-dismiss" data-dismiss-notif="${nid}" title="Dismiss">✕</button>
+          </div>`;
+      }).join('');
+
+      // Attach dismiss handlers
+      listEl.querySelectorAll('[data-dismiss-notif]').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          _mbxDismissNotif(btn.getAttribute('data-dismiss-notif') || '');
+        });
+      });
+    } catch(_) {}
+  }
+
+  // Mount the notif panel (singleton, appended to body once).
+  function _mbxEnsureNotifPanel() {
+    if (document.getElementById('mbx-notif-panel')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'mbx-notif-overlay';
+    overlay.className = 'mbx-notif-overlay';
+    document.body.appendChild(overlay);
+
+    const panel = document.createElement('div');
+    panel.id = 'mbx-notif-panel';
+    panel.className = 'mbx-notif-panel';
+    panel.innerHTML = `
+      <div class="mbx-notif-panel-head">
+        <div class="mbx-notif-panel-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          Inbox
+          <span id="mbx-notif-count-lbl" style="font-size:11px;background:rgba(56,189,248,.15);color:#38bdf8;padding:1px 7px;border-radius:999px;font-weight:700;"></span>
+        </div>
+        <button class="mbx-notif-panel-close" id="mbx-notif-close">Close ✕</button>
+      </div>
+      <div class="mbx-notif-list" id="mbx-notif-list"></div>
+      <div class="mbx-notif-panel-footer">
+        <button class="mbx-notif-clear-all" id="mbx-notif-clear-all">Dismiss All</button>
+      </div>
+    `;
+    document.body.appendChild(panel);
+
+    // Close handlers
+    overlay.addEventListener('click', _mbxCloseNotifPanel);
+    panel.querySelector('#mbx-notif-close').addEventListener('click', _mbxCloseNotifPanel);
+    panel.querySelector('#mbx-notif-clear-all').addEventListener('click', () => {
+      _mbxDismissAll();
+    });
+  }
+
+  function _mbxOpenNotifPanel() {
+    _mbxEnsureNotifPanel();
+    _notifPanelOpen = true;
+    _mbxRefreshNotifList();
+    // Update count label
+    const lbl = document.getElementById('mbx-notif-count-lbl');
+    const cnt = _mbxGetMyPendingNotifs().length;
+    if (lbl) lbl.textContent = cnt ? `${cnt} pending` : '';
+    document.getElementById('mbx-notif-panel').classList.add('open');
+    document.getElementById('mbx-notif-overlay').classList.add('open');
+  }
+
+  function _mbxCloseNotifPanel() {
+    _notifPanelOpen = false;
+    const panel = document.getElementById('mbx-notif-panel');
+    const overlay = document.getElementById('mbx-notif-overlay');
+    if (panel) panel.classList.remove('open');
+    if (overlay) overlay.classList.remove('open');
+  }
+  // ── END NOTIFICATION BELL STATE ──────────────────────────────────────────────
 
   function _registerMailboxStatusListener() {
     if (_mbxStatusListenerBound) return;
@@ -4442,6 +4793,8 @@ function _mbxReadJwt(){
   function _mountMailboxNormal(){
     render();
     startRealtimeTimers();
+    // Initial badge sync — fires after first render so badge reflects stored notifs immediately
+    setTimeout(_mbxUpdateBellBadge, 0);
 
     // REALTIME ALL-USER FIX: Immediately sync schedule blocks on mount for ALL roles.
     // This ensures MEMBERs (who have restricted Store.getUsers()) get full roster data
@@ -4665,6 +5018,14 @@ function _mbxReadJwt(){
           if (!_stateCooldownActive) { _mbxForceResync('shift-state-change'); }
           scheduleRender('shift-state-change');
         }
+        // NOTIFICATION BELL: When mums_schedule_notifs changes (new case assigned to current
+        // user, or case deleted/purged), update the bell badge in-place and refresh panel
+        // if it is currently open. No full re-render needed.
+        if (k === 'mums_schedule_notifs') {
+          _mbxUpdateBellBadge();
+          if (_notifPanelOpen) _mbxRefreshNotifList();
+        }
+
         // CASE MATRIX ALL-USER FIX: ums_cases is synced to all clients via Supabase realtime.
         // When any case is confirmed/updated/deleted, trigger an in-place patch + re-render
         // so all open Mailbox tabs reflect the new acknowledgment state immediately.
@@ -4687,6 +5048,13 @@ function _mbxReadJwt(){
       window.CloudSocket.off('mailbox:update');
       window.CloudSocket.off('mailbox:assign');
       window.CloudSocket.off('mailbox:confirm');
+    }
+    // Clean up bell singletons on nav-away
+    _mbxCloseNotifPanel();
+    // Remove global panel close listener
+    if (window.__mbxPanelCloseListener) {
+      document.removeEventListener('click', window.__mbxPanelCloseListener);
+      window.__mbxPanelCloseListener = null;
     }
   }
 
