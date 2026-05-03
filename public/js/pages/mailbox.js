@@ -3219,8 +3219,9 @@ function _mbxReadJwt(){
         const ownerId = esc(String(a.assigneeId||''));
         const ownerName = esc(String(a.assigneeName||''));
         
+        const confirmedAtVal = esc(String(a.confirmedAt || 0));
         return `
-          <td class="${cls}" data-case-action="1" data-assignment-id="${aid}" data-case-no="${caseNo}" data-owner-id="${ownerId}" data-owner-name="${ownerName}" title="Double-click to open Action Menu" style="border:1px solid rgba(255,255,255,0.04);">
+          <td class="${cls}" data-case-action="1" data-assignment-id="${aid}" data-case-no="${caseNo}" data-owner-id="${ownerId}" data-owner-name="${ownerName}" data-confirmed-at="${confirmedAtVal}" title="Double-click to open Action Menu" style="border:1px solid rgba(255,255,255,0.04);">
              <div class="mbx-case-badge ${isConfirmed ? '' : 'glow'}">
                 <span style="letter-spacing:0.5px;">${caseNo}</span>
                 ${statusHtml}
@@ -3272,137 +3273,6 @@ function _mbxReadJwt(){
   function _destroyModal(id){
     const m = document.getElementById(id);
     if(m) try{ m.remove(); }catch(_){}
-  }
-
-  function ensureAssignModalMounted(){
-    try{
-      if(document.getElementById('mbxAssignModal')) return;
-      const UI = window.UI;
-      const host = document.createElement('div');
-      host.className = 'mbx-custom-backdrop'; 
-      host.id = 'mbxAssignModal';
-      host.innerHTML = `
-        <div class="mbx-modal-glass">
-          <div class="mbx-modal-head">
-            <h3 style="color:#f8fafc; margin:0;">🎯 Route Case Assignment</h3>
-            <button class="btn-glass btn-glass-ghost" type="button" data-close="mbxAssignModal">✕ Cancel</button>
-          </div>
-          <div class="mbx-modal-body">
-            <div style="background:rgba(255,255,255,0.02); padding:16px; border-radius:10px; border:1px solid rgba(255,255,255,0.05); display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-              <div>
-                <label style="display:block; font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; margin-bottom:6px;">Receiving Agent</label>
-                <input id="mbxAssignedTo" disabled class="mbx-input" style="font-weight:700;" />
-              </div>
-              <div>
-                <label style="display:block; font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; margin-bottom:6px;">Time Block</label>
-                <input id="mbxBucketLbl" disabled class="mbx-input" style="color:#38bdf8; font-weight:700;" />
-              </div>
-            </div>
-            
-            <div>
-              <label style="display:block; font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; margin-bottom:6px;">Case Reference Number <span style="color:#ef4444">*</span></label>
-              <input id="mbxCaseNo" placeholder="e.g. INC0001234" class="mbx-input" style="border:1px solid rgba(56,189,248,0.4); font-size:15px; font-weight:800;" />
-            </div>
-            <div>
-              <label style="display:block; font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; margin-bottom:6px;">Short Description (Optional)</label>
-              <input id="mbxDesc" placeholder="Context notes..." class="mbx-input" style="font-size:13px;" />
-            </div>
-            <div style="background:rgba(56,189,248,0.05); border:1px solid rgba(56,189,248,0.2); border-radius:8px; padding:12px; display:flex; align-items:center; gap:10px;">
-              <div style="font-size:20px;">ℹ️</div>
-              <div style="font-size:11px; color:#cbd5e1; line-height:1.5;">
-                The agent will receive an instant notification and the case will appear in their <strong>Pending Actions</strong> panel. They must acknowledge it to complete the routing workflow.
-              </div>
-            </div>
-            <div style="display:flex; gap:10px;">
-              <button class="btn-glass btn-glass-ghost" type="button" data-close="mbxAssignModal" style="flex:1;">Cancel</button>
-              <button id="mbxAssignSubmit" class="btn-glass btn-glass-primary" type="button" style="flex:2;">Assign Case →</button>
-            </div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(host);
-
-      host.addEventListener('click', e=>{
-        if(e.target.closest('[data-close="mbxAssignModal"]')){
-          e.preventDefault();
-          e.stopPropagation();
-          _closeCustomModal('mbxAssignModal');
-        }
-      });
-
-      const submitBtn = host.querySelector('#mbxAssignSubmit');
-      if(submitBtn){
-        submitBtn.addEventListener('click', async ()=>{
-          if(_assignSending) return;
-          const caseNo = (host.querySelector('#mbxCaseNo')?.value||'').trim();
-          const desc = (host.querySelector('#mbxDesc')?.value||'').trim();
-          if(!caseNo){ alert('Please enter a case number.'); return; }
-          if(!_assignUserId){ alert('No agent selected.'); return; }
-
-          try{
-            _assignSending = true;
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Routing...';
-
-            const {shiftKey, table} = ensureShiftTables();
-            const activeBucket = computeActiveBucketId(table);
-            if(!activeBucket){ alert('No active time block found.'); return; }
-
-            const Store = window.Store;
-            const users = (Store && Store.getUsers ? Store.getUsers() : []) || [];
-            const targetUser = users.find(u=>u && String(u.id||'')=== String(_assignUserId||''));
-            const assigneeName = targetUser ? (targetUser.name||targetUser.username||_assignUserId) : _assignUserId;
-
-            const payload = {
-              shiftKey,
-              assigneeId: _assignUserId,
-              assigneeName,
-              caseNo,
-              desc,
-              bucketId: activeBucket,
-              assignedBy: (window.Auth && window.Auth.getUser) ? (window.Auth.getUser().id||'') : '',
-              assignedAt: Date.now(),
-              clientId: _mbxClientId()
-            };
-
-            const res = await fetch('/api/mailbox/assign', {
-              method:'POST',
-              headers:{ 'Content-Type':'application/json', ..._mbxAuthHeader() },
-              body: JSON.stringify(payload)
-            });
-
-            if(!res.ok){
-              const err = await res.text().catch(()=>'Network error');
-              throw new Error(err);
-            }
-
-            const data = await res.json().catch(()=>({}));
-            const assignment = data.assignment || { ...payload, id: `local_${Date.now()}` };
-
-            if(!table.counts) table.counts = {};
-            if(!table.counts[_assignUserId]) table.counts[_assignUserId] = {};
-            table.counts[_assignUserId][activeBucket] = (Number(table.counts[_assignUserId][activeBucket])||0) + 1;
-            if(!table.assignments) table.assignments = [];
-            table.assignments.push(assignment);
-
-            if(Store && Store.saveMailboxTable) Store.saveMailboxTable(shiftKey, table);
-
-            _closeCustomModal('mbxAssignModal');
-            scheduleRender('assign-success');
-
-            const UI = window.UI;
-            if(UI && UI.showToast) UI.showToast(`Case ${caseNo} assigned to ${assigneeName}`, 'success');
-
-          }catch(e){
-            alert(`Assignment failed: ${e.message}`);
-          }finally{
-            _assignSending = false;
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Assign Case →';
-          }
-        });
-      }
-    }catch(_){}
   }
 
   function _populateCaseActionTargets(modal, ownerId){
@@ -3467,6 +3337,11 @@ function _mbxReadJwt(){
               <div style="font-size:12px; color:#94a3b8; margin-top:4px;">Current owner: <strong id="mbxCaseActionOwner" style="color:#38bdf8;">—</strong></div>
             </div>
 
+            <!-- ACKNOWLEDGE: Shown only when current user is the assignee AND case is unconfirmed -->
+            <div id="mbxCaseActionAckWrap" style="display:none; margin-bottom:10px;">
+              <button id="mbxCaseActionAckBtn" class="btn-glass" type="button" style="width:100%; border-color:rgba(16,185,129,0.55); color:#6ee7b7; font-weight:800; font-size:13px; padding:11px 16px;">✓ Acknowledge Case</button>
+            </div>
+
             <label style="display:block; font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; margin-bottom:6px;">Reassign to</label>
             <select id="mbxCaseActionReassign" class="mbx-input" style="margin-bottom:14px;"></select>
 
@@ -3498,6 +3373,65 @@ function _mbxReadJwt(){
           _closeCustomModal('mbxCaseActionModal');
         }
       });
+
+      // ── ACKNOWLEDGE HANDLER ─────────────────────────────────────────────
+      // Allows the ASSIGNED USER to acknowledge their own case from within the
+      // Mailbox page matrix. Calls POST /api/mailbox/confirm with the assignment ID.
+      // The button is only visible when: current user === assigneeId AND confirmedAt=0.
+      let _ackBusy = false;
+      const ackBtn = host.querySelector('#mbxCaseActionAckBtn');
+      if (ackBtn) {
+        ackBtn.addEventListener('click', async () => {
+          if (_ackBusy || _caseActionBusy || !_caseActionCtx?.assignmentId) return;
+          const ctx = Object.assign({}, _caseActionCtx);
+          try {
+            _ackBusy = true;
+            ackBtn.disabled = true;
+            ackBtn.style.opacity = '0.6';
+            ackBtn.textContent = '⏳ Acknowledging...';
+
+            const { shiftKey: currentShiftKey } = ensureShiftTables();
+            const shiftKey = String(ctx.shiftKey || currentShiftKey || '');
+
+            const res = await fetch('/api/mailbox/confirm', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ..._mbxAuthHeader() },
+              body: JSON.stringify({
+                shiftKey,
+                assignmentId: ctx.assignmentId,
+                clientId: _mbxClientId()
+              })
+            });
+
+            const rawText = await res.text().catch(() => '');
+            if (!res.ok) throw new Error(rawText || `Server error ${res.status}`);
+
+            // Destroy modal BEFORE parsing so errors don't leave it open
+            _caseActionCtx = null;
+            _destroyModal('mbxCaseActionModal');
+
+            const data = (() => { try { return rawText ? JSON.parse(rawText) : {}; } catch (_) { return {}; } })();
+            const Store = window.Store;
+            if (Store && Store.saveMailboxTable && data && data.table) {
+              Store.saveMailboxTable(shiftKey, data.table);
+            }
+            scheduleRender('case-ack-success');
+
+            const UI = window.UI;
+            if (UI && UI.showToast) UI.showToast(`✓ Case ${ctx.caseNo || ''} acknowledged`, 'success');
+          } catch (e) {
+            _ackBusy = false;
+            ackBtn.disabled = false;
+            ackBtn.style.opacity = '';
+            ackBtn.textContent = '✓ Acknowledge Case';
+            const UI = window.UI;
+            if (UI && UI.showToast) UI.showToast(`Acknowledge failed: ${e.message}`, 'error');
+            else alert(`Acknowledge failed: ${e.message}`);
+          } finally {
+            _ackBusy = false;
+          }
+        });
+      }
 
       // ── REASSIGN HANDLER ─────────────────────────────────────────────────
       // FIX A applied: use ctx.shiftKey (NOT delCtx.shiftKey — delCtx lives
@@ -3883,7 +3817,14 @@ function _mbxReadJwt(){
 
             const Store = window.Store;
             const users = (Store && Store.getUsers ? Store.getUsers() : []) || [];
-            const targetUser = users.find(u=>u && String(u.id||'')=== String(_assignUserId||''));
+            let targetUser = users.find(u=>u && String(u.id||'')=== String(_assignUserId||''));
+            // MEMBER-ROLE FIX: Fallback to _rosterByTeam cache when Store.getUsers is restricted
+            if (!targetUser) {
+              const _duty = getDuty();
+              const _tid = String(_duty && _duty.current && _duty.current.id ? _duty.current.id : '');
+              const _roster = (_tid && _rosterByTeam && _rosterByTeam[_tid]) ? _rosterByTeam[_tid] : [];
+              targetUser = _roster.find(u=>u && String(u.id||'')===String(_assignUserId||''));
+            }
             const assigneeName = targetUser ? (targetUser.name||targetUser.username||_assignUserId) : _assignUserId;
 
             const payload = {
@@ -3957,7 +3898,14 @@ function _mbxReadJwt(){
           const {shiftKey, table} = ensureShiftTables();
           const activeBucket = computeActiveBucketId(table);
           const bucket = (table.buckets||[]).find(b=>b.id===activeBucket);
-          const member = (table.members||[]).find(m=>m.id===uid);
+          // MEMBER-ROLE FIX: Also check _rosterByTeam cache for member name.
+          // table.members may be sparse for MEMBER-role sessions (restricted Store.getUsers).
+          let member = (table.members||[]).find(m=>String(m.id||'')===uid);
+          if (!member) {
+            const _mTid = String(table?.meta?.teamId || '');
+            const _mRoster = (_mTid && _rosterByTeam && _rosterByTeam[_mTid]) ? _rosterByTeam[_mTid] : [];
+            member = _mRoster.find(m=>String(m.id||'')===uid);
+          }
 
           const assignedToInput = modal.querySelector('#mbxAssignedTo');
           const bucketLblInput = modal.querySelector('#mbxBucketLbl');
@@ -3994,6 +3942,21 @@ function _mbxReadJwt(){
           if(noSpan) noSpan.textContent = _caseActionCtx.caseNo;
           if(ownerSpan) ownerSpan.textContent = _caseActionCtx.ownerName;
           _populateCaseActionTargets(modal, _caseActionCtx.ownerId);
+
+          // ACKNOWLEDGE FEATURE: Show/hide ack button based on ownership + status
+          // The button appears ONLY when the current user IS the assignee AND the
+          // case is still pending (confirmedAt === 0). This lets the assignee
+          // acknowledge their case directly from the Mailbox Matrix.
+          try {
+            const confirmedAt = Number(cell.getAttribute('data-confirmed-at') || 0);
+            const currentUserId = String((window.Auth && window.Auth.getUser ? window.Auth.getUser() : {}).id || '').trim();
+            const isMyCase = !!(currentUserId && _caseActionCtx.ownerId === currentUserId);
+            const ackWrap = modal.querySelector('#mbxCaseActionAckWrap');
+            if (ackWrap) ackWrap.style.display = (isMyCase && !confirmedAt) ? '' : 'none';
+            // Reset ack button state on each open
+            const ackBtnEl = modal.querySelector('#mbxCaseActionAckBtn');
+            if (ackBtnEl) { ackBtnEl.disabled = false; ackBtnEl.style.opacity = ''; ackBtnEl.textContent = '✓ Acknowledge Case'; }
+          } catch (_) {}
 
           _openCustomModal('mbxCaseActionModal');
         });
@@ -4221,12 +4184,22 @@ function _mbxReadJwt(){
           settingsPanel.classList.toggle('open');
           gearBtn.classList.toggle('panel-open', settingsPanel.classList.contains('open'));
         });
-        document.addEventListener('click', function mbxClosePanel(e) {
-          if (!settingsPanel.contains(e.target) && e.target !== gearBtn) {
-            settingsPanel.classList.remove('open');
-            gearBtn.classList.remove('panel-open');
+        // LEAK FIX: Remove old listener before adding new one.
+        // render() can be called many times (debounced but frequent). Without
+        // removing the old listener, every render stacks a new document-level
+        // click handler → hundreds of listeners → performance degradation.
+        if (window.__mbxPanelCloseListener) {
+          document.removeEventListener('click', window.__mbxPanelCloseListener);
+        }
+        window.__mbxPanelCloseListener = function(e) {
+          if (settingsPanel && gearBtn) {
+            if (!settingsPanel.contains(e.target) && e.target !== gearBtn) {
+              settingsPanel.classList.remove('open');
+              gearBtn.classList.remove('panel-open');
+            }
           }
-        });
+        };
+        document.addEventListener('click', window.__mbxPanelCloseListener);
       }
 
       // ── Conditional formatting toggle ──────────────────────────────────────
@@ -4287,16 +4260,7 @@ function _mbxReadJwt(){
           }
         });
 
-        // Recreate tooltip text correctly (contains icon dot via CSS ::before)
-        counterWrap.addEventListener('mouseover', e => {
-          const row = e.target.closest('tr[data-mbx-member-name]');
-          if (!row) { currentRow = null; tt.classList.remove('visible'); return; }
-          if (row === currentRow) return;
-          currentRow = row;
-          const name = row.getAttribute('data-mbx-member-name') || '';
-          tt.textContent = name;
-          tt.classList.add('visible');
-        }, true);
+        // DEDUP FIX: Removed duplicate mouseover listener (was firing twice per hover)
       })();
 
       refreshMemberDutyPills(root);
