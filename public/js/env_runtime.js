@@ -115,6 +115,59 @@
     try { envController.abort(); } catch(_) {}
   }, 3500);
 
+  // ── ORG FINGERPRINT CHECK ─────────────────────────────────────────────────
+  // When SUPABASE_URL changes (new org / migration), all localStorage keys that
+  // are org-specific (users, mailbox state, schedules, cases, etc.) become stale
+  // ghost data from the old org. We detect the org change here — at the earliest
+  // possible boot point — and purge them before any module reads from cache.
+  //
+  // Keys preserved across migration (user-preference, not org-data):
+  //   mums_theme, mums_worldclocks, mums_quicklinks,
+  //   mums_release_notes, mums_release_notes_backup, mums__org_fp
+  //
+  var ORG_FP_KEY = 'mums__org_fp';
+  var PRESERVE_KEYS = {
+    'mums_theme': 1, 'mums_worldclocks': 1, 'mums_quicklinks': 1,
+    'mums_release_notes': 1, 'mums_release_notes_backup': 1,
+    'mums__org_fp': 1
+  };
+
+  function _clearOrgCache(newUrl) {
+    try {
+      var toDelete = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k) continue;
+        // Only clear MUMS-owned keys (prefixed ums_ or mums_)
+        if ((k.indexOf('ums_') === 0 || k.indexOf('mums_') === 0) && !PRESERVE_KEYS[k]) {
+          toDelete.push(k);
+        }
+      }
+      for (var j = 0; j < toDelete.length; j++) {
+        localStorage.removeItem(toDelete[j]);
+      }
+      localStorage.setItem(ORG_FP_KEY, newUrl);
+      DBG.log('info', 'env_runtime.org_migration_detected — cache cleared', { keys: toDelete.length });
+    } catch(e) {
+      // localStorage may be full or blocked — non-fatal
+    }
+  }
+
+  function _checkOrgFingerprint(newUrl) {
+    if (!newUrl) return; // no URL yet — skip
+    try {
+      var stored = localStorage.getItem(ORG_FP_KEY) || '';
+      if (stored && stored !== newUrl) {
+        // Org has changed — wipe all stale org-specific cache
+        _clearOrgCache(newUrl);
+      } else if (!stored) {
+        // First boot on this domain — write fingerprint, nothing to clear
+        localStorage.setItem(ORG_FP_KEY, newUrl);
+      }
+    } catch(e) {}
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   fetch('/api/env', { cache: 'no-store', signal: envController.signal })
     .then(function(r){ return r.ok ? r.json() : null; })
     .then(function(data){
@@ -132,6 +185,9 @@
         env.PRESENCE_LIST_POLL_MS    = Math.max(90000,  safeParseInt(data.PRESENCE_LIST_POLL_MS,    env.PRESENCE_LIST_POLL_MS));
         env.SYNC_POLL_MS             = Math.max(45000,  safeParseInt(data.SYNC_POLL_MS,             env.SYNC_POLL_MS));
         env.SYNC_ENABLE_SUPABASE_REALTIME = (String(data.SYNC_ENABLE_SUPABASE_REALTIME || 'true') !== 'false');
+
+        // ── Run fingerprint check NOW — SUPABASE_URL is known, modules not yet loaded ──
+        _checkOrgFingerprint(env.SUPABASE_URL);
       }
       clearTimeout(envTimer);
       readyResolve(env);
