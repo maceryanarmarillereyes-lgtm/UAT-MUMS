@@ -1,3 +1,9 @@
+/**
+ * @file supabase-overload.test.js
+ * @description Supabase Overload.Test module
+ * @module MUMS/MUMS
+ * @version UAT
+ */
 const assert = require('assert');
 
 process.env.SUPABASE_DB_POOLER_URL = process.env.SUPABASE_DB_POOLER_URL || 'https://example.supabase.co';

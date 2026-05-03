@@ -1,3 +1,9 @@
+/**
+ * @file realtimeChannels.js
+ * @description Supabase Realtime channel registry — creates and caches named channels
+ * @module MUMS/Lib
+ * @version UAT
+ */
 const MAX_CHANNELS = 3;
 
 export function createRealtimeChannelManager(supabase) {

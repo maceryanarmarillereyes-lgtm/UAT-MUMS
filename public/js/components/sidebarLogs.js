@@ -1,3 +1,9 @@
+/**
+ * @file sidebarLogs.js
+ * @description Component: sidebar activity log feed with real-time updates
+ * @module MUMS/Components
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

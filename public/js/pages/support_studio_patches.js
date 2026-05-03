@@ -1,3 +1,9 @@
+/**
+ * @file support_studio_patches.js
+ * @description Page: Support Studio patches — hot-fix patch loader for Support Studio
+ * @module MUMS/Studio
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

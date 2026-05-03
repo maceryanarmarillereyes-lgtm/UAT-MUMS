@@ -1,3 +1,9 @@
+/**
+ * @file security_pin.js
+ * @description Security PIN entry UI and validation for sensitive operations
+ * @module MUMS/Auth
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

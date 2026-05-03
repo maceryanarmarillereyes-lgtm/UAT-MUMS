@@ -1,3 +1,9 @@
+/**
+ * @file test-env.js
+ * @description Script: smoke-tests that all required environment variables are present
+ * @module MUMS/Scripts
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD: UNTOUCHABLE ZONE. Do not modify existing UI/UX, layouts, or core logic in this file without explicitly asking MACE for clearance. If changes are required here, STOP and provide a RISK IMPACT REPORT first. */
 #!/usr/bin/env node
 /*

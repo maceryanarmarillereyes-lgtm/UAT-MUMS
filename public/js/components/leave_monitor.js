@@ -1,3 +1,9 @@
+/**
+ * @file leave_monitor.js
+ * @description Component: leave monitor — tracks and highlights members on leave
+ * @module MUMS/Components
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

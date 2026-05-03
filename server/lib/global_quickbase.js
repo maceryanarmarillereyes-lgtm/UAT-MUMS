@@ -1,3 +1,9 @@
+/**
+ * @file global_quickbase.js
+ * @description Server lib: global QuickBase settings (realm, token, table IDs) for all users
+ * @module MUMS/Server/Lib
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

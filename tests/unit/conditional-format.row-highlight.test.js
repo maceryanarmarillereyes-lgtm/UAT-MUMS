@@ -1,3 +1,9 @@
+/**
+ * @file conditional-format.row-highlight.test.js
+ * @description Conditional Format.Row Highlight.Test module
+ * @module MUMS/MUMS
+ * @version UAT
+ */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

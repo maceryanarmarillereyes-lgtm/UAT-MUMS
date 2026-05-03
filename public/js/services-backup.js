@@ -1,3 +1,9 @@
+/**
+ * @file services-backup.js
+ * @description Services module: backup/restore operations for service records
+ * @module MUMS/Services
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

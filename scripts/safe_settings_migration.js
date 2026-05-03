@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+/**
+ * @file safe_settings_migration.js
+ * @description Script: safe settings migration runner with rollback support
+ * @module MUMS/Scripts
+ * @version UAT
+ */
 
 const fs = require('fs');
 const path = require('path');

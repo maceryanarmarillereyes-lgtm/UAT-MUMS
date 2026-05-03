@@ -1,3 +1,9 @@
+/**
+ * @file escape.js
+ * @description SQL/HTML escape helpers — prevents injection in dynamic queries
+ * @module MUMS/Server/Lib
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

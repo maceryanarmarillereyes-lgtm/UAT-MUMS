@@ -1,3 +1,9 @@
+/**
+ * @file freemium_guard.js
+ * @description Free-tier egress guard: enforces polling rate limits to stay within Supabase free plan
+ * @module MUMS/Core
+ * @version UAT
+ */
 /* MUMS Freemium Guard v1.1
  * Implements multi-tab leader election + visibility pause + 800ms debounce
  * Safe to add â€” does NOT modify UNTOUCHABLE files

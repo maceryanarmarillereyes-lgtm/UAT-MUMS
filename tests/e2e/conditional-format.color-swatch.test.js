@@ -1,3 +1,9 @@
+/**
+ * @file conditional-format.color-swatch.test.js
+ * @description Conditional Format.Color Swatch.Test module
+ * @module MUMS/MUMS
+ * @version UAT
+ */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

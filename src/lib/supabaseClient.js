@@ -1,3 +1,9 @@
+/**
+ * @file supabaseClient.js
+ * @description Supabase JS client singleton for React/JSX components
+ * @module MUMS/Lib
+ * @version UAT
+ */
 import { createClient } from '@supabase/supabase-js';
 
 function fetchWithTimeout(timeoutMs) {

@@ -1,3 +1,9 @@
+/**
+ * @file mailbox.js
+ * @description Page: Mailbox — mailbox queue management and case assignment
+ * @module MUMS/Pages
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·
@@ -435,8 +441,18 @@ function _mbxGetBlockTiming(userId, nowParts){
 
 function _mbxActorIdFromUser(user){
   if(!user || typeof user !== 'object') return '';
-  const raw = user.id || user.userId || user.user_id || user.uid || user.sub || '';
-  return String(raw || '').trim();
+  const raw = String(user.id || user.userId || user.user_id || user.uid || user.sub || '').trim();
+  if(!raw) return '';
+
+  // HARDENING: Some sessions can carry a contaminated id token fragment
+  // (e.g. uid accidentally appended with query pieces like ",liveTeamId-...").
+  // This produced malformed /api/member/:uid/schedule URLs, spamming 404/failed
+  // fetches and overloading client/Supabase sync loops. Keep only a valid UUID id.
+  const clean = raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i);
+  if(clean && clean[0]) return clean[0].toLowerCase();
+
+  // Fallback for non-UUID legacy ids: drop URL/query separators to avoid path pollution.
+  return raw.split(/[?,&#\s]+/)[0].trim();
 }
 
 function _mbxReadJwt(){
@@ -786,6 +802,7 @@ function _mbxReadJwt(){
 
   const _rosterByTeam  = {};   // { teamId: [{id,name,role,teamId,...}] }
   const _scheduleReady = {};   // { teamId: true } once first fetch completes
+  const _scheduleRefreshing = {}; // { teamId: true } while refresh fetch is in-flight
   const _syncInFlight  = {};   // guard against concurrent fetches per team
   let   _syncCooldown  = {};   // LOOP-GUARD: cooldown timestamps after failed fetches
   // _schedSyncPending: prevents re-triggering sync on every render while a sync
@@ -888,8 +905,8 @@ function _mbxReadJwt(){
         }catch(_){}
       }
       if(!tid) return;
-      // Clear all guards so _mbxSyncTeamScheduleBlocks will actually re-fetch
-      delete _scheduleReady[tid];
+      // Keep last known-good scheduleReady so UI won't blink to empty roster
+      // during periodic/realtime refreshes; clear only on hard reset paths.
       delete _syncInFlight[tid];
       if (_syncCooldown) delete _syncCooldown[tid]; // LOOP-GUARD: clear cooldown on manual resync
       _schedSyncPending = false;
@@ -902,6 +919,7 @@ function _mbxReadJwt(){
     if (_mailboxEnabled === false) return; // MAILBOX DISABLED — no Supabase calls
     if (_syncInFlight[teamId]) return;
     _syncInFlight[teamId] = true;
+    _scheduleRefreshing[teamId] = true;
 
     try {
       const me  = (window.Auth && window.Auth.getUser) ? (window.Auth.getUser() || {}) : {};
@@ -1135,6 +1153,7 @@ function _mbxReadJwt(){
       // Silently degrade
     } finally {
       _syncInFlight[teamId] = false;
+      _scheduleRefreshing[teamId] = false;
       _schedSyncPending = false;
       // LOOP-GUARD: If _scheduleReady was never set (fetch failed), mark it with
       // a cooldown timestamp so render() doesn't immediately retry and cause
@@ -1154,6 +1173,7 @@ function _mbxReadJwt(){
     if (teamId) {
       delete _rosterByTeam[teamId];
       delete _scheduleReady[teamId];
+      delete _scheduleRefreshing[teamId];
       _syncInFlight[teamId] = false;
       _schedSyncPending = false; // also reset the pending flag on team reset
     }
@@ -2749,7 +2769,11 @@ function _mbxReadJwt(){
     });
 
     // ── Bucket manager row ────────────────────────────────────────────────────
-    const isSyncing = teamId && !(_scheduleReady && _scheduleReady[teamId]);
+    const hasCachedRoster = !!(teamId && _rosterByTeam && Array.isArray(_rosterByTeam[teamId]) && _rosterByTeam[teamId].length);
+    const isSyncing = !!(teamId && (
+      (_scheduleRefreshing && _scheduleRefreshing[teamId]) ||
+      (!_scheduleReady?.[teamId] && !hasCachedRoster)
+    ));
     const bucketManagers = buckets.map(b => ({
       bucket: b,
       name: (()=>{

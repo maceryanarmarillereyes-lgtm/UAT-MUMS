@@ -1,3 +1,9 @@
+/**
+ * @file studio_quickbase.js
+ * @description Server lib: Support Studio QuickBase adapter — search, bulk fetch, field introspection
+ * @module MUMS/Server/Lib
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

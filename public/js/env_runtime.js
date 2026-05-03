@@ -1,3 +1,9 @@
+/**
+ * @file env_runtime.js
+ * @description Runtime environment bootstrap — fetches /api/env and exposes MUMS_ENV globally
+ * @module MUMS/Core
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

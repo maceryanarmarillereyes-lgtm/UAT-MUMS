@@ -1,3 +1,9 @@
+/**
+ * @file cloud_users.js
+ * @description Cloud user profile CRUD and avatar upload via Supabase
+ * @module MUMS/Users
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

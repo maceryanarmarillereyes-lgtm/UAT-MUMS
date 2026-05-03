@@ -1,3 +1,9 @@
+/**
+ * @file tailwind.config.js
+ * @description Tailwind.Config module
+ * @module MUMS/MUMS
+ * @version UAT
+ */
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: ["class"],

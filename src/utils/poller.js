@@ -1,3 +1,9 @@
+/**
+ * @file poller.js
+ * @description Generic polling utility — fires callbacks at configurable intervals with back-off
+ * @module MUMS/Lib
+ * @version UAT
+ */
 export function createVisibilityAwarePoller(task, intervalMs = 30000) {
   const pollMs = Math.max(30000, Number(intervalMs) || 30000);
   let timer = null;

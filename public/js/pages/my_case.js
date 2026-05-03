@@ -1,3 +1,9 @@
+/**
+ * @file my_case.js
+ * @description Page: My Case — personal case queue filtered to the logged-in user
+ * @module MUMS/Pages
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

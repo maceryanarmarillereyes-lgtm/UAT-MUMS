@@ -1,3 +1,9 @@
+/**
+ * @file global_qb_count.js
+ * @description Global Qb Count module
+ * @module MUMS/MUMS
+ * @version UAT
+ */
 // server/routes/settings/global_qb_count.js
 // GET /api/settings/global_qb_count?realm=&tableId=&qid=&where=
 //

@@ -1,3 +1,9 @@
+/**
+ * @file global_theme.js
+ * @description Server lib: global theme settings persistence and retrieval
+ * @module MUMS/Server/Lib
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

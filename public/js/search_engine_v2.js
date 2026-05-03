@@ -1,3 +1,9 @@
+/**
+ * @file search_engine_v2.js
+ * @description Search engine v2 — full-text search with ranking and category filters
+ * @module MUMS/Search
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

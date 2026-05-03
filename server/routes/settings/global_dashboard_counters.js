@@ -1,3 +1,9 @@
+/**
+ * @file global_dashboard_counters.js
+ * @description Global Dashboard Counters module
+ * @module MUMS/MUMS
+ * @version UAT
+ */
 // server/routes/settings/global_dashboard_counters.js
 // GET  /api/settings/global_dashboard_counters  — any authenticated user (reads counter config)
 // POST /api/settings/global_dashboard_counters  — SUPER_ADMIN only (writes counter config)

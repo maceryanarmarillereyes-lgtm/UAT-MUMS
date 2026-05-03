@@ -1,3 +1,9 @@
+/**
+ * @file bulk-lookup.js
+ * @description Bulk Lookup module
+ * @module MUMS/MUMS
+ * @version UAT
+ */
 export async function onRequestPost(context) {
   const { request, env } = context;
 

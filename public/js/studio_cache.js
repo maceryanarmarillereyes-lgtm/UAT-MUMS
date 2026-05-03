@@ -1,3 +1,9 @@
+/**
+ * @file studio_cache.js
+ * @description Support Studio cache layer — caches KB and QB data to reduce API calls
+ * @module MUMS/Studio
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

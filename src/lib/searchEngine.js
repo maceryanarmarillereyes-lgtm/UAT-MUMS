@@ -1,4 +1,10 @@
 /**
+ * @file searchEngine.js
+ * @description Client-side search engine — indexes and queries local data with ranking
+ * @module MUMS/Lib
+ * @version UAT
+ */
+/**
  * MUMS Support Studio - High Level Enterprise Search Engine v2
  * Features:
  * - Full dataset ingestion (no field limits)

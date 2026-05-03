@@ -1,3 +1,9 @@
+/**
+ * @file logs.js
+ * @description Page: Activity Logs — searchable audit trail of user and system events
+ * @module MUMS/Pages
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

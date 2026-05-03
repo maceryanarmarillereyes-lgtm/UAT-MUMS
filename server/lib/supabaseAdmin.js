@@ -1,3 +1,9 @@
+/**
+ * @file supabaseAdmin.js
+ * @description Server lib: Supabase Admin client factory using service role key (bypasses RLS)
+ * @module MUMS/Server/Lib
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

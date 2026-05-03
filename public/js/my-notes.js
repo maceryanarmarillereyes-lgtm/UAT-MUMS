@@ -1,3 +1,9 @@
+/**
+ * @file my-notes.js
+ * @description My Notes personal workspace — rich-text notes with workspace management
+ * @module MUMS/Notes
+ * @version UAT
+ */
 /* ═══════════════════════════════════════════════════════════════════════════
    My Notes v4 — MUMS Command Center
    ✅ Rich text editor: bold/italic/headings/colours/highlights/lists/checkboxes/code

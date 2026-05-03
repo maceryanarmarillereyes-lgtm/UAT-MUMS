@@ -1,4 +1,10 @@
 /**
+ * @file index.mjs
+ * @description Index.Mjs module
+ * @module MUMS/MUMS
+ * @version UAT
+ */
+/**
  * worker/index.mjs
  * Cloudflare Worker module example. Configure secrets in Wrangler or Cloudflare dashboard:
  * QUICKBASE_REALM, QUICKBASE_TOKEN, QUICKBASE_TABLE_ID

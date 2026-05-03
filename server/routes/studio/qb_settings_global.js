@@ -1,3 +1,9 @@
+/**
+ * @file qb_settings_global.js
+ * @description Qb Settings Global module
+ * @module MUMS/MUMS
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

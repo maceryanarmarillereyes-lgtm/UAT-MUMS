@@ -1,3 +1,9 @@
+/**
+ * @file ui.js
+ * @description UI utility library — modals, toasts, loaders, and DOM helpers
+ * @module MUMS/UI
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

@@ -1,3 +1,9 @@
+/**
+ * @file quickbaseSync.service.test.js
+ * @description Quickbasesync.Service.Test module
+ * @module MUMS/MUMS
+ * @version UAT
+ */
 const assert = require('assert');
 const svc = require('../server/services/quickbaseSync');
 

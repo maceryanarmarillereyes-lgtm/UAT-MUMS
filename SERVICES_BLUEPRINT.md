@@ -462,3 +462,8 @@ If step #3 is missing, task is incomplete.
   - **Update — `public/js/services-qb-lookup.js`:** `refreshAllLinkedColumns()` is now gated by `localStorage.getItem('mums_qb_autosync') === '1'`; when unset or not `1`, it exits early and skips sync.
   - **Behavior contract:** Auto QB sync is now default-disabled unless explicitly enabled via localStorage flag.
   - **Files changed:** `public/js/services-qb-lookup.js`, `SERVICES_BLUEPRINT.md`.
+
+- **2026-05-02 (SQL migration parity for Services QB sync + global theme legacy endpoint):**
+  - **Edit — `supabase/migrations/20260502_01_feature_sql_parity_global_settings_and_qb_tokens.sql`:** Added idempotent DDL for `public.qb_tokens` (with `updated_at` index + authenticated read policy) to match Services QB freshness probes in `services-qb-lookup.js`.
+  - **Edit — `supabase/migrations/20260502_01_feature_sql_parity_global_settings_and_qb_tokens.sql`:** Added idempotent DDL for `public.mums_global_settings` (primary key `setting_key`, jsonb value, timestamp index, authenticated read policy) to support `/api/settings/global-theme` reads/writes via service-role.
+  - **Behavior contract update:** Migration history now includes all runtime tables needed by Services QB token freshness checks and legacy global-theme settings endpoint, preventing drift between live Supabase state and repo migrations.

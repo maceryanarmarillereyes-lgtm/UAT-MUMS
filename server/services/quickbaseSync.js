@@ -1,3 +1,9 @@
+/**
+ * @file quickbaseSync.js
+ * @description Server service: QuickBase sync orchestrator — reconciles QB data into Supabase tables
+ * @module MUMS/Server/Services
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

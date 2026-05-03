@@ -1,3 +1,9 @@
+/**
+ * @file server.js
+ * @description Local development WebSocket relay server for Supabase Realtime
+ * @module MUMS/Realtime
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD: UNTOUCHABLE ZONE. Do not modify existing UI/UX, layouts, or core logic in this file without explicitly asking MACE for clearance. If changes are required here, STOP and provide a RISK IMPACT REPORT first. */
 
 /**

@@ -1,3 +1,9 @@
+/**
+ * @file quickbase-utils.js
+ * @description Server lib: QuickBase API utility functions (field parsing, error handling)
+ * @module MUMS/Server/Lib
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

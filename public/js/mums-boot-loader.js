@@ -1,3 +1,9 @@
+/**
+ * @file mums-boot-loader.js
+ * @description Application boot sequence orchestrator — loads env, auth, then SPA
+ * @module MUMS/Core
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Auth Flow.

@@ -1,3 +1,9 @@
+/**
+ * @file package_phase1_release.js
+ * @description Package Phase1 Release module
+ * @module MUMS/MUMS
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD: UNTOUCHABLE ZONE. Do not modify existing UI/UX, layouts, or core logic in this file without explicitly asking MACE for clearance. If changes are required here, STOP and provide a RISK IMPACT REPORT first. */
 #!/usr/bin/env node
 'use strict';

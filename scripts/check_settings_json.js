@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+/**
+ * @file check_settings_json.js
+ * @description Script: validates settings JSON structure against expected schema
+ * @module MUMS/Scripts
+ * @version UAT
+ */
 const fs = require('fs');
 const path = require('path');
 const { serviceSelect, serviceUpdate, serviceFetch } = require('../server/lib/supabase');

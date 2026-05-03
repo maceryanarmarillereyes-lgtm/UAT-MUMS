@@ -1,3 +1,9 @@
+/**
+ * @file coverageMeter.js
+ * @description Component: schedule coverage meter — visualises shift coverage percentage
+ * @module MUMS/Components
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

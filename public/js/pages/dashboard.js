@@ -1,3 +1,9 @@
+/**
+ * @file dashboard.js
+ * @description Page: Dashboard — main landing page with widgets, presence, and mailbox summary
+ * @module MUMS/Pages
+ * @version UAT
+ */
 /* dashboard.js — MUMS Executive Pulse
  * Renders the live dashboard counters pulled from Quickbase.
  * Data source   : Global QB Settings (realm / tableId / qid / token)

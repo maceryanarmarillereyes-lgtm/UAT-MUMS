@@ -1,3 +1,9 @@
+/**
+ * @file global_qb_fields.js
+ * @description Global Qb Fields module
+ * @module MUMS/MUMS
+ * @version UAT
+ */
 // server/routes/settings/global_qb_fields.js
 // GET /api/settings/global_qb_fields[?forceRefresh=1]
 //

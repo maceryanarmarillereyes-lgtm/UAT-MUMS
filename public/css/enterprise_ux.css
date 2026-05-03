@@ -1,3 +1,9 @@
+/**
+ * @file enterprise_ux.css
+ * @description Enterprise UX master stylesheet — layout shell, navigation, sidebar, and component tokens
+ * @module MUMS/Styles
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·

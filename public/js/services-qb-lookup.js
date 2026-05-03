@@ -1,3 +1,9 @@
+/**
+ * @file services-qb-lookup.js
+ * @description Services module: QuickBase field lookup and cross-reference resolution
+ * @module MUMS/Services
+ * @version UAT
+ */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
    Database/API Adapters · Tab Isolation · Virtual Column State ·
