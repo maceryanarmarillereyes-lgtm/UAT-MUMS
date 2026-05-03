@@ -362,7 +362,6 @@
         theme: 'openThemeBtn',
         quicklinks: 'openLinksBtn',
         worldclocks: 'openClocksBtn',
-        cursor: 'openCursorBtn',
         sidebar: 'openSidebarBtn',
         datatools: 'openDataToolsBtn',
       };
@@ -5243,13 +5242,6 @@ ${i < notes.length - 1 ? '<div class="rn-sidebar-divider"></div>' : ''}`;
                 if(UI.bindSoundSettingsModal) UI.bindSoundSettingsModal(_panelUser);
               }catch(_){}
             },
-            cursor: function(){
-              // Sync cursor dropdown to saved value
-              try{
-                const curSel = document.getElementById('cursorModeSelect');
-                if(curSel) curSel.value = (localStorage.getItem('mums_cursor_mode')||'custom');
-              }catch(_){}
-            },
             sidebar: function(){
               // Sync sidebar selects to saved values
               try{
@@ -5888,10 +5880,6 @@ async function boot(){
       document.body.classList.toggle('density-compact', d==='compact');
     }catch(e){}
 
-    try{
-      const cursorMode = 'system';
-      localStorage.setItem('mums_cursor_mode', cursorMode);
-    }catch(e){}
     try{ applySidebarState(); }catch(e){}
     try{ bindSidebarToggle(); }catch(e){}
     try{ bindMobilePanelToggle(); }catch(e){}
@@ -5908,10 +5896,6 @@ async function boot(){
     try{ bindNavKeyboard(); }catch(e){}
 
     try{
-      const curSel = document.getElementById('cursorModeSelect');
-      if(curSel){
-        curSel.value = (localStorage.getItem('mums_cursor_mode')||'custom');
-        curSel.onchange = ()=>{ try{ UI.setCursorMode(curSel.value); }catch(e){} };
       }
       const densSel = document.getElementById('densitySelect');
       if(densSel){
@@ -6199,10 +6183,6 @@ async function boot(){
     if(openThemeBtn){
       openThemeBtn.onclick = ()=>{ try{ __themeEditMode = false; renderThemeGrid(); }catch(_){} };
     }
-
-    const openCursorBtn = document.getElementById('openCursorBtn');
-    if(openCursorBtn){
-      openCursorBtn.onclick = ()=>{};
     }
 
     const openSidebarBtn = document.getElementById('openSidebarBtn');
