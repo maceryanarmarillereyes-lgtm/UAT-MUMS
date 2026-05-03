@@ -50,3 +50,5 @@
 - **2026-04-20** — Initial core dashboard/operations blueprint created.
 - **2026-04-22** — Leave Monitor right-sidebar overflow handling updated: monitor body now scrolls independently while footer action buttons remain visible, with session scroll position persistence.
 - **2026-04-26** — Added My Notes v2 widget integration scope (topbar pre-release-notes insertion + Supabase notes persistence contract).
+
+- **2026-05-03** — Dashboard gate tightened: users without a valid Quickbase name assignment are hard-blocked from dashboard counters to prevent global data bleed; UI now shows `DATA NOT AVAILABLE` with admin-contact instruction.

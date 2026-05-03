@@ -78,6 +78,13 @@
   // Build Quickbase WHERE clause for a counter
   // fieldId is the numeric field id, operator is QB operator (EX, CT, etc.)
   // userValue is the user's qb_name (injected automatically for hero)
+
+  function hasValidQbName(name) {
+    const normalized = String(name || '').trim().toLowerCase();
+    if (!normalized) return false;
+    return normalized !== 'not assigned' && normalized !== '-- not assigned --';
+  }
+
   function buildWhere(fieldId, operator, value) {
     if (!fieldId || !value) return '';
     return `{${fieldId}.${operator}.'${value.replace(/'/g, "\\'")}'}`;
@@ -149,8 +156,8 @@
     <!-- no QB name -->
     <div id="epNoQbName" style="display:none;text-align:center;color:rgba(255,255,255,.25);font-size:13px;line-height:2">
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="1.5" stroke-linecap="round" style="margin-bottom:12px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      <div>Your Quickbase name is not set.</div>
-      <div style="font-size:11px;margin-top:6px">Ask your Super Admin to assign your QB Name in User Management.</div>
+      <div>DATA NOT AVAILABLE</div>
+      <div style="font-size:11px;margin-top:6px">Contact the ADMIN to Enable your dashboard.</div>
     </div>
 
     <!-- dashboard content -->
@@ -281,8 +288,8 @@
         hide('epLoading'); show('epNoConfig'); return;
       }
 
-      // Hero requires qb_name (it's the personal filter). Side counters may not.
-      if (hasHero && !userQbName) {
+      // Dashboard requires a valid Quickbase name to prevent global-data bleed.
+      if (!hasValidQbName(userQbName)) {
         hide('epLoading'); show('epNoQbName'); return;
       }
 
