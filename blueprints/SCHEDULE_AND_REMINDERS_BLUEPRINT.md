@@ -28,9 +28,11 @@
 - Preserve reminder escalation/snooze settings behavior.
 
 ## Change checklist
-- [ ] Schedule load/edit works for role scopes.
+- [x] Schedule load/edit works for role scopes (validated actor-id sanitization for `/api/member/:uid/schedule` requests to prevent malformed UID fetch loops).
 - [ ] Calendar endpoint auth header still applied.
 - [ ] Reminder category/escalation settings still persisted.
 
 ## Change log
 - **2026-04-20** — Initial schedule/reminders blueprint created.
+
+- **2026-05-03** — Added actor-id sanitization requirement for My Schedule API calls to block malformed UID request storms and reduce Supabase/PostgREST load on free-tier projects.
