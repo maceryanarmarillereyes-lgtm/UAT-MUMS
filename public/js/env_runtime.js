@@ -116,12 +116,20 @@
   }, 3500);
 
   // ── ORG FINGERPRINT CHECK ─────────────────────────────────────────────────
-  // When SUPABASE_URL changes (new org / migration), all localStorage keys that
-  // are org-specific (users, mailbox state, schedules, cases, etc.) become stale
-  // ghost data from the old org. We detect the org change here — at the earliest
-  // possible boot point — and purge them before any module reads from cache.
+  // Supabase is the SINGLE SOURCE OF TRUTH for all org data.
+  // localStorage is only a read-through cache. When the Supabase org changes
+  // (new org / migration), all cached data (users, mailbox tables, schedules,
+  // cases, etc.) is stale and MUST be purged before any module reads it.
   //
-  // Keys preserved across migration (user-preference, not org-data):
+  // STRATEGY:
+  //   - Fingerprint = SUPABASE_URL (unique per org)
+  //   - On first boot (no stored fingerprint): CLEAR all org-cache then set FP.
+  //     Reason: we cannot know if existing localStorage data is from this org.
+  //     Safe because CloudUsers + Realtime sync will repopulate within seconds.
+  //   - On URL match (same org): no-op — normal boot.
+  //   - On URL mismatch (org changed): CLEAR then set new FP.
+  //
+  // Keys preserved across all scenarios (user-preference, not org-data):
   //   mums_theme, mums_worldclocks, mums_quicklinks,
   //   mums_release_notes, mums_release_notes_backup, mums__org_fp
   //
@@ -132,7 +140,7 @@
     'mums__org_fp': 1
   };
 
-  function _clearOrgCache(newUrl) {
+  function _clearOrgCache(newUrl, reason) {
     try {
       var toDelete = [];
       for (var i = 0; i < localStorage.length; i++) {
@@ -147,7 +155,7 @@
         localStorage.removeItem(toDelete[j]);
       }
       localStorage.setItem(ORG_FP_KEY, newUrl);
-      DBG.log('info', 'env_runtime.org_migration_detected — cache cleared', { keys: toDelete.length });
+      DBG.log('info', 'env_runtime.org_cache_cleared', { reason: reason, keys: toDelete.length, org: newUrl });
     } catch(e) {
       // localStorage may be full or blocked — non-fatal
     }
@@ -157,12 +165,20 @@
     if (!newUrl) return; // no URL yet — skip
     try {
       var stored = localStorage.getItem(ORG_FP_KEY) || '';
-      if (stored && stored !== newUrl) {
-        // Org has changed — wipe all stale org-specific cache
-        _clearOrgCache(newUrl);
+      if (stored === newUrl) {
+        // Same org — no-op, normal boot
+        return;
       } else if (!stored) {
-        // First boot on this domain — write fingerprint, nothing to clear
-        localStorage.setItem(ORG_FP_KEY, newUrl);
+        // ── FIRST BOOT or fingerprint was cleared ──────────────────────────
+        // Cannot verify if existing localStorage data belongs to this org.
+        // Clear all org-specific cache NOW before any module reads stale data.
+        // CloudUsers + Realtime will repopulate from Supabase within seconds.
+        _clearOrgCache(newUrl, 'first_boot_cache_sanitize');
+      } else {
+        // ── ORG CHANGED (migration) ────────────────────────────────────────
+        // stored !== newUrl — different Supabase org. All cached data is
+        // from the old org. Purge everything and set the new fingerprint.
+        _clearOrgCache(newUrl, 'org_migration');
       }
     } catch(e) {}
   }

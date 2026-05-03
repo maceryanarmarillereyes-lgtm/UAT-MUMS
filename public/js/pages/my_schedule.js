@@ -76,15 +76,6 @@
     return String(raw == null ? '' : raw);
   }
 
-
-
-  function sanitizeActorId(rawValue) {
-    const raw = String(rawValue || '').trim();
-    if (!raw) return '';
-    const uuid = raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i);
-    if (uuid && uuid[0]) return uuid[0].toLowerCase();
-    return raw.split(/[?,&#\s]+/)[0].trim();
-  }
   function getBearerToken() {
     try {
       const t = (window.CloudAuth && CloudAuth.accessToken) ? String(CloudAuth.accessToken() || '').trim() : '';
@@ -1678,7 +1669,7 @@
   // Fetches the current user's own schedule blocks from the API and hydrates
   // localStorage so getMyBlocks() returns real data (not just realtime leftovers).
   async function loadMyScheduleBlocks() {
-    const uid = sanitizeActorId((me && me.id) || sessionUserId || '');
+    const uid = String((me && me.id) || sessionUserId || '').trim();
     if (!uid) return;
     const liveTeamId = _resolveMyTeamId();
     const jwt = getBearerToken();
@@ -1728,7 +1719,7 @@
     _tmState._lastFetchAt = _now;
 
     const liveUser = (window.Auth && Auth.getUser) ? Auth.getUser() : me;
-    const uid = sanitizeActorId((liveUser && liveUser.id) || (me && me.id) || '');
+    const uid = String((liveUser && liveUser.id) || (me && me.id) || '').trim();
 
     if (!uid) {
       if (_tmState.retryCount < 8) {
