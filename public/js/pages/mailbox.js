@@ -3287,14 +3287,27 @@ function _mbxReadJwt(){
       const sel = modal.querySelector('#mbxCaseActionReassign');
       if(!sel) return;
       const { table } = ensureShiftTables();
-      const members = Array.isArray(table?.members) ? table.members : [];
-      const options = members
-        .filter(m=>m && String(m.id||'') && String(m.id||'') !== String(ownerId||''))
-        .map(m=>{
-          const id = String(m.id||'').trim();
-          const name = String(m.name||m.username||id).trim() || id;
-          return `<option value="${id.replace(/"/g,'&quot;')}">${name.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</option>`;
-        })
+      const unique = new Map();
+      const addCandidate = (raw)=>{
+        if(!raw) return;
+        const id = String(raw.id || '').trim();
+        if(!id || id === String(ownerId||'')) return;
+        if(unique.has(id)) return;
+        const name = String(raw.name || raw.username || id).trim() || id;
+        unique.set(id, { id, name });
+      };
+
+      (Array.isArray(table?.members) ? table.members : []).forEach(addCandidate);
+      const teamId = String(table?.meta?.teamId || '');
+      if(teamId && _rosterByTeam && Array.isArray(_rosterByTeam[teamId])){
+        _rosterByTeam[teamId].forEach(addCandidate);
+      }
+
+      const meNow = (window.Auth && window.Auth.getUser) ? window.Auth.getUser() : null;
+      addCandidate({ id: String(meNow?.id || ''), name: String(meNow?.name || meNow?.username || meNow?.id || '') });
+
+      const options = Array.from(unique.values())
+        .map(m=>`<option value="${m.id.replace(/"/g,'&quot;')}">${m.name.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</option>`)
         .join('');
       sel.innerHTML = `<option value="">Select member...</option>${options}`;
       sel.disabled = !options;

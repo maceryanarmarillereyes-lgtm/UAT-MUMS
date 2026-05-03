@@ -42,3 +42,15 @@
   - Added per-team forced-resync throttle window to collapse rapid repeated triggers.
   - Preserved server backoff cooldown during forced resync instead of clearing it.
   - Ensured in-flight sync requests are never re-triggered by realtime/state event bursts.
+- **2026-05-03** — Enabled on-duty Mailbox Manager self-assignment parity in Case Action reassignment:
+  - Reassignment target list now merges table members + team roster cache and includes current actor as fallback candidate.
+  - Preserved owner exclusion while allowing manager to reassign an existing case to themselves when on-duty.
+- **2026-05-03** — Fixed reassigned-case stale ownership record cleanup:
+  - Reassign now rewrites `ums_cases` for the case+shift into a single canonical entry owned by the new assignee.
+  - Prevents old owner from retaining acknowledged/reassigned case rows in Mailbox matrix-linked My Case record lists.
+- **2026-05-03** — Hardened mailbox table reassignment dedupe at source:
+  - Reassign action now keeps exactly one canonical assignment row per case number in `table.assignments` (canonical = current assignment id).
+  - Rebuilds `table.counts` from canonical assignments to prevent matrix ghost counts/cells after reassignment + acknowledgment.
+- **2026-05-03** — Added server-side missing-shift-table bootstrap for mailbox assignment:
+  - `/api/mailbox/assign` now auto-creates a canonical shift table payload when `mums_mailbox_tables[shiftKey]` is missing.
+  - Prevents false `Mailbox table not found` errors during first assignment on fresh shift keys (especially night shift rollover).
