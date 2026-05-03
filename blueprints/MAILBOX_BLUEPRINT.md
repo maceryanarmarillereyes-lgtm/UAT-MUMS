@@ -45,3 +45,6 @@
 - **2026-05-03** — Enabled on-duty Mailbox Manager self-assignment parity in Case Action reassignment:
   - Reassignment target list now merges table members + team roster cache and includes current actor as fallback candidate.
   - Preserved owner exclusion while allowing manager to reassign an existing case to themselves when on-duty.
+- **2026-05-03** — Fixed reassigned-case stale ownership record cleanup:
+  - Reassign now rewrites `ums_cases` for the case+shift into a single canonical entry owned by the new assignee.
+  - Prevents old owner from retaining acknowledged/reassigned case rows in Mailbox matrix-linked My Case record lists.

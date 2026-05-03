@@ -217,18 +217,36 @@ function normalizeCaseNo(v){
 function updateCasesForReassign(list, payload){
   const { oldAssigneeId, newAssigneeId, newAssigneeName, shiftKey, caseNo } = payload;
   const key = normalizeCaseNo(caseNo);
-  return (Array.isArray(list) ? list : []).map((c)=>{
-    if(!c || typeof c !== 'object') return c;
-    const sameAssignee = String(c.assigneeId || '') === String(oldAssigneeId || '');
+  const source = Array.isArray(list) ? list : [];
+
+  let canonical = null;
+  for(const c of source){
+    if(!c || typeof c !== 'object') continue;
     const sameShift = String(c.shiftKey || '') === String(shiftKey || '');
     const sameCaseNo = normalizeCaseNo(c.caseNo || c.title || '') === key;
-    if(!sameAssignee || !sameShift || !sameCaseNo) return c;
-    return Object.assign({}, c, {
-      assigneeId: newAssigneeId,
-      assigneeName: newAssigneeName,
-      status: 'Assigned'
-    });
+    if(!sameShift || !sameCaseNo) continue;
+    const cAssignee = String(c.assigneeId || '');
+    if(cAssignee === String(oldAssigneeId || '') || cAssignee === String(newAssigneeId || '')){
+      canonical = Object.assign({}, c, canonical || {});
+    }
+  }
+
+  const cleaned = source.filter((c)=>{
+    if(!c || typeof c !== 'object') return false;
+    const sameShift = String(c.shiftKey || '') === String(shiftKey || '');
+    const sameCaseNo = normalizeCaseNo(c.caseNo || c.title || '') === key;
+    return !(sameShift && sameCaseNo);
   });
+
+  const nextEntry = Object.assign({}, canonical || {}, {
+    caseNo: safeString(caseNo, 120),
+    shiftKey: safeString(shiftKey, 120),
+    assigneeId: newAssigneeId,
+    assigneeName: newAssigneeName,
+    status: 'Assigned'
+  });
+
+  return [nextEntry, ...cleaned];
 }
 
 function removeCaseEntry(list, payload){
