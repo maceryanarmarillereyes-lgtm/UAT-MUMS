@@ -28,9 +28,10 @@
 - Preserve reminder escalation/snooze settings behavior.
 
 ## Change checklist
-- [ ] Schedule load/edit works for role scopes.
+- [x] Schedule load/edit works for role scopes.
 - [ ] Calendar endpoint auth header still applied.
 - [ ] Reminder category/escalation settings still persisted.
 
 ## Change log
 - **2026-04-20** — Initial schedule/reminders blueprint created.
+- **2026-05-03** — My Schedule shift-status fallback now infers label from configured shift start time when team/user shift key is missing or non-standard, preventing status mismatch with displayed schedule window.
