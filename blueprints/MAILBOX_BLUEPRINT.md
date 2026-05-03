@@ -54,3 +54,6 @@
 - **2026-05-03** — Added server-side missing-shift-table bootstrap for mailbox assignment:
   - `/api/mailbox/assign` now auto-creates a canonical shift table payload when `mums_mailbox_tables[shiftKey]` is missing.
   - Prevents false `Mailbox table not found` errors during first assignment on fresh shift keys (especially night shift rollover).
+- **2026-05-03** — Normalized assignment shiftKey resolution for cross-client consistency:
+  - `/api/mailbox/assign` now resolves incoming `shiftKey` to an existing canonical key in `mums_mailbox_tables` using case-insensitive match before write.
+  - Prevents split-key writes (`night|...` vs `NIGHT|...`) that caused assigned-user notification/case visibility desync.

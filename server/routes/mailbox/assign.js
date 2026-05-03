@@ -236,6 +236,14 @@ function ensureShiftTable(allTables, shiftKey){
   };
 }
 
+function resolveShiftKey(allTables, requestedShiftKey){
+  const req = safeString(requestedShiftKey, 120);
+  if(!req) return "";
+  const keys = Object.keys((allTables && typeof allTables === "object") ? allTables : {});
+  const hit = keys.find(k => String(k || "").toLowerCase() === req.toLowerCase());
+  return hit || req;
+}
+
 function normalizeCaseNo(v){
   return String(v||'').trim().toLowerCase();
 }
@@ -318,9 +326,11 @@ module.exports = async (req, res) => {
       return res.end(JSON.stringify({ ok:false, error:'Failed to read mailbox tables', details: tablesDoc.details }));
     }
     const allTables = (tablesDoc.value && typeof tablesDoc.value === 'object') ? tablesDoc.value : {};
-    const table = ensureShiftTable(allTables, shiftKey);
+    const resolvedShiftKey = resolveShiftKey(allTables, shiftKey);
+    const resolvedShiftTeamId = parseShiftTeamId(resolvedShiftKey);
+    const table = ensureShiftTable(allTables, resolvedShiftKey);
 
-    const dutyWindow = resolveDutyWindow(shiftTeamId, table);
+    const dutyWindow = resolveDutyWindow(resolvedShiftTeamId, table);
     const inDutyWindow = blockHit(now.nowMin, dutyWindow.startMin, dutyWindow.endMin);
 
     // TEAM_LEAD + MEMBER must act only on the active duty shift (admins may override).
@@ -330,7 +340,7 @@ module.exports = async (req, res) => {
         return res.end(JSON.stringify({ ok:false, error:'Forbidden (not on active shift)' }));
       }
       const teamIdGate = safeString(profile && (profile.team_id || profile.teamId) ? (profile.team_id || profile.teamId) : '', 40);
-      if(teamIdGate && shiftTeamId && teamIdGate !== shiftTeamId){
+      if(teamIdGate && resolvedShiftTeamId && teamIdGate !== resolvedShiftTeamId){
         res.statusCode = 403;
         return res.end(JSON.stringify({ ok:false, error:'Forbidden (not in duty team)' }));
       }
@@ -340,7 +350,7 @@ module.exports = async (req, res) => {
     if(!isAdminAnytime && !isTeamLead){
       // Must be a member mailbox manager on duty and assigned to current duty team.
       const teamId = safeString(profile && (profile.team_id || profile.teamId) ? (profile.team_id || profile.teamId) : '', 40);
-      if(!teamId || (shiftTeamId && teamId !== shiftTeamId)){
+      if(!teamId || (resolvedShiftTeamId && teamId !== resolvedShiftTeamId)){
         res.statusCode = 403;
         return res.end(JSON.stringify({ ok:false, error:'Forbidden (not in duty team)' }));
       }
@@ -361,7 +371,7 @@ module.exports = async (req, res) => {
     // TEAM_LEAD + MEMBER: enforce that assignment is within the active duty shift table.
     if(!isAdminAnytime){
       const tableTeam = safeString(table && table.meta && table.meta.teamId ? table.meta.teamId : '', 40);
-      if(tableTeam && shiftTeamId && tableTeam !== shiftTeamId){
+      if(tableTeam && resolvedShiftTeamId && tableTeam !== resolvedShiftTeamId){
         res.statusCode = 403;
         return res.end(JSON.stringify({ ok:false, error:'Forbidden (shiftKey not current duty shift)' }));
       }
@@ -372,7 +382,7 @@ module.exports = async (req, res) => {
     try{
       const stateDoc = await getDocValue('mums_mailbox_state');
       const st = stateDoc.ok && stateDoc.value && typeof stateDoc.value === 'object' ? stateDoc.value : {};
-      const curKey = safeString(st.currentKey || shiftKey, 120);
+      const curKey = safeString(st.currentKey || resolvedShiftKey, 120);
       const prevKey = safeString(st.previousKey || '', 120);
       const toCheck = [curKey, prevKey].filter(Boolean).map(k=>allTables[k]).filter(t=>t && Array.isArray(t.assignments));
       const dup = toCheck.some(t => t.assignments.some(a => String(a && a.caseNo || '').toLowerCase() === lower));
@@ -452,7 +462,7 @@ module.exports = async (req, res) => {
     // Persist with verify/retry and fail hard when we cannot confirm durability.
     let wrote = false;
     let persistedTable = next;
-    allTables[shiftKey] = table;
+    allTables[resolvedShiftKey] = table;
     for(let attempt=0; attempt<4; attempt++){
       let latestAll = allTables;
       if(attempt > 0){
@@ -460,7 +470,7 @@ module.exports = async (req, res) => {
         latestAll = (latestDoc.ok && latestDoc.value && typeof latestDoc.value === 'object') ? latestDoc.value : {};
       }
 
-      const latestTable = (latestAll[shiftKey] && typeof latestAll[shiftKey] === 'object') ? latestAll[shiftKey] : {};
+      const latestTable = (latestAll[resolvedShiftKey] && typeof latestAll[resolvedShiftKey] === 'object') ? latestAll[resolvedShiftKey] : {};
       const merged = JSON.parse(JSON.stringify(latestTable));
       merged.assignments = Array.isArray(merged.assignments) ? merged.assignments : [];
       const existingById = merged.assignments.find(a=>a && a.id===assignment.id);
@@ -488,7 +498,7 @@ module.exports = async (req, res) => {
         role
       };
 
-      const payloadAll = Object.assign({}, latestAll, { [shiftKey]: merged });
+      const payloadAll = Object.assign({}, latestAll, { [resolvedShiftKey]: merged });
       const up = await upsertDoc('mums_mailbox_tables', payloadAll, actor, profile, clientId);
       if(!up.ok){
         res.statusCode = 500;
@@ -497,11 +507,11 @@ module.exports = async (req, res) => {
 
       const verify = await getDocValue('mums_mailbox_tables');
       const verifyAll = (verify.ok && verify.value && typeof verify.value === 'object') ? verify.value : {};
-      const verifyTable = verifyAll[shiftKey];
+      const verifyTable = verifyAll[resolvedShiftKey];
       const ok = !!(verifyTable && Array.isArray(verifyTable.assignments) && verifyTable.assignments.some(a=>a && a.id===assignment.id));
       if(ok){
         wrote = true;
-        allTables[shiftKey] = verifyTable;
+        allTables[resolvedShiftKey] = verifyTable;
         persistedTable = verifyTable;
         break;
       }
@@ -536,11 +546,11 @@ module.exports = async (req, res) => {
           (desc ? `note: ${desc}` : ''),
           `timeblock ${bucketLabel}`,
           `bucketId ${assignment.bucketId}`,
-          `shiftKey ${shiftKey}`
+          `shiftKey ${resolvedShiftKey}`
         ].filter(Boolean).join(' • '),
 
         // Structured context (safe to ignore by older clients)
-        shiftKey,
+        shiftKey: resolvedShiftKey,
         bucketId: assignment.bucketId,
         timeblock: {
           start: safeString(bucket.start, 10),
@@ -565,7 +575,7 @@ module.exports = async (req, res) => {
         id: notifId,
         ts: assignment.assignedAt,
         type: 'MAILBOX_ASSIGN',
-        teamId: safeString(persistedTable?.meta?.teamId || shiftTeamId, 40),
+        teamId: safeString(persistedTable?.meta?.teamId || resolvedShiftTeamId, 40),
         fromId: actor.id,
         fromName: assignment.actorName,
         title: 'Case Assigned Notification',
@@ -574,7 +584,7 @@ module.exports = async (req, res) => {
         assignmentId: assignment.id,
         caseNo,
         desc,
-        shiftKey,
+        shiftKey: resolvedShiftKey,
         bucketId: assignment.bucketId,
         timeblock: {
           start: safeString(bucket.start, 10),
@@ -607,7 +617,7 @@ module.exports = async (req, res) => {
         assigneeName,
         assignedById: actor.id,
         assignedByName: assignment.actorName,
-        shiftKey,
+        shiftKey: resolvedShiftKey,
         bucketId: assignment.bucketId,
         mailboxTime: bucketLabel
       };
@@ -619,7 +629,7 @@ module.exports = async (req, res) => {
     }catch(_){}
 
     res.statusCode = 200;
-    return res.end(JSON.stringify({ ok:true, shiftKey, table: allTables[shiftKey], assignmentId: assignment.id }));
+    return res.end(JSON.stringify({ ok:true, shiftKey: resolvedShiftKey, table: allTables[resolvedShiftKey], assignmentId: assignment.id }));
   }catch(e){
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
