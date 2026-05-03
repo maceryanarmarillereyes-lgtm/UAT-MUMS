@@ -379,10 +379,21 @@
     return { color: c, bg, border, text };
   }
 
-  function shiftLabel(sk) {
+  function shiftLabel(sk, shift) {
     const key = String(sk || '').toLowerCase();
     if (key.includes('night')) return 'night';
     if (key.includes('mid')) return 'mid';
+    if (key.includes('morning') || key.includes('day')) return 'morning';
+    // Fallback: infer by configured shift start hour so status aligns with team/user schedule window.
+    const startHM = String((shift && shift.startHM) || '');
+    const hmMatch = /^(\d{1,2}):(\d{2})$/.exec(startHM);
+    if (hmMatch) {
+      const hh = Number(hmMatch[1]);
+      if (Number.isFinite(hh)) {
+        if (hh >= 20 || hh < 5) return 'night';
+        if (hh >= 12 && hh < 20) return 'mid';
+      }
+    }
     return 'morning';
   }
 
@@ -807,7 +818,7 @@
         <div class="schx-kpis">
           <div class="schx-kpi">
             <div class="small muted">Shift status</div>
-            <div class="big">${esc(shiftLabel(sk))}</div>
+            <div class="big">${esc(shiftLabel(sk, shift))}</div>
             <div class="small muted">${esc(shift.startHM)}–${esc(shift.endHM)}</div>
           </div>
           <div class="schx-kpi">
