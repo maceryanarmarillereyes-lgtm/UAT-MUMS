@@ -51,3 +51,6 @@
 - **2026-05-03** — Hardened mailbox table reassignment dedupe at source:
   - Reassign action now keeps exactly one canonical assignment row per case number in `table.assignments` (canonical = current assignment id).
   - Rebuilds `table.counts` from canonical assignments to prevent matrix ghost counts/cells after reassignment + acknowledgment.
+- **2026-05-03** — Added server-side missing-shift-table bootstrap for mailbox assignment:
+  - `/api/mailbox/assign` now auto-creates a canonical shift table payload when `mums_mailbox_tables[shiftKey]` is missing.
+  - Prevents false `Mailbox table not found` errors during first assignment on fresh shift keys (especially night shift rollover).

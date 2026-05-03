@@ -179,6 +179,63 @@ function makeAssignmentId(){
 }
 
 
+
+function splitShiftKey(shiftKey){
+  const raw = String(shiftKey || '');
+  const i = raw.indexOf('|');
+  if(i < 0) return { teamId:'', isoDate:'', dutyStart:'00:00' };
+  const teamId = raw.slice(0, i);
+  const rhs = raw.slice(i+1);
+  const tIdx = rhs.indexOf('T');
+  if(tIdx < 0) return { teamId, isoDate:rhs || '', dutyStart:'00:00' };
+  return { teamId, isoDate: rhs.slice(0, tIdx), dutyStart: rhs.slice(tIdx+1) || '00:00' };
+}
+
+function buildDefaultBuckets(dutyStart, dutyEnd){
+  const start = parseHM(dutyStart || '00:00');
+  const end = parseHM(dutyEnd || '00:00');
+  const wraps = end <= start;
+  const total = wraps ? (24*60 - start + end) : (end - start);
+  const seg = Math.max(1, Math.floor(total / 3));
+  const out = [];
+  for(let i=0;i<3;i++){
+    const s = (start + i*seg) % (24*60);
+    const e = (i===2) ? end : ((start + (i+1)*seg) % (24*60));
+    out.push({ id:`b${i}`, startMin:s, endMin:e, start:fmtHM(s), end:fmtHM(e) });
+  }
+  return out;
+}
+
+function fmtHM(min){
+  const m = ((Number(min)||0) % (24*60) + (24*60)) % (24*60);
+  const hh = Math.floor(m / 60);
+  const mm = m % 60;
+  return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+}
+
+function ensureShiftTable(allTables, shiftKey){
+  const existing = allTables && allTables[shiftKey];
+  if(existing && typeof existing === 'object') return existing;
+  const { teamId, dutyStart } = splitShiftKey(shiftKey);
+  const w = resolveDutyWindow(teamId, { meta:{ dutyStart } });
+  return {
+    meta: {
+      schemaVer: 3,
+      shiftKey,
+      teamId,
+      teamLabel: teamId,
+      dutyStart: dutyStart || w.start,
+      dutyEnd: w.end,
+      bucketManagers: {},
+      createdAt: Date.now()
+    },
+    buckets: buildDefaultBuckets(dutyStart || w.start, w.end),
+    members: [],
+    counts: {},
+    assignments: []
+  };
+}
+
 function normalizeCaseNo(v){
   return String(v||'').trim().toLowerCase();
 }
@@ -261,11 +318,7 @@ module.exports = async (req, res) => {
       return res.end(JSON.stringify({ ok:false, error:'Failed to read mailbox tables', details: tablesDoc.details }));
     }
     const allTables = (tablesDoc.value && typeof tablesDoc.value === 'object') ? tablesDoc.value : {};
-    const table = allTables[shiftKey];
-    if(!table || typeof table !== 'object'){
-      res.statusCode = 404;
-      return res.end(JSON.stringify({ ok:false, error:'Mailbox table not found', shiftKey }));
-    }
+    const table = ensureShiftTable(allTables, shiftKey);
 
     const dutyWindow = resolveDutyWindow(shiftTeamId, table);
     const inDutyWindow = blockHit(now.nowMin, dutyWindow.startMin, dutyWindow.endMin);
@@ -399,6 +452,7 @@ module.exports = async (req, res) => {
     // Persist with verify/retry and fail hard when we cannot confirm durability.
     let wrote = false;
     let persistedTable = next;
+    allTables[shiftKey] = table;
     for(let attempt=0; attempt<4; attempt++){
       let latestAll = allTables;
       if(attempt > 0){
