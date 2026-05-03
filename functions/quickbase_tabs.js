@@ -66,7 +66,7 @@ let mod = null;
 async function loadHandler(env) {
   ensureProcessEnv(env);
   if (!mod) {
-    const loaded = await import('../../server/routes/quickbase_tabs.js');
+    const loaded = await import('../server/routes/quickbase_tabs.js');
     mod = (loaded && (loaded.default || loaded)) || loaded;
   }
   return mod;

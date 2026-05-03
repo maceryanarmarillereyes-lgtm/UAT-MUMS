@@ -67,7 +67,7 @@ let mod = null;
 async function loadHandler(env) {
   ensureProcessEnv(env);
   if (!mod) {
-    const loaded = await import('../../../server/routes/settings/global_theme.js');
+    const loaded = await import('../../server/routes/settings/global_theme.js');
     mod = (loaded && (loaded.default || loaded)) || loaded;
   }
   return mod;

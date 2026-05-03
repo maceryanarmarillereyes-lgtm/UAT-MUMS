@@ -71,14 +71,14 @@ async function loadHandler(action, env) {
   const key = String(action || '').toLowerCase();
   if (key === 'get') {
     if (!modGet) {
-      const mod = await import('../../../server/routes/theme_access/get.js');
+      const mod = await import('../../server/routes/theme_access/get.js');
       modGet = (mod && (mod.default || mod)) || mod;
     }
     return modGet;
   }
   if (key === 'set') {
     if (!modSet) {
-      const mod = await import('../../../server/routes/theme_access/set.js');
+      const mod = await import('../../server/routes/theme_access/set.js');
       modSet = (mod && (mod.default || mod)) || mod;
     }
     return modSet;
