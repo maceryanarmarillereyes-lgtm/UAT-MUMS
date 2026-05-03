@@ -237,10 +237,6 @@
               <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/><circle cx="12" cy="12" r="4"/></svg></span>
               <span class="ms-ni-text"><span class="ms-ni-name">Theme</span><span class="ms-ni-sub">Color &amp; appearance</span></span>
             </button>
-            <button class="ms-nav-item" id="msNav_cursor" data-panel="cursor" type="button">
-              <span class="ms-ni-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 4l7.5 18 3-7 7-3z"/></svg></span>
-              <span class="ms-ni-text"><span class="ms-ni-name">Cursor</span><span class="ms-ni-sub">Pointer style</span></span>
-            </button>
 
             <!-- Workspace -->
             <div class="ms-grp-label">Workspace</div>
@@ -419,23 +415,6 @@
                 <div class="h3" style="margin:0 0 6px">Theme Lab</div>
                 <div class="small muted">Automatic readability checks (contrast + key UI elements).</div>
                 <div id="themeAuditInner" style="margin-top:10px"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- PANEL: Cursor -->
-                    <div class="ms-panel" id="msp_cursor" data-panel="cursor" style="display:none">
-            <div class="ms-panel-hero">
-              <div class="ms-hero-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l7.5 18 3-7 7-3z"/></svg></div>
-              <div class="ms-hero-text"><div class="ms-hero-title">Cursor</div><div class="ms-hero-desc">Choose between the custom in-app cursor or your system cursor.</div></div>
-            </div>
-            <div class="ms-panel-body">
-              <div class="ms-ctrl-group">
-                <div class="ms-ctrl-group-label">Cursor Mode</div>
-                <div class="ms-ctrl-row">
-                  <div class="ms-ctrl-label"><div class="ms-ctrl-name">Cursor mode</div><div class="ms-ctrl-hint">Custom cursor remains consistent regardless of OS pointer settings.</div></div>
-                  <div class="ms-ctrl-control"><select class="input" id="cursorModeSelect" style="min-width:160px"><option value="custom">Custom (always visible)</option><option value="system">System cursor</option></select></div>
-                </div>
               </div>
             </div>
           </div>
@@ -1601,8 +1580,7 @@
   <script src="/js/sync_status_ui.js?v=p1-664"></script>
   <script src="/js/pause-session-manager.js?v=p1-665"></script>
 <script src="/js/ui.js?v=p1-664"></script>
-  <script>try{ window.UI && UI.initAppCursor && UI.initAppCursor(); }catch(e){} </script>
-
+  
   <!-- Components — PERF-FIX-05: defer added; registers into global namespace,
        execution order preserved since all defer scripts run in order after parse. -->
   <script src="/js/components/sidebarLogs.js?v=p1-664" defer></script>
@@ -1761,30 +1739,6 @@
         </div>
         <div id="globalSearchResults" class="gresults" aria-live="polite"></div>
         <div class="small muted" style="margin-top:10px">Tips: Press <b>Enter</b> to open the top result. Use <b>↑/↓</b> to navigate.</div>
-      </div>
-    </div>
-  </div>
-
-
-  <!-- Cursor settings -->
-  <div class="modal" id="cursorSettingsModal">
-    <div class="panel">
-      <div class="head">
-        <div>
-          <div class="announce-title">Cursor</div>
-          <div class="small">Choose between the custom in-app cursor or your system cursor.</div>
-        </div>
-        <button class="btn ghost" type="button" data-close="cursorSettingsModal">✕</button>
-      </div>
-      <div class="body">
-        <div class="form-row">
-          <label class="small muted">Cursor mode</label>
-          <select id="cursorModeSelect_bak">
-            <option value="custom">Custom (always visible)</option>
-            <option value="system">System cursor</option>
-          </select>
-        </div>
-        <div class="small muted" style="margin-top:10px">Tip: Custom cursor remains consistent regardless of OS pointer settings.</div>
       </div>
     </div>
   </div>
