@@ -25,11 +25,10 @@
  *   2. LISTEN for these signals from the existing boot sequence:
  *      ┌─ mums:session_hydrated → Step: Profile Hydrated
  *      ├─ mums:syncstatus { mode:'realtime' } → Step: Sync Connected
- *      ├─ mums:syncstatus { mode:'polling' }  → Step: Sync Ready (fallback)
  *      └─ mums:syncstatus { mode:'offline' }  → Update pill state (degraded)
  *
  *   3. COMPLETION GATE:
- *      Ready = session_hydrated AND (realtime|polling connected)
+ *      Ready = session_hydrated AND realtime connected
  *      When ready:
  *        a. Run "Welcome, {name}" finish animation (checkmark + scale-up)
  *        b. After 1.2s → fade out loader + fade in .app
@@ -52,7 +51,7 @@
   window.__mumsLoaderMounted = true;
 
   // ── Constants ────────────────────────────────────────────────────────────
-  var HARD_TIMEOUT_MS    = 14000; // max wait before auto-dismiss
+  var HARD_TIMEOUT_MS    = 60000; // watchdog log timer only; loader waits for realtime-connected gate
   var DISMISS_DELAY_MS   = 1200;  // ms after "ready" before hiding loader
   var WELCOME_LINGER_MS  = 800;   // welcome flash duration
 
@@ -450,10 +449,11 @@
 
   function _onSyncConnected(mode) {
     if (_dismissed) return;
-    _syncReady = true;
+    var isRealtime = (mode === 'realtime');
+    _syncReady = isRealtime;
 
     var rl = document.getElementById('bl-ring-label');
-    if (rl) rl.textContent = mode === 'realtime' ? 'Live Sync' : 'Polling Sync';
+    if (rl) rl.textContent = isRealtime ? 'Live Sync' : 'Waiting Realtime';
 
     // Complete step 3
     _completeStep('bl-step3', null, document.getElementById('bl-step3-label'));
@@ -461,9 +461,16 @@
     _animatePct(80);
 
     // Realtime pill
-    var rtText  = mode === 'realtime' ? 'Connected' : 'Polling';
-    var rtColor = mode === 'realtime' ? 'rgba(52,211,153,.9)' : 'rgba(250,204,21,.9)';
+    var rtText  = isRealtime ? 'Connected' : 'Waiting';
+    var rtColor = isRealtime ? 'rgba(52,211,153,.9)' : 'rgba(251,191,36,.9)';
     _setPill('bl-p-realtime', rtText, rtColor);
+
+    if (!isRealtime) {
+      _setStepProgress(62);
+      _animatePct(82);
+      _checkReady();
+      return;
+    }
 
     // Activate step 4
     setTimeout(function () {
@@ -572,7 +579,7 @@
     // Also check if sync was already connected before our listener registered
     // (Realtime.init may fire before our listener if the script loads late)
     try {
-      if (window.__mumsSyncMode === 'realtime' || window.__mumsSyncMode === 'polling') {
+      if (window.__mumsSyncMode === 'realtime') {
         _syncReady = true;
       }
     } catch (_) {}
@@ -590,11 +597,13 @@
       _mount();
     }
 
-    // Hard safety timeout — never trap user
+    // Realtime wait watchdog: keep loader visible until realtime is connected.
     _hardTimer = setTimeout(function () {
-      if (!_dismissed) {
-        console.warn('[MUMS Loader] Hard timeout — auto-dismissing after ' + HARD_TIMEOUT_MS + 'ms');
-        _dismiss();
+      if (!_dismissed && !_syncReady) {
+        console.warn('[MUMS Loader] Realtime still not connected after ' + HARD_TIMEOUT_MS + 'ms; keeping loader active by design.');
+        _setPill('bl-p-realtime', 'Waiting', 'rgba(251,191,36,.9)');
+        var rl = document.getElementById('bl-ring-label');
+        if (rl) rl.textContent = 'Waiting Realtime';
       }
     }, HARD_TIMEOUT_MS);
   }
