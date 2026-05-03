@@ -24,9 +24,10 @@
 - Preserve override safety handling to prevent ghost active overrides.
 
 ## Change checklist
-- [ ] Assignment action still updates state + API.
-- [ ] Override state behaves correctly after reload.
-- [ ] No regression on member fallback schedule/task visibility.
+- [x] Assignment action still updates state + API.
+- [x] Override state behaves correctly after reload.
+- [x] No regression on member fallback schedule/task visibility.
+- [x] Resync path cannot trigger repeated schedule fetch storms under realtime bursts.
 
 ## Change log
 - **2026-04-20** — Initial mailbox blueprint created.
@@ -37,4 +38,7 @@
 - **2026-05-02** — Hardened mailbox roster sync actor-id parsing:
   - Sanitized actor id extraction to keep valid UUID only (or safe token fallback) before calling `/api/member/:uid/schedule`.
   - Prevented malformed schedule endpoint URLs that triggered repeated failed fetch loops and client-side resource overload.
-
+- **2026-05-03** — Added resync storm guardrails for mailbox schedule sync:
+  - Added per-team forced-resync throttle window to collapse rapid repeated triggers.
+  - Preserved server backoff cooldown during forced resync instead of clearing it.
+  - Ensured in-flight sync requests are never re-triggered by realtime/state event bursts.

@@ -805,6 +805,7 @@ function _mbxReadJwt(){
   const _scheduleRefreshing = {}; // { teamId: true } while refresh fetch is in-flight
   const _syncInFlight  = {};   // guard against concurrent fetches per team
   let   _syncCooldown  = {};   // LOOP-GUARD: cooldown timestamps after failed fetches
+  const _forceResyncThrottleUntil = {}; // { teamId: ts } guard vs resync storms
   // _schedSyncPending: prevents re-triggering sync on every render while a sync
   // is in-flight or already completed.  This MUST be declared here — accessing an
   // undeclared variable throws a ReferenceError in strict mode (and in some browsers
@@ -905,10 +906,15 @@ function _mbxReadJwt(){
         }catch(_){}
       }
       if(!tid) return;
+      const now = Date.now();
+      if (_syncInFlight[tid]) return; // already syncing this team
+      if (_syncCooldown && _syncCooldown[tid] && now < _syncCooldown[tid]) return; // in backoff
+      if (_forceResyncThrottleUntil[tid] && now < _forceResyncThrottleUntil[tid]) return; // burst guard
+      _forceResyncThrottleUntil[tid] = now + 5000;
       // Keep last known-good scheduleReady so UI won't blink to empty roster
       // during periodic/realtime refreshes; clear only on hard reset paths.
       delete _syncInFlight[tid];
-      if (_syncCooldown) delete _syncCooldown[tid]; // LOOP-GUARD: clear cooldown on manual resync
+      // Keep cooldown guard intact; forced resync should still respect backend backoff.
       _schedSyncPending = false;
       _mbxSyncTeamScheduleBlocks(tid).catch(()=>{});
     }catch(_){}
