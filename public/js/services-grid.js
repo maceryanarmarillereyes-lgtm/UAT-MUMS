@@ -170,7 +170,7 @@
 
   function scheduleConditionalPaint() {
     if (!window.svcConditionalFormat || typeof window.svcConditionalFormat.paint !== 'function') return;
-    // Use double-rAF to ensure DOM is fully laid out before painting
+    // Double rAF: first frame lets render() commit to DOM, second frame paints
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
         try {
@@ -2672,21 +2672,24 @@
   function getState() { return current; }
 
 
-  // ── FIX-CF-SCROLL: Re-apply conditional formatting on scroll ──────────────
-  // paintGrid() only runs once after render(), so when the user scrolls and
-  // something triggers a partial DOM update or style recalc, highlights vanish.
-  // This debounced scroll handler ensures formatting is always re-applied.
-  (function bindScrollRepaint() {
-    var wrap = document.getElementById('svcGridWrap');
-    if (!wrap) return;
-    var scrollTimer = null;
-    wrap.addEventListener('scroll', function () {
-      clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(function () {
-        scheduleConditionalPaint();
-      }, 60);
-    }, { passive: true });
-    console.log('[services-grid] Scroll-repaint listener bound to svcGridWrap');
+  // FIX-CF-SCROLL: Re-apply conditional formatting after user scrolls
+  (function () {
+    var _scrollRepaintTimer = null;
+    var _wrapEl = document.querySelector('.svc-grid-wrap') || document.getElementById('svcGridWrap');
+    if (!_wrapEl) {
+      // fallback: try the table's parent
+      var _gridEl = document.getElementById('svcGrid');
+      if (_gridEl) _wrapEl = _gridEl.parentElement;
+    }
+    if (_wrapEl) {
+      _wrapEl.addEventListener('scroll', function () {
+        clearTimeout(_scrollRepaintTimer);
+        _scrollRepaintTimer = setTimeout(function () {
+          scheduleConditionalPaint();
+        }, 80);
+      }, { passive: true });
+      console.log('[CF-SCROLL] Scroll repaint listener attached');
+    }
   })();
 
   window.servicesGrid = {

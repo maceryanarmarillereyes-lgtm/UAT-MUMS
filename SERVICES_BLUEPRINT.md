@@ -191,6 +191,12 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-05-04 (CF suspended reset + deterministic repaint + animation-strip hardening):**
+  - **Edit — `public/js/services-grid.js`:** Kept `scheduleConditionalPaint()` on double-`requestAnimationFrame` sequencing and standardized the scroll repaint listener (`.svc-grid-wrap`/`#svcGridWrap` fallback + table-parent fallback, 80ms debounce) so CF repaint is re-fired after scroll-driven DOM churn.
+  - **Edit — `public/js/services-conditional-format.js`:** Added `_paintSuspendedTimer` safety reset, auto-clears stalled suspend state after 8s, and updated `paintGrid()` suspend guard to explicit skip logging only; `svc:qb-update-complete` now clears the safety timer before repaint.
+  - **Edit — `public/css/services.css`:** Removed Services-grid conditional-format row/cell transition/animation hooks (including `cf-row-accent-in` keyframes) to prevent highlight desync/flicker under repaint.
+  - **Behavior contract update:** CF row highlighting must repaint after render+scroll and cannot stay blocked indefinitely by stale suspend flags; Services grid row/cell CF visuals are animation-free for deterministic repaint.
+
 - **2026-05-04 (CF scroll repaint + observer resiliency patch):**
   - **Edit — `public/js/services-grid.js`:** Upgraded `scheduleConditionalPaint()` to double-`requestAnimationFrame` repaint sequencing and added `svcGridWrap` debounced scroll listener to re-apply conditional formatting after scroll-driven DOM/style recalcs.
   - **Edit — `public/js/services-conditional-format.js`:** `paintGrid()` now retries when `_paintSuspended` instead of hard-skipping, row-to-DOM matching now prioritizes stable `data-row-id` / `row.id` keys (with safe fallback), and a debounced `MutationObserver` on `#svcGrid` auto-triggers repaints for render/realtime/edit mutations.
