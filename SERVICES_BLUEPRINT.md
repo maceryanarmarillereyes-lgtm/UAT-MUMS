@@ -489,3 +489,8 @@ If step #3 is missing, task is incomplete.
   - **Edit — `public/js/services-conditional-format.js`:** Replaced O(n) `rows.find(...)` during highlight persistence with one-pass `rowRefMap` for stable row-key lookup and deterministic row-wide highlight application.
   - **Edit — `public/js/services-conditional-format.js`:** Updated swatch renderer to maintain active button state immediately on click (`data-color` + `setActive`) so formatting color selection no longer appears stuck on prior UI highlight.
   - **Behavior contract update:** Conditional formatting repaint must be single-pass and stable (no visible blink), and color-palette selection state must reflect the currently chosen style value instantly.
+- **2026-05-04 (CF anti-flicker paint guard + observer scope hardening):**
+  - **Edit — `public/js/services-conditional-format.js`:** Added re-entrancy guard (`_isPainting`) and queued repaint handoff (`_paintQueued`) so overlapping paint calls are coalesced into one next-frame repaint instead of repeated clear/reapply bursts.
+  - **Edit — `public/js/services-conditional-format.js`:** Wrapped paint pipeline in `try/finally` to always release paint lock and safely flush one queued repaint.
+  - **Edit — `public/js/services-conditional-format.js`:** Narrowed `MutationObserver` from full-grid subtree to `tbody` direct child-list changes only, with suspend/paint guard checks + debounce to prevent observer feedback loops from CF-driven DOM micro-mutations.
+  - **Behavior contract update:** CF repaint must be non-reentrant and observer-triggered repaint must react only to structural row rebuilds, not CF’s own mutation side effects.

@@ -43,6 +43,8 @@
   // FIX-CF-SUSPEND: While QB bulk update is running, suspend paintGrid() calls
   var _paintSuspended = false;
   var _paintSuspendedTimer = null; // safety auto-reset
+  var _isPainting = false;
+  var _paintQueued = false;
 
   /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      CONSTANTS & PALETTES
@@ -293,11 +295,18 @@
   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function paintGrid() {
+    if (_isPainting) {
+      _paintQueued = true;
+      return;
+    }
     if (_paintSuspended) {
       console.log('[CF] paintGrid skipped (suspended)');
       return;
     }
+    _isPainting = true;
+    _paintQueued = false;
 
+    try {
     var grid = document.getElementById('svcGrid');
     if (!grid || !window.servicesGrid) return;
     var state = window.servicesGrid.getState();
@@ -641,6 +650,13 @@
       td.appendChild(badge);
       td.setAttribute('data-cf-applied', '1');
     });
+    } finally {
+      _isPainting = false;
+      if (_paintQueued && !_paintSuspended) {
+        _paintQueued = false;
+        requestAnimationFrame(function () { paintGrid(); });
+      }
+    }
   }
 
 
@@ -1422,22 +1438,25 @@
     window.servicesGrid._cfHooked = true;
   }
 
-  // FIX-CF-SCROLL-v3: Use MutationObserver to re-paint whenever grid DOM changes
-  // This catches ALL cases: render(), realtime updates, QB sync, cell edits
+  // FIX-CF-STABLE-PAINT: Observe only tbody child changes and coalesce repaint
+  // to avoid feedback loops from CF style/badge mutations that cause blink.
   (function bindGridObserver() {
     var gridEl = document.getElementById('svcGrid');
     if (!gridEl) return;
+    var tbody = gridEl.querySelector('tbody');
+    if (!tbody) return;
     var _repaintTimer = null;
     var observer = new MutationObserver(function () {
+      if (_isPainting || _paintSuspended) return;
       clearTimeout(_repaintTimer);
       _repaintTimer = setTimeout(function () {
         if (typeof paintGrid === 'function') {
           try { paintGrid(); } catch (e) { console.warn('[CF-Observer] repaint error:', e); }
         }
-      }, 100);
+      }, 140);
     });
-    observer.observe(gridEl, { childList: true, subtree: true });
-    console.log('[CF] MutationObserver bound to svcGrid for auto-repaint');
+    observer.observe(tbody, { childList: true, subtree: false });
+    console.log('[CF] MutationObserver bound to svcGrid tbody for stable repaint');
   })();
 
   /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
