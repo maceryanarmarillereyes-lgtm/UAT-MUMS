@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-05-04 (CF runtime hotfix: rowIdx ReferenceError):**
+  - **Edit — `public/js/services-conditional-format.js`:** Fixed runtime `ReferenceError: rowIdx is not defined` inside `paintGrid()` rule evaluation payload by storing stable `rowIdxStr` instead of undefined `rowIdx`; restores full CF paint pass and prevents repeated console-error loops.
+  - **Edit — `public/css/services.css`:** Cleaned now-empty CF row selector block left after transition removal.
+  - **Behavior contract update:** CF evaluation pass must stay exception-free; any row highlight metadata now uses stable row key strings only.
+
 - **2026-05-04 (CF suspended reset + deterministic repaint + animation-strip hardening):**
   - **Edit — `public/js/services-grid.js`:** Kept `scheduleConditionalPaint()` on double-`requestAnimationFrame` sequencing and standardized the scroll repaint listener (`.svc-grid-wrap`/`#svcGridWrap` fallback + table-parent fallback, 80ms debounce) so CF repaint is re-fired after scroll-driven DOM churn.
   - **Edit — `public/js/services-conditional-format.js`:** Added `_paintSuspendedTimer` safety reset, auto-clears stalled suspend state after 8s, and updated `paintGrid()` suspend guard to explicit skip logging only; `svc:qb-update-complete` now clears the safety timer before repaint.

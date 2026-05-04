@@ -3343,11 +3343,6 @@ input.cell.cell-qb-not-found {
   background: inherit;
 }
 
-/* When row is highlighted, make the row-num separator line tinted */
-#svcGrid tbody tr[data-cf-row] td {
-  /* transition for smooth paint/unpaint */
-}
-
 /* 2. CONDITIONAL FORMATTING - medium priority (overrides zebra) */
 .svc-grid tbody tr[data-cf-applied="true"] td:not(.row-num) {
   /* CF will set inline style or data-cf-color */

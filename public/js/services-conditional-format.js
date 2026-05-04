@@ -438,7 +438,7 @@
               if (rule.highlightRow) {
                 if (!rowHighlights[rowIdxStr]) {
                   rowHighlights[rowIdxStr] = {
-                    rowIdx:       rowIdx,
+                    rowIdx:       rowIdxStr,
                     bgColor:      rule.bgColor       || '',
                     textColor:    rule.textColor     || '',
                     bold:         !!rule.bold,
