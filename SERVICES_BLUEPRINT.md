@@ -483,3 +483,17 @@ If step #3 is missing, task is incomplete.
   - **Edit — `supabase/migrations/20260502_01_feature_sql_parity_global_settings_and_qb_tokens.sql`:** Added idempotent DDL for `public.qb_tokens` (with `updated_at` index + authenticated read policy) to match Services QB freshness probes in `services-qb-lookup.js`.
   - **Edit — `supabase/migrations/20260502_01_feature_sql_parity_global_settings_and_qb_tokens.sql`:** Added idempotent DDL for `public.mums_global_settings` (primary key `setting_key`, jsonb value, timestamp index, authenticated read policy) to support `/api/settings/global-theme` reads/writes via service-role.
   - **Behavior contract update:** Migration history now includes all runtime tables needed by Services QB token freshness checks and legacy global-theme settings endpoint, preventing drift between live Supabase state and repo migrations.
+
+- **2026-05-04 (CF permanent row-highlight + color picker stability fix):**
+  - **Edit — `public/js/services-conditional-format.js`:** Moved `__cfRowBg/__cfTextColor` persistence out of per-row evaluation loop so it runs once per paint cycle (prevents repeated row metadata churn that caused blink/flicker on lower rows during render/scroll).
+  - **Edit — `public/js/services-conditional-format.js`:** Replaced O(n) `rows.find(...)` during highlight persistence with one-pass `rowRefMap` for stable row-key lookup and deterministic row-wide highlight application.
+  - **Edit — `public/js/services-conditional-format.js`:** Updated swatch renderer to maintain active button state immediately on click (`data-color` + `setActive`) so formatting color selection no longer appears stuck on prior UI highlight.
+  - **Behavior contract update:** Conditional formatting repaint must be single-pass and stable (no visible blink), and color-palette selection state must reflect the currently chosen style value instantly.
+- **2026-05-04 (CF anti-flicker paint guard + observer scope hardening):**
+  - **Edit — `public/js/services-conditional-format.js`:** Added re-entrancy guard (`_isPainting`) and queued repaint handoff (`_paintQueued`) so overlapping paint calls are coalesced into one next-frame repaint instead of repeated clear/reapply bursts.
+  - **Edit — `public/js/services-conditional-format.js`:** Wrapped paint pipeline in `try/finally` to always release paint lock and safely flush one queued repaint.
+  - **Edit — `public/js/services-conditional-format.js`:** Narrowed `MutationObserver` from full-grid subtree to `tbody` direct child-list changes only, with suspend/paint guard checks + debounce to prevent observer feedback loops from CF-driven DOM micro-mutations.
+  - **Behavior contract update:** CF repaint must be non-reentrant and observer-triggered repaint must react only to structural row rebuilds, not CF’s own mutation side effects.
+- **2026-05-04 (CF row-key parity fix for full-row highlight reliability):**
+  - **Edit — `public/js/services-conditional-format.js`:** Added shared `getRowDomKey(row, fallbackPos)` helper and switched CF evaluation/persistence maps to the same key contract used by grid `<tr data-row-id>` (`id` when present, otherwise `idx:<row_index>`).
+  - **Behavior contract update:** Conditional formatting row targeting must use the exact grid DOM row-id key format; fallback row-index keys without `idx:` prefix are invalid for no-id rows.
