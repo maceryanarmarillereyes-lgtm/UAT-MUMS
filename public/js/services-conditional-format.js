@@ -4,25 +4,25 @@
  * @module MUMS/Services
  * @version UAT
  */
-/* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
-   Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
-   Database/API Adapters · Tab Isolation · Virtual Column State ·
-   QuickBase Settings Persistence · Auth Flow.
+/* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE â€” MACE APPROVAL REQUIRED.
+   Protects: Enterprise UI/UX Â· Realtime Sync Logic Â· Core State Management Â·
+   Database/API Adapters Â· Tab Isolation Â· Virtual Column State Â·
+   QuickBase Settings Persistence Â· Auth Flow.
    DO NOT modify any existing logic, layout, or structure in this file without
    first submitting a RISK IMPACT REPORT to MACE and receiving explicit "CLEARED" approval.
-   Violations will cause regressions. When in doubt — STOP and REPORT. */
+   Violations will cause regressions. When in doubt â€” STOP and REPORT. */
 
 /**
- * services-conditional-format.js — v2.0
+ * services-conditional-format.js â€” v2.0
  * Conditional Formatting engine for Services Workspace (MUMS).
  *
  * v2.0 FIXES vs v1.0:
- * ───────────────────────────────────────────────────────────────────────────
+ * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  * [FIX-ROW-1] BUG: `if (!td) return` inside rows.forEach caused early-exit
  *   before rowHighlights was populated. Hidden/scrolled-out columns killed
  *   the entire row highlight for that row.
  *   FIX: Split paintGrid into PASS 1 (pure data, zero DOM) and PASS 2 (DOM).
- *   Row highlight collection now runs purely against row.data — no DOM needed.
+ *   Row highlight collection now runs purely against row.data â€” no DOM needed.
  *
  * [FIX-ROW-2] BUG: Row highlight used CSS class + CSS variable approach:
  *   `tr.cf-row-highlighted td { background-color: var(--cf-row-bg) !important }`
@@ -33,8 +33,8 @@
  *   EVERY td in the row (Pass 2A). Per-cell styles applied in Pass 2B naturally
  *   override specific cells (same inline specificity, applied later = wins).
  *
- * All other logic: constants, evalRule, modal, editor, save — UNCHANGED.
- * ───────────────────────────────────────────────────────────────────────────
+ * All other logic: constants, evalRule, modal, editor, save â€” UNCHANGED.
+ * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  */
 
 (function () {
@@ -43,9 +43,9 @@
   // FIX-CF-SUSPEND: While QB bulk update is running, suspend paintGrid() calls
   var _paintSuspended = false;
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      CONSTANTS & PALETTES
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   var BG_PALETTE = [
     '#fecaca','#fca5a5','#f87171','#ef4444','#dc2626',
@@ -126,9 +126,9 @@
     { id: 'formula',      label: '\u0192x Custom Formula' }
   ];
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      STATE
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   var _state = {
     open: false,
@@ -140,9 +140,9 @@
     draft: null
   };
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      UTILS
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function mkEl(tag, props, parent) {
     var el = document.createElement(tag);
@@ -170,9 +170,9 @@
     return luminance > 0.55 ? '#0f172a' : '#f1f5f9';
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      EVALUATION ENGINE
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function evalRule(rule, cellValue) {
     var v = String(cellValue == null ? '' : cellValue).trim();
@@ -268,28 +268,28 @@
     return 'rgba('+r+','+g+','+b+','+alpha+')';
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
-     PAINT ENGINE v3.0 — DOM-walk architecture
-     ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+     PAINT ENGINE v3.0 â€” DOM-walk architecture
+     â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      v3.0 FIXES vs v2.0:
      [FIX-ROW-3] BUG: Pass 2A used querySelector('tr[data-row="X"]') to find rows.
        Padding/empty rows in render() share the same row_index value as real rows
        when viewRows is filtered/sorted (loop counter i collides with row.row_index).
-       querySelector returns the FIRST match — often the WRONG tr.
-       This caused "some rows highlight, others don't" — the exact symptom in screenshots.
+       querySelector returns the FIRST match â€” often the WRONG tr.
+       This caused "some rows highlight, others don't" â€” the exact symptom in screenshots.
        FIX: Pre-build domRowMap by walking tbody ONCE. Each tr appears exactly once.
        rowHighlights and cellStyles look up O(1) from the map. Zero collision.
 
      [FIX-ROW-4] BUG: Rules with no bgColor (only textColor) produced semiBg=''
-       → rowRef.__cfRowBg='' → falsy → render() re-stamp skipped cf-row-highlighted
-       → next render() lost the text color that paintGrid applied.
+       â†’ rowRef.__cfRowBg='' â†’ falsy â†’ render() re-stamp skipped cf-row-highlighted
+       â†’ next render() lost the text color that paintGrid applied.
        FIX: Store 'cf-row-hl' sentinel when bgColor is absent so re-stamp always fires.
 
-     [FIX-ROW-5] BUG: Pass 2B per-cell also used querySelector — same collision risk.
-       FIX: Now uses domRowMap[rowIdxStr].inputs[colKey] — direct O(1) lookup.
+     [FIX-ROW-5] BUG: Pass 2B per-cell also used querySelector â€” same collision risk.
+       FIX: Now uses domRowMap[rowIdxStr].inputs[colKey] â€” direct O(1) lookup.
 
-     All other logic: evalRule, modal, editor, save — UNCHANGED.
-  ─────────────────────────────────────────────────────────────────────────── */
+     All other logic: evalRule, modal, editor, save â€” UNCHANGED.
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function paintGrid() {
     var grid = document.getElementById('svcGrid');
@@ -308,7 +308,7 @@
     });
 
     /* =========================================================================
-       PRE-BUILD DOM MAP — walk tbody once, build rowIndex(string)->DOM lookup
+       PRE-BUILD DOM MAP â€” walk tbody once, build rowIndex(string)->DOM lookup
        [FIX-ROW-3] Each DOM tr appears exactly once. No collision possible.
        Map key = tr.dataset.row (= String(row.row_index) stamped in render()).
     ========================================================================= */
@@ -329,7 +329,7 @@
     }
 
     /* =========================================================================
-       CLEAR — Remove all previous CF inline styles via domRowMap
+       CLEAR â€” Remove all previous CF inline styles via domRowMap
     ========================================================================= */
     Object.keys(domRowMap).forEach(function (ri) {
       var entry = domRowMap[ri];
@@ -366,16 +366,19 @@
     });
 
     /* =========================================================================
-       PASS 1 — PURE DATA EVALUATION (zero DOM access)
+       PASS 1 â€” PURE DATA EVALUATION (zero DOM access)
        Collect: rowHighlights{}, cellStyles{}, colorScales[], dataBars[], iconSets[].
        Key change from v2.0: rowHighlights keyed by String(row.row_index) = domRowMap key.
-       [FIX-ROW-3] Only evaluate rows that exist in domRowMap (visible in DOM).
+       [FIX-ROW-3-REVISED] Evaluate ALL rows in data, apply only to DOM in PASS 2.
     ========================================================================= */
     var rowHighlights = {}; // String(rowIdx) -> highlight info
     var cellStyles    = {}; // 'rowIdxStr:::colKey' -> {rowIdxStr, colKey, rule}
     var colorScales   = []; // [{rowIdxStr, colKey, color}]
     var dataBars      = []; // [{rowIdxStr, colKey, pct, barColor}]
     var iconSets      = []; // [{rowIdxStr, colKey, icon}]
+
+    // Clear stale CF flags on ALL rows before re-evaluating
+    rows.forEach(function(r){ if(r){ delete r.__cfRowBg; delete r.__cfTextColor; } });
 
     cols.forEach(function (col) {
       if (!col || !Array.isArray(col.conditionalRules) || !col.conditionalRules.length) return;
@@ -395,13 +398,13 @@
         if (v !== '') valueCounts[v] = (valueCounts[v] || 0) + 1;
       });
 
-      rows.forEach(function (row, rowPos) {
+      // PERMANENT FIX 2026-05-04: Evaluate ALL rows (not just visible DOM)
+    // Previous [FIX-ROW-3] caused highlights to disappear on scroll because
+    // off-screen rows were never evaluated, so __cfRowBg was never set.
+    rows.forEach(function (row, rowPos) {
         if (!row || !row.data) return;
         var rowIdx    = row.row_index != null ? row.row_index : rowPos;
         var rowIdxStr = String(rowIdx);
-
-        // [FIX-ROW-3] Skip rows not in the current DOM render — prevents stale highlights
-        if (!domRowMap[rowIdxStr]) return;
 
         var cellValue = row.data[col.key] != null ? row.data[col.key] : '';
         var cellStr   = String(cellValue).trim();
@@ -476,13 +479,32 @@
             }
           }
         }
-      });
+  
+    // PERMANENT FIX: Persist __cfRowBg for ALL rows (not just visible)
+    // This ensures render() can re-stamp highlights when rows scroll into view
+    Object.keys(rowHighlights).forEach(function(rowIdxStr){
+      var hl = rowHighlights[rowIdxStr];
+      var semiBg = '';
+      if (hl.bgColor) {
+        semiBg = hexToRgba(hl.bgColor, 0.28);
+      } else if (hl.textColor) {
+        semiBg = hexToRgba(hl.textColor, 0.12);
+      } else {
+        semiBg = 'rgba(99,102,241,0.12)';
+      }
+      var rowRef = rows.find(function(r){ return r && r.row_index != null && String(r.row_index) === rowIdxStr; });
+      if (rowRef) {
+        rowRef.__cfRowBg = semiBg;
+        rowRef.__cfTextColor = hl.textColor || '';
+      }
+    });
+    });
     });
 
     /* =========================================================================
-       PASS 2A — ROW HIGHLIGHTS (applied FIRST)
-       [FIX-ROW-3] domRowMap[rowIdxStr] — O(1), zero collision.
-       [FIX-ROW-2] Direct inline setProperty on EVERY td — no "holes".
+       PASS 2A â€” ROW HIGHLIGHTS (applied FIRST)
+       [FIX-ROW-3] domRowMap[rowIdxStr] â€” O(1), zero collision.
+       [FIX-ROW-2] Direct inline setProperty on EVERY td â€” no "holes".
        [FIX-ROW-4] textColor-only rules also persist across re-renders.
     ========================================================================= */
     Object.keys(rowHighlights).forEach(function (rowIdxStr) {
@@ -500,10 +522,10 @@
       } else if (hl.textColor) {
         // FIX-SEMIBG: When no bgColor but textColor is set and highlightRow=true,
         // derive a faint tint from textColor so the row highlight is visible.
-        // Without this, --cf-row-bg = transparent → class exists but row looks unhighlighted.
+        // Without this, --cf-row-bg = transparent â†’ class exists but row looks unhighlighted.
         semiBg = hexToRgba(hl.textColor, 0.12);
       } else {
-        // No color at all — use a neutral steel-blue tint as last resort
+        // No color at all â€” use a neutral steel-blue tint as last resort
         semiBg = 'rgba(99,102,241,0.12)';
       }
       var accentColor = hl.borderColor || hl.bgColor || '';
@@ -511,18 +533,11 @@
       tr.style.setProperty('--cf-row-bg', semiBg || 'transparent');
       if (accentColor) tr.style.setProperty('--cf-row-accent', accentColor);
 
-      // [FIX-ROW-4] Persist on row.data so render() re-stamp is always truthy
-      var rowRef = rows.find(function (r) {
-        return r && r.row_index != null && String(r.row_index) === rowIdxStr;
-      });
-      if (rowRef) {
-        rowRef.__cfRowBg     = semiBg; // always non-empty now (FIX-SEMIBG)
-        rowRef.__cfTextColor = hl.textColor || '';
-      }
+      // __cfRowBg already persisted for all rows above (PERMANENT FIX)
 
-      // Apply bg to EVERY td via domRowMap — [FIX-ROW-3] no rescan, no collision
+      // Apply bg to EVERY td via domRowMap â€” [FIX-ROW-3] no rescan, no collision
       // FIX-SEMIBG: semiBg is always non-empty for rowHighlight (fallback derived above).
-      // No longer guarded by if(semiBg) — every highlighted row gets a visible bg.
+      // No longer guarded by if(semiBg) â€” every highlighted row gets a visible bg.
       entry.tds.forEach(function (td) {
         td.style.setProperty('background', semiBg, 'important');
         td.setAttribute('data-cf-row-bg', '1');
@@ -552,8 +567,8 @@
     });
 
     /* =========================================================================
-       PASS 2B — PER-CELL STYLES (applied AFTER row highlights)
-       [FIX-ROW-5] domRowMap lookup — no querySelector collision.
+       PASS 2B â€” PER-CELL STYLES (applied AFTER row highlights)
+       [FIX-ROW-5] domRowMap lookup â€” no querySelector collision.
     ========================================================================= */
     Object.keys(cellStyles).forEach(function (key) {
       var cs    = cellStyles[key];
@@ -567,7 +582,7 @@
     });
 
     /* =========================================================================
-       PASS 2C — COLOR SCALES
+       PASS 2C â€” COLOR SCALES
     ========================================================================= */
     colorScales.forEach(function (cs) {
       var entry = domRowMap[cs.rowIdxStr];
@@ -580,7 +595,7 @@
     });
 
     /* =========================================================================
-       PASS 2D — DATA BARS
+       PASS 2D â€” DATA BARS
     ========================================================================= */
     dataBars.forEach(function (db) {
       var entry = domRowMap[db.rowIdxStr];
@@ -593,7 +608,7 @@
     });
 
     /* =========================================================================
-       PASS 2E — ICON SETS
+       PASS 2E â€” ICON SETS
     ========================================================================= */
     iconSets.forEach(function (is) {
       var entry = domRowMap[is.rowIdxStr];
@@ -645,9 +660,9 @@
     }
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      MODAL DOM BUILDING
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function buildModal() {
     if (document.getElementById('svcCfModal')) return;
@@ -691,9 +706,9 @@
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && _state.open) closeModal(); });
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      RULES LIST
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function renderRulesList() {
     var container = document.getElementById('cfRulesList');
@@ -818,9 +833,9 @@
     return '';
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      EDITOR PANE
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function renderEditor(rule) {
     var pane = document.getElementById('cfEditorPane');
@@ -891,9 +906,9 @@
     renderPreview(previewSection, rule);
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      SINGLE COLOR CONDITION
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function renderSingleColorCondition(parent, rule) {
     var catTabs = mkEl('div', { className: 'svc-cf-type-tabs', style: 'margin-bottom:10px;' }, parent);
@@ -959,9 +974,9 @@
     return 'text';
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      COLOR SCALE
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function renderColorScale(parent, rule) {
     var row = mkEl('div', { className: 'svc-cf-scale-row' }, parent);
@@ -992,9 +1007,9 @@
     bar.style.background = 'linear-gradient(to right, '+(d.scaleMin||'#f87171')+', '+(d.scaleMid||'#fde047')+', '+(d.scaleMax||'#4ade80')+')';
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      DATA BAR
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function renderDataBar(parent, rule) {
     var colorRow = mkEl('div', { className: 'svc-cf-color-row' }, parent);
@@ -1011,9 +1026,9 @@
     fill.style.background = rule.barColor || '#22d3ee';
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      ICON SET
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function renderIconSet(parent, rule) {
     var gridEl = mkEl('div', { className: 'svc-cf-iconset-grid' }, parent);
@@ -1031,9 +1046,9 @@
     });
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      FORMULA
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function renderFormula(parent, rule) {
     var state2    = window.servicesGrid ? window.servicesGrid.getState() : null;
@@ -1104,9 +1119,9 @@
     rowChk.addEventListener('change', function () { _state.draft.highlightRow = rowChk.checked; syncDraftToRule(); updatePreview(); });
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      STYLE PICKER
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function renderStylePicker(parent, rule) {
     var styleGrid = mkEl('div', { className: 'svc-cf-style-grid' }, parent);
@@ -1171,9 +1186,9 @@
     });
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      PREVIEW CELL
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   var _previewUpdateTimeout = null;
 
@@ -1224,9 +1239,9 @@
     }
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      DRAFT SYNC
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function syncToColumnDefs() {
     if (!window.servicesGrid) return;
@@ -1245,9 +1260,9 @@
     paintGrid();
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      OPEN / CLOSE / SAVE
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function openModal(colIdx, colKey, colLabel, existingRules) {
     buildModal();
@@ -1370,9 +1385,9 @@
     renderEditor(_state.draft);
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      HOOK INTO GRID RENDER
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function hookGridRender() {
     if (!window.servicesGrid) { setTimeout(hookGridRender, 200); return; }
@@ -1380,9 +1395,9 @@
     window.servicesGrid._cfHooked = true;
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      PUBLIC API
-  ───────────────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   window.svcConditionalFormat = {
     open:  openModal,
