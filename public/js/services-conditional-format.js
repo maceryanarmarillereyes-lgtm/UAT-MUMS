@@ -292,6 +292,12 @@
   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   function paintGrid() {
+    if (_paintSuspended) {
+      console.log('[CF] paintGrid skipped — suspended, will retry in 500ms');
+      setTimeout(function() { paintGrid(); }, 500);
+      return;
+    }
+
     var grid = document.getElementById('svcGrid');
     if (!grid || !window.servicesGrid) return;
     var state = window.servicesGrid.getState();
@@ -316,7 +322,7 @@
     var tbody = grid.querySelector('tbody');
     if (tbody) {
       tbody.querySelectorAll('tr').forEach(function (tr) {
-        var ri = tr.dataset.row;
+        var ri = tr.dataset.rowId || tr.getAttribute('data-row-id') || tr.dataset.row;
         if (ri == null || ri === '') return;
         var entry = { tr: tr, tds: [], inputs: {} };
         tr.querySelectorAll('td').forEach(function (td) {
@@ -403,8 +409,8 @@
     // off-screen rows were never evaluated, so __cfRowBg was never set.
     rows.forEach(function (row, rowPos) {
         if (!row || !row.data) return;
-        var rowIdx    = row.row_index != null ? row.row_index : rowPos;
-        var rowIdxStr = String(rowIdx);
+        var rowDomKey = row && row.id != null ? String(row.id) : String(row.row_index != null ? row.row_index : rowPos);
+        var rowIdxStr = rowDomKey;
 
         var cellValue = row.data[col.key] != null ? row.data[col.key] : '';
         var cellStr   = String(cellValue).trim();
@@ -492,7 +498,11 @@
       } else {
         semiBg = 'rgba(99,102,241,0.12)';
       }
-      var rowRef = rows.find(function(r){ return r && r.row_index != null && String(r.row_index) === rowIdxStr; });
+      var rowRef = rows.find(function(r){
+        if (!r) return false;
+        if (r.id != null && String(r.id) === rowIdxStr) return true;
+        return r.row_index != null && String(r.row_index) === rowIdxStr;
+      });
       if (rowRef) {
         rowRef.__cfRowBg = semiBg;
         rowRef.__cfTextColor = hl.textColor || '';
@@ -1394,6 +1404,24 @@
     if (window.servicesGrid._cfHooked) return;
     window.servicesGrid._cfHooked = true;
   }
+
+  // FIX-CF-SCROLL-v3: Use MutationObserver to re-paint whenever grid DOM changes
+  // This catches ALL cases: render(), realtime updates, QB sync, cell edits
+  (function bindGridObserver() {
+    var gridEl = document.getElementById('svcGrid');
+    if (!gridEl) return;
+    var _repaintTimer = null;
+    var observer = new MutationObserver(function () {
+      clearTimeout(_repaintTimer);
+      _repaintTimer = setTimeout(function () {
+        if (typeof paintGrid === 'function') {
+          try { paintGrid(); } catch (e) { console.warn('[CF-Observer] repaint error:', e); }
+        }
+      }, 100);
+    });
+    observer.observe(gridEl, { childList: true, subtree: true });
+    console.log('[CF] MutationObserver bound to svcGrid for auto-repaint');
+  })();
 
   /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      PUBLIC API
