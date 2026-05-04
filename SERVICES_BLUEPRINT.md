@@ -483,3 +483,9 @@ If step #3 is missing, task is incomplete.
   - **Edit — `supabase/migrations/20260502_01_feature_sql_parity_global_settings_and_qb_tokens.sql`:** Added idempotent DDL for `public.qb_tokens` (with `updated_at` index + authenticated read policy) to match Services QB freshness probes in `services-qb-lookup.js`.
   - **Edit — `supabase/migrations/20260502_01_feature_sql_parity_global_settings_and_qb_tokens.sql`:** Added idempotent DDL for `public.mums_global_settings` (primary key `setting_key`, jsonb value, timestamp index, authenticated read policy) to support `/api/settings/global-theme` reads/writes via service-role.
   - **Behavior contract update:** Migration history now includes all runtime tables needed by Services QB token freshness checks and legacy global-theme settings endpoint, preventing drift between live Supabase state and repo migrations.
+
+- **2026-05-04 (CF permanent row-highlight + color picker stability fix):**
+  - **Edit — `public/js/services-conditional-format.js`:** Moved `__cfRowBg/__cfTextColor` persistence out of per-row evaluation loop so it runs once per paint cycle (prevents repeated row metadata churn that caused blink/flicker on lower rows during render/scroll).
+  - **Edit — `public/js/services-conditional-format.js`:** Replaced O(n) `rows.find(...)` during highlight persistence with one-pass `rowRefMap` for stable row-key lookup and deterministic row-wide highlight application.
+  - **Edit — `public/js/services-conditional-format.js`:** Updated swatch renderer to maintain active button state immediately on click (`data-color` + `setActive`) so formatting color selection no longer appears stuck on prior UI highlight.
+  - **Behavior contract update:** Conditional formatting repaint must be single-pass and stable (no visible blink), and color-palette selection state must reflect the currently chosen style value instantly.

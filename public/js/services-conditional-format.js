@@ -486,8 +486,18 @@
           }
         }
   
+    });
+    });
+
     // PERMANENT FIX: Persist __cfRowBg for ALL rows (not just visible)
     // This ensures render() can re-stamp highlights when rows scroll into view
+    var rowRefMap = {};
+    rows.forEach(function (r, idx) {
+      if (!r) return;
+      var key = r.id != null ? String(r.id) : String(r.row_index != null ? r.row_index : idx);
+      rowRefMap[key] = r;
+    });
+
     Object.keys(rowHighlights).forEach(function(rowIdxStr){
       var hl = rowHighlights[rowIdxStr];
       var semiBg = '';
@@ -498,17 +508,11 @@
       } else {
         semiBg = 'rgba(99,102,241,0.12)';
       }
-      var rowRef = rows.find(function(r){
-        if (!r) return false;
-        if (r.id != null && String(r.id) === rowIdxStr) return true;
-        return r.row_index != null && String(r.row_index) === rowIdxStr;
-      });
+      var rowRef = rowRefMap[rowIdxStr];
       if (rowRef) {
         rowRef.__cfRowBg = semiBg;
         rowRef.__cfTextColor = hl.textColor || '';
       }
-    });
-    });
     });
 
     /* =========================================================================
@@ -1177,14 +1181,26 @@
   }
 
   function renderSwatches(container, palette, currentHex, onChange, allowNone) {
+    function setActive(hex) {
+      container.querySelectorAll('.cf-color-btn').forEach(function (btn) {
+        btn.classList.remove('cf-swatch-active', 'active');
+      });
+      var selector = hex
+        ? '.cf-color-btn[data-color="' + String(hex).toLowerCase() + '"]'
+        : '.cf-color-btn[data-color="none"]';
+      var activeBtn = container.querySelector(selector);
+      if (activeBtn) activeBtn.classList.add('cf-swatch-active', 'active');
+    }
+
     if (allowNone) {
       var noneBtn = mkEl('div', {
         className: 'svc-cf-swatch cf-color-btn' + (!currentHex ? ' cf-swatch-active active' : ''),
         title: 'None',
         style: 'background:transparent;border:1.5px dashed rgba(148,163,184,0.3);position:relative;'
       }, container);
+      noneBtn.dataset.color = 'none';
       noneBtn.innerHTML = '<span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:10px;color:#475569;">\u2205</span>';
-      noneBtn.addEventListener('click', function () { onChange(''); });
+      noneBtn.addEventListener('click', function () { setActive(''); onChange(''); });
     }
     palette.forEach(function (hex) {
       var sw = mkEl('div', {
@@ -1192,7 +1208,8 @@
         style: 'background:' + hex + ';',
         title: hex
       }, container);
-      sw.addEventListener('click', function () { onChange(hex); });
+      sw.dataset.color = String(hex).toLowerCase();
+      sw.addEventListener('click', function () { setActive(hex); onChange(hex); });
     });
   }
 
