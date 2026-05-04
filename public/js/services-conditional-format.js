@@ -1262,7 +1262,19 @@
     var overlay = document.getElementById('svcCfModal');
     if (overlay) overlay.classList.remove('cf-open');
     _state.open = false;
-    paintGrid();
+    // FIX-CLOSE-REPAINT: Do NOT call paintGrid() synchronously here.
+    // saveRules() already called paintGrid() right before closeModal().
+    // A second synchronous paintGrid() causes a CLEAR phase that temporarily
+    // strips all inline td backgrounds before re-applying them, creating a
+    // visible flash where only the CF-target column td retains its bg
+    // (because the CSS class --cf-row-bg var still applies to it via the
+    // cf-row-highlighted class, but inline styles on other tds were cleared).
+    // RAF-schedule so any CSS transition for modal close completes first.
+    requestAnimationFrame(function () {
+      if (window.svcConditionalFormat && typeof window.svcConditionalFormat.paint === 'function') {
+        window.svcConditionalFormat.paint();
+      }
+    });
   }
 
   async function saveRules() {

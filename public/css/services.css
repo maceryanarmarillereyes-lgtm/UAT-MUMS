@@ -3324,7 +3324,12 @@ input.cell.cell-qb-not-found {
 }
 
 #svcGrid tbody tr.cf-row-highlighted td {
-  background-color: var(--cf-row-bg) !important;
+  /* FIX-CF-CSS: Use background shorthand (not background-color) to match
+     paintGrid() Pass 2A which sets inline background (shorthand) via setProperty.
+     background-color was fighting the shorthand causing partial-row flash.
+     This rule is the CSS-var fallback for rows re-stamped by render() before
+     paintGrid() RAF fires. Inline style from paintGrid() still wins via !important. */
+  background: var(--cf-row-bg, transparent) !important;
   transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 

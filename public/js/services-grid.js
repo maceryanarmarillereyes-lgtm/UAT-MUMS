@@ -328,11 +328,14 @@
         var displayVal = String(formatCellValue(c, row.data[c.key]));
         inp.value = displayVal;
         // BUG2 FIX: Apply gray '---' styling for empty date cells
+        // FIX-CF-COLOR: Guard CF text color — if CF applied color via !important,
+        // do NOT strip it here. scheduleConditionalPaint() will re-apply CF after.
+        var _hasCfColor = inp.style.getPropertyPriority('color') === 'important';
         if ((c.type === 'date' || c.format === 'date') && displayVal === '---') {
-          inp.style.color = '#64748b';
+          if (!_hasCfColor) inp.style.color = '#64748b';
           inp.style.textAlign = 'center';
         } else if (c.type === 'date' || c.format === 'date') {
-          inp.style.removeProperty('color');
+          if (!_hasCfColor) inp.style.removeProperty('color');
           inp.style.removeProperty('text-align');
         }
       }
