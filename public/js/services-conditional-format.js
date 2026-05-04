@@ -494,7 +494,18 @@
       tr.classList.add('cf-row-highlighted');
       tr.setAttribute('data-cf-row', '1');
 
-      var semiBg      = hl.bgColor ? hexToRgba(hl.bgColor, 0.28) : '';
+      var semiBg = '';
+      if (hl.bgColor) {
+        semiBg = hexToRgba(hl.bgColor, 0.28);
+      } else if (hl.textColor) {
+        // FIX-SEMIBG: When no bgColor but textColor is set and highlightRow=true,
+        // derive a faint tint from textColor so the row highlight is visible.
+        // Without this, --cf-row-bg = transparent → class exists but row looks unhighlighted.
+        semiBg = hexToRgba(hl.textColor, 0.12);
+      } else {
+        // No color at all — use a neutral steel-blue tint as last resort
+        semiBg = 'rgba(99,102,241,0.12)';
+      }
       var accentColor = hl.borderColor || hl.bgColor || '';
 
       tr.style.setProperty('--cf-row-bg', semiBg || 'transparent');
@@ -505,16 +516,16 @@
         return r && r.row_index != null && String(r.row_index) === rowIdxStr;
       });
       if (rowRef) {
-        rowRef.__cfRowBg     = semiBg || 'cf-row-hl'; // sentinel when no bgColor
+        rowRef.__cfRowBg     = semiBg; // always non-empty now (FIX-SEMIBG)
         rowRef.__cfTextColor = hl.textColor || '';
       }
 
       // Apply bg to EVERY td via domRowMap — [FIX-ROW-3] no rescan, no collision
+      // FIX-SEMIBG: semiBg is always non-empty for rowHighlight (fallback derived above).
+      // No longer guarded by if(semiBg) — every highlighted row gets a visible bg.
       entry.tds.forEach(function (td) {
-        if (semiBg) {
-          td.style.setProperty('background', semiBg, 'important');
-          td.setAttribute('data-cf-row-bg', '1');
-        }
+        td.style.setProperty('background', semiBg, 'important');
+        td.setAttribute('data-cf-row-bg', '1');
         td.setAttribute('data-cf-applied', '1');
       });
 

@@ -618,16 +618,24 @@
       });
     }
 
+    // FIX-TOTALROWS: rows are fetched ordered by DB `id`, NOT row_index.
+    // After deletions + re-inserts, max(row_index) can exceed rows.length.
+    // Using rows.length+2 as totalRows left those high-index rows unrendered
+    // → invisible in grid AND skipped by paintGrid (not in domRowMap) → no CF.
+    // Fix: compute actual max row_index and use that as the upper bound.
+    var _maxRowIndex = current.rows.reduce(function (m, r) {
+      return r && r.row_index != null ? Math.max(m, r.row_index) : m;
+    }, -1);
     var totalRows = (isFilteredView || isSorted)
       ? Math.max(viewRows.length, 1)
-      : Math.max(current.rows.length + 2, 10);
+      : Math.max(_maxRowIndex + 3, current.rows.length + 2, 10);
 
     // ── Row-num column: dynamic width based on max row number digits ─────────────
     // ISOLATED from user column resizes: never touched by _applyColumnWidths(),
     // resize handles, or table-layout:auto reflows. Width locks via colgroup +
     // inline styles on th/td (inline styles in fixed layout beat everything).
-    var _totalRows = current.rows.length || 0;
-    var _rnDigits  = String(Math.max(_totalRows, 1)).length;
+    var _totalRows = Math.max(_maxRowIndex + 1, current.rows.length, 1);
+    var _rnDigits  = String(_totalRows).length;
     var _rnWidth   = Math.max(44, _rnDigits * 9 + 28);
     current.__rowNumWidth = _rnWidth; // cache for _applyColumnWidths
 
@@ -821,12 +829,11 @@
       var tr = mkEl('tr', { className: 'grid-row' }, tbody);
       tr.dataset.row = String(rowIndex);
       tr.dataset.rowId = rowData && rowData.id != null ? String(rowData.id) : ('idx:' + String(rowIndex));
-      // [FIX-ROW-4] Re-stamp CF class when __cfRowBg is truthy — 'cf-row-hl' sentinel
-      // covers textColor-only rules that have no bgColor (semiBg='').
+      // [FIX-ROW-4] Re-stamp CF class when __cfRowBg is set by paintGrid.
+      // semiBg is now always a valid rgba() string (FIX-SEMIBG), no sentinel needed.
       if (rowData && rowData.__cfRowBg) {
         tr.classList.add('cf-row-highlighted');
-        var cfBgVal = rowData.__cfRowBg === 'cf-row-hl' ? '' : String(rowData.__cfRowBg);
-        tr.style.setProperty('--cf-row-bg', cfBgVal || 'transparent');
+        tr.style.setProperty('--cf-row-bg', String(rowData.__cfRowBg));
       }
       var rowNumTd = mkEl('td', {
         className: 'row-num',
