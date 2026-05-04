@@ -1,8 +1,37 @@
 /**
  * @file leave_monitor.js
- * @description Component: leave monitor — tracks and highlights members on leave
+ * @description Component: leave monitor — tracks members on leave AND on rest day
  * @module MUMS/Components
- * @version UAT
+ * @version UAT v2.0
+ *
+ * v2.0 CHANGES:
+ * ─────────────────────────────────────────────────────────────────────────────
+ * [FEAT-RD-1] REST DAY INTEGRATION
+ *   Merges Master Schedule rest day rules into Leave Monitor display.
+ *   For today and tomorrow, any user whose Master Schedule `restWeekdays` includes
+ *   that day (and whose effectiveStart has passed) appears in the Leave Monitor
+ *   with a distinct "RD" (Rest Day) badge.
+ *   Data source: Store.getMaster() → localStorage `mums_master` key.
+ *   Zero extra API calls — pure local Store read.
+ *
+ * [FEAT-RD-2] DEDUPLICATION
+ *   If a user appears in both the QB Calendar leave list AND the rest day list
+ *   (rare but possible), QB Calendar entry wins (more specific). Rest day entries
+ *   are only added when the user is NOT already in the leave list.
+ *
+ * [FEAT-RD-3] MONITORING LOG
+ *   On each load, emits structured activity logs via Store.addLog() for:
+ *   - LEAVE_MONITOR_LOAD: total QB leave + rest day entries per day
+ *   - LEAVE_MONITOR_REST_DAY: one log per rest day match found (user + day)
+ *   These appear in Activity Logs page for audit/diagnostic purposes.
+ *
+ * [FEAT-RD-4] UPDATED FOOTER
+ *   Footer label updated to "Manila Calendar + Rest Days · Live" to reflect
+ *   the dual data source.
+ *
+ * All existing auth, realtime, QB calendar fetch, scroll persistence,
+ * and refresh logic: UNCHANGED.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 /* @AI_CRITICAL_GUARD v3.0: UNTOUCHABLE ZONE — MACE APPROVAL REQUIRED.
    Protects: Enterprise UI/UX · Realtime Sync Logic · Core State Management ·
@@ -16,6 +45,7 @@
 // public/js/components/leave_monitor.js
 // Leave Monitor — Right Sidebar Widget (Option B: Timeline Rail)
 // Shows who is on leave TODAY and TOMORROW, sourced from Manila Calendar QB data.
+// v2.0: Also shows who is ON REST DAY per Master Schedule rules.
 // Visible to all authenticated users. Auto-refreshes every 10 minutes.
 // Injected into #right-sidebar-container, below status-widget-grid.
 
@@ -35,11 +65,14 @@
     OB:      { bg: 'rgba(168,85,247,.15)',  border: 'rgba(168,85,247,.3)',   text: '#c084fc' },
     WBD:     { bg: 'rgba(234,179,8,.15)',   border: 'rgba(234,179,8,.3)',    text: '#facc15' },
     LEAVE:   { bg: 'rgba(249,115,22,.15)',  border: 'rgba(249,115,22,.3)',   text: '#fb923c' },
+    // [FEAT-RD-1] Rest Day — slate-grey palette, distinct from all leave types
+    RD:      { bg: 'rgba(100,116,139,.14)', border: 'rgba(100,116,139,.3)',  text: '#94a3b8' },
     DEFAULT: { bg: 'rgba(148,163,184,.1)',  border: 'rgba(148,163,184,.2)',  text: '#94a3b8' },
   };
 
   function leaveColor(note) {
     const n = String(note || '').toUpperCase();
+    if (n === 'RD' || n.includes('REST DAY'))       return LEAVE_COLORS.RD;
     if (n.includes('WBD'))                            return LEAVE_COLORS.WBD;
     if (n.includes('OB'))                             return LEAVE_COLORS.OB;
     if (n.includes('HL'))                             return LEAVE_COLORS.HL;
@@ -51,6 +84,7 @@
 
   function leaveLabel(note) {
     const n = String(note || '').toUpperCase();
+    if (n === 'RD' || n.includes('REST DAY')) return 'RD';
     if (n.includes('WBD'))   return 'WBD';
     if (n.includes('OB'))    return 'OB';
     if (n.includes('HL'))    return 'HL';
@@ -160,6 +194,7 @@
         note:      String(fv(noteId) || '').trim(),
         startDate: start,
         endDate:   end,
+        _source:   'calendar',
       };
     }).filter(r => r.startDate !== null);
   }
@@ -167,6 +202,124 @@
   // ─── Filter for a specific day ───────────────────────────────────────────────
   function filterForDay(records, day) {
     return records.filter(r => dateInRange(day, r.startDate, r.endDate || r.startDate));
+  }
+
+  // ─── [FEAT-RD-1] REST DAY INTEGRATION ───────────────────────────────────────
+  // Reads Master Schedule from Store.getMaster() (localStorage — zero API calls).
+  // For the given `day` date, returns synthetic leave entries for each user whose
+  // restWeekdays includes that day's weekday index AND whose effectiveStart ≤ day.
+  //
+  // Entry shape: { id, employee, note:'RD', startDate:day, endDate:day, _source:'rest_day' }
+  // Returned entries are labelled 'RD' (Rest Day) and use the slate-grey badge colour.
+  function _getRestDayEntries(day) {
+    try {
+      if (!window.Store || typeof Store.getMaster !== 'function') return [];
+      if (!window.Store || typeof Store.getUsers !== 'function')  return [];
+
+      const master   = Store.getMaster();   // { [teamId]: { members: { [userId]: { restWeekdays, startISO } } } }
+      const allUsers = Store.getUsers();    // [{ id, name, username, teamId, ... }]
+      if (!master || !allUsers) return [];
+
+      const dayOfWeek    = day.getDay(); // 0=Sun..6=Sat
+      const dayMidnight  = toMidnight(day).getTime();
+      const results      = [];
+      const seenUserIds  = new Set();
+
+      Object.entries(master).forEach(([teamId, teamData]) => {
+        if (!teamData || !teamData.members) return;
+        Object.entries(teamData.members).forEach(([userId, rule]) => {
+          if (!rule) return;
+          if (seenUserIds.has(userId)) return; // skip duplicates across teams
+
+          const restWeekdays = Array.isArray(rule.restWeekdays) ? rule.restWeekdays : [];
+          if (!restWeekdays.map(Number).includes(dayOfWeek)) return; // not a rest day
+
+          // Check effectiveStart: only apply if today >= effectiveStart
+          const startISO = String(rule.startISO || '');
+          if (startISO) {
+            const effectiveStart = parseDate(startISO);
+            if (effectiveStart && toMidnight(effectiveStart).getTime() > dayMidnight) return; // rule not yet active
+          }
+
+          // Resolve display name from user list
+          const user = allUsers.find(u => String(u && u.id) === String(userId));
+          const displayName = user
+            ? (String(user.name || user.username || '').trim() || String(user.username || userId))
+            : String(userId);
+
+          seenUserIds.add(userId);
+          results.push({
+            id:        'rd_' + userId + '_' + day.toISOString().slice(0, 10),
+            employee:  displayName,
+            note:      'RD',
+            startDate: day,
+            endDate:   day,
+            _source:   'rest_day',
+            _userId:   userId,
+            _teamId:   teamId,
+          });
+        });
+      });
+
+      return results;
+    } catch (err) {
+      try { console.warn('[LeaveMonitor] _getRestDayEntries error:', err); } catch (_) {}
+      return [];
+    }
+  }
+
+  // ─── [FEAT-RD-2] MERGE: QB Calendar + Rest Days (with deduplication) ─────────
+  // QB Calendar entries take priority. Rest day entries are only added when the
+  // user's display name is NOT already present in the QB Calendar list for that day.
+  // Matching is case-insensitive on the employee/display name.
+  function _mergeWithRestDays(calendarList, restDayList) {
+    const calendarNames = new Set(
+      calendarList.map(r => String(r.employee || '').toLowerCase().trim())
+    );
+    const uniqueRestDays = restDayList.filter(
+      r => !calendarNames.has(String(r.employee || '').toLowerCase().trim())
+    );
+    // Calendar entries first (highlighted), then rest day entries
+    return [...calendarList, ...uniqueRestDays];
+  }
+
+  // ─── [FEAT-RD-3] MONITORING LOG ──────────────────────────────────────────────
+  // Writes structured logs to Store.addLog() for audit trail in Activity Logs.
+  function _emitMonitoringLog(todayAll, tomorrowAll) {
+    try {
+      if (!window.Store || typeof Store.addLog !== 'function') return;
+
+      const todayRD    = todayAll.filter(r => r._source === 'rest_day');
+      const tomorrowRD = tomorrowAll.filter(r => r._source === 'rest_day');
+      const todayLeave = todayAll.filter(r => r._source === 'calendar');
+      const tomorrowLeave = tomorrowAll.filter(r => r._source === 'calendar');
+
+      // Summary log
+      Store.addLog({
+        ts:     Date.now(),
+        action: 'LEAVE_MONITOR_LOAD',
+        msg:    `Leave Monitor refreshed — Today: ${todayAll.length} (${todayLeave.length} leave, ${todayRD.length} rest), Tomorrow: ${tomorrowAll.length} (${tomorrowLeave.length} leave, ${tomorrowRD.length} rest)`,
+        detail: JSON.stringify({
+          today:    { total: todayAll.length,    leave: todayLeave.length,    restDay: todayRD.length    },
+          tomorrow: { total: tomorrowAll.length, leave: tomorrowLeave.length, restDay: tomorrowRD.length },
+        }),
+      });
+
+      // Individual rest day match logs (for traceability per user)
+      [...todayRD, ...tomorrowRD].forEach(r => {
+        const dayLabel = r._source === 'rest_day' && r.startDate
+          ? r.startDate.toISOString().slice(0, 10)
+          : '';
+        Store.addLog({
+          ts:       Date.now(),
+          action:   'LEAVE_MONITOR_REST_DAY',
+          targetId: r._userId || '',
+          msg:      `Rest day detected: ${r.employee} on ${dayLabel} (team: ${r._teamId || 'unknown'})`,
+          detail:   JSON.stringify({ userId: r._userId, teamId: r._teamId, date: dayLabel }),
+        });
+      });
+
+    } catch (_) {}
   }
 
   // ─── Initials from full name ─────────────────────────────────────────────────
@@ -188,11 +341,21 @@
     const ini  = initials(r.employee);
     const c    = leaveColor(r.note);
     const lbl  = leaveLabel(r.note);
-    const avBg = isToday ? 'rgba(20,184,166,.15)' : 'rgba(59,130,246,.12)';
-    const avTx = isToday ? '#2dd4bf'               : '#60a5fa';
+    const isRD = r._source === 'rest_day' || r.note === 'RD';
+
+    // Rest day entries use a muted slate avatar; leave entries use teal/blue
+    const avBg = isRD
+      ? 'rgba(100,116,139,.12)'
+      : (isToday ? 'rgba(20,184,166,.15)' : 'rgba(59,130,246,.12)');
+    const avTx = isRD
+      ? '#64748b'
+      : (isToday ? '#2dd4bf' : '#60a5fa');
+
+    // Rest day rows are slightly muted to visually distinguish from leave entries
+    const rowStyle = isRD ? 'opacity:.82;' : '';
 
     return `
-      <div class="lm-tl-row">
+      <div class="lm-tl-row" style="${rowStyle}" title="${isRD ? 'Rest Day (Master Schedule)' : 'Leave (Manila Calendar)'}">
         <div class="lm-tl-avatar" style="background:${avBg};color:${avTx};">${esc(ini)}</div>
         <span class="lm-tl-name">${esc(r.employee)}</span>
         <span class="lm-badge" style="background:${c.bg};color:${c.text};border:1px solid ${c.border};">${esc(lbl)}</span>
@@ -291,9 +454,9 @@
           ${bodyContent}
         </div>
 
-        <!-- Footer -->
+        <!-- [FEAT-RD-4] Updated footer: reflects dual data source -->
         <div class="lm-footer">
-          <span class="lm-footer-txt">Manila Calendar · Live</span>
+          <span class="lm-footer-txt">Manila Calendar + Rest Days · Live</span>
         </div>
 
       </div>`;
@@ -343,17 +506,32 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const data = await r.json();
 
-      if (!data.ok) {
-        // Calendar not configured — show silent empty state, don't error
-        _lastData = [];
-        render([], []);
-        return;
-      }
-
-      _lastData = normalizeRecords(data);
       const today    = new Date();
       const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-      render(filterForDay(_lastData, today), filterForDay(_lastData, tomorrow));
+
+      // ── QB Calendar records ──────────────────────────────────────────────────
+      let calendarRecords = [];
+      if (data.ok) {
+        calendarRecords = normalizeRecords(data);
+      }
+      // (If data.ok is false → calendar not configured → silent empty calendar list)
+      _lastData = calendarRecords;
+
+      const calToday    = filterForDay(calendarRecords, today);
+      const calTomorrow = filterForDay(calendarRecords, tomorrow);
+
+      // ── [FEAT-RD-1] Rest Day entries from Master Schedule ───────────────────
+      const rdToday    = _getRestDayEntries(today);
+      const rdTomorrow = _getRestDayEntries(tomorrow);
+
+      // ── [FEAT-RD-2] Merge (QB Calendar wins on duplicate names) ─────────────
+      const todayAll    = _mergeWithRestDays(calToday,    rdToday);
+      const tomorrowAll = _mergeWithRestDays(calTomorrow, rdTomorrow);
+
+      // ── [FEAT-RD-3] Monitoring log ───────────────────────────────────────────
+      _emitMonitoringLog(todayAll, tomorrowAll);
+
+      render(todayAll, tomorrowAll);
     } catch (err) {
       const el = getOrCreateHost();
       el.innerHTML = renderWidget([], [], false, String(err && err.message || err));
