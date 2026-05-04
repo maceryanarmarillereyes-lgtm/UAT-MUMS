@@ -191,6 +191,11 @@ If step #3 is missing, task is incomplete.
 
 ## 7) Blueprint Change Log
 
+- **2026-05-04 (CF scroll repaint + observer resiliency patch):**
+  - **Edit — `public/js/services-grid.js`:** Upgraded `scheduleConditionalPaint()` to double-`requestAnimationFrame` repaint sequencing and added `svcGridWrap` debounced scroll listener to re-apply conditional formatting after scroll-driven DOM/style recalcs.
+  - **Edit — `public/js/services-conditional-format.js`:** `paintGrid()` now retries when `_paintSuspended` instead of hard-skipping, row-to-DOM matching now prioritizes stable `data-row-id` / `row.id` keys (with safe fallback), and a debounced `MutationObserver` on `#svcGrid` auto-triggers repaints for render/realtime/edit mutations.
+  - **Behavior contract update:** Conditional formatting repaint is now resilient to suspended windows, scroll interactions, and delayed row DOM materialization without aborting the full paint pass.
+
 - **2026-04-26 (Conditional formatting reliability + row highlight persistence):**
   - **Edit — `public/js/services-grid.js`:** Removed legacy hardcoded conditional evaluator and added deterministic `requestAnimationFrame` repaint handoff to `window.svcConditionalFormat.paint()` after full renders and single-row realtime updates.
   - **Edit — `public/js/services-grid.js`:** Grid row `<tr>` nodes now stamp stable `data-row-id` and preload persisted `--cf-row-bg` metadata (`cf-row-highlighted`) so highlight state can be rehydrated across tbody rebuilds.

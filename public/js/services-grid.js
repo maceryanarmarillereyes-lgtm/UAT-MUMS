@@ -15,6 +15,7 @@
 (function () {
   // services-grid.js v4 — DOM-safe render, context menu, auto-resize
   var grid        = document.getElementById('svcGrid');
+  var _cfScrollTimer = null;
   var empty       = document.getElementById('svcEmptyState');
   var addRowBtn   = document.getElementById('svcAddRow');
   var addColBtn   = document.getElementById('svcAddCol');
@@ -169,12 +170,15 @@
 
   function scheduleConditionalPaint() {
     if (!window.svcConditionalFormat || typeof window.svcConditionalFormat.paint !== 'function') return;
+    // Use double-rAF to ensure DOM is fully laid out before painting
     requestAnimationFrame(function () {
-      try {
-        window.svcConditionalFormat.paint();
-      } catch (err) {
-        console.warn('[services-grid] conditional paint failed:', err);
-      }
+      requestAnimationFrame(function () {
+        try {
+          window.svcConditionalFormat.paint();
+        } catch (err) {
+          console.warn('[services-grid] conditional paint failed:', err);
+        }
+      });
     });
   }
 
@@ -2666,6 +2670,24 @@
   });
 
   function getState() { return current; }
+
+
+  // ── FIX-CF-SCROLL: Re-apply conditional formatting on scroll ──────────────
+  // paintGrid() only runs once after render(), so when the user scrolls and
+  // something triggers a partial DOM update or style recalc, highlights vanish.
+  // This debounced scroll handler ensures formatting is always re-applied.
+  (function bindScrollRepaint() {
+    var wrap = document.getElementById('svcGridWrap');
+    if (!wrap) return;
+    var scrollTimer = null;
+    wrap.addEventListener('scroll', function () {
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(function () {
+        scheduleConditionalPaint();
+      }, 60);
+    }, { passive: true });
+    console.log('[services-grid] Scroll-repaint listener bound to svcGridWrap');
+  })();
 
   window.servicesGrid = {
     load: load,
