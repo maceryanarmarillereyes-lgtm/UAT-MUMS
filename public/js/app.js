@@ -5967,7 +5967,13 @@ async function boot(){
       if (window.PauseSessionManager) {
         window.pauseManager = new window.PauseSessionManager();
         if (window.pauseManager && typeof window.pauseManager.init === 'function') {
-          window.pauseManager.init();
+          // BUG-FIX-5: await init() so loadConfig() completes (server fetch) before the
+          // PIN gate and app render start. Without await, the constructor reads a stale
+          // localStorage config (possibly enabled=true) and briefly starts the checker
+          // before the server-fresh config (enabled=false) arrives, creating a tiny but
+          // real window where the checker runs against the wrong config.
+          // Adding await adds ~100-200ms to boot (single API GET) — acceptable.
+          await window.pauseManager.init();
         }
       }
     }catch(_){ }

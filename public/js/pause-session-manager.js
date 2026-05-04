@@ -87,7 +87,13 @@
     // ── PUBLIC: init ────────────────────────────────────────────────
     async init(){
       await this.loadConfig();
-      this._bindSettingsPanel();
+      // BUG-FIX-1: _bindSettingsPanel() is intentionally NOT called here.
+      // Calling it at init() time permanently attaches a 'click' EventListener to
+      // #pause-save. Then every time the Settings panel is opened via panelInits
+      // (which resets _saveBound = false), _bindSettingsPanel() is called again →
+      // another listener stacks on top → N panel opens = N+1 concurrent save handlers
+      // → double/N-tuple POST requests, race conditions, stale config state.
+      // The correct place to bind is panelInits.pausesession (only on actual open).
       this._setupCrossTab();
       if (this.config && this.config.enabled) {
         this._bindActivityListeners();
@@ -245,6 +251,27 @@
           }
           if (e.data.type === 'pause')  { this._applyPauseFromBroadcast(); }
           if (e.data.type === 'resume') { this._resumeFromBroadcast(); }
+          // BUG-FIX-3: Handle config_update from other tabs.
+          // When Tab A saves new settings (e.g. enabled=false), it broadcasts
+          // config_update so all other open tabs immediately apply the same config
+          // without requiring a page reload. Without this, Tab B's checker keeps
+          // running with stale config.enabled=true and eventually pauses Tab B
+          // even though the global setting was set to disabled.
+          if (e.data.type === 'config_update' && e.data.config) {
+            try {
+              this.config = this._normalizeConfig(e.data.config);
+              this._saveCachedConfig(this.config);
+              if (!this.config.enabled) {
+                this._unbindActivityListeners();
+                if (this.checkerTimer) { clearInterval(this.checkerTimer); this.checkerTimer = null; }
+              } else {
+                if (!this._paused) {
+                  this._bindActivityListeners();
+                  this._startChecker();
+                }
+              }
+            } catch(_) {}
+          }
         };
       }
       window.addEventListener('storage', (e) => {
@@ -277,12 +304,21 @@
       // FIX-PS-8: Do NOT start checker if feature is disabled — prevents lingering
       // timers from triggering pause even after user saves enabled=false.
       if (!this.config || !this.config.enabled) return;
+      // BUG-FIX-4: Reduced interval from 15000ms to 5000ms for timing accuracy.
+      // At 15s granularity, a 1-minute timeout could fire up to 75s after last
+      // activity (15s slack) — a 25% deviation on the shortest allowed timeout.
+      // At 5s granularity, maximum slack is 5s (8% error on 1-min, imperceptible
+      // on 5+ min). CPU cost is trivial: it's a single Date.now() comparison + one
+      // localStorage.getItem per 5 seconds.
+      // Also changed `>` to `>=` so timeouts fire at exactly T=timeout, not T+ε.
       this.checkerTimer = setInterval(()=>{
         if (!this.config || !this.config.enabled || this._paused) return;
         const last = Number(localStorage.getItem(this.lastActivityKey) || this.lastActivity || Date.now());
         const timeoutMs = Number(this.config.timeout_minutes || 10) * 60000;
-        if ((Date.now() - last) > timeoutMs) { this.pause(); }
-      }, 15000);
+        // BUG-FIX-4: Guard against NaN/Infinity before triggering pause
+        if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return;
+        if ((Date.now() - last) >= timeoutMs) { this.pause(); }
+      }, 5000);
     }
 
     // ── [FIX-1] ALARM WAKE SCHEDULER ───────────────────────────────
@@ -495,13 +531,22 @@
       timeoutEl.disabled    = !isSA;
       saveBtn.style.display = isSA ? '' : 'none';
 
-      // FIX-PS-2: _saveBound guard is reset by panelInits on each panel open
+      // BUG-FIX-2: Use saveBtn.onclick (assignment) instead of addEventListener.
+      // addEventListener stacks listeners — even with the _saveBound guard, if
+      // _saveBound is reset externally (panelInits does this on every panel open),
+      // each call adds a NEW anonymous listener. onclick replaces the previous
+      // handler in-place, guaranteeing exactly ONE active handler regardless of
+      // how many times _bindSettingsPanel() is called.
+      // _saveBound guard is kept for defensive compatibility but is no longer the
+      // primary protection against duplicate listeners.
       if (this._saveBound) return;
       this._saveBound = true;
 
-      saveBtn.addEventListener('click', async ()=>{
+      // Capture `this` for the onclick closure (cannot use arrow fn via onclick)
+      const _self = this;
+      saveBtn.onclick = async function() {
         // FIX-PS-4: Re-read role at click time (double-guard against privilege escalation)
-        const clickRole = this._getCurrentRole();
+        const clickRole = _self._getCurrentRole();
         if (clickRole !== 'SUPER_ADMIN') {
           if (statusEl) {
             statusEl.textContent = '✗ Insufficient permissions.';
@@ -536,11 +581,11 @@
           // FIX-PS-5: Ensure window.fetch is NOT the blocked version before saving.
           // If a previous pause cycle installed _blockFetches(), the blocked fetch
           // would reject here. Use _origFetch directly to guarantee the request lands.
-          const safeFetch = (this._origFetch && window.fetch !== this._origFetch)
-            ? this._origFetch
+          const safeFetch = (_self._origFetch && window.fetch !== _self._origFetch)
+            ? _self._origFetch
             : window.fetch;
 
-          const token = this._getToken();
+          const token = _self._getToken();
           const res = await safeFetch.call(window, '/api/settings/pause-session', {
             method: 'POST',
             headers: {
@@ -554,20 +599,29 @@
           try { data = await res.json(); } catch(_) {}
 
           if (res.ok && data && data.ok && data.settings) {
-            this.config = this._normalizeConfig(data.settings);
-            this._saveCachedConfig(this.config);
-            this._onActivity();
+            _self.config = _self._normalizeConfig(data.settings);
+            _self._saveCachedConfig(_self.config);
+            _self._onActivity();
+
+            // BUG-FIX-3: Broadcast config_update to all open tabs immediately.
+            // Without this, other tabs keep running with stale config (e.g. enabled=true
+            // after this tab saved enabled=false) and will eventually pause even though
+            // the feature was disabled. All tabs receive this and apply the new config
+            // in-place via the config_update handler in _setupCrossTab().
+            try {
+              _self.channel && _self.channel.postMessage({ type: 'config_update', config: _self.config });
+            } catch(_) {}
 
             // FIX-PS-6: Apply the new enabled state immediately — don't wait for reload.
             // If user disabled pause session, stop the checker and unbind listeners.
             // If user re-enabled, restart the checker.
-            if (!this.config.enabled) {
-              this._unbindActivityListeners();
-              if (this.checkerTimer) { clearInterval(this.checkerTimer); this.checkerTimer = null; }
+            if (!_self.config.enabled) {
+              _self._unbindActivityListeners();
+              if (_self.checkerTimer) { clearInterval(_self.checkerTimer); _self.checkerTimer = null; }
             } else {
-              if (!this._paused) {
-                this._bindActivityListeners();
-                this._startChecker();
+              if (!_self._paused) {
+                _self._bindActivityListeners();
+                _self._startChecker();
               }
             }
 
