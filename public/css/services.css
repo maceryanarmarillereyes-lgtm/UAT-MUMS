@@ -3330,7 +3330,6 @@ input.cell.cell-qb-not-found {
      This rule is the CSS-var fallback for rows re-stamped by render() before
      paintGrid() RAF fires. Inline style from paintGrid() still wins via !important. */
   background: var(--cf-row-bg, transparent) !important;
-  transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 
 #svcGrid tbody tr.cf-row-highlighted td.row-num {
@@ -3342,12 +3341,6 @@ input.cell.cell-qb-not-found {
   /* box-shadow set by JS takes precedence over hover bg
      — no override needed here, but reset hover background */
   background: inherit;
-}
-
-/* When row is highlighted, make the row-num separator line tinted */
-#svcGrid tbody tr[data-cf-row] td {
-  /* transition for smooth paint/unpaint */
-  transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 
 /* 2. CONDITIONAL FORMATTING - medium priority (overrides zebra) */
@@ -3374,9 +3367,6 @@ input.cell.cell-qb-not-found {
   font-style: normal !important;
 }
 
-/* ── Premium row highlight: left accent pulse animation ──── */
-@keyframes cf-row-accent-in {
-  from { box-shadow: inset 0 0 0 transparent; }
   to   { box-shadow: inset 4px 0 0 currentColor; }
 }
 

@@ -42,6 +42,7 @@
 
   // FIX-CF-SUSPEND: While QB bulk update is running, suspend paintGrid() calls
   var _paintSuspended = false;
+  var _paintSuspendedTimer = null; // safety auto-reset
 
   /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      CONSTANTS & PALETTES
@@ -293,8 +294,7 @@
 
   function paintGrid() {
     if (_paintSuspended) {
-      console.log('[CF] paintGrid skipped — suspended, will retry in 500ms');
-      setTimeout(function() { paintGrid(); }, 500);
+      console.log('[CF] paintGrid skipped (suspended)');
       return;
     }
 
@@ -438,7 +438,7 @@
               if (rule.highlightRow) {
                 if (!rowHighlights[rowIdxStr]) {
                   rowHighlights[rowIdxStr] = {
-                    rowIdx:       rowIdx,
+                    rowIdx:       rowIdxStr,
                     bgColor:      rule.bgColor       || '',
                     textColor:    rule.textColor     || '',
                     bold:         !!rule.bold,
@@ -1447,10 +1447,17 @@
 
   document.addEventListener('svc:qb-update-start', function () {
     _paintSuspended = true;
+    clearTimeout(_paintSuspendedTimer);
+    _paintSuspendedTimer = setTimeout(function () {
+      _paintSuspended = false;
+      paintGrid();
+      console.log('[CF] _paintSuspended auto-reset after timeout');
+    }, 8000); // 8 second hard safety reset
   });
 
   document.addEventListener('svc:qb-update-complete', function () {
     _paintSuspended = false;
+    clearTimeout(_paintSuspendedTimer);
     setTimeout(paintGrid, 120);
   });
 
