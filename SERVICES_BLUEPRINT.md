@@ -494,3 +494,6 @@ If step #3 is missing, task is incomplete.
   - **Edit — `public/js/services-conditional-format.js`:** Wrapped paint pipeline in `try/finally` to always release paint lock and safely flush one queued repaint.
   - **Edit — `public/js/services-conditional-format.js`:** Narrowed `MutationObserver` from full-grid subtree to `tbody` direct child-list changes only, with suspend/paint guard checks + debounce to prevent observer feedback loops from CF-driven DOM micro-mutations.
   - **Behavior contract update:** CF repaint must be non-reentrant and observer-triggered repaint must react only to structural row rebuilds, not CF’s own mutation side effects.
+- **2026-05-04 (CF row-key parity fix for full-row highlight reliability):**
+  - **Edit — `public/js/services-conditional-format.js`:** Added shared `getRowDomKey(row, fallbackPos)` helper and switched CF evaluation/persistence maps to the same key contract used by grid `<tr data-row-id>` (`id` when present, otherwise `idx:<row_index>`).
+  - **Behavior contract update:** Conditional formatting row targeting must use the exact grid DOM row-id key format; fallback row-index keys without `idx:` prefix are invalid for no-id rows.

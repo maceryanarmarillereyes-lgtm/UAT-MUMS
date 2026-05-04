@@ -271,6 +271,13 @@
     return 'rgba('+r+','+g+','+b+','+alpha+')';
   }
 
+  function getRowDomKey(row, fallbackPos) {
+    if (!row) return '';
+    if (row.id != null) return String(row.id);
+    var idx = row.row_index != null ? row.row_index : fallbackPos;
+    return 'idx:' + String(idx);
+  }
+
   /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      PAINT ENGINE v3.0 â€” DOM-walk architecture
      â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -418,8 +425,7 @@
     // off-screen rows were never evaluated, so __cfRowBg was never set.
     rows.forEach(function (row, rowPos) {
         if (!row || !row.data) return;
-        var rowDomKey = row && row.id != null ? String(row.id) : String(row.row_index != null ? row.row_index : rowPos);
-        var rowIdxStr = rowDomKey;
+        var rowIdxStr = getRowDomKey(row, rowPos);
 
         var cellValue = row.data[col.key] != null ? row.data[col.key] : '';
         var cellStr   = String(cellValue).trim();
@@ -503,7 +509,7 @@
     var rowRefMap = {};
     rows.forEach(function (r, idx) {
       if (!r) return;
-      var key = r.id != null ? String(r.id) : String(r.row_index != null ? r.row_index : idx);
+      var key = getRowDomKey(r, idx);
       rowRefMap[key] = r;
     });
 
