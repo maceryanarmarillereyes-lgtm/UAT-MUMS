@@ -55,3 +55,5 @@
 - **2026-05-03** — Dashboard gate tightened: users without a valid Quickbase name assignment are hard-blocked from dashboard counters to prevent global data bleed; UI now shows `DATA NOT AVAILABLE` with admin-contact instruction.
 
 - **2026-05-05** — Navigation contract hardened: dashboard/menu routing now resolves page target from `data-page` first, with href-derived routing as fallback to prevent accidental Team Report renders from delegated click handlers.
+
+- **2026-05-05** — Team Report QB OPEN alignment hardened: Quickbase assignee-to-profile matching now normalizes punctuation/whitespace and applies safe fuzzy fallback so member QB OPEN mirrors per-user Dashboard/My Active Cases scope when Assigned QB names vary in format.
