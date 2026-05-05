@@ -13,7 +13,7 @@
    Violations will cause regressions. When in doubt — STOP and REPORT. */
 
 
-const { sendJson, requireAuthedUser, serviceSelect } = require('./_common');
+const { sendJson, requireAuthedUser, roleFlags, serviceSelect } = require('./_common');
 
 module.exports = async (req, res) => {
   try {
@@ -23,7 +23,16 @@ module.exports = async (req, res) => {
     const auth = await requireAuthedUser(req);
     if (!auth) return sendJson(res, 401, { ok: false, error: 'unauthorized' });
 
-    const out = await serviceSelect('mums_profiles', 'select=user_id,name,username,role,team_id,duty&order=name.asc');
+    const role = String(auth && auth.profile && auth.profile.role || '').toUpperCase();
+    const teamId = String(auth && auth.profile && auth.profile.team_id || '').trim();
+    const { isAdmin } = roleFlags(role);
+
+    const baseSelect = 'select=user_id,name,username,role,team_id,duty';
+    const scopedSelect = (!isAdmin && teamId)
+      ? `${baseSelect}&team_id=eq.${encodeURIComponent(teamId)}&order=name.asc`
+      : `${baseSelect}&order=name.asc`;
+
+    const out = await serviceSelect('mums_profiles', scopedSelect);
     if (!out.ok) return sendJson(res, 500, { ok: false, error: 'members_fetch_failed', details: out.json || out.text });
 
     return sendJson(res, 200, { ok: true, rows: Array.isArray(out.json) ? out.json : [] });
