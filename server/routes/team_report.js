@@ -146,6 +146,24 @@ async function fetchQbTabCounts(memberIds) {
 //
 // This is exactly what the monitoring endpoint does in global mode for the Dashboard.
 
+
+function normalizeQbPersonName(v) {
+  return String(v || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[.,;:()\[\]{}"']/g, '')
+    .trim();
+}
+
+function buildNameVariants(raw) {
+  const base = normalizeQbPersonName(raw);
+  if (!base) return [];
+  const variants = new Set([base]);
+  const compact = base.replace(/\s+/g, '');
+  if (compact) variants.add(compact);
+  return Array.from(variants);
+}
+
 function buildGlobalFilterWhere(filterConfig, filterMatch) {
   if (!Array.isArray(filterConfig) || !filterConfig.length) return '';
   const VALID_OPS = ['EX','XEX','CT','XCT','SW','XSW','BF','AF','IR','XIR','TV','XTV','LT','LTE','GT','GTE'];
@@ -191,7 +209,10 @@ async function fetchQbRecords(profiles) {
   profiles.forEach(p => { result[p.id] = { open: 0, closed: 0, total: 0 }; });
 
   const nameToId = {};
-  profiles.forEach(p => { if (p.qbName) nameToId[p.qbName.toLowerCase()] = p.id; });
+  profiles.forEach(p => {
+    const variants = buildNameVariants(p.qbName);
+    variants.forEach(v => { if (v) nameToId[v] = p.id; });
+  });
   if (!Object.keys(nameToId).length) return result;
 
   const hit = qbCache.get('qb_records');
@@ -277,7 +298,8 @@ async function fetchQbRecords(profiles) {
       ).trim();
       if (!nameVal) return;
 
-      const key = nameVal.toLowerCase();
+      const key = normalizeQbPersonName(nameVal);
+      if (!key) return;
       if (!nameCounts[key]) nameCounts[key] = { open: 0, closed: 0 };
 
       let isClosed = false;
@@ -300,12 +322,18 @@ async function fetchQbRecords(profiles) {
 }
 
 function applyQbNameCounts(nameCounts, nameToId, result) {
+  const memberKeys = Object.keys(nameToId);
   Object.entries(nameCounts).forEach(([name, cnts]) => {
-    const uid = nameToId[name];
+    let uid = nameToId[name];
+    if (!uid) {
+      const compactName = name.replace(/\s+/g, '');
+      const fuzzy = memberKeys.find(k => k === compactName || k.includes(compactName) || compactName.includes(k));
+      if (fuzzy) uid = nameToId[fuzzy];
+    }
     if (uid) {
-      result[uid].open   = cnts.open   || 0;
-      result[uid].closed = cnts.closed || 0;
-      result[uid].total  = (cnts.open || 0) + (cnts.closed || 0);
+      result[uid].open   = (result[uid].open || 0) + (cnts.open || 0);
+      result[uid].closed = (result[uid].closed || 0) + (cnts.closed || 0);
+      result[uid].total  = (result[uid].open || 0) + (result[uid].closed || 0);
     }
   });
 }
