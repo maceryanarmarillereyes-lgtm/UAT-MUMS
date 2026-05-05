@@ -1,18 +1,27 @@
 /**
  * @file team_report.js
  * @description API Route: Team Report — per-member workload with 3-day case history,
- *   schedule hours, QB tab count, and movement deltas for Team Lead daily meetings.
+ *   schedule hours, QB tab count, QB record count, and movement deltas.
  * @module MUMS/Server/Routes
- * @version UAT
+ * @version UAT-p1-666
  * @access TEAM_LEAD, SUPER_USER, SUPER_ADMIN
+ *
+ * BUGFIX LOG (v666):
+ *  BUG-1 FIXED: fetchProfiles queried non-existent `status` column → 400 → profiles=[] → NO MEMBERS
+ *  BUG-2 FIXED: fetchQbTabCounts wrong PostgREST OR syntax (col=eq.val → col.eq.val)
+ *  BUG-3 FIXED: Cases loading added SQL fallback (matches overall_stats pattern)
+ *  FEAT: fetchQbRecordCounts — global QB report run once, count per qb_name
  */
 
 const { getUserFromJwt, getProfileForUserId, serviceSelect, serviceFetch } = require('../lib/supabase');
+const { readGlobalQuickbaseSettings } = require('../lib/global_quickbase');
 
-const CACHE_TTL_MS = 2 * 60 * 1000; // 2-min cache (fresher than overall_stats for daily meeting use)
+const CACHE_TTL_MS = 2 * 60 * 1000;
+const QB_CACHE_TTL_MS = 3 * 60 * 1000;
 const cache = new Map();
+const qbCache = new Map();
 
-/* ─── Helpers ─────────────────────────────────────────────────────────────── */
+/* ── Helpers ──────────────────────────────────────────────────────────────── */
 
 function sendJson(res, statusCode, body) {
   res.statusCode = statusCode;
@@ -65,7 +74,31 @@ function normalizeRole(role) {
   return 'other';
 }
 
-/* ─── Data Loaders ────────────────────────────────────────────────────────── */
+/* ── SQL fallback for ums_cases (matches overall_stats) ──────────────────── */
+
+async function tryExecSql(sql) {
+  const candidates = ['exec_sql', 'execute_sql', 'mums_exec_sql', 'sql'];
+  for (const fn of candidates) {
+    try {
+      const out = await serviceFetch(`/rest/v1/rpc/${encodeURIComponent(fn)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: sql }),
+      });
+      if (out && out.ok) return out;
+    } catch (_) { /* try next */ }
+  }
+  return null;
+}
+
+async function loadCasesWithSql() {
+  const sql = `select value as cases from mums_documents where key = 'ums_cases' limit 1;`;
+  const out = await tryExecSql(sql);
+  if (!out || !out.ok || !Array.isArray(out.json) || !out.json[0]) return null;
+  return out.json[0].cases || null;
+}
+
+/* ── Data loaders ─────────────────────────────────────────────────────────── */
 
 async function loadDocValue(key) {
   const out = await serviceSelect(
@@ -76,48 +109,141 @@ async function loadDocValue(key) {
   return out.json[0].value;
 }
 
+/**
+ * BUG-1 FIX: Removed `status` from select (column does not exist in mums_profiles).
+ * Added `qb_name` for QB record matching.
+ */
 async function fetchProfiles(teamId) {
-  // TEAM_LEAD sees only their team; SUPER_USER/SUPER_ADMIN can see all or filter
   const filter = teamId ? `&team_id=eq.${encodeURIComponent(teamId)}` : '';
   const out = await serviceSelect(
     'mums_profiles',
-    `select=user_id,name,username,team_id,role,status&role=eq.MEMBER${filter}&order=name.asc`
+    `select=user_id,name,username,team_id,role,qb_name${filter}&role=eq.MEMBER&order=name.asc`
   );
   if (!out.ok || !Array.isArray(out.json)) return [];
-  return out.json
-    .filter(p => !p.status || String(p.status).toLowerCase() !== 'inactive')
-    .map(p => ({
-      id: String(p.user_id || ''),
-      name: p.name || p.username || '',
-      username: p.username || '',
-      teamId: p.team_id || '',
-      role: p.role || 'MEMBER'
-    }));
+  return out.json.map(p => ({
+    id: String(p.user_id || ''),
+    name: p.name || p.username || '',
+    username: p.username || '',
+    teamId: p.team_id || '',
+    role: p.role || 'MEMBER',
+    qbName: String(p.qb_name || '').trim()
+  }));
 }
 
+/**
+ * BUG-2 FIX: PostgREST OR must use dot-notation: `col.eq.val` not `col=eq.val`
+ */
 async function fetchQbTabCounts(memberIds) {
-  // Returns { userId: count } map
-  if (!memberIds || !memberIds.length) return {};
-  // Fetch all tabs for these users in one query using OR filter
-  const idFilter = memberIds.map(id => `user_id=eq.${encodeURIComponent(id)}`).join(',');
+  if (!memberIds || !memberIds.length) return { counts: {}, tabNames: {} };
+  const idFilter = memberIds.map(id => `user_id.eq.${encodeURIComponent(id)}`).join(',');
   const out = await serviceSelect(
     'quickbase_tabs',
-    `select=user_id,tab_id&or=(${idFilter})`
+    `select=user_id,tab_id,tab_name&or=(${idFilter})`
   );
   const counts = {};
-  memberIds.forEach(id => { counts[id] = 0; });
+  const tabNames = {};
+  memberIds.forEach(id => { counts[id] = 0; tabNames[id] = []; });
   if (out.ok && Array.isArray(out.json)) {
     out.json.forEach(row => {
       const uid = String(row.user_id || '');
-      if (uid in counts) counts[uid] += 1;
+      if (uid in counts) {
+        counts[uid] += 1;
+        const n = String(row.tab_name || row.tab_id || '').trim();
+        if (n) tabNames[uid].push(n);
+      }
     });
   }
-  return counts;
+  return { counts, tabNames };
 }
+
+/**
+ * FEAT: Run global QB report ONCE, count records per qb_name.
+ * Looks for "Assigned to" field in report columns. Fails gracefully.
+ */
+async function fetchQbRecordCounts(profiles) {
+  const result = {};
+  profiles.forEach(p => { result[p.id] = 0; });
+
+  const nameToId = {};
+  profiles.forEach(p => {
+    if (p.qbName) nameToId[p.qbName.toLowerCase()] = p.id;
+  });
+  if (!Object.keys(nameToId).length) return result;
+
+  const hit = qbCache.get('qb_counts');
+  if (hit && Date.now() - hit.ts < QB_CACHE_TTL_MS) {
+    Object.entries(hit.nameCounts).forEach(([name, cnt]) => {
+      const uid = nameToId[name];
+      if (uid) result[uid] = cnt;
+    });
+    return result;
+  }
+
+  try {
+    const globalResult = await readGlobalQuickbaseSettings();
+    if (!globalResult.ok) return result;
+    const { realm, qbToken, tableId, qid } = globalResult.settings;
+    if (!realm || !qbToken || !tableId || !qid) return result;
+
+    const normalizedRealm = realm.includes('.') ? realm : `${realm}.quickbase.com`;
+    const url = `https://api.quickbase.com/v1/reports/${encodeURIComponent(qid)}/run?tableId=${encodeURIComponent(tableId)}&skip=0&top=1000`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'QB-Realm-Hostname': normalizedRealm,
+        'Authorization': `QB-USER-TOKEN ${qbToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({})
+    });
+
+    if (!response.ok) return result;
+    let json;
+    try { json = await response.json(); } catch (_) { return result; }
+
+    const records = Array.isArray(json.data) ? json.data : [];
+    const reportFields = Array.isArray(json.fields)
+      ? json.fields.map(f => ({ id: Number(f.id), label: String(f.label || '').toLowerCase() }))
+      : [];
+
+    // Find Assigned To field by common label patterns
+    const assignedField = reportFields.find(f =>
+      f.label === 'assigned to' ||
+      f.label === 'assigned_to' ||
+      f.label === 'assignee' ||
+      (f.label.includes('assign') && !f.label.includes('date'))
+    );
+    if (!assignedField || !Number.isFinite(assignedField.id)) return result;
+    const fid = String(assignedField.id);
+
+    const nameCounts = {};
+    records.forEach(rec => {
+      if (!rec || typeof rec !== 'object') return;
+      const cell = rec[fid];
+      const val = String((cell && cell.value !== undefined ? cell.value : cell) || '').trim();
+      if (!val) return;
+      nameCounts[val.toLowerCase()] = (nameCounts[val.toLowerCase()] || 0) + 1;
+    });
+
+    qbCache.set('qb_counts', { ts: Date.now(), nameCounts });
+
+    Object.entries(nameCounts).forEach(([name, cnt]) => {
+      const uid = nameToId[name];
+      if (uid) result[uid] = cnt;
+    });
+  } catch (err) {
+    console.warn('[team_report] QB record count skipped:', err && err.message);
+  }
+
+  return result;
+}
+
+/* ── Case counting ────────────────────────────────────────────────────────── */
 
 function computeCaseCountsForDate(cases, memberIds, dateIso) {
   const startMs = new Date(`${dateIso}T00:00:00Z`).getTime();
-  const endMs = new Date(`${dateIso}T23:59:59Z`).getTime();
+  const endMs   = new Date(`${dateIso}T23:59:59Z`).getTime();
   const counts = {};
   memberIds.forEach(id => { counts[id] = 0; });
   (Array.isArray(cases) ? cases : []).forEach(c => {
@@ -132,7 +258,6 @@ function computeCaseCountsForDate(cases, memberIds, dateIso) {
 }
 
 function computeTotalCasesUpToDate(cases, memberIds, upToDateIso) {
-  // Total cases ever assigned up to end-of-day for the given date
   const endMs = new Date(`${upToDateIso}T23:59:59Z`).getTime();
   const counts = {};
   memberIds.forEach(id => { counts[id] = 0; });
@@ -147,21 +272,19 @@ function computeTotalCasesUpToDate(cases, memberIds, upToDateIso) {
   return counts;
 }
 
+/* ── Schedule hours ───────────────────────────────────────────────────────── */
+
 function computeScheduleHoursForDate(snapshotsByWeek, memberIds, dateIso) {
-  const dayIdx = dayIndexFromIso(dateIso);
+  const dayIdx    = dayIndexFromIso(dateIso);
   const weekStart = weekStartIso(dateIso);
-  const snap = snapshotsByWeek.get(weekStart);
-  const result = {};
-  memberIds.forEach(id => {
-    result[id] = { mailbox: 0, call: 0, back_office: 0, other: 0, total: 0 };
-  });
+  const snap      = snapshotsByWeek.get(weekStart);
+  const result    = {};
+  memberIds.forEach(id => { result[id] = { mailbox: 0, call: 0, back_office: 0, other: 0, total: 0 }; });
   if (!snap || !snap.snapshots) return result;
   memberIds.forEach(uid => {
     const memberSnap = snap.snapshots[uid];
     if (!memberSnap || !memberSnap.days) return;
-    const blocks = Array.isArray(memberSnap.days[String(dayIdx)])
-      ? memberSnap.days[String(dayIdx)]
-      : [];
+    const blocks = Array.isArray(memberSnap.days[String(dayIdx)]) ? memberSnap.days[String(dayIdx)] : [];
     blocks.forEach(b => {
       const s = parseHM(b.start);
       const e = parseHM(b.end);
@@ -169,7 +292,7 @@ function computeScheduleHoursForDate(snapshotsByWeek, memberIds, dateIso) {
       const mins = e - s;
       const roleKey = normalizeRole(b.role);
       result[uid][roleKey] += mins;
-      result[uid].total += mins;
+      result[uid].total    += mins;
     });
   });
   return result;
@@ -189,14 +312,13 @@ function selectLatestSnapshots(notifs, teamId) {
   return map;
 }
 
-/* ─── Main Handler ────────────────────────────────────────────────────────── */
+/* ── Main Handler ─────────────────────────────────────────────────────────── */
 
 module.exports = async (req, res) => {
   try {
-    // ── Auth ──
     const auth = String((req.headers && req.headers.authorization) || '');
-    const jwt = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : '';
-    const u = await getUserFromJwt(jwt);
+    const jwt  = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : '';
+    const u    = await getUserFromJwt(jwt);
     if (!u) return sendJson(res, 401, { ok: false, error: 'Unauthorized' });
 
     const profile = await getProfileForUserId(u.id);
@@ -206,118 +328,105 @@ module.exports = async (req, res) => {
     const allowRoles = new Set(['TEAM_LEAD', 'SUPER_ADMIN', 'SUPER_USER']);
     if (!allowRoles.has(role)) return sendJson(res, 403, { ok: false, error: 'Forbidden: insufficient role' });
 
-    // ── Resolve team ──
     let teamId = String((req.query && req.query.team_id) || '').trim();
-    // TEAM_LEAD is always scoped to their own team
     if (role === 'TEAM_LEAD') teamId = String(profile.team_id || '').trim();
 
-    // ── Date resolution — Manila local date ──
-    // We compute today in Asia/Manila UTC+8; fall back to UTC
-    const nowMs = Date.now();
-    const manilaOffset = 8 * 60 * 60 * 1000;
-    const manilaDate = new Date(nowMs + manilaOffset);
-    const todayIso = manilaDate.toISOString().slice(0, 10);
-    const d1Iso = addDays(todayIso, -1); // yesterday
-    const d2Iso = addDays(todayIso, -2); // 2 days ago
+    // Manila date (UTC+8)
+    const nowMs       = Date.now();
+    const manilaDate  = new Date(nowMs + 8 * 60 * 60 * 1000);
+    const todayIso    = manilaDate.toISOString().slice(0, 10);
+    const d1Iso       = addDays(todayIso, -1);
+    const d2Iso       = addDays(todayIso, -2);
 
     const cacheKey = `tr|${teamId}|${todayIso}`;
     const hit = cache.get(cacheKey);
-    if (hit && nowMs - hit.ts < CACHE_TTL_MS) {
-      return sendJson(res, 200, hit.data);
-    }
+    if (hit && nowMs - hit.ts < CACHE_TTL_MS) return sendJson(res, 200, hit.data);
 
-    // ── Load all data in parallel ──
-    const [profiles, notifsRaw, casesRaw] = await Promise.all([
+    // BUG-3 FIX: parallel load with SQL fallback for cases
+    const [profiles, notifsRaw, casesDocRaw, casesSql] = await Promise.all([
       fetchProfiles(teamId),
       loadDocValue('mums_schedule_notifs').then(v => v || loadDocValue('ums_schedule_notifs')),
-      loadDocValue('ums_cases')
+      loadDocValue('ums_cases'),
+      loadCasesWithSql()
     ]);
 
-    const memberIds = profiles.map(p => String(p.id));
-    const cases = Array.isArray(casesRaw) ? casesRaw : [];
-    const snapshotsByWeek = selectLatestSnapshots(notifsRaw, teamId);
+    const cases      = Array.isArray(casesSql) ? casesSql : (Array.isArray(casesDocRaw) ? casesDocRaw : []);
+    const memberIds  = profiles.map(p => String(p.id));
+    const snapshots  = selectLatestSnapshots(notifsRaw, teamId);
 
-    // QB tab counts — fetch separately (may fail gracefully)
-    const qbTabCounts = await fetchQbTabCounts(memberIds).catch(() => {
-      const fallback = {};
-      memberIds.forEach(id => { fallback[id] = 0; });
-      return fallback;
-    });
+    const [qbTabData, qbRecordCounts] = await Promise.all([
+      fetchQbTabCounts(memberIds).catch(() => ({ counts: {}, tabNames: {} })),
+      fetchQbRecordCounts(profiles).catch(() => {
+        const fb = {}; memberIds.forEach(id => { fb[id] = 0; }); return fb;
+      })
+    ]);
+    const { counts: qbTabCounts, tabNames: qbTabNameMap } = qbTabData;
 
-    // ── Compute per-day case counts ──
     const casesToday = computeCaseCountsForDate(cases, memberIds, todayIso);
-    const casesD1 = computeCaseCountsForDate(cases, memberIds, d1Iso);
-    const casesD2 = computeCaseCountsForDate(cases, memberIds, d2Iso);
+    const casesD1    = computeCaseCountsForDate(cases, memberIds, d1Iso);
+    const casesD2    = computeCaseCountsForDate(cases, memberIds, d2Iso);
     const casesTotal = computeTotalCasesUpToDate(cases, memberIds, todayIso);
 
-    // ── Compute per-day schedule hours ──
-    const schedToday = computeScheduleHoursForDate(snapshotsByWeek, memberIds, todayIso);
-    const schedD1 = computeScheduleHoursForDate(snapshotsByWeek, memberIds, d1Iso);
-    const schedD2 = computeScheduleHoursForDate(snapshotsByWeek, memberIds, d2Iso);
+    const schedToday = computeScheduleHoursForDate(snapshots, memberIds, todayIso);
+    const schedD1    = computeScheduleHoursForDate(snapshots, memberIds, d1Iso);
+    const schedD2    = computeScheduleHoursForDate(snapshots, memberIds, d2Iso);
 
-    // ── Build member rows ──
     const members = profiles.map(p => {
-      const uid = p.id;
-
-      const cT = casesToday[uid] || 0;
-      const c1 = casesD1[uid] || 0;
-      const c2 = casesD2[uid] || 0;
+      const uid  = p.id;
+      const cT   = casesToday[uid] || 0;
+      const c1   = casesD1[uid]    || 0;
+      const c2   = casesD2[uid]    || 0;
       const cTot = casesTotal[uid] || 0;
+      const sT   = schedToday[uid] || { mailbox:0, call:0, back_office:0, other:0, total:0 };
+      const s1   = schedD1[uid]    || { mailbox:0, call:0, back_office:0, other:0, total:0 };
+      const s2   = schedD2[uid]    || { mailbox:0, call:0, back_office:0, other:0, total:0 };
 
-      const sT = schedToday[uid] || { mailbox: 0, call: 0, back_office: 0, other: 0, total: 0 };
-      const s1 = schedD1[uid] || { mailbox: 0, call: 0, back_office: 0, other: 0, total: 0 };
-      const s2 = schedD2[uid] || { mailbox: 0, call: 0, back_office: 0, other: 0, total: 0 };
+      const qbRec = qbRecordCounts[uid] || 0;
 
-      const qbTabs = qbTabCounts[uid] || 0;
-
-      // Movement indicators: positive = more cases handled (good), negative = fewer (stale)
-      const deltaD1 = cT - c1;   // today vs yesterday
-      const deltaD2 = cT - c2;   // today vs 2 days ago
-
-      // Load status heuristic based on total assigned cases
       let loadStatus = 'normal';
       if (cTot >= 15) loadStatus = 'overload';
       else if (cTot >= 10) loadStatus = 'warning';
 
       return {
-        id: uid,
-        name: p.name,
-        username: p.username,
-        teamId: p.teamId,
-        // Cases
+        id:         uid,
+        name:       p.name,
+        username:   p.username,
+        teamId:     p.teamId,
+        qbName:     p.qbName,
+        // Dashboard cases — 3-day
         casesToday: cT,
-        casesD1: c1,
-        casesD2: c2,
+        casesD1:    c1,
+        casesD2:    c2,
         totalAssigned: cTot,
-        deltaD1,
-        deltaD2,
-        // Schedule hours for today
-        mailboxMins: sT.mailbox,
-        callMins: sT.call,
+        deltaD1:    cT - c1,
+        deltaD2:    cT - c2,
+        // Schedule
+        mailboxMins:    sT.mailbox,
+        callMins:       sT.call,
         backOfficeMins: sT.back_office,
-        totalMins: sT.total,
-        mailboxH: Math.round(sT.mailbox / 60 * 10) / 10,
-        callH: Math.round(sT.call / 60 * 10) / 10,
-        backOfficeH: Math.round(sT.back_office / 60 * 10) / 10,
-        totalH: Math.round(sT.total / 60 * 10) / 10,
-        // Schedule hours for D-1
-        schedD1TotalH: Math.round(s1.total / 60 * 10) / 10,
-        // Schedule hours for D-2
-        schedD2TotalH: Math.round(s2.total / 60 * 10) / 10,
+        totalMins:      sT.total,
+        mailboxH:       Math.round(sT.mailbox     / 60 * 10) / 10,
+        callH:          Math.round(sT.call        / 60 * 10) / 10,
+        backOfficeH:    Math.round(sT.back_office / 60 * 10) / 10,
+        totalH:         Math.round(sT.total       / 60 * 10) / 10,
+        schedD1TotalH:  Math.round(s1.total       / 60 * 10) / 10,
+        schedD2TotalH:  Math.round(s2.total       / 60 * 10) / 10,
         // QB
-        qbTabs,
+        qbTabs:     qbTabCounts[uid]   || 0,
+        qbTabNames: qbTabNameMap[uid]  || [],
+        qbRecords:  qbRec,
         // Status
         loadStatus
       };
     });
 
-    // ── Team KPIs ──
     const totalCasesToday = members.reduce((s, m) => s + m.casesToday, 0);
-    const totalCasesD1 = members.reduce((s, m) => s + m.casesD1, 0);
-    const totalAssigned = members.reduce((s, m) => s + m.totalAssigned, 0);
-    const overloaded = members.filter(m => m.loadStatus === 'overload').length;
-    const warning = members.filter(m => m.loadStatus === 'warning').length;
-    const avgCases = members.length ? Math.round((totalAssigned / members.length) * 10) / 10 : 0;
+    const totalCasesD1    = members.reduce((s, m) => s + m.casesD1, 0);
+    const totalAssigned   = members.reduce((s, m) => s + m.totalAssigned, 0);
+    const totalQbRecords  = members.reduce((s, m) => s + m.qbRecords, 0);
+    const overloaded      = members.filter(m => m.loadStatus === 'overload').length;
+    const warning         = members.filter(m => m.loadStatus === 'warning').length;
+    const avgCases        = members.length ? Math.round((totalAssigned / members.length) * 10) / 10 : 0;
 
     const payload = {
       ok: true,
@@ -327,9 +436,11 @@ module.exports = async (req, res) => {
         totalCasesToday,
         totalCasesD1,
         totalAssigned,
+        totalQbRecords,
         avgCasesPerMember: avgCases,
         overloaded,
-        warning
+        warning,
+        hasQbData: totalQbRecords > 0
       },
       members
     };

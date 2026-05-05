@@ -78,6 +78,7 @@ const ROUTES = {
   'settings/pause_session': require('../server/routes/settings/pause_session'),
 
   'overall_stats': require('../server/routes/overall_stats'),
+  'team_report':   require('../server/routes/team_report'),
 
   'users/create': require('../server/routes/users/create'),
   'users/ensure_profile': require('../server/routes/users/ensure_profile'),
