@@ -128,7 +128,32 @@ async function fetchQbTabCounts(memberIds) {
   return { counts, tabNames };
 }
 
-/* ── QB Records — open/closed counts per member via global report ─────────── */
+/* ── QB Records — active case counts per member aligned with Dashboard MY ACTIVE CASES ── */
+// FIX v667+1: Apply globalFilterConfig when building QB WHERE clause so that
+// "QB OPEN" in Team Report matches "MY ACTIVE CASES" in Dashboard exactly.
+// Previously: raw report run with body='{}' → no global filters → included closed/resolved cases.
+// Now: builds the same extraWhere the monitoring endpoint uses (global filter clauses) so
+// QB OPEN reflects ACTIVE records only — same scope the Dashboard hero count shows per user.
+
+function buildGlobalFilterWhere(filterConfig, filterMatch) {
+  if (!Array.isArray(filterConfig) || !filterConfig.length) return '';
+  const VALID_OPS = ['EX','XEX','CT','XCT','SW','XSW','BF','AF','IR','XIR','TV','XTV','LT','LTE','GT','GTE'];
+  const clauses = filterConfig.reduce((acc, f) => {
+    if (!f || typeof f !== 'object') return acc;
+    const fieldId  = Number(f.fieldId ?? f.field_id ?? f.fid ?? f.id);
+    const value    = String(f.value ?? '').trim();
+    const opRaw    = String(f.operator ?? 'EX').trim().toUpperCase();
+    const operator = VALID_OPS.includes(opRaw) ? opRaw : 'EX';
+    if (!Number.isFinite(fieldId) || !value) return acc;
+    // Escape single quotes in QB literal
+    const escaped = value.replace(/'/g, "\\'");
+    acc.push(`{${fieldId}.${operator}.'${escaped}'}`);
+    return acc;
+  }, []);
+  if (!clauses.length) return '';
+  const join = String(filterMatch || 'ALL').toUpperCase() === 'ANY' ? ' OR ' : ' AND ';
+  return clauses.length === 1 ? clauses[0] : `(${clauses.join(join)})`;
+}
 
 async function fetchQbRecords(profiles) {
   const result = {};
@@ -147,13 +172,19 @@ async function fetchQbRecords(profiles) {
   try {
     const { ok, settings } = await readGlobalQuickbaseSettings();
     if (!ok) return result;
-    const { realm, qbToken, tableId, qid } = settings;
+    const { realm, qbToken, tableId, qid, filterConfig, filterMatch } = settings;
     if (!realm || !qbToken || !tableId || !qid) return result;
 
     const normalizedRealm = realm.includes('.') ? realm : `${realm}.quickbase.com`;
+
+    // Build global filter WHERE — same logic as monitoring endpoint's global filter gate.
+    // This ensures QB OPEN only counts ACTIVE records (e.g. excludes "C – Resolved").
+    const globalWhere = buildGlobalFilterWhere(filterConfig, filterMatch);
+
+    const reqBody = globalWhere ? JSON.stringify({ where: globalWhere }) : '{}';
     const resp = await fetch(
       `https://api.quickbase.com/v1/reports/${encodeURIComponent(qid)}/run?tableId=${encodeURIComponent(tableId)}&skip=0&top=1000`,
-      { method: 'POST', headers: { 'QB-Realm-Hostname': normalizedRealm, 'Authorization': `QB-USER-TOKEN ${qbToken}`, 'Content-Type': 'application/json' }, body: '{}' }
+      { method: 'POST', headers: { 'QB-Realm-Hostname': normalizedRealm, 'Authorization': `QB-USER-TOKEN ${qbToken}`, 'Content-Type': 'application/json' }, body: reqBody }
     );
     if (!resp.ok) return result;
 
@@ -168,7 +199,9 @@ async function fetchQbRecords(profiles) {
 
     if (!assignedFld) return result;
 
-    // name → { open, closed }
+    // With globalFilterConfig applied, ALL records returned are already "active".
+    // We still split open/closed as a secondary dimension using statusFld when available,
+    // so qbClosed in Team Report stays meaningful (manual close after filter edge cases).
     const nameCounts = {};
     const CLOSED_STATUSES = new Set(['closed','resolved','complete','completed','done']);
     records.forEach(rec => {
@@ -181,14 +214,15 @@ async function fetchQbRecords(profiles) {
 
       let isClosed = false;
       if (statusFld) {
-        const stCell  = rec[statusFld.id];
-        const stVal   = String((stCell && stCell.value !== undefined ? stCell.value : stCell) || '').trim().toLowerCase();
+        const stCell = rec[statusFld.id];
+        const stVal  = String((stCell && stCell.value !== undefined ? stCell.value : stCell) || '').trim().toLowerCase();
         isClosed = CLOSED_STATUSES.has(stVal);
       }
       if (isClosed) nameCounts[key].closed++;
       else          nameCounts[key].open++;
     });
 
+    console.log(`[team_report] QB fetch OK — globalWhere="${globalWhere || '(none)'}" records=${records.length}`);
     qbCache.set('qb_records', { ts: Date.now(), data: nameCounts });
     applyQbNameCounts(nameCounts, nameToId, result);
   } catch (err) {
