@@ -1968,7 +1968,7 @@ function updateClocksPreviewTimes(){
         if(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
         if(typeof e.button === 'number' && e.button !== 0) return;
 
-        const pageId = _routePageIdFromHref(href);
+        const pageId = String(a.getAttribute('data-page')||'').trim() || _routePageIdFromHref(href);
         if(!pageId) return;
 
         e.preventDefault();
@@ -7682,7 +7682,7 @@ async function boot(){
           if(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
           if(typeof e.button === 'number' && e.button !== 0) return;
 
-          const pageId = _routePageIdFromHref(href);
+          const pageId = String(a.getAttribute('data-page')||'').trim() || _routePageIdFromHref(href);
           if(!pageId) return;
 
           e.preventDefault();
