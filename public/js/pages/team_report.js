@@ -1,30 +1,28 @@
 /**
  * @file team_report.js
- * @description Page: Team Report — daily workload matrix with 3-day case history,
- *   QB records, QB tab count, schedule hours, and movement deltas.
- *   Visible to TEAM_LEAD, SUPER_USER, SUPER_ADMIN only.
+ * @description Page: Team Report — Power BI–style dashboard.
+ *   Member workload matrix, Chart.js case movement chart, QB timeline.
  * @module MUMS/Pages
- * @version UAT-p1-666
+ * @version UAT-p1-667
  */
-
 (window.Pages = window.Pages || {});
 
 window.Pages.team_report = function (root) {
-  root.innerHTML = '<div class="tr-shell"><div class="tr-loading">Loading Team Report…</div></div>';
+  root.innerHTML = '<div class="tr2-shell"><div class="tr2-boot">Loading Team Report…</div></div>';
 
   (async () => {
     /* ── Auth gate ─────────────────────────────────────────────────────── */
     const me = (window.Auth && Auth.getUser) ? (Auth.getUser() || {}) : {};
     const canView = (window.Config && Config.can) ? Config.can(me, 'view_team_report') : false;
     if (!canView) {
-      root.innerHTML = `
-        <div class="tr-shell">
-          <div class="tr-glass-panel" style="padding:2rem;text-align:center">
-            <div style="font-size:2rem;margin-bottom:.5rem">🔒</div>
-            <div style="color:#ef4444;font-size:1.1rem;font-weight:600">Access Denied</div>
-            <div class="muted" style="margin-top:.5rem">Team Report is restricted to Team Leads, Super Users, and Super Admins.</div>
-          </div>
-        </div>`;
+      root.innerHTML = `<div class="tr2-shell"><div class="tr2-deny">
+        <div style="font-size:2rem">🔒</div>
+        <div style="color:#ef4444;font-weight:700;margin-top:.5rem">Access Denied</div>
+        <div style="color:#64748b;margin-top:.25rem;font-size:.85rem">Team Report is restricted to Team Leads, Super Users, and Super Admins.</div>
+        <div style="margin-top:.75rem;font-size:.7rem;color:#475569;border:1px solid #1e293b;padding:.3rem .6rem;border-radius:.3rem;display:inline-flex;align-items:center;gap:.4rem">
+          🔒 Visible only to TEAM_LEAD, SUPER_USER, SUPER_ADMIN
+        </div>
+      </div></div>`;
       return;
     }
 
@@ -32,580 +30,849 @@ window.Pages.team_report = function (root) {
     const teams   = (Config && Config.TEAMS) ? Config.TEAMS.slice() : [];
 
     /* ── State ─────────────────────────────────────────────────────────── */
-    let selectedTeamId = isLead
-      ? String(me.teamId || '')
-      : (teams[0] && teams[0].id ? teams[0].id : '');
+    let selectedTeamId = isLead ? String(me.teamId || '') : (teams[0] ? teams[0].id : '');
     let searchQuery    = '';
-    let sortBy         = 'name';
-    let sortDir        = 'asc';
     let lastData       = null;
     let loading        = false;
-    let autoRefreshTimer = null;
+    let autoTimer      = null;
+    let chartLine      = null;
+    let chartDonut     = null;
+    let lastUpdated    = null;
 
     /* ── Helpers ───────────────────────────────────────────────────────── */
     function esc(s) {
-      return UI && UI.esc ? UI.esc(String(s ?? '')) :
-        String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c));
+      return String(s ?? '').replace(/[&<>"']/g, c =>
+        ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c] || c));
     }
 
     function fmtDate(iso) {
       if (!iso) return '—';
       try {
-        return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', {
-          month: 'short', day: '2-digit', weekday: 'short', timeZone: 'Asia/Manila'
-        });
+        const d = new Date(`${iso}T00:00:00Z`);
+        return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', weekday: 'short', timeZone: 'Asia/Manila' });
       } catch (_) { return iso; }
     }
 
-    function fmtMins(mins) {
-      if (!mins) return '—';
-      const h = Math.floor(mins / 60);
-      const m = mins % 60;
-      return m ? `${h}h ${m}m` : `${h}h`;
+    function fmtShortDate(iso) {
+      if (!iso) return '';
+      try {
+        const d = new Date(`${iso}T00:00:00Z`);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' });
+      } catch (_) { return iso; }
     }
 
-    function deltaBadge(val) {
-      if (val > 0) return `<span class="tr-delta tr-delta-up">▲ ${val}</span>`;
-      if (val < 0) return `<span class="tr-delta tr-delta-down">▼ ${Math.abs(val)}</span>`;
-      return `<span class="tr-delta tr-delta-flat">— 0</span>`;
-    }
+    function initials(n) { return String(n||'?').split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase(); }
 
-    function loadBadge(status) {
-      if (status === 'overload') return '<span class="tr-load tr-load-overload">OVERLOAD</span>';
-      if (status === 'warning')  return '<span class="tr-load tr-load-warning">WARNING</span>';
-      return '<span class="tr-load tr-load-normal">NORMAL</span>';
-    }
-
-    function initials(name) {
-      return String(name || '?').split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+    function gradientForName(name) {
+      const grads = [
+        'from-violet-500 to-purple-600','from-blue-500 to-cyan-600',
+        'from-emerald-500 to-teal-600','from-orange-500 to-amber-600',
+        'from-pink-500 to-rose-600','from-red-500 to-orange-600',
+        'from-indigo-500 to-blue-600','from-cyan-500 to-sky-600'
+      ];
+      let h = 0;
+      for (let i = 0; i < (name||'').length; i++) h = (h*31 + name.charCodeAt(i)) & 0xfffff;
+      return grads[Math.abs(h) % grads.length];
     }
 
     function avatarColor(name) {
-      const colors = ['#3B82F6','#8B5CF6','#06B6D4','#10B981','#F59E0B','#EF4444','#EC4899','#6366F1'];
+      const colors = ['#7C3AED','#2563EB','#059669','#D97706','#DB2777','#DC2626','#4F46E5','#0891B2'];
       let h = 0;
-      for (let i = 0; i < (name || '').length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xFFFFFF;
+      for (let i = 0; i < (name||'').length; i++) h = (h*31 + name.charCodeAt(i)) & 0xfffff;
       return colors[Math.abs(h) % colors.length];
     }
 
-    /* ── Styles ────────────────────────────────────────────────────────── */
+    function deltaHtml(val, bold) {
+      if (val > 0) return `<span class="tr2-delta tr2-delta-up${bold?' tr2-delta-bold':''}">`+
+        `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 15l-6-6-6 6"/></svg>+${val}</span>`;
+      if (val < 0) return `<span class="tr2-delta tr2-delta-dn">`+
+        `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg>${val}</span>`;
+      return `<span class="tr2-delta tr2-delta-flat">0</span>`;
+    }
+
+    function currentCaseBadge(m) {
+      if (m.loadStatus === 'overload')
+        return `<span class="tr2-cur tr2-cur-overload">${m.casesToday}</span>`;
+      if (m.loadStatus === 'warning')
+        return `<span class="tr2-cur tr2-cur-warning">${m.casesToday}</span>`;
+      return `<span class="tr2-cur tr2-cur-normal">${m.casesToday}</span>`;
+    }
+
+    function loadBadge(m) {
+      if (m.loadStatus === 'overload')
+        return `<span class="tr2-status tr2-status-overload${m.casesToday >= 13 ? ' tr2-pulse' : ''}">Overload</span>`;
+      if (m.loadStatus === 'warning')
+        return `<span class="tr2-status tr2-status-warning">Warning</span>`;
+      return `<span class="tr2-status tr2-status-normal">Normal</span>`;
+    }
+
+    function patternBadge(pattern) {
+      const map = {
+        spiking:  `<span class="tr2-pattern tr2-pattern-spiking"><span class="tr2-blink"></span>Spiking</span>`,
+        rising:   `<span class="tr2-pattern tr2-pattern-rising">Rising</span>`,
+        declining:`<span class="tr2-pattern tr2-pattern-declining">Declining</span>`,
+        stable:   `<span class="tr2-pattern tr2-pattern-stable">Stable</span>`
+      };
+      return map[pattern] || map.stable;
+    }
+
+    function attendanceDots(attendance7) {
+      if (!Array.isArray(attendance7) || !attendance7.length) {
+        return Array.from({length:7}).map(()=>`<span class="tr2-att-dot tr2-att-absent"></span>`).join('');
+      }
+      return attendance7.slice(0,7).map(s => {
+        const cls = s === 'present' ? 'tr2-att-present' : s === 'partial' ? 'tr2-att-partial' : 'tr2-att-absent';
+        return `<span class="tr2-att-dot ${cls}"></span>`;
+      }).join('');
+    }
+
+    function qbOpenBadge(n) {
+      if (n >= 7) return `<span class="tr2-qb-open tr2-qb-open-high">${n}</span>`;
+      if (n >= 4) return `<span class="tr2-qb-open tr2-qb-open-med">${n}</span>`;
+      return `<span class="tr2-qb-open tr2-qb-open-low">${n}</span>`;
+    }
+
+    function qbClosedBadge(n) {
+      return `<span class="tr2-qb-closed">${n}</span>`;
+    }
+
+    /* ── Styles injection ──────────────────────────────────────────────── */
     function injectStyles() {
-      if (document.getElementById('tr-styles-v2')) return;
-      const el = document.createElement('style');
-      el.id = 'tr-styles-v2';
-      el.textContent = `
-        .tr-shell{padding:1.25rem 1.5rem;font-family:inherit;min-height:100vh;background:transparent}
-        .tr-loading{color:#94a3b8;padding:2rem;text-align:center;font-size:.95rem}
+      if (document.getElementById('tr2-styles')) return;
+      const s = document.createElement('style');
+      s.id = 'tr2-styles';
+      s.textContent = `
+        /* ── Base ── */
+        .tr2-shell{font-family:'Inter',system-ui,sans-serif;background:#0B1120;min-height:100vh;padding:0;color:#e2e8f0}
+        .tr2-boot{color:#64748b;padding:3rem;text-align:center;font-size:.9rem}
+        .tr2-deny{padding:3rem 1rem;text-align:center}
+        .pbi-grid-bg{background-image:linear-gradient(rgba(148,163,184,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.03) 1px,transparent 1px);background-size:20px 20px}
 
-        /* Header */
-        .tr-header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:.75rem;margin-bottom:1.25rem}
-        .tr-title-row{display:flex;align-items:center;gap:.6rem}
-        .tr-title{font-size:1.3rem;font-weight:700;color:#f1f5f9;letter-spacing:-.01em;margin:0}
-        .tr-badge{display:inline-flex;align-items:center;gap:.3rem;padding:.15rem .5rem;border-radius:.25rem;font-size:.65rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;background:#1e293b;border:1px solid #334155;color:#94a3b8}
-        .tr-subtitle{color:#64748b;font-size:.78rem;margin-top:.2rem}
-        .tr-live-row{display:flex;align-items:center;gap:.5rem;font-size:.75rem;color:#64748b}
-        .tr-live-dot{width:.5rem;height:.5rem;border-radius:50%;background:#22c55e;animation:tr-pulse 2s infinite}
-        @keyframes tr-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+        /* ── Page header ── */
+        .tr2-page{padding:1.25rem 1.5rem 2rem}
+        .tr2-header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:.75rem;margin-bottom:1.25rem}
+        .tr2-title{font-size:1.35rem;font-weight:600;color:#fff;letter-spacing:-.02em;margin:0;display:flex;align-items:center;gap:.6rem}
+        .tr2-title-badge{font-size:.65rem;font-weight:500;padding:.15rem .45rem;border-radius:.25rem;background:#1e293b;border:1px solid #334155;color:#94a3b8;letter-spacing:.04em}
+        .tr2-subtitle{color:#64748b;font-size:.8rem;margin-top:.2rem}
+        .tr2-live{display:flex;align-items:center;gap:.4rem;font-size:.75rem;color:#64748b}
+        .tr2-live-dot{width:.5rem;height:.5rem;border-radius:50%;background:#10b981;animation:tr2-pulse-anim 2s infinite}
+        @keyframes tr2-pulse-anim{0%,100%{opacity:1}50%{opacity:.3}}
 
-        /* KPI Row */
-        .tr-kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.25rem}
-        @media(min-width:900px){.tr-kpi-row{grid-template-columns:repeat(4,1fr)}}
-        .tr-kpi-card{position:relative;background:#1e293b;border:1px solid #334155;border-radius:.75rem;padding:1rem;overflow:hidden;transition:border-color .2s}
-        .tr-kpi-card:hover{border-color:#475569}
-        .tr-kpi-card--red{border-color:#7f1d1d}.tr-kpi-card--red:hover{border-color:#991b1b}
-        .tr-kpi-card--blue{border-color:#1e3a5f}.tr-kpi-card--blue:hover{border-color:#1d4ed8}
-        .tr-kpi-grid-bg{position:absolute;inset:0;background-image:linear-gradient(rgba(148,163,184,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.03) 1px,transparent 1px);background-size:20px 20px;pointer-events:none}
-        .tr-kpi-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;color:#64748b;font-weight:600;margin-bottom:.4rem}
-        .tr-kpi-val{font-size:1.8rem;font-weight:700;color:#f1f5f9;line-height:1;letter-spacing:-.03em}
-        .tr-kpi-sub{font-size:.72rem;color:#64748b;margin-top:.5rem}
-        .tr-kpi-sub--red{color:#f87171}.tr-kpi-sub--amber{color:#fbbf24}.tr-kpi-sub--blue{color:#60a5fa}
+        /* ── KPI cards ── */
+        .tr2-kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.9rem;margin-bottom:1.25rem}
+        @media(min-width:900px){.tr2-kpi-row{grid-template-columns:repeat(4,1fr)}}
+        .tr2-kpi{position:relative;background:#1e293b;border:1px solid rgba(100,116,139,.3);border-radius:.75rem;padding:1rem;overflow:hidden;transition:border-color .2s}
+        .tr2-kpi:hover{border-color:rgba(100,116,139,.6)}
+        .tr2-kpi--red{border-color:rgba(127,29,29,.6)}.tr2-kpi--red:hover{border-color:#991b1b}
+        .tr2-kpi-inner{position:relative}
+        .tr2-kpi-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.4rem}
+        .tr2-kpi-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;color:#64748b;font-weight:500}
+        .tr2-kpi-val{font-size:1.85rem;font-weight:600;color:#fff;line-height:1;letter-spacing:-.03em;margin:.25rem 0}
+        .tr2-kpi-sub{font-size:.72rem;display:flex;align-items:center;gap:.3rem;margin-top:.6rem}
+        .tr2-kpi-sub-up{color:#f59e0b}.tr2-kpi-sub-dn{color:#f59e0b}.tr2-kpi-sub-red{color:#f87171}.tr2-kpi-sub-muted{color:#64748b}
 
-        /* Toolbar */
-        .tr-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:.75rem;background:#1e293b;border:1px solid #334155;border-radius:.75rem;padding:.6rem 1rem;margin-bottom:1.25rem}
-        .tr-toolbar-label{font-size:.72rem;color:#64748b;white-space:nowrap}
-        .tr-select{background:#0f172a;border:1px solid #334155;border-radius:.4rem;color:#e2e8f0;font-size:.8rem;padding:.3rem .6rem;outline:none}
-        .tr-select:focus{border-color:#3b82f6}
-        .tr-search{background:#0f172a;border:1px solid #334155;border-radius:.4rem;color:#e2e8f0;font-size:.8rem;padding:.3rem .6rem .3rem 1.6rem;outline:none;min-width:180px}
-        .tr-search:focus{border-color:#3b82f6}
-        .tr-search-wrap{position:relative}
-        .tr-search-wrap svg{position:absolute;left:.5rem;top:50%;transform:translateY(-50%);color:#64748b;pointer-events:none}
-        .tr-divider{width:1px;height:1.2rem;background:#334155;display:none}
-        @media(min-width:640px){.tr-divider{display:block}}
-        .tr-btn{display:inline-flex;align-items:center;gap:.35rem;background:#0f172a;border:1px solid #334155;border-radius:.4rem;color:#94a3b8;font-size:.75rem;padding:.3rem .65rem;cursor:pointer;transition:all .15s;white-space:nowrap}
-        .tr-btn:hover{background:#1e293b;color:#e2e8f0;border-color:#475569}
-        .tr-btn--primary{background:#1d4ed8;border-color:#2563eb;color:#fff}.tr-btn--primary:hover{background:#1e40af}
-        .tr-ml-auto{margin-left:auto}
+        /* ── Filters ── */
+        .tr2-filters{background:#1e293b;border:1px solid rgba(100,116,139,.3);border-radius:.75rem;padding:.6rem 1rem;margin-bottom:1.25rem;display:flex;flex-wrap:wrap;align-items:center;gap:.75rem}
+        .tr2-filter-label{font-size:.75rem;color:#64748b}
+        .tr2-select{background:#0f172a;border:1px solid #334155;border-radius:.45rem;color:#e2e8f0;font-size:.8rem;padding:.3rem .55rem;outline:none;cursor:pointer}
+        .tr2-select:focus{border-color:#3b82f6}
+        .tr2-date-btn{background:#0f172a;border:1px solid #334155;border-radius:.45rem;color:#e2e8f0;font-size:.8rem;padding:.3rem .7rem;display:inline-flex;align-items:center;gap:.4rem;cursor:pointer}
+        .tr2-date-btn:hover{background:#1e293b}
+        .tr2-vsep{width:1px;height:1.2rem;background:#334155;display:none}
+        @media(min-width:640px){.tr2-vsep{display:block}}
+        .tr2-search-wrap{position:relative;flex:1;max-width:240px}
+        .tr2-search-wrap svg{position:absolute;left:.55rem;top:50%;transform:translateY(-50%);color:#64748b;pointer-events:none}
+        .tr2-search{width:100%;background:#0f172a;border:1px solid #334155;border-radius:.45rem;color:#e2e8f0;font-size:.8rem;padding:.3rem .55rem .3rem 1.75rem;outline:none}
+        .tr2-search:focus{border-color:#3b82f6}
+        .tr2-ml-auto{margin-left:auto}
 
-        /* Table panel */
-        .tr-panel{background:#1e293b;border:1px solid #334155;border-radius:.75rem;overflow:hidden;margin-bottom:1.25rem}
-        .tr-panel-head{display:flex;align-items:center;justify-content:space-between;padding:.65rem 1rem;background:#0f172a;border-bottom:1px solid #334155}
-        .tr-panel-title{display:flex;align-items:center;gap:.5rem;font-size:.78rem;font-weight:600;color:#f1f5f9;text-transform:uppercase;letter-spacing:.06em}
-        .tr-panel-icon{width:1.6rem;height:1.6rem;border-radius:.3rem;background:#0f172a;border:1px solid #334155;display:flex;align-items:center;justify-content:center}
-        .tr-legend{display:flex;gap:.5rem;flex-wrap:wrap}
-        .tr-legend-item{font-size:.65rem;padding:.12rem .4rem;border-radius:.2rem;font-weight:500}
-        .tr-legend-normal{background:rgba(34,197,94,.12);color:#4ade80;border:1px solid rgba(34,197,94,.2)}
-        .tr-legend-warning{background:rgba(251,191,36,.12);color:#fbbf24;border:1px solid rgba(251,191,36,.2)}
-        .tr-legend-overload{background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.2)}
+        /* ── Main 2-col grid ── */
+        .tr2-main-grid{display:grid;grid-template-columns:1fr;gap:1.25rem;margin-bottom:1.25rem}
+        @media(min-width:1100px){.tr2-main-grid{grid-template-columns:2fr 1fr}}
 
-        /* Table */
-        .tr-table-wrap{overflow-x:auto}
-        .tr-table{width:100%;border-collapse:collapse;font-size:.8rem}
-        .tr-table thead{background:rgba(15,23,42,.7);position:sticky;top:0;z-index:10}
-        .tr-table th{padding:.55rem .75rem;text-align:left;font-size:.65rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#64748b;white-space:nowrap;border-bottom:1px solid #334155;cursor:pointer;user-select:none}
-        .tr-table th:hover{color:#94a3b8}
-        .tr-table th.th-center{text-align:center}
-        .tr-table th .sort-arrow{opacity:.3;margin-left:.25rem;font-size:.7rem}
-        .tr-table th.sort-active{color:#93c5fd}
-        .tr-table th.sort-active .sort-arrow{opacity:1;color:#60a5fa}
-        /* QB column header highlight */
-        .tr-table th.th-qb{color:#818cf8}
-        .tr-table th.th-qb:hover{color:#a5b4fc}
-        .tr-table th.th-qb.sort-active{color:#a5b4fc}
-        .tr-table tbody tr{border-bottom:1px solid rgba(51,65,85,.5);transition:background .12s}
-        .tr-table tbody tr:hover{background:rgba(51,65,85,.35)}
-        .tr-table tbody tr:last-child{border-bottom:none}
-        .tr-table td{padding:.55rem .75rem;color:#cbd5e1;vertical-align:middle}
-        .tr-table td.td-center{text-align:center}
-        .tr-table .td-num{font-variant-numeric:tabular-nums;font-weight:600;color:#f1f5f9}
-        .tr-table .td-muted{color:#475569;font-size:.75rem}
+        /* ── Panel shared ── */
+        .tr2-panel{background:#1e293b;border:1px solid rgba(100,116,139,.3);border-radius:.75rem;overflow:hidden}
+        .tr2-panel-head{display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:rgba(15,23,42,.5);border-bottom:1px solid rgba(100,116,139,.2)}
+        .tr2-panel-title{display:flex;align-items:center;gap:.5rem;font-size:.72rem;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.07em}
+        .tr2-panel-icon{width:1.75rem;height:1.75rem;border-radius:.35rem;background:#0f172a;border:1px solid #334155;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+        .tr2-legend{display:flex;gap:.4rem}
+        .tr2-leg{font-size:.65rem;padding:.1rem .4rem;border-radius:.2rem;font-weight:500}
+        .tr2-leg-n{background:rgba(16,185,129,.12);color:#34d399;border:1px solid rgba(16,185,129,.2)}
+        .tr2-leg-w{background:rgba(245,158,11,.12);color:#fbbf24;border:1px solid rgba(245,158,11,.2)}
+        .tr2-leg-o{background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.2)}
 
-        /* QB records cell */
-        .tr-qb-rec{display:inline-flex;align-items:center;gap:.3rem}
-        .tr-qb-rec-count{font-variant-numeric:tabular-nums;font-weight:700;color:#818cf8;font-size:.88rem}
-        .tr-qb-rec-na{color:#374151;font-size:.72rem}
+        /* ── Workload Matrix table ── */
+        .tr2-table-wrap{overflow-x:auto}
+        .tr2-table{width:100%;border-collapse:collapse;font-size:.8rem}
+        .tr2-table thead{background:rgba(15,23,42,.7);position:sticky;top:0;z-index:10}
+        .tr2-table th{padding:.5rem .75rem;text-align:left;font-size:.65rem;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:#64748b;white-space:nowrap;border-bottom:1px solid rgba(51,65,85,.6)}
+        .tr2-table th.tc{text-align:center}
+        .tr2-table tbody tr{border-bottom:1px solid rgba(30,41,59,.8);transition:background .1s}
+        .tr2-table tbody tr:hover{background:rgba(51,65,85,.4)}
+        .tr2-table tbody tr.tr2-row-even{background:rgba(15,23,42,.3)}
+        .tr2-table tbody tr.tr2-row-overload{background:rgba(127,29,29,.12);border-left:2px solid #ef4444}
+        .tr2-table tbody tr.tr2-row-overload:hover{background:rgba(127,29,29,.22)}
+        .tr2-table td{padding:.55rem .75rem;color:#cbd5e1;vertical-align:middle}
+        .tr2-table td.tc{text-align:center}
 
         /* Member cell */
-        .tr-member-cell{display:flex;align-items:center;gap:.6rem}
-        .tr-avatar{width:1.75rem;height:1.75rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#fff;flex-shrink:0;letter-spacing:.02em}
-        .tr-member-name{font-weight:600;color:#f1f5f9;font-size:.82rem}
-        .tr-member-user{color:#64748b;font-size:.7rem}
-        .tr-member-qbname{color:#6366f1;font-size:.65rem;margin-top:.05rem}
+        .tr2-member-cell{display:flex;align-items:center;gap:.55rem}
+        .tr2-avatar{width:1.75rem;height:1.75rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#fff;flex-shrink:0}
+        .tr2-avatar-overload{ring:2px;box-shadow:0 0 0 2px rgba(239,68,68,.5)}
+        .tr2-member-name{font-weight:500;color:#fff;font-size:.82rem;display:flex;align-items:center;gap:.4rem}
+        .tr2-member-overload-dot{width:.45rem;height:.45rem;border-radius:50%;background:#ef4444;animation:tr2-pulse-anim 1.5s infinite;flex-shrink:0}
+        .tr2-member-sub{color:#64748b;font-size:.68rem;margin-top:.05rem}
 
-        /* Load badge */
-        .tr-load{display:inline-block;padding:.1rem .4rem;border-radius:.2rem;font-size:.6rem;font-weight:700;letter-spacing:.06em}
-        .tr-load-normal{background:rgba(34,197,94,.12);color:#4ade80;border:1px solid rgba(34,197,94,.25)}
-        .tr-load-warning{background:rgba(251,191,36,.12);color:#fbbf24;border:1px solid rgba(251,191,36,.25)}
-        .tr-load-overload{background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.25)}
+        /* Attendance dots */
+        .tr2-att-dots{display:flex;justify-content:center;gap:.2rem}
+        .tr2-att-dot{width:.45rem;height:.45rem;border-radius:50%;display:inline-block}
+        .tr2-att-present{background:#10b981}
+        .tr2-att-partial{background:#f59e0b}
+        .tr2-att-absent{background:#374151}
 
-        /* Delta badges */
-        .tr-delta{display:inline-block;padding:.08rem .35rem;border-radius:.2rem;font-size:.68rem;font-weight:600}
-        .tr-delta-up{background:rgba(34,197,94,.1);color:#4ade80}
-        .tr-delta-down{background:rgba(239,68,68,.1);color:#f87171}
-        .tr-delta-flat{background:rgba(100,116,139,.1);color:#64748b}
+        /* QB badges */
+        .tr2-qb-open{padding:.1rem .4rem;border-radius:.25rem;font-size:.75rem;font-weight:600;font-variant-numeric:tabular-nums}
+        .tr2-qb-open-high{background:rgba(239,68,68,.2);color:#fca5a5}
+        .tr2-qb-open-med{background:rgba(245,158,11,.2);color:#fcd34d}
+        .tr2-qb-open-low{background:rgba(51,65,85,.5);color:#e2e8f0}
+        .tr2-qb-closed{padding:.1rem .4rem;border-radius:.25rem;font-size:.75rem;background:rgba(16,185,129,.12);color:#6ee7b7}
 
-        /* Date chips */
-        .tr-date-strip{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.25rem}
-        .tr-date-chip{display:flex;flex-direction:column;align-items:center;padding:.4rem .8rem;background:#1e293b;border:1px solid #334155;border-radius:.5rem;min-width:90px}
-        .tr-date-chip.today{border-color:#3b82f6;background:rgba(59,130,246,.07)}
-        .tr-date-chip-label{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#64748b}
-        .tr-date-chip-date{font-size:.8rem;color:#e2e8f0;margin-top:.1rem}
-        .tr-date-chip.today .tr-date-chip-label{color:#60a5fa}
-        .tr-date-chip.today .tr-date-chip-date{color:#93c5fd}
+        /* Current cases */
+        .tr2-cur{padding:.25rem .55rem;border-radius:.35rem;font-size:.82rem;font-weight:600;display:inline-block}
+        .tr2-cur-overload{background:rgba(239,68,68,.2);color:#fca5a5;border:1px solid rgba(239,68,68,.3);box-shadow:0 1px 4px rgba(239,68,68,.08)}
+        .tr2-cur-warning{background:rgba(245,158,11,.15);color:#fcd34d;border:1px solid rgba(245,158,11,.25)}
+        .tr2-cur-normal{background:rgba(16,185,129,.12);color:#6ee7b7;border:1px solid rgba(16,185,129,.2)}
 
-        /* QB bar */
-        .tr-qb-bar{display:flex;align-items:center;gap:.3rem}
-        .tr-qb-tab-dot{width:.45rem;height:.45rem;border-radius:50%;background:#3b82f6;opacity:.8}
+        /* Delta */
+        .tr2-delta{display:inline-flex;align-items:center;gap:.2rem;font-size:.75rem;font-weight:500}
+        .tr2-delta-up{color:#f87171}.tr2-delta-dn{color:#34d399}.tr2-delta-flat{color:#475569}
+        .tr2-delta-bold{font-weight:700}
 
-        /* Column group divider */
-        .tr-col-sep{border-left:2px solid rgba(99,102,241,.2) !important}
+        /* Load status badge */
+        .tr2-status{padding:.2rem .55rem;border-radius:999px;font-size:.68rem;font-weight:600}
+        .tr2-status-overload{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.3)}
+        .tr2-status-warning{background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.25)}
+        .tr2-status-normal{background:rgba(16,185,129,.12);color:#34d399;border:1px solid rgba(16,185,129,.2)}
+        .tr2-pulse{animation:tr2-pulse-anim 1.5s infinite}
 
-        /* Empty state */
-        .tr-empty{padding:3rem 1rem;text-align:center;color:#64748b;font-size:.85rem}
-        .tr-empty-icon{font-size:2rem;margin-bottom:.5rem;opacity:.5}
+        /* Table footer */
+        .tr2-table-foot{padding:.55rem 1rem;background:rgba(15,23,42,.5);border-top:1px solid rgba(51,65,85,.4);display:flex;align-items:center;justify-content:space-between;font-size:.68rem;color:#475569}
 
-        /* Skeleton */
-        .tr-skel{background:linear-gradient(90deg,#1e293b 25%,#263148 50%,#1e293b 75%);background-size:200% 100%;animation:tr-skel-anim 1.4s infinite;border-radius:.3rem;height:.8rem;display:inline-block}
-        @keyframes tr-skel-anim{0%{background-position:200% 0}100%{background-position:-200% 0}}
+        /* ── Right panel ── */
+        .tr2-right-panels{display:flex;flex-direction:column;gap:1.25rem}
+        .tr2-chart-area{padding:1rem}
+        .tr2-chart-canvas-wrap{height:200px;position:relative}
+        .tr2-chart-summary{margin-top:.75rem;padding-top:.75rem;border-top:1px solid rgba(51,65,85,.4);display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;font-size:.7rem}
+        .tr2-chart-summary-item .tr2-chart-summary-label{color:#64748b}
+        .tr2-chart-summary-item .tr2-chart-summary-val{color:#fff;font-weight:600;margin-top:.1rem}
+        .tr2-donut-wrap{height:160px;position:relative;display:flex;align-items:center;justify-content:center}
+        .tr2-donut-center{position:absolute;text-align:center;pointer-events:none}
+        .tr2-donut-center-num{font-size:1.4rem;font-weight:700;color:#fff;line-height:1}
+        .tr2-donut-center-lbl{font-size:.6rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-top:.15rem}
+        .tr2-donut-legend{margin-top:.75rem;display:flex;flex-direction:column;gap:.4rem}
+        .tr2-donut-legend-item{display:flex;align-items:center;justify-content:space-between;font-size:.72rem}
+        .tr2-donut-legend-left{display:flex;align-items:center;gap:.4rem;color:#cbd5e1}
+        .tr2-donut-dot{width:.55rem;height:.55rem;border-radius:50%}
+        .tr2-donut-legend-right{color:#fff;font-weight:600}
 
-        /* Footer meta */
-        .tr-meta{font-size:.7rem;color:#475569;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-top:.5rem}
-        .tr-meta-dot{width:.35rem;height:.35rem;border-radius:50%;background:#22c55e}
+        /* ── QB Timeline table ── */
+        .tr2-timeline-wrap{overflow-x:auto}
+        .tr2-timeline-table{width:100%;border-collapse:collapse;font-size:.8rem}
+        .tr2-timeline-table thead{background:rgba(15,23,42,.7)}
+        .tr2-timeline-table th{padding:.5rem 1rem;text-align:left;font-size:.65rem;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:#64748b;border-bottom:1px solid rgba(51,65,85,.5);white-space:nowrap}
+        .tr2-timeline-table th.tc{text-align:center}
+        .tr2-timeline-table tbody tr{border-bottom:1px solid rgba(30,41,59,.6);transition:background .1s}
+        .tr2-timeline-table tbody tr:hover{background:rgba(51,65,85,.3)}
+        .tr2-timeline-table td{padding:.5rem 1rem;color:#cbd5e1;vertical-align:middle}
+        .tr2-timeline-table td.tc{text-align:center}
+        .tr2-timeline-head-note{font-size:.7rem;color:#64748b}
 
-        /* QB section banner */
-        .tr-qb-banner{display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.15);border-radius:.5rem;font-size:.72rem;color:#818cf8;margin-bottom:.75rem}
+        /* Timeline "today" cell */
+        .tr2-td-today-high{display:inline-flex;align-items:center;gap:.4rem;padding:.25rem .6rem;border-radius:.3rem;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25)}
+        .tr2-td-today-med{display:inline-flex;align-items:center;gap:.4rem;padding:.25rem .6rem;border-radius:.3rem;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.2)}
+        .tr2-td-today-norm{display:inline-flex;align-items:center;gap:.4rem}
+        .tr2-td-today-count{color:#fff;font-weight:600}
+        .tr2-td-d1-wrap{display:inline-flex;align-items:center;gap:.4rem}
+
+        /* Pattern badges */
+        .tr2-pattern{display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;padding:.15rem .45rem;border-radius:.25rem}
+        .tr2-pattern-spiking{background:rgba(239,68,68,.12);color:#f87171}
+        .tr2-pattern-rising{background:rgba(245,158,11,.12);color:#fbbf24}
+        .tr2-pattern-declining{background:rgba(34,197,94,.1);color:#4ade80}
+        .tr2-pattern-stable{background:rgba(51,65,85,.5);color:#94a3b8}
+        .tr2-blink{width:.35rem;height:.35rem;border-radius:50%;background:#ef4444;animation:tr2-pulse-anim 1s infinite;display:inline-block}
+
+        /* ── Footer ── */
+        .tr2-footer{display:flex;align-items:center;justify-content:flex-end;gap:.4rem;margin-top:1rem;font-size:.7rem;color:#475569}
+
+        /* ── Skeleton ── */
+        .tr2-skel{display:inline-block;border-radius:.2rem;height:.75rem;background:linear-gradient(90deg,#1e293b 25%,#263148 50%,#1e293b 75%);background-size:200% 100%;animation:tr2-skel 1.4s infinite}
+        @keyframes tr2-skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+        /* ── Empty ── */
+        .tr2-empty{padding:3rem 1rem;text-align:center;color:#64748b;font-size:.85rem}
       `;
-      document.head.appendChild(el);
+      document.head.appendChild(s);
+    }
+
+    /* ── Load Chart.js dynamically ─────────────────────────────────────── */
+    function ensureChartJs() {
+      return new Promise(resolve => {
+        if (window.Chart) { resolve(); return; }
+        const sc = document.createElement('script');
+        sc.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+        sc.onload = resolve;
+        sc.onerror = resolve; // fail gracefully
+        document.head.appendChild(sc);
+      });
     }
 
     /* ── Fetch ─────────────────────────────────────────────────────────── */
     async function fetchReport() {
       loading = true;
-      render();
-      const headers = {};
+      renderSkeleton();
       const jwt = (window.CloudAuth && CloudAuth.accessToken) ? CloudAuth.accessToken() : '';
-      if (jwt) headers['Authorization'] = `Bearer ${jwt}`;
-      const params = new URLSearchParams();
+      const headers = jwt ? { Authorization: `Bearer ${jwt}` } : {};
+      const params  = new URLSearchParams();
       if (selectedTeamId) params.set('team_id', selectedTeamId);
-
       try {
-        const res = await fetch(`/api/team_report?${params}`, { headers });
+        const res  = await fetch(`/api/team_report?${params}`, { headers });
         const json = await res.json().catch(() => ({ ok: false }));
-        if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load team report.');
-        lastData = json;
+        if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load.');
+        lastData    = json;
+        lastUpdated = new Date();
       } catch (e) {
         lastData = { ok: false, error: String(e.message || e) };
       } finally {
         loading = false;
+        await ensureChartJs();
         render();
       }
     }
 
-    /* ── Sort ──────────────────────────────────────────────────────────── */
-    function sortMembers(members) {
-      const dir = sortDir === 'desc' ? -1 : 1;
-      return [...members].sort((a, b) => {
-        switch (sortBy) {
-          case 'name':         return String(a.name).localeCompare(String(b.name)) * dir;
-          case 'totalAssigned':return (a.totalAssigned - b.totalAssigned) * dir;
-          case 'casesToday':   return (a.casesToday - b.casesToday) * dir;
-          case 'casesD1':      return (a.casesD1 - b.casesD1) * dir;
-          case 'casesD2':      return (a.casesD2 - b.casesD2) * dir;
-          case 'deltaD1':      return (a.deltaD1 - b.deltaD1) * dir;
-          case 'qbRecords':    return (a.qbRecords - b.qbRecords) * dir;
-          case 'qbTabs':       return (a.qbTabs - b.qbTabs) * dir;
-          case 'totalH':       return (a.totalH - b.totalH) * dir;
-          case 'load':         return (['normal','warning','overload'].indexOf(a.loadStatus) - ['normal','warning','overload'].indexOf(b.loadStatus)) * dir;
-          default:             return 0;
+    /* ── Skeleton while loading ─────────────────────────────────────────── */
+    function renderSkeleton() {
+      injectStyles();
+      root.innerHTML = `<div class="tr2-shell"><div class="tr2-page">
+        <div class="tr2-boot" style="padding:4rem;color:#475569">
+          <div class="tr2-skel" style="width:120px;margin:0 auto .75rem"></div>
+          <div class="tr2-skel" style="width:200px;margin:0 auto"></div>
+        </div>
+      </div></div>`;
+    }
+
+    /* ── Charts ────────────────────────────────────────────────────────── */
+    function renderLineChart(members, dates7) {
+      const canvas = document.getElementById('tr2LineChart');
+      if (!canvas || !window.Chart) return;
+      if (chartLine) { chartLine.destroy(); chartLine = null; }
+
+      // Top 3 highest-load members for the chart
+      const sorted = [...members].sort((a, b) => b.casesToday - a.casesToday).slice(0, 3);
+      const CHART_COLORS = ['#EF4444', '#3B82F6', '#F59E0B', '#10B981'];
+      const labels = (Array.isArray(dates7) ? dates7 : []).slice(0, 7).reverse().map(d => fmtShortDate(d));
+
+      Chart.defaults.color        = '#94A3B8';
+      Chart.defaults.borderColor  = '#1E293B';
+      Chart.defaults.font.family  = 'Inter, system-ui, sans-serif';
+      Chart.defaults.font.size    = 11;
+
+      chartLine = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: sorted.map((m, i) => ({
+            label: m.name,
+            data:  [...(m.history7 || [])].slice(0, 7).reverse(),
+            borderColor: CHART_COLORS[i],
+            backgroundColor: CHART_COLORS[i] + '18',
+            borderWidth: i === 0 ? 2.5 : 2,
+            tension: 0.35,
+            pointRadius: i === 0 ? 3 : 2.5,
+            pointHoverRadius: 5,
+            pointBackgroundColor: CHART_COLORS[i],
+            fill: i === 0
+          }))
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { intersect: false, mode: 'index' },
+          plugins: {
+            legend: { display: true, position: 'top', align: 'start',
+              labels: { boxWidth: 10, boxHeight: 10, padding: 10, color: '#CBD5E1', font: { size: 11, weight: '500' } }
+            },
+            tooltip: {
+              backgroundColor: '#0F172A', titleColor: '#E2E8F0', bodyColor: '#CBD5E1',
+              borderColor: '#334155', borderWidth: 1, padding: 10,
+              callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y} cases` }
+            }
+          },
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(51,65,85,.5)', drawBorder: false },
+              ticks: { padding: 6, color: '#64748B' }, border: { display: false } },
+            x: { grid: { display: false }, ticks: { padding: 4, color: '#64748B' }, border: { display: false } }
+          }
         }
       });
     }
 
-    function thSort(col, label, extra) {
-      const active = sortBy === col;
-      const arrow  = active ? (sortDir === 'asc' ? '▲' : '▼') : '▲';
-      const cls    = `th-center${active ? ' sort-active' : ''}${extra ? ' ' + extra : ''}`;
-      return `<th class="${cls}" data-sort="${col}">${label}<span class="sort-arrow">${arrow}</span></th>`;
+    function renderDonutChart(kpis) {
+      const canvas = document.getElementById('tr2DonutChart');
+      if (!canvas || !window.Chart) return;
+      if (chartDonut) { chartDonut.destroy(); chartDonut = null; }
+      const normal   = (kpis.totalMembers||0) - (kpis.overloaded||0) - (kpis.warning||0);
+      chartDonut = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels: ['Normal', 'Warning', 'Overload'],
+          datasets: [{ data: [Math.max(normal,0), kpis.warning||0, kpis.overloaded||0],
+            backgroundColor: ['#10B981','#F59E0B','#EF4444'],
+            borderWidth: 0, hoverOffset: 4, cutout: '72%' }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false },
+            tooltip: { backgroundColor:'#0F172A', titleColor:'#E2E8F0', bodyColor:'#CBD5E1',
+              borderColor:'#334155', borderWidth:1, padding:10,
+              callbacks: { label: ctx => `${ctx.label}: ${ctx.parsed} members` }
+            }
+          }
+        }
+      });
     }
 
-    /* ── Render ────────────────────────────────────────────────────────── */
+    /* ── Main render ────────────────────────────────────────────────────── */
     function render() {
       injectStyles();
       const scrollY = window.scrollY;
 
-      const dates    = lastData && lastData.dates ? lastData.dates : {};
-      const kpis     = lastData && lastData.kpis  ? lastData.kpis  : {};
-      const todayIso = dates.today || '';
-      const d1Iso    = dates.d1    || '';
-      const d2Iso    = dates.d2    || '';
-      const hasQb    = !!(kpis.hasQbData);
+      if (!lastData || !lastData.ok) {
+        root.innerHTML = `<div class="tr2-shell"><div class="tr2-page">
+          <div class="tr2-empty" style="padding:5rem 1rem">
+            <div style="font-size:1.5rem;margin-bottom:.5rem">⚠️</div>
+            <div style="color:#ef4444;font-weight:600;margin-bottom:.25rem">Failed to load Team Report</div>
+            <div style="color:#64748b;font-size:.8rem">${esc(lastData && lastData.error ? lastData.error : 'Unknown error')}</div>
+            <button id="tr2Retry" style="margin-top:1rem;background:#1d4ed8;border:none;color:#fff;padding:.4rem 1rem;border-radius:.4rem;font-size:.8rem;cursor:pointer">Retry</button>
+          </div>
+        </div></div>`;
+        document.getElementById('tr2Retry')?.addEventListener('click', fetchReport);
+        return;
+      }
 
-      let rawMembers = (lastData && Array.isArray(lastData.members)) ? lastData.members : [];
+      const kpis  = lastData.kpis  || {};
+      const dates = lastData.dates || {};
+      const dates7 = Array.isArray(dates.history7) ? dates.history7 : [];
+
+      let members = Array.isArray(lastData.members) ? lastData.members : [];
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        rawMembers = rawMembers.filter(m =>
-          String(m.name || '').toLowerCase().includes(q) ||
-          String(m.username || '').toLowerCase().includes(q) ||
-          String(m.qbName || '').toLowerCase().includes(q)
+        members = members.filter(m =>
+          String(m.name||'').toLowerCase().includes(q) ||
+          String(m.username||'').toLowerCase().includes(q) ||
+          String(m.qbName||'').toLowerCase().includes(q)
         );
       }
-      const members = sortMembers(rawMembers);
 
-      /* Team selector */
-      const teamOpts = isLead
+      const teamName = (() => {
+        const t = teams.find(t => t.id === selectedTeamId);
+        return t ? (t.label || t.name || t.id) : (selectedTeamId || 'All Teams');
+      })();
+
+      const updStr = lastUpdated
+        ? lastUpdated.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', timeZone:'Asia/Manila' }) + ' MNL'
+        : 'now';
+
+      const teamOptsHtml = isLead
         ? `<option value="${esc(me.teamId)}" selected>${esc(me.teamId)}</option>`
-        : teams.map(t => `<option value="${esc(t.id)}" ${t.id === selectedTeamId ? 'selected' : ''}>${esc(t.label || t.name || t.id)}</option>`).join('');
+        : teams.map(t => `<option value="${esc(t.id)}" ${t.id===selectedTeamId?'selected':''}>${esc(t.label||t.name||t.id)}</option>`).join('');
 
-      /* KPI cards */
-      const skel = (w) => loading ? `<span class="tr-skel" style="width:${w}"></span>` : null;
-      const kpiCards = `
-        <div class="tr-kpi-row">
-          <div class="tr-kpi-card">
-            <div class="tr-kpi-grid-bg"></div>
-            <div class="tr-kpi-label">Team Members</div>
-            <div class="tr-kpi-val">${skel('3rem') || esc(kpis.totalMembers ?? rawMembers.length ?? 0)}</div>
-            <div class="tr-kpi-sub">Active in team</div>
-          </div>
-          <div class="tr-kpi-card">
-            <div class="tr-kpi-grid-bg"></div>
-            <div class="tr-kpi-label">Cases Today</div>
-            <div class="tr-kpi-val">${skel('3rem') || esc(kpis.totalCasesToday ?? 0)}</div>
-            <div class="tr-kpi-sub tr-kpi-sub--amber">
-              ${(kpis.totalCasesD1 != null && !loading)
-                ? `${kpis.totalCasesToday >= kpis.totalCasesD1 ? '▲' : '▼'} ${Math.abs((kpis.totalCasesToday||0)-(kpis.totalCasesD1||0))} vs yesterday`
-                : 'vs yesterday'}
-            </div>
-          </div>
-          <div class="tr-kpi-card${(kpis.overloaded > 0) ? ' tr-kpi-card--red' : ''}">
-            <div class="tr-kpi-grid-bg"></div>
-            <div class="tr-kpi-label">Overloaded</div>
-            <div class="tr-kpi-val">${skel('3rem') || esc(kpis.overloaded ?? 0)}</div>
-            <div class="tr-kpi-sub${(kpis.overloaded > 0) ? ' tr-kpi-sub--red' : ''}">members at overload</div>
-          </div>
-          <div class="tr-kpi-card${hasQb ? ' tr-kpi-card--blue' : ''}">
-            <div class="tr-kpi-grid-bg"></div>
-            <div class="tr-kpi-label">${hasQb ? 'QB Records (Live)' : 'Avg Cases / Member'}</div>
-            <div class="tr-kpi-val${hasQb ? ' ' : ''}" style="${hasQb ? 'color:#818cf8' : ''}">
-              ${skel('3rem') || (hasQb ? esc(kpis.totalQbRecords ?? 0) : esc(kpis.avgCasesPerMember ?? 0))}
-            </div>
-            <div class="tr-kpi-sub${hasQb ? ' tr-kpi-sub--blue' : ''}">
-              ${hasQb ? 'total open QB cases (team)' : 'Total assigned average'}
-            </div>
-          </div>
-        </div>`;
-
-      /* Date chips */
-      const dateStrip = `
-        <div class="tr-date-strip">
-          <div class="tr-date-chip"><div class="tr-date-chip-label">D–2</div><div class="tr-date-chip-date">${fmtDate(d2Iso)}</div></div>
-          <div class="tr-date-chip"><div class="tr-date-chip-label">Yesterday</div><div class="tr-date-chip-date">${fmtDate(d1Iso)}</div></div>
-          <div class="tr-date-chip today"><div class="tr-date-chip-label">Today ●</div><div class="tr-date-chip-date">${fmtDate(todayIso)}</div></div>
-        </div>`;
-
-      /* QB banner when QB data is present */
-      const qbBanner = hasQb && !loading ? `
-        <div class="tr-qb-banner">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-          QB Records sourced from Global Quickbase Report — live count matching each member's QB Name.
-          <span style="margin-left:auto;color:#475569">Total: ${esc(kpis.totalQbRecords || 0)} open records</span>
-        </div>` : '';
-
-      /* Table rows */
-      let tableBody = '';
-      if (loading) {
-        tableBody = Array.from({ length: 5 }).map(() => `
-          <tr>${Array.from({length:13}).map(()=>`<td><span class="tr-skel" style="width:${50+Math.random()*40}%"></span></td>`).join('')}</tr>`).join('');
-      } else if (!members.length) {
-        tableBody = `<tr><td colspan="13"><div class="tr-empty"><div class="tr-empty-icon">👥</div>${searchQuery ? 'No members match your search.' : 'No members found for this team.'}</div></td></tr>`;
-      } else {
-        tableBody = members.map(m => {
-          const bg   = avatarColor(m.name);
-          const ini  = initials(m.name);
-
-          // QB tabs display
-          const qbDots = Math.min(m.qbTabs || 0, 5);
-          const qbTabStr = qbDots > 0
-            ? `<div class="tr-qb-bar" style="justify-content:center" title="${esc((m.qbTabNames||[]).join(', ') || m.qbTabs + ' tab(s)')}">
-                ${Array.from({length:qbDots}).map(()=>'<span class="tr-qb-tab-dot"></span>').join('')}
-                <span style="color:#64748b;font-size:.7rem;margin-left:.25rem">${m.qbTabs}</span>
-               </div>`
-            : '<span style="color:#475569;font-size:.72rem">—</span>';
-
-          // QB records display
-          const qbRecStr = (m.qbRecords > 0)
-            ? `<div class="tr-qb-rec" title="QB Name: ${esc(m.qbName || 'not set')}">
-                <span class="tr-qb-rec-count">${m.qbRecords}</span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" opacity=".6"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-               </div>`
-            : `<span class="tr-qb-rec-na">${m.qbName ? '—' : 'No QB'}</span>`;
-
-          return `
-          <tr>
-            <td>
-              <div class="tr-member-cell">
-                <div class="tr-avatar" style="background:${bg}">${ini}</div>
-                <div>
-                  <div class="tr-member-name">${esc(m.name)}</div>
-                  <div class="tr-member-user">@${esc(m.username)}</div>
-                  ${m.qbName ? `<div class="tr-member-qbname">QB: ${esc(m.qbName)}</div>` : ''}
-                </div>
+      /* ── KPI cards ── */
+      const kpiHtml = `
+        <div class="tr2-kpi-row">
+          <div class="tr2-kpi pbi-grid-bg">
+            <div class="tr2-kpi-inner">
+              <div class="tr2-kpi-top">
+                <p class="tr2-kpi-label">Total Members</p>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </div>
-            </td>
-            <td class="td-center td-num">${esc(m.totalAssigned)}</td>
-            <td class="td-center td-num">${esc(m.casesD2)}</td>
-            <td class="td-center td-num">${esc(m.casesD1)}</td>
-            <td class="td-center td-num" style="color:#93c5fd">${esc(m.casesToday)}</td>
-            <td class="td-center">${deltaBadge(m.deltaD1)}</td>
-            <td class="td-center">${deltaBadge(m.deltaD2)}</td>
-            <td class="td-center tr-col-sep">${qbRecStr}</td>
-            <td class="td-center">${qbTabStr}</td>
-            <td class="td-center td-muted tr-col-sep">${m.totalH ? `<span style="color:#94a3b8">${m.totalH}h</span>` : '—'}</td>
-            <td class="td-center td-muted">${fmtMins(m.mailboxMins)}</td>
-            <td class="td-center tr-col-sep">${loadBadge(m.loadStatus)}</td>
-          </tr>`;
-        }).join('');
-      }
+              <div class="tr2-kpi-val">${kpis.totalMembers ?? 0}</div>
+              <div class="tr2-kpi-sub tr2-kpi-sub-muted">Active in ${esc(teamName)}</div>
+            </div>
+          </div>
+          <div class="tr2-kpi pbi-grid-bg">
+            <div class="tr2-kpi-inner">
+              <div class="tr2-kpi-top">
+                <p class="tr2-kpi-label">Avg Cases / Member</p>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 17V9l4-4 4 4v8"/></svg>
+              </div>
+              <div class="tr2-kpi-val">${kpis.avgCases ?? 0}</div>
+              <div class="tr2-kpi-sub tr2-kpi-sub-up">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 15l-6-6-6 6"/></svg>
+                Total assigned avg
+              </div>
+            </div>
+          </div>
+          <div class="tr2-kpi pbi-grid-bg ${(kpis.overloaded||0)>0?'tr2-kpi--red':''}">
+            <div class="tr2-kpi-inner">
+              <div class="tr2-kpi-top">
+                <p class="tr2-kpi-label" style="${(kpis.overloaded||0)>0?'color:#f87171;opacity:.8':''}">Overloaded Today</p>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${(kpis.overloaded||0)>0?'#F87171':'#64748B'}" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </div>
+              <div class="tr2-kpi-val">${kpis.overloaded ?? 0}</div>
+              <div class="tr2-kpi-sub ${(kpis.overloaded||0)>0?'tr2-kpi-sub-red':'tr2-kpi-sub-muted'}">
+                ${(kpis.overloaded||0)>0
+                  ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 15l-6-6-6 6"/></svg>+${kpis.overloaded} vs yesterday`
+                  : 'members at overload'}
+              </div>
+            </div>
+          </div>
+          <div class="tr2-kpi pbi-grid-bg">
+            <div class="tr2-kpi-inner">
+              <div class="tr2-kpi-top">
+                <p class="tr2-kpi-label">Team Attendance</p>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="16 12 12 8 8 12"/><line x1="12" y1="16" x2="12" y2="8"/></svg>
+              </div>
+              <div class="tr2-kpi-val">${kpis.attendancePct ?? 0}<span style="font-size:1.25rem;color:#94a3b8">%</span></div>
+              <div class="tr2-kpi-sub tr2-kpi-sub-up">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg>
+                7-day attendance avg
+              </div>
+            </div>
+          </div>
+        </div>`;
 
-      /* Summary / totals row */
-      const totalRow = (!loading && members.length > 1) ? `
-        <tfoot>
-          <tr style="background:rgba(15,23,42,.5);border-top:1px solid #334155">
-            <td style="color:#64748b;font-size:.72rem;padding:.5rem .75rem;font-weight:600">TEAM TOTAL</td>
-            <td class="td-center td-num">${members.reduce((s,m)=>s+m.totalAssigned,0)}</td>
-            <td class="td-center td-num">${members.reduce((s,m)=>s+m.casesD2,0)}</td>
-            <td class="td-center td-num">${members.reduce((s,m)=>s+m.casesD1,0)}</td>
-            <td class="td-center td-num" style="color:#93c5fd">${members.reduce((s,m)=>s+m.casesToday,0)}</td>
-            <td class="td-center">—</td>
-            <td class="td-center">—</td>
-            <td class="td-center tr-col-sep" style="color:#818cf8;font-weight:700">${members.reduce((s,m)=>s+m.qbRecords,0)||'—'}</td>
-            <td class="td-center td-num">${members.reduce((s,m)=>s+m.qbTabs,0)}</td>
-            <td class="td-center tr-col-sep" style="color:#94a3b8">${members.length ? (members.reduce((s,m)=>s+m.totalH,0)/members.length).toFixed(1)+'h avg' : '—'}</td>
-            <td class="td-center">—</td>
-            <td class="td-center tr-col-sep">—</td>
-          </tr>
-        </tfoot>` : '';
+      /* ── Filters ── */
+      const filtersHtml = `
+        <div class="tr2-filters">
+          ${!isLead ? `<span class="tr2-filter-label">Team</span>
+            <select class="tr2-select" id="tr2TeamSel">${teamOptsHtml}</select>` : ''}
+          <button class="tr2-date-btn" id="tr2DateBtn" title="Date context: last 3 days shown in table">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            ${fmtShortDate(dates7[2]||'')} – ${fmtShortDate(dates7[0]||'')}
+          </button>
+          <div class="tr2-vsep"></div>
+          <div class="tr2-ml-auto"></div>
+          <div class="tr2-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input class="tr2-search" id="tr2Search" placeholder="Search member…" value="${esc(searchQuery)}">
+          </div>
+        </div>`;
 
-      const now    = new Date();
-      const nowStr = now.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', timeZone:'Asia/Manila' });
+      /* ── Workload Matrix rows ── */
+      const matrixRows = members.length === 0
+        ? `<tr><td colspan="10"><div class="tr2-empty">
+            <div style="font-size:1.5rem;opacity:.4;margin-bottom:.4rem">👥</div>
+            ${searchQuery ? 'No members match your search.' : 'No members found for this team.'}
+           </div></td></tr>`
+        : members.map((m, i) => {
+            const isOverload = m.loadStatus === 'overload';
+            const avColor    = avatarColor(m.name);
+            const ini        = initials(m.name);
+            const rowCls     = isOverload
+              ? 'tr2-row-overload'
+              : (i % 2 === 1 ? 'tr2-row-even' : '');
 
+            return `<tr class="${rowCls}" data-name="${esc((m.name||'').toLowerCase())}">
+              <td>
+                <div class="tr2-member-cell">
+                  <div class="tr2-avatar ${isOverload?'tr2-avatar-overload':''}" style="background:${avColor}">${ini}</div>
+                  <div>
+                    <div class="tr2-member-name">
+                      ${esc(m.name)}
+                      ${isOverload ? '<span class="tr2-member-overload-dot"></span>' : ''}
+                    </div>
+                    <div class="tr2-member-sub">@${esc(m.username)}${m.qbName?` • QB: ${esc(m.qbName)}`:''}</div>
+                  </div>
+                </div>
+              </td>
+              <td class="tc" style="color:#94a3b8;font-size:.75rem">${esc(m.duty||'Member')}</td>
+              <td class="tc">
+                <div class="tr2-att-dots">${attendanceDots(m.attendance7)}</div>
+              </td>
+              <td class="tc" style="color:#cbd5e1;font-variant-numeric:tabular-nums">${m.totalAssigned ?? 0}</td>
+              <td class="tc">${qbOpenBadge(m.qbOpen ?? 0)}</td>
+              <td class="tc">${qbClosedBadge(m.qbClosed ?? 0)}</td>
+              <td class="tc">${currentCaseBadge(m)}</td>
+              <td class="tc">${deltaHtml(m.deltaD1, true)}</td>
+              <td class="tc">${deltaHtml(m.deltaD2, false)}</td>
+              <td class="tc">${loadBadge(m)}</td>
+            </tr>`;
+          }).join('');
+
+      /* ── QB Timeline rows ── */
+      const timelineMembers = [...members]
+        .sort((a, b) => b.casesToday - a.casesToday)
+        .filter(m => m.casesToday > 0 || m.casesD1 > 0 || m.casesD2 > 0)
+        .slice(0, 10);
+
+      const timelineRows = timelineMembers.length === 0
+        ? `<tr><td colspan="7"><div class="tr2-empty">No case movement data for this period.</div></td></tr>`
+        : timelineMembers.map(m => {
+            const avColor = avatarColor(m.name);
+            const ini     = initials(m.name);
+            const isHigh  = m.casesToday >= 13;
+            const isMed   = m.casesToday >= 10 && !isHigh;
+            const todayClass = isHigh ? 'tr2-td-today-high' : isMed ? 'tr2-td-today-med' : 'tr2-td-today-norm';
+            const d1Delta = m.deltaD1 !== 0 ? deltaHtml(m.deltaD1, false) : '';
+
+            return `<tr>
+              <td>
+                <div style="display:flex;align-items:center;gap:.5rem">
+                  <div class="tr2-avatar" style="background:${avColor};width:1.5rem;height:1.5rem;font-size:.55rem">${ini}</div>
+                  <span style="color:#fff">${esc(m.name)}</span>
+                </div>
+              </td>
+              <td class="tc">
+                <div class="${todayClass}">
+                  <span class="tr2-td-today-count">${m.casesToday}</span>
+                  ${m.deltaD1 !== 0 ? deltaHtml(m.deltaD1, false) : ''}
+                </div>
+              </td>
+              <td class="tc">
+                <div class="tr2-td-d1-wrap">
+                  <span style="color:#e2e8f0">${m.casesD1}</span>
+                  ${m.casesD1 - m.casesD2 !== 0 ? deltaHtml(m.casesD1 - m.casesD2, false) : ''}
+                </div>
+              </td>
+              <td class="tc" style="color:#94a3b8">${m.casesD2}</td>
+              <td class="tc">
+                <span style="color:${m.deltaThreeDay>0?'#f87171':m.deltaThreeDay<0?'#34d399':'#64748b'};font-weight:600">
+                  ${m.deltaThreeDay > 0 ? '+' : ''}${m.deltaThreeDay ?? 0}
+                </span>
+              </td>
+              <td class="tc" style="color:#94a3b8">${m.sevenDayAvg ?? '—'}</td>
+              <td>${patternBadge(m.pattern)}</td>
+            </tr>`;
+          }).join('');
+
+      /* ── Overload count for footer ── */
+      const overloadCount = members.filter(m => m.loadStatus === 'overload').length;
+
+      /* ── Assemble full page ── */
       root.innerHTML = `
-        <div class="tr-shell">
-          <!-- Header -->
-          <div class="tr-header">
-            <div>
-              <div class="tr-title-row">
-                <h1 class="tr-title">Team Report</h1>
-                <span class="tr-badge">📋 Daily Brief</span>
+        <div class="tr2-shell">
+          <div class="tr2-page">
+
+            <!-- Header -->
+            <div class="tr2-header">
+              <div>
+                <h1 class="tr2-title">
+                  Team Report
+                  <span class="tr2-title-badge">POWER BI</span>
+                </h1>
+                <p class="tr2-subtitle">${esc(teamName)} • Workload, attendance &amp; QuickBase operations</p>
               </div>
-              <div class="tr-subtitle">Workload matrix, case history &amp; movement tracking for daily standups</div>
+              <div class="tr2-live">
+                <div class="tr2-live-dot"></div>Live
+                <span>•</span>
+                <span>Updated ${esc(updStr)}</span>
+              </div>
             </div>
-            <div class="tr-live-row">
-              <div class="tr-live-dot"></div>
-              <span>Live</span>
-              <span style="color:#334155">•</span>
-              <span>Updated ${esc(nowStr)} MNL</span>
-            </div>
-          </div>
 
-          ${kpiCards}
-          ${dateStrip}
-          ${qbBanner}
+            ${kpiHtml}
+            ${filtersHtml}
 
-          <!-- Main Matrix -->
-          <div class="tr-panel">
-            <div class="tr-panel-head">
-              <div class="tr-panel-title">
-                <div class="tr-panel-icon">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2">
-                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                    <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-                  </svg>
+            <!-- Main 2-col grid -->
+            <div class="tr2-main-grid">
+
+              <!-- Left: Workload Matrix -->
+              <div class="tr2-panel">
+                <div class="tr2-panel-head">
+                  <div class="tr2-panel-title">
+                    <div class="tr2-panel-icon">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    </div>
+                    Member Workload Matrix
+                  </div>
+                  <div class="tr2-legend">
+                    <span class="tr2-leg tr2-leg-n">Normal</span>
+                    <span class="tr2-leg tr2-leg-w">Warning</span>
+                    <span class="tr2-leg tr2-leg-o">Overload</span>
+                  </div>
                 </div>
-                Member Workload Matrix
+                <div class="tr2-table-wrap">
+                  <table class="tr2-table" id="tr2Matrix">
+                    <thead>
+                      <tr>
+                        <th>Member</th>
+                        <th>Role</th>
+                        <th class="tc">Attendance</th>
+                        <th class="tc">Total</th>
+                        <th class="tc">QB Open</th>
+                        <th class="tc">QB Closed</th>
+                        <th class="tc">Current</th>
+                        <th class="tc">Δ 1D</th>
+                        <th class="tc">Δ 2D</th>
+                        <th class="tc">Load Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>${matrixRows}</tbody>
+                  </table>
+                </div>
+                <div class="tr2-table-foot">
+                  <span>Showing ${members.length} of ${(lastData.members||[]).length} members • ${overloadCount} overloaded</span>
+                  <span>Conditional: ≥13 = Overload, ≥10 = Warning</span>
+                </div>
               </div>
-              <div class="tr-legend">
-                <span class="tr-legend-item tr-legend-normal">Normal</span>
-                <span class="tr-legend-item tr-legend-warning">Warning ≥10</span>
-                <span class="tr-legend-item tr-legend-overload">Overload ≥15</span>
+
+              <!-- Right: Charts -->
+              <div class="tr2-right-panels">
+
+                <!-- Line chart: Case movement -->
+                <div class="tr2-panel">
+                  <div class="tr2-panel-head">
+                    <div class="tr2-panel-title" style="font-size:.7rem">Case Movement — Last 7 Days</div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                  </div>
+                  <div class="tr2-chart-area">
+                    <div class="tr2-chart-canvas-wrap">
+                      <canvas id="tr2LineChart"></canvas>
+                    </div>
+                    <div class="tr2-chart-summary">
+                      <div class="tr2-chart-summary-item">
+                        <div class="tr2-chart-summary-label">Peak Load</div>
+                        <div class="tr2-chart-summary-val">${(()=>{
+                          const top = [...(lastData.members||[])].sort((a,b)=>b.casesToday-a.casesToday)[0];
+                          return top ? `${top.name.split(' ')[0]} (${top.casesToday})` : '—';
+                        })()}</div>
+                      </div>
+                      <div class="tr2-chart-summary-item">
+                        <div class="tr2-chart-summary-label">Trend</div>
+                        <div class="tr2-chart-summary-val" style="color:${(kpis.totalCasesToday||0)>(kpis.totalCasesD1||0)?'#f59e0b':'#34d399'}">
+                          ${(kpis.totalCasesToday||0)>(kpis.totalCasesD1||0)?'↑':'↓'}
+                          ${Math.abs((kpis.totalCasesToday||0)-(kpis.totalCasesD1||0))} today
+                        </div>
+                      </div>
+                      <div class="tr2-chart-summary-item">
+                        <div class="tr2-chart-summary-label">Risk</div>
+                        <div class="tr2-chart-summary-val" style="color:${(kpis.overloaded||0)>1?'#f87171':(kpis.overloaded||0)===1?'#fbbf24':'#34d399'}">
+                          ${(kpis.overloaded||0)>1?'High':(kpis.overloaded||0)===1?'Medium':'Low'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Donut chart: Workload distribution -->
+                <div class="tr2-panel">
+                  <div class="tr2-panel-head">
+                    <div class="tr2-panel-title" style="font-size:.7rem">Workload Distribution</div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                  </div>
+                  <div class="tr2-chart-area">
+                    <div class="tr2-donut-wrap">
+                      <canvas id="tr2DonutChart"></canvas>
+                      <div class="tr2-donut-center">
+                        <div class="tr2-donut-center-num">${kpis.totalMembers??0}</div>
+                        <div class="tr2-donut-center-lbl">Members</div>
+                      </div>
+                    </div>
+                    <div class="tr2-donut-legend">
+                      ${(()=>{
+                        const normal   = Math.max((kpis.totalMembers||0)-(kpis.overloaded||0)-(kpis.warning||0),0);
+                        const total    = kpis.totalMembers||1;
+                        return [
+                          { color:'#10B981', label:'Normal (≤9)',      count: normal,               pct: Math.round(normal/(total)*100) },
+                          { color:'#F59E0B', label:'Warning (10–12)',   count: kpis.warning||0,      pct: Math.round((kpis.warning||0)/total*100) },
+                          { color:'#EF4444', label:'Overload (13+)',    count: kpis.overloaded||0,   pct: Math.round((kpis.overloaded||0)/total*100) }
+                        ].map(r => `<div class="tr2-donut-legend-item">
+                          <div class="tr2-donut-legend-left">
+                            <span class="tr2-donut-dot" style="background:${r.color}"></span>
+                            <span>${r.label}</span>
+                          </div>
+                          <span class="tr2-donut-legend-right">${r.count} members • ${r.pct}%</span>
+                        </div>`).join('');
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+              </div><!-- /right panels -->
+            </div><!-- /main grid -->
+
+            <!-- Bottom: QB Record Timeline -->
+            <div class="tr2-panel">
+              <div class="tr2-panel-head">
+                <div class="tr2-panel-title">
+                  <div class="tr2-panel-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg>
+                  </div>
+                  My QuickBase Record Timeline
+                </div>
+                <span class="tr2-timeline-head-note">Per member • Today vs Yesterday vs 2 Days Ago</span>
+              </div>
+              <div class="tr2-timeline-wrap">
+                <table class="tr2-timeline-table">
+                  <thead>
+                    <tr>
+                      <th>Member</th>
+                      <th class="tc" style="min-width:130px">Today <span style="font-weight:400;opacity:.5;text-transform:none;letter-spacing:0">${fmtShortDate(dates7[0]||'')}</span></th>
+                      <th class="tc" style="min-width:130px">Yesterday <span style="font-weight:400;opacity:.5;text-transform:none;letter-spacing:0">${fmtShortDate(dates7[1]||'')}</span></th>
+                      <th class="tc" style="min-width:110px">2 Days Ago <span style="font-weight:400;opacity:.5;text-transform:none;letter-spacing:0">${fmtShortDate(dates7[2]||'')}</span></th>
+                      <th class="tc">3-Day Δ</th>
+                      <th class="tc">7-Day Avg</th>
+                      <th>Pattern</th>
+                    </tr>
+                  </thead>
+                  <tbody>${timelineRows}</tbody>
+                </table>
               </div>
             </div>
 
-            <!-- Toolbar -->
-            <div class="tr-toolbar">
-              ${!isLead ? `
-                <span class="tr-toolbar-label">Team</span>
-                <select class="tr-select" id="trTeamSelect">${teamOpts}</select>
-                <div class="tr-divider"></div>
-              ` : ''}
-              <div class="tr-search-wrap">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                <input class="tr-search" id="trSearch" placeholder="Search member / QB name…" value="${esc(searchQuery)}">
-              </div>
-              <div class="tr-divider"></div>
-              <span class="tr-toolbar-label">Sort:</span>
-              <select class="tr-select" id="trSort">
-                <option value="name"          ${sortBy==='name'?'selected':''}>Name</option>
-                <option value="totalAssigned"  ${sortBy==='totalAssigned'?'selected':''}>Total Assigned</option>
-                <option value="casesToday"     ${sortBy==='casesToday'?'selected':''}>Cases Today</option>
-                <option value="deltaD1"        ${sortBy==='deltaD1'?'selected':''}>Movement Δ1D</option>
-                <option value="qbRecords"      ${sortBy==='qbRecords'?'selected':''}>QB Records</option>
-                <option value="qbTabs"         ${sortBy==='qbTabs'?'selected':''}>QB Tabs</option>
-                <option value="totalH"         ${sortBy==='totalH'?'selected':''}>Sched Hours</option>
-                <option value="load"           ${sortBy==='load'?'selected':''}>Load Status</option>
-              </select>
-              <button class="tr-btn" id="trSortDir">${sortDir==='asc'?'▲ ASC':'▼ DESC'}</button>
-              <div class="tr-ml-auto"></div>
-              <button class="tr-btn tr-btn--primary" id="trRefresh">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-                Refresh
-              </button>
+            <!-- Footer note -->
+            <div class="tr2-footer">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Visible only to TEAM_LEAD, SUPER_USER, SUPER_ADMIN
             </div>
 
-            <!-- Table -->
-            <div class="tr-table-wrap">
-              <table class="tr-table" id="trTable">
-                <thead>
-                  <tr>
-                    <th data-sort="name" class="${sortBy==='name'?'sort-active':''}">Member<span class="sort-arrow">${sortBy==='name'?(sortDir==='asc'?'▲':'▼'):'▲'}</span></th>
-                    ${thSort('totalAssigned','Total Assigned')}
-                    ${thSort('casesD2','Cases D–2')}
-                    ${thSort('casesD1','Cases D–1')}
-                    ${thSort('casesToday','Cases Today')}
-                    ${thSort('deltaD1','Δ 1D')}
-                    ${thSort('deltaD2','Δ 2D')}
-                    ${thSort('qbRecords','QB Records','th-qb tr-col-sep')}
-                    ${thSort('qbTabs','QB Tabs','th-qb')}
-                    ${thSort('totalH','Sched Hrs','tr-col-sep')}
-                    <th class="th-center">Mailbox</th>
-                    ${thSort('load','Load Status','tr-col-sep')}
-                  </tr>
-                </thead>
-                <tbody>${tableBody}</tbody>
-                ${totalRow}
-              </table>
-            </div>
-          </div>
-
-          <!-- Meta footer -->
-          <div class="tr-meta">
-            <div style="display:flex;align-items:center;gap:.35rem">
-              <div class="tr-meta-dot"></div>
-              <span>Showing ${members.length} member${members.length!==1?'s':''} ${searchQuery?`matching "${esc(searchQuery)}"`:''}
-              </span>
-            </div>
-            <span>•</span>
-            <span>Cases: from ums_cases assigned date</span>
-            <span>•</span>
-            <span>Δ = today's cases minus prior day</span>
-            <span>•</span>
-            <span>QB Records: live count from Global QB Report per qb_name</span>
-            <span>•</span>
-            <span>Load: Normal &lt;10 | Warning ≥10 | Overload ≥15 total assigned</span>
-          </div>
-        </div>`;
+          </div><!-- /page -->
+        </div><!-- /shell -->`;
 
       /* ── Event bindings ─────────────────────────────────────────────── */
-      const teamSel = document.getElementById('trTeamSelect');
-      if (teamSel) teamSel.addEventListener('change', () => { selectedTeamId = teamSel.value; fetchReport(); });
+      document.getElementById('tr2TeamSel')?.addEventListener('change', e => {
+        selectedTeamId = e.target.value;
+        fetchReport();
+      });
 
-      const searchEl = document.getElementById('trSearch');
+      const searchEl = document.getElementById('tr2Search');
       let searchTimer;
       if (searchEl) {
-        searchEl.addEventListener('input', () => {
+        searchEl.addEventListener('input', e => {
           clearTimeout(searchTimer);
-          searchTimer = setTimeout(() => { searchQuery = searchEl.value; render(); }, 280);
+          searchTimer = setTimeout(() => { searchQuery = e.target.value; render(); }, 250);
         });
       }
 
-      const sortSel = document.getElementById('trSort');
-      if (sortSel) sortSel.addEventListener('change', () => { sortBy = sortSel.value; render(); });
-
-      const sortDirBtn = document.getElementById('trSortDir');
-      if (sortDirBtn) sortDirBtn.addEventListener('click', () => { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; render(); });
-
-      const refreshBtn = document.getElementById('trRefresh');
-      if (refreshBtn) refreshBtn.addEventListener('click', () => fetchReport());
-
-      const table = document.getElementById('trTable');
-      if (table) {
-        table.querySelectorAll('th[data-sort]').forEach(th => {
-          th.addEventListener('click', () => {
-            const col = th.dataset.sort;
-            if (sortBy === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-            else { sortBy = col; sortDir = 'asc'; }
-            render();
-          });
-        });
-      }
+      /* ── Render charts after DOM settles ─────────────────────────────── */
+      requestAnimationFrame(() => {
+        renderLineChart(lastData.members || [], dates7);
+        renderDonutChart(kpis);
+      });
 
       window.scrollTo(0, scrollY);
     }
 
-    /* ── Auto-refresh every 5 min ──────────────────────────────────────── */
+    /* ── Auto-refresh 5 min ─────────────────────────────────────────────── */
     function startAutoRefresh() {
-      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-      autoRefreshTimer = setInterval(() => {
+      if (autoTimer) clearInterval(autoTimer);
+      autoTimer = setInterval(() => {
         if (document.visibilityState !== 'hidden') fetchReport();
       }, 5 * 60 * 1000);
     }
 
+    /* ── Cleanup on nav away ────────────────────────────────────────────── */
     const origNav = window.navigateToPageId;
     if (typeof origNav === 'function') {
-      const cleanup = () => { if (autoRefreshTimer) clearInterval(autoRefreshTimer); };
-      document.addEventListener('visibilitychange', cleanup, { once: true });
+      document.addEventListener('visibilitychange', () => {
+        if (autoTimer) clearInterval(autoTimer);
+        if (chartLine)  { chartLine.destroy();  chartLine  = null; }
+        if (chartDonut) { chartDonut.destroy();  chartDonut = null; }
+      }, { once: true });
     }
 
     /* ── Boot ──────────────────────────────────────────────────────────── */
     injectStyles();
-    render();
+    await ensureChartJs();
     await fetchReport();
     startAutoRefresh();
 
