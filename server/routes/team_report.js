@@ -151,7 +151,7 @@ function normalizeRealm(raw) {
 }
 
 function encodeQbLiteral(v) {
-  return String(v == null ? '' : v).replace(/'/g, "\'");
+  return String(v == null ? '' : v).replace(/'/g, "\\'");
 }
 
 function buildGlobalFilterWhere(filterConfig, filterMatch) {

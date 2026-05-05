@@ -59,3 +59,5 @@
 - **2026-05-05** — Team Report QB OPEN alignment hardened: Quickbase assignee-to-profile matching now normalizes punctuation/whitespace and applies safe fuzzy fallback so member QB OPEN mirrors per-user Dashboard/My Active Cases scope when Assigned QB names vary in format.
 
 - **2026-05-05** — Team Report QB OPEN source-of-truth aligned to Dashboard hero counter logic by reusing Global QB filters + report filter + per-user hero field clause, so per-member QB OPEN now equals My Active Cases counts.
+
+- **2026-05-05** — Team Report QB OPEN query literal escaping corrected (`\'` in QB WHERE values), fixing zero-count failures when per-user clauses were composed for Dashboard-equivalent My Active Cases filters.
