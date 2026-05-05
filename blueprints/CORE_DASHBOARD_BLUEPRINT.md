@@ -40,6 +40,7 @@
 - Keep dashboard safe fallback rendering when data is partial.
 - Keep logs visibility filters aligned with role/team boundaries.
 - Do not silently widen access scope.
+- Sidebar navigation handlers must prioritize `data-page` as canonical page ID; href parsing is fallback only to avoid cross-page misrouting.
 
 ## Change checklist
 - [ ] Verified role-based guards unchanged.
@@ -52,3 +53,5 @@
 - **2026-04-26** — Added My Notes v2 widget integration scope (topbar pre-release-notes insertion + Supabase notes persistence contract).
 
 - **2026-05-03** — Dashboard gate tightened: users without a valid Quickbase name assignment are hard-blocked from dashboard counters to prevent global data bleed; UI now shows `DATA NOT AVAILABLE` with admin-contact instruction.
+
+- **2026-05-05** — Navigation contract hardened: dashboard/menu routing now resolves page target from `data-page` first, with href-derived routing as fallback to prevent accidental Team Report renders from delegated click handlers.
