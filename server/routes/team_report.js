@@ -9,6 +9,7 @@
 
 const { getUserFromJwt, getProfileForUserId, serviceSelect, serviceFetch } = require('../lib/supabase');
 const { readGlobalQuickbaseSettings } = require('../lib/global_quickbase');
+const { queryQuickbaseRecords, listQuickbaseFields } = require('../lib/quickbase');
 
 const CACHE_TTL_MS    = 2 * 60 * 1000;
 const QB_CACHE_TTL_MS = 3 * 60 * 1000;
@@ -128,12 +129,22 @@ async function fetchQbTabCounts(memberIds) {
   return { counts, tabNames };
 }
 
-/* ── QB Records — active case counts per member aligned with Dashboard MY ACTIVE CASES ── */
-// FIX v667+1: Apply globalFilterConfig when building QB WHERE clause so that
-// "QB OPEN" in Team Report matches "MY ACTIVE CASES" in Dashboard exactly.
-// Previously: raw report run with body='{}' → no global filters → included closed/resolved cases.
-// Now: builds the same extraWhere the monitoring endpoint uses (global filter clauses) so
-// QB OPEN reflects ACTIVE records only — same scope the Dashboard hero count shows per user.
+/* ── QB Records — active case counts per member via /v1/records/query ─────── */
+// ROOT CAUSE FIX v667+2:
+//   Previous approach used POST /v1/reports/{qid}/run — this runs the QB REPORT
+//   as-saved, which has a user-level "Assigned to = [QB user who saved it]" filter
+//   baked in. Result: only 1 person's records returned → all 10 members show 0.
+//
+//   Correct approach (mirrors monitoring global mode):
+//   1. GET /v1/fields to resolve "Assigned to" and "Case Status" field IDs by label
+//   2. POST /v1/records/query with:
+//      - from: tableId  (bypass report-level filter)
+//      - where: globalFilterConfig clauses only (e.g. "Case Status XEX 'C – Resolved'")
+//      - select: [assignedToFieldId, caseStatusFieldId]
+//      - NO user filter — we want ALL members' records so we can group by name
+//   3. Group by assignedTo name → open/closed counts per member
+//
+// This is exactly what the monitoring endpoint does in global mode for the Dashboard.
 
 function buildGlobalFilterWhere(filterConfig, filterMatch) {
   if (!Array.isArray(filterConfig) || !filterConfig.length) return '';
@@ -145,7 +156,6 @@ function buildGlobalFilterWhere(filterConfig, filterMatch) {
     const opRaw    = String(f.operator ?? 'EX').trim().toUpperCase();
     const operator = VALID_OPS.includes(opRaw) ? opRaw : 'EX';
     if (!Number.isFinite(fieldId) || !value) return acc;
-    // Escape single quotes in QB literal
     const escaped = value.replace(/'/g, "\\'");
     acc.push(`{${fieldId}.${operator}.'${escaped}'}`);
     return acc;
@@ -153,6 +163,27 @@ function buildGlobalFilterWhere(filterConfig, filterMatch) {
   if (!clauses.length) return '';
   const join = String(filterMatch || 'ALL').toUpperCase() === 'ANY' ? ' OR ' : ' AND ';
   return clauses.length === 1 ? clauses[0] : `(${clauses.join(join)})`;
+}
+
+// Separate fields cache so we don't re-fetch on every team report load
+const FIELDS_CACHE_TTL_MS = 5 * 60 * 1000;
+const fieldsCache = new Map();
+
+async function resolveQbFields(config) {
+  const cacheKey = `fields:${config.realm}:${config.tableId}`;
+  const hit = fieldsCache.get(cacheKey);
+  if (hit && Date.now() - hit.ts < FIELDS_CACHE_TTL_MS) return hit.fields;
+
+  const out = await listQuickbaseFields({ config });
+  if (!out.ok || !Array.isArray(out.fields)) return null;
+
+  const fields = out.fields.map(f => ({
+    id: Number(f.id),
+    label: String(f.label || '').toLowerCase().trim()
+  })).filter(f => Number.isFinite(f.id));
+
+  fieldsCache.set(cacheKey, { ts: Date.now(), fields });
+  return fields;
 }
 
 async function fetchQbRecords(profiles) {
@@ -173,48 +204,85 @@ async function fetchQbRecords(profiles) {
     const { ok, settings } = await readGlobalQuickbaseSettings();
     if (!ok) return result;
     const { realm, qbToken, tableId, qid, filterConfig, filterMatch } = settings;
-    if (!realm || !qbToken || !tableId || !qid) return result;
+    if (!realm || !qbToken || !tableId) return result;
 
     const normalizedRealm = realm.includes('.') ? realm : `${realm}.quickbase.com`;
 
-    // Build global filter WHERE — same logic as monitoring endpoint's global filter gate.
-    // This ensures QB OPEN only counts ACTIVE records (e.g. excludes "C – Resolved").
+    // Build a config object compatible with queryQuickbaseRecords / listQuickbaseFields
+    const qbConfig = {
+      qb_realm:    normalizedRealm,
+      qb_token:    qbToken,
+      qb_table_id: tableId,
+      qb_qid:      ''   // intentionally empty — we bypass report-level filter
+    };
+
+    // Step 1: Resolve field IDs by label from the actual table schema
+    const allFields = await resolveQbFields(qbConfig);
+    if (!allFields) {
+      console.warn('[team_report] QB fields lookup failed — skipping QB counts');
+      return result;
+    }
+
+    const resolveId = (...labels) => {
+      for (const lbl of labels) {
+        const f = allFields.find(f => f.label === lbl.toLowerCase() || f.label.startsWith(lbl.toLowerCase()));
+        if (f) return f.id;
+      }
+      return null;
+    };
+
+    const assignedToFieldId = resolveId('assigned to', 'assignee', 'assigned');
+    const caseStatusFieldId = resolveId('case status', 'status');
+
+    if (!Number.isFinite(assignedToFieldId)) {
+      console.warn('[team_report] QB "Assigned to" field not found in table schema — skipping QB counts');
+      return result;
+    }
+
+    // Step 2: Build WHERE from globalFilterConfig only (no user filter — want ALL members)
     const globalWhere = buildGlobalFilterWhere(filterConfig, filterMatch);
 
-    const reqBody = globalWhere ? JSON.stringify({ where: globalWhere }) : '{}';
-    const resp = await fetch(
-      `https://api.quickbase.com/v1/reports/${encodeURIComponent(qid)}/run?tableId=${encodeURIComponent(tableId)}&skip=0&top=1000`,
-      { method: 'POST', headers: { 'QB-Realm-Hostname': normalizedRealm, 'Authorization': `QB-USER-TOKEN ${qbToken}`, 'Content-Type': 'application/json' }, body: reqBody }
-    );
-    if (!resp.ok) return result;
+    // Step 3: select only the fields we need — keeps payload small
+    const selectFields = [assignedToFieldId];
+    if (Number.isFinite(caseStatusFieldId)) selectFields.push(caseStatusFieldId);
 
-    let json; try { json = await resp.json(); } catch (_) { return result; }
-    const records = Array.isArray(json.data) ? json.data : [];
-    const fields  = Array.isArray(json.fields)
-      ? json.fields.map(f => ({ id: String(f.id), label: String(f.label || '').toLowerCase() }))
-      : [];
+    // Step 4: Fetch via /v1/records/query — bypasses any user-scoped report filter
+    const qOut = await queryQuickbaseRecords({
+      config:           qbConfig,
+      where:            globalWhere || undefined,
+      select:           selectFields,
+      limit:            2000,          // enough for all active cases across all members
+      allowEmptySelect: false,
+      enableQueryIdFallback: false     // no qid — query the raw table with our WHERE
+    });
 
-    const assignedFld = fields.find(f => f.label === 'assigned to' || f.label === 'assignee' || f.label.startsWith('assign'));
-    const statusFld   = fields.find(f => f.label === 'case status' || f.label === 'status');
+    if (!qOut.ok) {
+      console.warn('[team_report] QB query failed:', qOut.message || qOut.error);
+      return result;
+    }
 
-    if (!assignedFld) return result;
+    const records = Array.isArray(qOut.records) ? qOut.records : [];
+    const assignedKey = String(assignedToFieldId);
+    const statusKey   = caseStatusFieldId ? String(caseStatusFieldId) : null;
 
-    // With globalFilterConfig applied, ALL records returned are already "active".
-    // We still split open/closed as a secondary dimension using statusFld when available,
-    // so qbClosed in Team Report stays meaningful (manual close after filter edge cases).
+    // Step 5: Group by assignedTo name → open / closed
     const nameCounts = {};
     const CLOSED_STATUSES = new Set(['closed','resolved','complete','completed','done']);
+
     records.forEach(rec => {
       if (!rec) return;
-      const assignCell = rec[assignedFld.id];
-      const nameVal    = String((assignCell && assignCell.value !== undefined ? assignCell.value : assignCell) || '').trim();
+      const assignCell = rec[assignedKey];
+      const nameVal = String(
+        (assignCell && assignCell.value !== undefined ? assignCell.value : assignCell) || ''
+      ).trim();
       if (!nameVal) return;
+
       const key = nameVal.toLowerCase();
       if (!nameCounts[key]) nameCounts[key] = { open: 0, closed: 0 };
 
       let isClosed = false;
-      if (statusFld) {
-        const stCell = rec[statusFld.id];
+      if (statusKey && rec[statusKey]) {
+        const stCell = rec[statusKey];
         const stVal  = String((stCell && stCell.value !== undefined ? stCell.value : stCell) || '').trim().toLowerCase();
         isClosed = CLOSED_STATUSES.has(stVal);
       }
@@ -222,7 +290,7 @@ async function fetchQbRecords(profiles) {
       else          nameCounts[key].open++;
     });
 
-    console.log(`[team_report] QB fetch OK — globalWhere="${globalWhere || '(none)'}" records=${records.length}`);
+    console.log(`[team_report] QB query OK — assignedToFid=${assignedToFieldId} globalWhere="${globalWhere || '(none)'}" records=${records.length} names=${Object.keys(nameCounts).length}`);
     qbCache.set('qb_records', { ts: Date.now(), data: nameCounts });
     applyQbNameCounts(nameCounts, nameToId, result);
   } catch (err) {
