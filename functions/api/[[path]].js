@@ -96,6 +96,7 @@ async function getRoutes(env) {
     'catalog/history': unwrapCjs(await import('../../server/routes/catalog/history.js')),
 
     overall_stats: unwrapCjs(await import('../../server/routes/overall_stats.js')),
+    team_report: unwrapCjs(await import('../../server/routes/team_report.js')),
 
     'users/list': unwrapCjs(await import('../../server/routes/users/list.js')),
     'users/create': unwrapCjs(await import('../../server/routes/users/create.js')),
