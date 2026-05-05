@@ -2672,12 +2672,14 @@
   function getState() { return current; }
 
 
-  // FIX-CF-SCROLL: Re-apply conditional formatting after user scrolls
+  // FIX-CF-SCROLL: Re-apply conditional formatting after user scrolls.
+  // BLINK-FIX: Use a direct requestAnimationFrame (not scheduleConditionalPaint
+  // which double-rAFs) so CF is applied in the very next compositor frame after
+  // the scroll settles — no visible gap between scroll position and CF highlight.
   (function () {
     var _scrollRepaintTimer = null;
     var _wrapEl = document.querySelector('.svc-grid-wrap') || document.getElementById('svcGridWrap');
     if (!_wrapEl) {
-      // fallback: try the table's parent
       var _gridEl = document.getElementById('svcGrid');
       if (_gridEl) _wrapEl = _gridEl.parentElement;
     }
@@ -2685,8 +2687,12 @@
       _wrapEl.addEventListener('scroll', function () {
         clearTimeout(_scrollRepaintTimer);
         _scrollRepaintTimer = setTimeout(function () {
-          scheduleConditionalPaint();
-        }, 80);
+          if (window.svcConditionalFormat && typeof window.svcConditionalFormat.paint === 'function') {
+            requestAnimationFrame(function () {
+              try { window.svcConditionalFormat.paint(); } catch (e) {}
+            });
+          }
+        }, 60);
       }, { passive: true });
       console.log('[CF-SCROLL] Scroll repaint listener attached');
     }

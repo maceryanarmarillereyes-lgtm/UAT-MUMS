@@ -46,6 +46,19 @@
   var _isPainting = false;
   var _paintQueued = false;
 
+  // BLINK-FIX: Track which sheet was active during the last paintGrid() call.
+  // When this changes, we clear _prev* state to prevent cross-sheet stale-clear.
+  var _paintLastSheetId = '';
+
+  // BLINK-FIX: Track previous paint state so we can APPLY first, CLEAR stale second.
+  // This eliminates the "blank frame" between CLEAR and APPLY that causes blink.
+  // Keys mirror domRowMap keys (rowIdxStr). Values are the entry refs for fast removal.
+  var _prevHighlightedRows  = {}; // rowIdxStr -> true  (row-level CF from last paint)
+  var _prevCellStyleKeys    = {}; // 'rowIdxStr:::colKey' -> true (per-cell CF from last paint)
+  var _prevColorScaleKeys   = {}; // 'rowIdxStr:::colKey' -> true
+  var _prevDataBarKeys      = {}; // 'rowIdxStr:::colKey' -> true
+  var _prevIconSetKeys      = {}; // 'rowIdxStr:::colKey' -> true
+
   /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      CONSTANTS & PALETTES
   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -314,10 +327,27 @@
     _paintQueued = false;
 
     try {
-    var grid = document.getElementById('svcGrid');
-    if (!grid || !window.servicesGrid) return;
-    var state = window.servicesGrid.getState();
-    if (!state || !state.sheet) return;
+      var _grid = document.getElementById('svcGrid');
+      if (!_grid || !window.servicesGrid) return;
+      var _state = window.servicesGrid.getState();
+      if (!_state || !_state.sheet) return;
+
+      // BLINK-FIX: Detect sheet change and reset prev-state maps.
+      // If we carry over _prevHighlightedRows from a previous sheet, the STALE-CLEAR
+      // phase will try to remove CF from row indices that now belong to different rows
+      // in the new sheet — wrong rows get cleared and wrong DOM is mutated.
+      var _currentSheetId = _state.sheet && (_state.sheet.id || _state.sheet.title || '');
+      if (_currentSheetId !== _paintLastSheetId) {
+        _paintLastSheetId    = _currentSheetId;
+        _prevHighlightedRows = {};
+        _prevCellStyleKeys   = {};
+        _prevColorScaleKeys  = {};
+        _prevDataBarKeys     = {};
+        _prevIconSetKeys     = {};
+      }
+    // Alias to local names used throughout paintGrid body
+    var grid  = _grid;
+    var state = _state;
 
     var cols = state.sheet.column_defs || [];
     var rows = state.rows || [];
@@ -330,7 +360,7 @@
     });
 
     /* =========================================================================
-       PRE-BUILD DOM MAP â€” walk tbody once, build rowIndex(string)->DOM lookup
+       PRE-BUILD DOM MAP — walk tbody once, build rowIndex(string)->DOM lookup
        [FIX-ROW-3] Each DOM tr appears exactly once. No collision possible.
        Map key = tr.dataset.row (= String(row.row_index) stamped in render()).
     ========================================================================= */
@@ -351,47 +381,11 @@
     }
 
     /* =========================================================================
-       CLEAR â€” Remove all previous CF inline styles via domRowMap
-    ========================================================================= */
-    Object.keys(domRowMap).forEach(function (ri) {
-      var entry = domRowMap[ri];
-      var tr = entry.tr;
-
-      tr.removeAttribute('data-cf-row');
-      tr.classList.remove('cf-row-highlighted');
-      tr.style.removeProperty('--cf-row-bg');
-      tr.style.removeProperty('--cf-row-accent');
-
-      entry.tds.forEach(function (td) {
-        td.removeAttribute('data-cf-applied');
-        td.removeAttribute('data-cf-row-bg');
-        td.style.removeProperty('background');
-        td.style.removeProperty('border-left');
-        td.style.removeProperty('outline');
-        td.style.removeProperty('position');
-        td.style.removeProperty('padding-left');
-        td.style.removeProperty('box-shadow');
-        var badge = td.querySelector('.cf-icon-badge');
-        if (badge) badge.remove();
-      });
-
-      Object.keys(entry.inputs).forEach(function (k) {
-        var inp = entry.inputs[k];
-        inp.style.removeProperty('color');
-        inp.style.removeProperty('font-weight');
-        inp.style.removeProperty('font-style');
-        inp.style.removeProperty('text-decoration');
-        inp.style.removeProperty('font-family');
-        inp.dataset.cfIcon = '';
-        inp.dataset.cfQbStripped = '';
-      });
-    });
-
-    /* =========================================================================
-       PASS 1 â€” PURE DATA EVALUATION (zero DOM access)
+       PASS 1 — PURE DATA EVALUATION (zero DOM access)
        Collect: rowHighlights{}, cellStyles{}, colorScales[], dataBars[], iconSets[].
-       Key change from v2.0: rowHighlights keyed by String(row.row_index) = domRowMap key.
-       [FIX-ROW-3-REVISED] Evaluate ALL rows in data, apply only to DOM in PASS 2.
+       BLINK-FIX: We separate evaluation (PASS 1) from DOM mutation (PASS 2+STALE-CLEAR).
+       NO CLEAR phase runs before APPLY — highlighted rows get styles overwritten
+       in-place, eliminating the blank frame between remove and re-add.
     ========================================================================= */
     var rowHighlights = {}; // String(rowIdx) -> highlight info
     var cellStyles    = {}; // 'rowIdxStr:::colKey' -> {rowIdxStr, colKey, rule}
@@ -404,7 +398,6 @@
 
     cols.forEach(function (col) {
       if (!col || !Array.isArray(col.conditionalRules) || !col.conditionalRules.length) return;
-
       var rules = col.conditionalRules.filter(function (r) { return r && !r.disabled; });
       if (!rules.length) return;
 
@@ -420,13 +413,9 @@
         if (v !== '') valueCounts[v] = (valueCounts[v] || 0) + 1;
       });
 
-      // PERMANENT FIX 2026-05-04: Evaluate ALL rows (not just visible DOM)
-    // Previous [FIX-ROW-3] caused highlights to disappear on scroll because
-    // off-screen rows were never evaluated, so __cfRowBg was never set.
-    rows.forEach(function (row, rowPos) {
+      rows.forEach(function (row, rowPos) {
         if (!row || !row.data) return;
         var rowIdxStr = getRowDomKey(row, rowPos);
-
         var cellValue = row.data[col.key] != null ? row.data[col.key] : '';
         var cellStr   = String(cellValue).trim();
 
@@ -448,19 +437,18 @@
             } else {
               matched = evalRule(rule, cellValue);
             }
-
             if (matched) {
               if (rule.highlightRow) {
                 if (!rowHighlights[rowIdxStr]) {
                   rowHighlights[rowIdxStr] = {
-                    rowIdx:       rowIdxStr,
-                    bgColor:      rule.bgColor       || '',
-                    textColor:    rule.textColor     || '',
-                    bold:         !!rule.bold,
-                    italic:       !!rule.italic,
-                    strikethrough:!!rule.strikethrough,
-                    underline:    !!rule.underline,
-                    borderColor:  rule.rowBorderColor || ''
+                    rowIdx:        rowIdxStr,
+                    bgColor:       rule.bgColor        || '',
+                    textColor:     rule.textColor      || '',
+                    bold:          !!rule.bold,
+                    italic:        !!rule.italic,
+                    strikethrough: !!rule.strikethrough,
+                    underline:     !!rule.underline,
+                    borderColor:   rule.rowBorderColor || ''
                   };
                 }
               } else {
@@ -500,41 +488,45 @@
             }
           }
         }
-  
-    });
+      });
     });
 
-    // PERMANENT FIX: Persist __cfRowBg for ALL rows (not just visible)
-    // This ensures render() can re-stamp highlights when rows scroll into view
+    // Persist __cfRowBg for ALL rows so render() can re-stamp on scroll-in
     var rowRefMap = {};
     rows.forEach(function (r, idx) {
       if (!r) return;
-      var key = getRowDomKey(r, idx);
-      rowRefMap[key] = r;
+      rowRefMap[getRowDomKey(r, idx)] = r;
     });
-
-    Object.keys(rowHighlights).forEach(function(rowIdxStr){
+    Object.keys(rowHighlights).forEach(function (rowIdxStr) {
       var hl = rowHighlights[rowIdxStr];
-      var semiBg = '';
-      if (hl.bgColor) {
-        semiBg = hexToRgba(hl.bgColor, 0.28);
-      } else if (hl.textColor) {
-        semiBg = hexToRgba(hl.textColor, 0.12);
-      } else {
-        semiBg = 'rgba(99,102,241,0.12)';
-      }
+      var semiBg = hl.bgColor
+        ? hexToRgba(hl.bgColor, 0.28)
+        : hl.textColor
+          ? hexToRgba(hl.textColor, 0.12)
+          : 'rgba(99,102,241,0.12)';
       var rowRef = rowRefMap[rowIdxStr];
       if (rowRef) {
-        rowRef.__cfRowBg = semiBg;
-        rowRef.__cfTextColor = hl.textColor || '';
+        rowRef.__cfRowBg      = semiBg;
+        rowRef.__cfTextColor  = hl.textColor || '';
       }
     });
 
     /* =========================================================================
-       PASS 2A â€” ROW HIGHLIGHTS (applied FIRST)
-       [FIX-ROW-3] domRowMap[rowIdxStr] â€” O(1), zero collision.
-       [FIX-ROW-2] Direct inline setProperty on EVERY td â€” no "holes".
-       [FIX-ROW-4] textColor-only rules also persist across re-renders.
+       BUILD key sets for new paint cycle (used by STALE-CLEAR below)
+    ========================================================================= */
+    var newColorScaleKeys = {};
+    colorScales.forEach(function(cs){ newColorScaleKeys[cs.rowIdxStr + ':::' + cs.colKey] = true; });
+    var newDataBarKeys = {};
+    dataBars.forEach(function(db){ newDataBarKeys[db.rowIdxStr + ':::' + db.colKey] = true; });
+    var newIconSetKeys = {};
+    iconSets.forEach(function(is){ newIconSetKeys[is.rowIdxStr + ':::' + is.colKey] = true; });
+
+    /* =========================================================================
+       PASS 2A — ROW HIGHLIGHTS  ← APPLY FIRST, NO CLEAR BEFORE THIS
+       BLINK-FIX: For rows that were highlighted before AND are still highlighted,
+       we overwrite the existing inline styles directly — no remove/re-add cycle,
+       no blank compositor frame, no blink. Stale (no-longer-highlighted) rows
+       are cleaned in the STALE-CLEAR block below, after all new paint is done.
     ========================================================================= */
     Object.keys(rowHighlights).forEach(function (rowIdxStr) {
       var hl    = rowHighlights[rowIdxStr];
@@ -545,35 +537,22 @@
       tr.classList.add('cf-row-highlighted');
       tr.setAttribute('data-cf-row', '1');
 
-      var semiBg = '';
-      if (hl.bgColor) {
-        semiBg = hexToRgba(hl.bgColor, 0.28);
-      } else if (hl.textColor) {
-        // FIX-SEMIBG: When no bgColor but textColor is set and highlightRow=true,
-        // derive a faint tint from textColor so the row highlight is visible.
-        // Without this, --cf-row-bg = transparent â†’ class exists but row looks unhighlighted.
-        semiBg = hexToRgba(hl.textColor, 0.12);
-      } else {
-        // No color at all â€” use a neutral steel-blue tint as last resort
-        semiBg = 'rgba(99,102,241,0.12)';
-      }
+      var semiBg = hl.bgColor
+        ? hexToRgba(hl.bgColor, 0.28)
+        : hl.textColor
+          ? hexToRgba(hl.textColor, 0.12)
+          : 'rgba(99,102,241,0.12)';
       var accentColor = hl.borderColor || hl.bgColor || '';
 
-      tr.style.setProperty('--cf-row-bg', semiBg || 'transparent');
+      tr.style.setProperty('--cf-row-bg',     semiBg || 'transparent');
       if (accentColor) tr.style.setProperty('--cf-row-accent', accentColor);
 
-      // __cfRowBg already persisted for all rows above (PERMANENT FIX)
-
-      // Apply bg to EVERY td via domRowMap â€” [FIX-ROW-3] no rescan, no collision
-      // FIX-SEMIBG: semiBg is always non-empty for rowHighlight (fallback derived above).
-      // No longer guarded by if(semiBg) â€” every highlighted row gets a visible bg.
       entry.tds.forEach(function (td) {
         td.style.setProperty('background', semiBg, 'important');
-        td.setAttribute('data-cf-row-bg', '1');
+        td.setAttribute('data-cf-row-bg',  '1');
         td.setAttribute('data-cf-applied', '1');
       });
 
-      // Text style on all inputs
       var dec2 = [];
       if (hl.strikethrough) dec2.push('line-through');
       if (hl.underline)     dec2.push('underline');
@@ -583,9 +562,11 @@
         if (hl.textColor) {
           inp.style.setProperty('color', hl.textColor, 'important');
         } else if (hl.bgColor) {
-          var c2 = hl.bgColor.replace('#', '');
+          var c2  = hl.bgColor.replace('#', '');
           if (c2.length === 3) c2 = c2[0]+c2[0]+c2[1]+c2[1]+c2[2]+c2[2];
-          var rr = parseInt(c2.substr(0,2),16), gg = parseInt(c2.substr(2,2),16), bb = parseInt(c2.substr(4,2),16);
+          var rr  = parseInt(c2.substr(0,2),16);
+          var gg  = parseInt(c2.substr(2,2),16);
+          var bb  = parseInt(c2.substr(4,2),16);
           var lum = (0.299*rr + 0.587*gg + 0.114*bb) / 255;
           inp.style.setProperty('color', lum > 0.55 ? '#1e293b' : '#f1f5f9', 'important');
         }
@@ -596,59 +577,53 @@
     });
 
     /* =========================================================================
-       PASS 2B â€” PER-CELL STYLES (applied AFTER row highlights)
-       [FIX-ROW-5] domRowMap lookup â€” no querySelector collision.
+       PASS 2B — PER-CELL STYLES (applied AFTER row highlights)
     ========================================================================= */
     Object.keys(cellStyles).forEach(function (key) {
       var cs    = cellStyles[key];
       var entry = domRowMap[cs.rowIdxStr];
       if (!entry) return;
-      var inp = entry.inputs[cs.colKey];
-      if (!inp) return;
-      var td = inp.parentElement;
-      if (!td) return;
+      var inp = entry.inputs[cs.colKey]; if (!inp) return;
+      var td  = inp.parentElement;       if (!td)  return;
       applyStyleToTd(td, cs.rule);
     });
 
     /* =========================================================================
-       PASS 2C â€” COLOR SCALES
+       PASS 2C — COLOR SCALES
     ========================================================================= */
     colorScales.forEach(function (cs) {
-      var entry = domRowMap[cs.rowIdxStr];
-      if (!entry) return;
-      var inp = entry.inputs[cs.colKey]; if (!inp) return;
-      var td  = inp.parentElement;       if (!td)  return;
+      var entry = domRowMap[cs.rowIdxStr]; if (!entry) return;
+      var inp = entry.inputs[cs.colKey];   if (!inp)   return;
+      var td  = inp.parentElement;         if (!td)    return;
       td.style.background = cs.color;
       td.setAttribute('data-cf-applied', '1');
       inp.style.color = contrastColor(cs.color);
     });
 
     /* =========================================================================
-       PASS 2D â€” DATA BARS
+       PASS 2D — DATA BARS
     ========================================================================= */
     dataBars.forEach(function (db) {
-      var entry = domRowMap[db.rowIdxStr];
-      if (!entry) return;
-      var inp = entry.inputs[db.colKey]; if (!inp) return;
-      var td  = inp.parentElement;       if (!td)  return;
+      var entry = domRowMap[db.rowIdxStr]; if (!entry) return;
+      var inp = entry.inputs[db.colKey];   if (!inp)   return;
+      var td  = inp.parentElement;         if (!td)    return;
       td.style.background = 'linear-gradient(to right, ' + hexToRgba(db.barColor, 0.45) + ' ' + db.pct + '%, transparent ' + db.pct + '%)';
       td.style.borderLeft = '3px solid ' + db.barColor;
       td.setAttribute('data-cf-applied', '1');
     });
 
     /* =========================================================================
-       PASS 2E â€” ICON SETS
+       PASS 2E — ICON SETS
     ========================================================================= */
     iconSets.forEach(function (is) {
-      var entry = domRowMap[is.rowIdxStr];
-      if (!entry) return;
-      var inp = entry.inputs[is.colKey]; if (!inp) return;
-      var td  = inp.parentElement;       if (!td)  return;
+      var entry = domRowMap[is.rowIdxStr]; if (!entry) return;
+      var inp = entry.inputs[is.colKey];   if (!inp)   return;
+      var td  = inp.parentElement;         if (!td)    return;
       inp.dataset.cfIcon = is.icon;
       var existing = td.querySelector('.cf-icon-badge');
       if (existing) existing.remove();
       var badge = document.createElement('span');
-      badge.className = 'cf-icon-badge';
+      badge.className   = 'cf-icon-badge';
       badge.textContent = is.icon;
       badge.style.cssText = 'position:absolute;left:4px;top:50%;transform:translateY(-50%);pointer-events:none;font-size:12px;z-index:2;';
       td.style.position    = 'relative';
@@ -656,6 +631,121 @@
       td.appendChild(badge);
       td.setAttribute('data-cf-applied', '1');
     });
+
+    /* =========================================================================
+       STALE-CLEAR — Remove CF styles ONLY from elements that are NO LONGER
+       highlighted in the current cycle.
+       BLINK-FIX: This runs LAST — every new style is already painted above.
+       An element that is still highlighted had its styles overwritten in-place
+       (no blank frame). Only elements LEAVING CF get cleaned here.
+    ========================================================================= */
+
+    // Clear stale row highlights (rows that had CF before but no longer do)
+    Object.keys(_prevHighlightedRows).forEach(function (ri) {
+      if (rowHighlights[ri]) return; // still highlighted — already updated above
+      var entry = domRowMap[ri];
+      if (!entry) return;
+
+      entry.tr.removeAttribute('data-cf-row');
+      entry.tr.classList.remove('cf-row-highlighted');
+      entry.tr.style.removeProperty('--cf-row-bg');
+      entry.tr.style.removeProperty('--cf-row-accent');
+
+      entry.tds.forEach(function (td) {
+        td.removeAttribute('data-cf-applied');
+        td.removeAttribute('data-cf-row-bg');
+        td.style.removeProperty('background');
+        td.style.removeProperty('border-left');
+        td.style.removeProperty('outline');
+        td.style.removeProperty('position');
+        td.style.removeProperty('padding-left');
+        td.style.removeProperty('box-shadow');
+        var badge = td.querySelector('.cf-icon-badge');
+        if (badge) badge.remove();
+      });
+      Object.keys(entry.inputs).forEach(function (k) {
+        var inp = entry.inputs[k];
+        inp.style.removeProperty('color');
+        inp.style.removeProperty('font-weight');
+        inp.style.removeProperty('font-style');
+        inp.style.removeProperty('text-decoration');
+        inp.style.removeProperty('font-family');
+        inp.dataset.cfIcon = '';
+        inp.dataset.cfQbStripped = '';
+      });
+    });
+
+    // Clear stale per-cell styles
+    Object.keys(_prevCellStyleKeys).forEach(function (key) {
+      if (cellStyles[key]) return; // still has per-cell CF
+      var parts = key.split(':::');
+      if (rowHighlights[parts[0]]) return; // now covered by row highlight
+      var entry = domRowMap[parts[0]]; if (!entry) return;
+      var inp   = entry.inputs[parts[1]]; if (!inp) return;
+      var td    = inp.parentElement;       if (!td)  return;
+      td.removeAttribute('data-cf-applied');
+      td.style.removeProperty('background');
+      td.style.removeProperty('box-shadow');
+      td.style.removeProperty('border-left');
+      inp.style.removeProperty('color');
+      inp.style.removeProperty('font-weight');
+      inp.style.removeProperty('font-style');
+      inp.style.removeProperty('text-decoration');
+    });
+
+    // Clear stale color scale cells
+    Object.keys(_prevColorScaleKeys).forEach(function (key) {
+      if (newColorScaleKeys[key]) return;
+      var parts = key.split(':::');
+      if (rowHighlights[parts[0]]) return;
+      var entry = domRowMap[parts[0]]; if (!entry) return;
+      var inp   = entry.inputs[parts[1]]; if (!inp) return;
+      var td    = inp.parentElement;       if (!td)  return;
+      td.style.removeProperty('background');
+      td.removeAttribute('data-cf-applied');
+      inp.style.removeProperty('color');
+    });
+
+    // Clear stale data bar cells
+    Object.keys(_prevDataBarKeys).forEach(function (key) {
+      if (newDataBarKeys[key]) return;
+      var parts = key.split(':::');
+      if (rowHighlights[parts[0]]) return;
+      var entry = domRowMap[parts[0]]; if (!entry) return;
+      var inp   = entry.inputs[parts[1]]; if (!inp) return;
+      var td    = inp.parentElement;       if (!td)  return;
+      td.style.removeProperty('background');
+      td.style.removeProperty('border-left');
+      td.removeAttribute('data-cf-applied');
+    });
+
+    // Clear stale icon set cells
+    Object.keys(_prevIconSetKeys).forEach(function (key) {
+      if (newIconSetKeys[key]) return;
+      var parts = key.split(':::');
+      if (rowHighlights[parts[0]]) return;
+      var entry = domRowMap[parts[0]]; if (!entry) return;
+      var inp   = entry.inputs[parts[1]]; if (!inp) return;
+      var td    = inp.parentElement;       if (!td)  return;
+      var badge = td.querySelector('.cf-icon-badge');
+      if (badge) badge.remove();
+      td.style.removeProperty('position');
+      td.style.removeProperty('padding-left');
+      td.removeAttribute('data-cf-applied');
+      inp.dataset.cfIcon = '';
+    });
+
+    /* =========================================================================
+       UPDATE STATE — snapshot current paint for next cycle's STALE-CLEAR
+    ========================================================================= */
+    _prevHighlightedRows = {};
+    Object.keys(rowHighlights).forEach(function(k){ _prevHighlightedRows[k] = true; });
+    _prevCellStyleKeys  = {};
+    Object.keys(cellStyles).forEach(function(k){ _prevCellStyleKeys[k] = true; });
+    _prevColorScaleKeys = newColorScaleKeys;
+    _prevDataBarKeys    = newDataBarKeys;
+    _prevIconSetKeys    = newIconSetKeys;
+
     } finally {
       _isPainting = false;
       if (_paintQueued && !_paintSuspended) {
