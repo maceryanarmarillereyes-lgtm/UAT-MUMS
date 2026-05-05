@@ -9,12 +9,9 @@
 
 const { getUserFromJwt, getProfileForUserId, serviceSelect, serviceFetch } = require('../lib/supabase');
 const { readGlobalQuickbaseSettings } = require('../lib/global_quickbase');
-const { queryQuickbaseRecords, listQuickbaseFields } = require('../lib/quickbase');
 
 const CACHE_TTL_MS    = 2 * 60 * 1000;
-const QB_CACHE_TTL_MS = 3 * 60 * 1000;
 const cache    = new Map();
-const qbCache  = new Map();
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
 
@@ -147,21 +144,14 @@ async function fetchQbTabCounts(memberIds) {
 // This is exactly what the monitoring endpoint does in global mode for the Dashboard.
 
 
-function normalizeQbPersonName(v) {
-  return String(v || '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/[.,;:()\[\]{}"']/g, '')
-    .trim();
+function normalizeRealm(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  return s.includes('.') ? s : `${s}.quickbase.com`;
 }
 
-function buildNameVariants(raw) {
-  const base = normalizeQbPersonName(raw);
-  if (!base) return [];
-  const variants = new Set([base]);
-  const compact = base.replace(/\s+/g, '');
-  if (compact) variants.add(compact);
-  return Array.from(variants);
+function encodeQbLiteral(v) {
+  return String(v == null ? '' : v).replace(/'/g, "\'");
 }
 
 function buildGlobalFilterWhere(filterConfig, filterMatch) {
@@ -174,8 +164,7 @@ function buildGlobalFilterWhere(filterConfig, filterMatch) {
     const opRaw    = String(f.operator ?? 'EX').trim().toUpperCase();
     const operator = VALID_OPS.includes(opRaw) ? opRaw : 'EX';
     if (!Number.isFinite(fieldId) || !value) return acc;
-    const escaped = value.replace(/'/g, "\\'");
-    acc.push(`{${fieldId}.${operator}.'${escaped}'}`);
+    acc.push(`{${fieldId}.${operator}.'${encodeQbLiteral(value)}'}`);
     return acc;
   }, []);
   if (!clauses.length) return '';
@@ -183,159 +172,102 @@ function buildGlobalFilterWhere(filterConfig, filterMatch) {
   return clauses.length === 1 ? clauses[0] : `(${clauses.join(join)})`;
 }
 
-// Separate fields cache so we don't re-fetch on every team report load
-const FIELDS_CACHE_TTL_MS = 5 * 60 * 1000;
-const fieldsCache = new Map();
+const REPORT_FILTER_TTL_MS = 5 * 60 * 1000;
+const reportFilterCache = new Map();
 
-async function resolveQbFields(config) {
-  const cacheKey = `fields:${config.realm}:${config.tableId}`;
-  const hit = fieldsCache.get(cacheKey);
-  if (hit && Date.now() - hit.ts < FIELDS_CACHE_TTL_MS) return hit.fields;
+async function getReportFilterFormula({ realm, token, tableId, qid }) {
+  const normalizedRealm = normalizeRealm(realm);
+  if (!normalizedRealm || !tableId || !qid || !token) return '';
+  const cacheKey = `${normalizedRealm}|${tableId}|${qid}`;
+  const hit = reportFilterCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < REPORT_FILTER_TTL_MS) return hit.filter;
 
-  const out = await listQuickbaseFields({ config });
-  if (!out.ok || !Array.isArray(out.fields)) return null;
+  try {
+    const url = `https://api.quickbase.com/v1/reports/${encodeURIComponent(qid)}?tableId=${encodeURIComponent(tableId)}`;
+    const resp = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'QB-Realm-Hostname': normalizedRealm,
+        'Authorization': `QB-USER-TOKEN ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!resp.ok) {
+      reportFilterCache.set(cacheKey, { at: Date.now(), filter: '' });
+      return '';
+    }
+    const json = await resp.json().catch(() => ({}));
+    const reportFilter = String(json.query?.filterFormula || json.query?.formula || json.query?.filter || json.query?.queryString || '').trim();
+    reportFilterCache.set(cacheKey, { at: Date.now(), filter: reportFilter });
+    return reportFilter;
+  } catch (_) {
+    reportFilterCache.set(cacheKey, { at: Date.now(), filter: '' });
+    return '';
+  }
+}
 
-  const fields = out.fields.map(f => ({
-    id: Number(f.id),
-    label: String(f.label || '').toLowerCase().trim()
-  })).filter(f => Number.isFinite(f.id));
+async function countViaQbApi({ realm, token, tableId, where }) {
+  const normalizedRealm = normalizeRealm(realm);
+  if (!normalizedRealm || !tableId || !token) return null;
+  try {
+    const resp = await fetch('https://api.quickbase.com/v1/records/query', {
+      method: 'POST',
+      headers: {
+        'QB-Realm-Hostname': normalizedRealm,
+        'Authorization': `QB-USER-TOKEN ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ from: tableId, where: where || undefined, options: { skip: 0, top: 0 } })
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json().catch(() => ({}));
+    if (typeof json?.metadata?.totalRecords === 'number') return json.metadata.totalRecords;
+    if (Array.isArray(json?.data)) return json.data.length;
+    return 0;
+  } catch (_) { return null; }
+}
 
-  fieldsCache.set(cacheKey, { ts: Date.now(), fields });
-  return fields;
+async function loadDashboardCounterConfig() {
+  const raw = await loadDocValue('mums_global_dashboard_counters');
+  const cfg = raw && typeof raw === 'object' ? raw : {};
+  const hero = cfg.hero && typeof cfg.hero === 'object' ? cfg.hero : {};
+  const heroFieldId = Number(hero.heroFieldId || hero.fieldId || 0);
+  const heroOperator = String(hero.heroOperator || hero.operator || 'EX').trim().toUpperCase() || 'EX';
+  return { heroFieldId, heroOperator };
 }
 
 async function fetchQbRecords(profiles) {
   const result = {};
   profiles.forEach(p => { result[p.id] = { open: 0, closed: 0, total: 0 }; });
 
-  const nameToId = {};
-  profiles.forEach(p => {
-    const variants = buildNameVariants(p.qbName);
-    variants.forEach(v => { if (v) nameToId[v] = p.id; });
+  const eligibleProfiles = profiles.filter(p => String(p.qbName || '').trim());
+  if (!eligibleProfiles.length) return result;
+
+  const { ok, settings } = await readGlobalQuickbaseSettings();
+  if (!ok) return result;
+  const { realm, qbToken, tableId, qid, filterConfig, filterMatch } = settings || {};
+  if (!realm || !qbToken || !tableId) return result;
+
+  const { heroFieldId, heroOperator } = await loadDashboardCounterConfig();
+  if (!Number.isFinite(heroFieldId) || heroFieldId <= 0) return result;
+
+  const globalWhere = buildGlobalFilterWhere(filterConfig, filterMatch);
+  const reportWhere = qid ? await getReportFilterFormula({ realm, token: qbToken, tableId, qid }) : '';
+
+  const counts = await Promise.all(eligibleProfiles.map(async (p) => {
+    const userWhere = `{${heroFieldId}.${heroOperator}.'${encodeQbLiteral(p.qbName)}'}`;
+    const finalWhere = [reportWhere, globalWhere, userWhere].filter(Boolean).join(' AND ') || undefined;
+    const c = await countViaQbApi({ realm, token: qbToken, tableId, where: finalWhere });
+    return { uid: p.id, count: Number.isFinite(c) ? c : 0 };
+  }));
+
+  counts.forEach(({ uid, count }) => {
+    if (!result[uid]) return;
+    result[uid].open = count;
+    result[uid].closed = 0;
+    result[uid].total = count;
   });
-  if (!Object.keys(nameToId).length) return result;
-
-  const hit = qbCache.get('qb_records');
-  if (hit && Date.now() - hit.ts < QB_CACHE_TTL_MS) {
-    applyQbNameCounts(hit.data, nameToId, result);
-    return result;
-  }
-
-  try {
-    const { ok, settings } = await readGlobalQuickbaseSettings();
-    if (!ok) return result;
-    const { realm, qbToken, tableId, qid, filterConfig, filterMatch } = settings;
-    if (!realm || !qbToken || !tableId) return result;
-
-    const normalizedRealm = realm.includes('.') ? realm : `${realm}.quickbase.com`;
-
-    // Build a config object compatible with queryQuickbaseRecords / listQuickbaseFields
-    const qbConfig = {
-      qb_realm:    normalizedRealm,
-      qb_token:    qbToken,
-      qb_table_id: tableId,
-      qb_qid:      ''   // intentionally empty — we bypass report-level filter
-    };
-
-    // Step 1: Resolve field IDs by label from the actual table schema
-    const allFields = await resolveQbFields(qbConfig);
-    if (!allFields) {
-      console.warn('[team_report] QB fields lookup failed — skipping QB counts');
-      return result;
-    }
-
-    const resolveId = (...labels) => {
-      for (const lbl of labels) {
-        const f = allFields.find(f => f.label === lbl.toLowerCase() || f.label.startsWith(lbl.toLowerCase()));
-        if (f) return f.id;
-      }
-      return null;
-    };
-
-    const assignedToFieldId = resolveId('assigned to', 'assignee', 'assigned');
-    const caseStatusFieldId = resolveId('case status', 'status');
-
-    if (!Number.isFinite(assignedToFieldId)) {
-      console.warn('[team_report] QB "Assigned to" field not found in table schema — skipping QB counts');
-      return result;
-    }
-
-    // Step 2: Build WHERE from globalFilterConfig only (no user filter — want ALL members)
-    const globalWhere = buildGlobalFilterWhere(filterConfig, filterMatch);
-
-    // Step 3: select only the fields we need — keeps payload small
-    const selectFields = [assignedToFieldId];
-    if (Number.isFinite(caseStatusFieldId)) selectFields.push(caseStatusFieldId);
-
-    // Step 4: Fetch via /v1/records/query — bypasses any user-scoped report filter
-    const qOut = await queryQuickbaseRecords({
-      config:           qbConfig,
-      where:            globalWhere || undefined,
-      select:           selectFields,
-      limit:            2000,          // enough for all active cases across all members
-      allowEmptySelect: false,
-      enableQueryIdFallback: false     // no qid — query the raw table with our WHERE
-    });
-
-    if (!qOut.ok) {
-      console.warn('[team_report] QB query failed:', qOut.message || qOut.error);
-      return result;
-    }
-
-    const records = Array.isArray(qOut.records) ? qOut.records : [];
-    const assignedKey = String(assignedToFieldId);
-    const statusKey   = caseStatusFieldId ? String(caseStatusFieldId) : null;
-
-    // Step 5: Group by assignedTo name → open / closed
-    const nameCounts = {};
-    const CLOSED_STATUSES = new Set(['closed','resolved','complete','completed','done']);
-
-    records.forEach(rec => {
-      if (!rec) return;
-      const assignCell = rec[assignedKey];
-      const nameVal = String(
-        (assignCell && assignCell.value !== undefined ? assignCell.value : assignCell) || ''
-      ).trim();
-      if (!nameVal) return;
-
-      const key = normalizeQbPersonName(nameVal);
-      if (!key) return;
-      if (!nameCounts[key]) nameCounts[key] = { open: 0, closed: 0 };
-
-      let isClosed = false;
-      if (statusKey && rec[statusKey]) {
-        const stCell = rec[statusKey];
-        const stVal  = String((stCell && stCell.value !== undefined ? stCell.value : stCell) || '').trim().toLowerCase();
-        isClosed = CLOSED_STATUSES.has(stVal);
-      }
-      if (isClosed) nameCounts[key].closed++;
-      else          nameCounts[key].open++;
-    });
-
-    console.log(`[team_report] QB query OK — assignedToFid=${assignedToFieldId} globalWhere="${globalWhere || '(none)'}" records=${records.length} names=${Object.keys(nameCounts).length}`);
-    qbCache.set('qb_records', { ts: Date.now(), data: nameCounts });
-    applyQbNameCounts(nameCounts, nameToId, result);
-  } catch (err) {
-    console.warn('[team_report] QB fetch failed:', err && err.message);
-  }
   return result;
-}
-
-function applyQbNameCounts(nameCounts, nameToId, result) {
-  const memberKeys = Object.keys(nameToId);
-  Object.entries(nameCounts).forEach(([name, cnts]) => {
-    let uid = nameToId[name];
-    if (!uid) {
-      const compactName = name.replace(/\s+/g, '');
-      const fuzzy = memberKeys.find(k => k === compactName || k.includes(compactName) || compactName.includes(k));
-      if (fuzzy) uid = nameToId[fuzzy];
-    }
-    if (uid) {
-      result[uid].open   = (result[uid].open || 0) + (cnts.open || 0);
-      result[uid].closed = (result[uid].closed || 0) + (cnts.closed || 0);
-      result[uid].total  = (result[uid].open || 0) + (result[uid].closed || 0);
-    }
-  });
 }
 
 /* ── Case counting ────────────────────────────────────────────────────────── */

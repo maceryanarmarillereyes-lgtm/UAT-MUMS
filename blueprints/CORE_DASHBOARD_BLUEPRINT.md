@@ -57,3 +57,5 @@
 - **2026-05-05** — Navigation contract hardened: dashboard/menu routing now resolves page target from `data-page` first, with href-derived routing as fallback to prevent accidental Team Report renders from delegated click handlers.
 
 - **2026-05-05** — Team Report QB OPEN alignment hardened: Quickbase assignee-to-profile matching now normalizes punctuation/whitespace and applies safe fuzzy fallback so member QB OPEN mirrors per-user Dashboard/My Active Cases scope when Assigned QB names vary in format.
+
+- **2026-05-05** — Team Report QB OPEN source-of-truth aligned to Dashboard hero counter logic by reusing Global QB filters + report filter + per-user hero field clause, so per-member QB OPEN now equals My Active Cases counts.
